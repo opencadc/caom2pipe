@@ -68,15 +68,21 @@
 #
 
 import logging
+import io
 
+from astropy import units
 from astropy.io import fits
+from astropy.io.votable import parse_single_table
 from astropy.coordinates import EarthLocation
 from astropy.time import Time, TimeDelta
+from astropy.coordinates import SkyCoord
 
 from datetime import timedelta as dt_timedelta
 from datetime import datetime as dt_datetime
 from time import strptime as dt_strptime
 
+from cadctap import CadcTapClient
+from cadcutils import net
 from caom2 import Interval as caom_Interval
 from caom2 import Time as caom_Time
 from caom2 import shape as caom_shape
@@ -86,7 +92,9 @@ from caom2pipe import manage_composable as mc
 
 __all__ = ['convert_time', 'get_datetime', 'build_plane_time',
            'build_plane_time_interval', 'build_plane_time_sample',
-           'get_location', 'get_timedelta_in_s', 'make_headers_from_string']
+           'build_ra_dec_as_deg',
+           'get_location', 'get_timedelta_in_s', 'make_headers_from_string',
+           'query_tap']
 
 
 def find_time_bounds(headers):
@@ -195,6 +203,16 @@ def build_plane_time_sample(start_date, end_date):
         mc.to_float(end_date.value))
 
 
+def build_ra_dec_as_deg(ra, dec):
+    """
+    Common code to go from units.hourangle, units.deg to both values in
+    units.deg
+    """
+    result = SkyCoord(ra, dec, frame='icrs',
+                      unit=(units.hourangle, units.deg))
+    return result.ra.degree, result.dec.degree
+
+
 def get_timedelta_in_s(from_value):
     """
     :param from_value: a string representing time in H:M:S
@@ -214,3 +232,19 @@ def make_headers_from_string(fits_header):
         [e + delim for e in fits_header.split(delim) if e.strip()]
     headers = [fits.Header.fromstring(e, sep='\n') for e in extensions]
     return headers
+
+
+def query_tap(query_string, config):
+    """
+    :query_string: ADQL
+    :config: manage_composable.Config - used to query
+    :returns an astropy votable instance. Need to call .decode on
+        column results."""
+
+    logging.debug('query_tap: execute query {} against {}'.format(
+        query_string, config.tap_id))
+    subject = net.Subject(certificate=config.proxy_fqn)
+    tap_client = CadcTapClient(subject, resource_id=config.tap_id)
+    buffer = io.BytesIO()
+    tap_client.query(query_string, output_file=buffer)
+    return parse_single_table(buffer).to_table()
