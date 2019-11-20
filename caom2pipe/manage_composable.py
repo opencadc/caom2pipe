@@ -1061,9 +1061,9 @@ class Validator(object):
         logger = logging.getLogger()
         logger.setLevel(self._config.logging_level)
         logging.debug(self._config)
-        self._source = None
-        self._destination_data = None
-        self._destination_meta = None
+        self._source = []
+        self._destination_data = []
+        self._destination_meta = []
         self._source_name = source_name
         self._scheme = scheme
         self._preview_suffix = preview_suffix
@@ -1071,14 +1071,20 @@ class Validator(object):
 
     def _find_unaligned_dates(self, source, meta, data):
         result = []
-        for f_name in meta:
-            if f_name in source and f_name in data:
-                source_dt = datetime.strptime(source[f_name], ISO_8601_FORMAT)
-                source_utc = source_dt.astimezone(timezone(self._source_tz))
-                dest_dt = datetime.strptime(data[f_name], ISO_8601_FORMAT)
-                dest_utc = dest_dt.astimezone(timezone('US/Pacific'))
-                if dest_utc < source_utc:
-                    result.append(f_name)
+        if len(data) > 0:
+            for f_name in meta:
+                if f_name in source and f_name in data['fileName']:
+                    source_dt = datetime.utcfromtimestamp(source[f_name])
+                    source_utc = source_dt.astimezone(self._source_tz)
+                    mask = data['fileName'] == f_name
+                    # 0 - only one row in the mask
+                    # 1 - timestamps are the second column
+                    dest_dt_orig = data[mask][0][1]
+                    dest_dt = datetime.strptime(dest_dt_orig, ISO_8601_FORMAT)
+                    # AD - 2019-11-18 - 'ad' timezone is US/Pacific
+                    dest_utc = dest_dt.astimezone(timezone('US/Pacific'))
+                    if dest_utc < source_utc:
+                        result.append(f_name)
         return list(set(result))
 
     def _read_list_from_destination_data(self):
@@ -1092,7 +1098,7 @@ class Validator(object):
                                   subject=subject, agent=agent, retry=True)
         query_meta = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
                      f"archiveName = '{self._config.archive}' " \
-                     f"AND fileName not like '%{self._preview_suffix} " \
+                     f"AND fileName not like '%{self._preview_suffix}' " \
                      f"ORDER BY fileName"
         data = {'QUERY': query_meta, 'LANG': 'ADQL', 'FORMAT': 'csv'}
         logging.debug('Query is {}'.format(query_meta))
@@ -1115,6 +1121,7 @@ class Validator(object):
                 f"JOIN caom2.Artifact AS A ON P.planeID = A.planeID " \
                 f"WHERE O.collection='{self._config.collection}' " \
                 f"AND A.uri not like '%{self._preview_suffix}'"
+        logging.debug(f'Query is {query}')
         subject = net.Subject(certificate=self._config.proxy_fqn)
         tap_client = CadcTapClient(subject, resource_id=self._config.tap_id)
         buffer = io.BytesIO()
@@ -1138,7 +1145,7 @@ class Validator(object):
         logging.info('Query source metadata.')
         source_temp = self.read_from_source()
 
-        logging.info('Find files that are missing from CADC.')
+        logging.info('Find files that do not appear at CADC.')
         self._destination_meta = find_missing(
             dest_meta_temp, source_temp.keys())
 
@@ -1161,12 +1168,14 @@ class Validator(object):
             self._config.working_directory, VALIDATE_OUTPUT)
         write_as_yaml(result, result_fqn)
 
-        logging.info(f'There are {len(self._source)} files at '
-                     f'{self._source_name} that are not represented at CADC, '
-                     f'and {len(self._destination_meta)} CAOM entries at '
-                     f'CADC that are not available from {self._source_name}.\n'
-                     f'There are {len(self._destination_data)} files that are '
-                     f'newer at {self._source_name}.')
+        logging.info(f'Results:\n'
+                     f'  - {len(self._source)} files at '
+                     f'{self._source_name} that are not referenced by CADC '
+                     f'CAOM entries\n'
+                     f'  - {len(self._destination_meta)} CAOM entries at '
+                     f'CADC that do not reference {self._source_name} files\n'
+                     f'  - {len(self._destination_data)} files that are '
+                     f'newer at {self._source_name} than in CADC storage')
         return self._source, self._destination_meta, self._destination_data
 
     def write_todo(self):
