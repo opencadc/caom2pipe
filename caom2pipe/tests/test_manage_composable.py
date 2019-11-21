@@ -73,7 +73,7 @@ import sys
 
 import six
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from mock import Mock, patch
 
 from caom2 import ProductType, ReleaseType, Artifact, ChecksumURI
@@ -347,9 +347,13 @@ def test_state():
     if os.path.exists(TEST_STATE_FILE):
         os.unlink(TEST_STATE_FILE)
     with open(TEST_STATE_FILE, 'w') as f:
-        f.write(
-            'bookmarks:\n  gemini_timestamp:\n    last_record: '
-            '2019-07-23 20:52:03.524443\n')
+        f.write('bookmarks:\n'
+                '  gemini_timestamp:\n'
+                '    last_record: 2019-07-23 20:52:03.524443\n'
+                'context:\n'
+                '  neossat_context:\n'
+                '    - NEOSS\n'
+                '    - 2020\n')
 
     with pytest.raises(mc.CadcException):
         test_subject = mc.State('nonexistent')
@@ -360,11 +364,22 @@ def test_state():
     assert test_result is not None, 'expect content'
     assert isinstance(test_result, datetime)
 
-    test_subject.save_state('gemini_timestamp', test_result)
+    test_context = test_subject.get_context('neossat_context')
+    assert test_context is not None, 'expect a result'
+    assert isinstance(test_context, list), 'wrong return type'
+    assert len(test_context) == 2, 'wrong return length'
+    assert 'NEOSS' in test_context, 'wrong content'
+    test_context.append('2019')
+
+    test_subject.save_state('gemini_timestamp',
+                            test_result + timedelta(3))
+    test_subject.save_state('neossat_context', test_context)
 
     with open(TEST_STATE_FILE, 'r') as f:
         text = f.readlines()
-        assert '20:52:03.524443' not in text, 'content not updated'
+        compare = ''.join(ii for ii in text)
+        assert '2019-07-23' not in compare, 'content not updated'
+        assert '2019' in compare, 'context content not updated'
 
 
 @pytest.mark.skipif(not sys.version.startswith(PY_VERSION),

@@ -228,21 +228,27 @@ class State(object):
         self.logger = logging.getLogger('State')
         result = read_as_yaml(self.fqn)
         if result is None:
-            raise CadcException('Could not load state from {}'.format(fqn))
+            raise CadcException(f'Could not load state from {fqn}')
         else:
             self.bookmarks = result.get('bookmarks')
+            self.context = result.get('context', {})
             self.content = result
 
     def get_bookmark(self, key):
         """Lookup for last_record key."""
         result = None
-        if key in self.bookmarks:
-            if 'last_record' in self.bookmarks[key]:
-                result = self.bookmarks[key]['last_record']
-            else:
-                self.logger.warning('No record found for {}'.format(key))
+        if self.bookmarks.get(key) is None:
+            self.logger.warning(f'No record found for {key}')
         else:
-            self.logger.warning('No bookmarks found for {}'.format(key))
+            result = self.bookmarks.get(key).get('last_record')
+        return result
+
+    def get_context(self, key):
+        result = None
+        if self.context.get(key) is None:
+            self.logger.warning(f'No context found for {key}')
+        else:
+            result = self.context.get(key)
         return result
 
     def save_state(self, key, value):
@@ -250,15 +256,20 @@ class State(object):
         :param key which record is being updated
         :param value the value to update the record with
         """
-        if key in self.bookmarks:
-            if 'last_record' in self.bookmarks[key]:
-                self.bookmarks[key]['last_record'] = value
-                logging.debug('Saving timestamp {} {}'.format(value, self.fqn))
-                write_as_yaml(self.content, self.fqn)
+        if self.bookmarks.get(key) is None:
+            if self.context.get(key) is None:
+                self.logger.warning(f'No context found for {key}')
             else:
-                self.logger.warning('No record found for {}'.format(key))
+                self.context[key] = value
+                logging.debug(f'Saving context {value} {self.fqn}')
+                write_as_yaml(self.content, self.fqn)
         else:
-            self.logger.warning('No bookmarks found for {}'.format(key))
+            if self.bookmarks.get(key).get('last_record') is None:
+                self.logger.warning(f'No bookmark found for {key}')
+            else:
+                self.bookmarks[key]['last_record'] = value
+                logging.debug(f'Saving timestamp {value} {self.fqn}')
+                write_as_yaml(self.content, self.fqn)
 
 
 class Builder(object):
