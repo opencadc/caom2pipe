@@ -336,11 +336,13 @@ class Rejected(object):
     IDs that will fail a particular TaskType.
     """
     NO_REASON = ''
+    BAD_DATA = 'bad_data'
     BAD_METADATA = 'bad_metadata'
     NO_PREVIEW = 'no_preview'
 
     # A map to the logging message string representing acknowledged rejections
-    reasons = {BAD_METADATA: 'Cannot build an observation',
+    reasons = {BAD_DATA: 'Header missing END card',
+               BAD_METADATA: 'Cannot build an observation',
                NO_PREVIEW: '404 Client Error: Not Found for url'}
 
     def __init__(self, fqn):
@@ -385,6 +387,9 @@ class Rejected(object):
             # ensure unique entries
             self.content[key] = list(set(value))
         write_as_yaml(self.content, self.fqn)
+
+    def is_bad_data(self, obs_id):
+        return obs_id in self.content[Rejected.BAD_DATA]
 
     def is_bad_metadata(self, obs_id):
         return obs_id in self.content[Rejected.BAD_METADATA]
