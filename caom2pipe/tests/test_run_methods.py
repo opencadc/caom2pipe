@@ -68,65 +68,62 @@
 #
 
 import os
-import pytest
-import six
 import shutil
 import sys
 
 from datetime import datetime, timedelta
-from mock import patch, Mock
+from unittest.mock import patch, Mock
 
-if six.PY3:
-    from caom2pipe import execute_composable as ec
-    from caom2pipe import manage_composable as mc
+from caom2pipe import execute_composable as ec
+from caom2pipe import manage_composable as mc
 
-    class TestWork(mc.Work):
-        def __init__(self):
-            super(TestWork, self).__init__(max_ts_s=12)
-
-        def initialize(self):
-            pass
-
-        def todo(self, prev_exec_date, exec_date):
-            return []
-
-    def _common_check(test_result, do_mock, test_entry,
-                      expected_result=0, expected_call_count=1,
-                      test_obs_id=None):
-        assert test_result is not None, 'expect a result'
-        assert test_result == expected_result, 'wrong result'
-
-        assert do_mock.called, 'do mock not called'
-        assert do_mock.call_count == expected_call_count, do_mock.call_count
-        args, kwargs = do_mock.call_args
-        test_storage = args[2]
-        assert isinstance(test_storage, ec.StorageName), type(test_storage)
-        assert test_storage.obs_id == test_obs_id, 'wrong obs id'
-        assert test_storage.url == test_entry, test_storage.url
-
-    def _write_state(start_time):
-        if os.path.exists(STATE_FILE):
-            os.unlink(STATE_FILE)
-        test_bookmark = {'bookmarks': {TEST_BOOKMARK:
-                                       {'last_record': start_time}}}
-        mc.write_as_yaml(test_bookmark, STATE_FILE)
+import test_conf as tc
 
 
-PY_VERSION = '3.6'
-THIS_DIR = os.path.dirname(os.path.realpath(__file__))
-TEST_DATA_DIR = os.path.join(THIS_DIR, 'data')
+class TestWork(mc.Work):
+    def __init__(self):
+        super(TestWork, self).__init__(max_ts_s=12)
+
+    def initialize(self):
+        pass
+
+    def todo(self, prev_exec_date, exec_date):
+        return []
+
+
+def _common_check(test_result, do_mock, test_entry,
+                  expected_result=0, expected_call_count=1,
+                  test_obs_id=None):
+    assert test_result is not None, 'expect a result'
+    assert test_result == expected_result, 'wrong result'
+
+    assert do_mock.called, 'do mock not called'
+    assert do_mock.call_count == expected_call_count, do_mock.call_count
+    args, kwargs = do_mock.call_args
+    test_storage = args[2]
+    assert isinstance(test_storage, ec.StorageName), type(test_storage)
+    assert test_storage.obs_id == test_obs_id, 'wrong obs id'
+    assert test_storage.url == test_entry, test_storage.url
+
+
+def _write_state(start_time):
+    if os.path.exists(STATE_FILE):
+        os.unlink(STATE_FILE)
+    test_bookmark = {'bookmarks': {TEST_BOOKMARK:
+                                   {'last_record': start_time}}}
+    mc.write_as_yaml(test_bookmark, STATE_FILE)
+
+
 COMMAND_NAME = 'test_command'
-PROGRESS_FILE = os.path.join(TEST_DATA_DIR, 'progress.txt')
-REJECTED_FILE = os.path.join(TEST_DATA_DIR, 'rejected.yml')
-STATE_FILE = os.path.join(TEST_DATA_DIR, 'test_state.yml')
+PROGRESS_FILE = os.path.join(tc.TEST_DATA_DIR, 'progress.txt')
+REJECTED_FILE = os.path.join(tc.TEST_DATA_DIR, 'rejected.yml')
+STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')
 TEST_URL = 'http://localhost/vlass.fits'
 TEST_OBS_ID = 'TEST_OBS_ID'
 TEST_ENTRY = 'TEST_ENTRY'
 TEST_BOOKMARK = 'TEST_BOOKMARK'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('caom2pipe.execute_composable._do_one')
 @patch('caom2pipe.manage_composable.Work')
 def test_run_from_state(work_mock, do_mock, test_config):
@@ -161,8 +158,6 @@ def test_run_from_state(work_mock, do_mock, test_config):
     assert os.path.exists(REJECTED_FILE)
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('caom2pipe.execute_composable._do_one')
 def test_run_single_from_state(do_mock, test_config):
     cleanup_log_txt(test_config)
@@ -194,8 +189,6 @@ def test_run_single_from_state(do_mock, test_config):
         'organizer should be called'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('caom2pipe.execute_composable._do_one')
 def test_run_single(do_mock, test_config):
     cleanup_log_txt(test_config)
@@ -231,8 +224,6 @@ def test_run_single(do_mock, test_config):
     assert test_storage.url == test_url, test_storage.url
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('caom2pipe.execute_composable._do_one')
 def test_run_by_file(do_mock, test_config):
     cleanup_log_txt(test_config)
@@ -262,8 +253,6 @@ def test_run_by_file(do_mock, test_config):
     assert os.path.exists(REJECTED_FILE)
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('caom2pipe.execute_composable._do_one')
 def test_run_by_file_use_local_files(do_mock, test_config):
 
@@ -286,7 +275,7 @@ def test_run_by_file_use_local_files(do_mock, test_config):
         test_config.features.use_urls = False
         test_config.features.use_file_names = False
         test_config.working_directory = os.path.join(
-            TEST_DATA_DIR, 'local_files')
+            tc.TEST_DATA_DIR, 'local_files')
 
         class TestStorageName(ec.StorageName):
             def __init__(self, file_name=None, fname_on_disk=None):
@@ -314,8 +303,6 @@ def test_run_by_file_use_local_files(do_mock, test_config):
         assert os.path.exists(REJECTED_FILE)
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_time_box(test_config):
     _write_state('23-Jul-2019 09:51')
     test_config.state_fqn = STATE_FILE
@@ -374,8 +361,6 @@ def test_time_box(test_config):
     assert test_work.todo_call_count == 3, 'wrong todo call count'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_time_box_equal(test_config):
     _write_state('23-Jul-2019 09:51')
     test_config.state_fqn = STATE_FILE
@@ -415,8 +400,6 @@ def test_time_box_equal(test_config):
     assert test_work.todo_call_count == 0, 'wrong todo call count'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_time_box_once_through(test_config):
     _write_state('23-Jul-2019 09:51')
     test_config.state_fqn = STATE_FILE
@@ -461,8 +444,6 @@ def test_time_box_once_through(test_config):
     assert test_work.todo_call_count == 1, 'wrong todo call count'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('caom2pipe.execute_composable._do_one')
 def test_run_by_file_use_local_files_gz(do_mock, test_config):
     cleanup_log_txt(test_config)
@@ -473,7 +454,7 @@ def test_run_by_file_use_local_files_gz(do_mock, test_config):
     test_config.features.use_urls = False
     test_config.features.use_file_names = True
     test_config.working_directory = os.path.join(
-        TEST_DATA_DIR, 'local_json_files')
+        tc.TEST_DATA_DIR, 'local_json_files')
 
     class TestStorageName(ec.StorageName):
         def __init__(self, file_name=None, fname_on_disk=None):
@@ -494,8 +475,6 @@ def test_run_by_file_use_local_files_gz(do_mock, test_config):
     assert do_mock.call_count == 1, do_mock.call_count
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('caom2pipe.execute_composable._do_one')
 def test_run_by_state_storage_name_instance(do_mock, test_config):
     try:
@@ -524,8 +503,6 @@ def test_run_by_state_storage_name_instance(do_mock, test_config):
     assert do_mock.call_count == 0, do_mock.call_count
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_run_by_state_expects_retry_storage_name_instance(test_config):
     cleanup_log_txt(test_config)
     now_minus_15_min = datetime.utcnow()
@@ -544,16 +521,16 @@ def test_run_by_state_expects_retry_storage_name_instance(test_config):
     test_config.task_types = []
     test_config.state_fqn = STATE_FILE
     test_config.interval = 1
-    assert test_config.log_file_directory == TEST_DATA_DIR
+    assert test_config.log_file_directory == tc.TEST_DATA_DIR
     assert test_config.work_file == 'todo.txt'
 
     assert test_config.need_to_retry(), 'should require retries'
 
     test_config.update_for_retry(test_retry_count)
     assert test_config.log_file_directory == '{}/data_{}'.format(
-        THIS_DIR, test_retry_count)
+        tc.THIS_DIR, test_retry_count)
     assert test_config.work_file == 'retries.txt'
-    assert test_config.work_fqn == '{}/retries.txt'.format(TEST_DATA_DIR)
+    assert test_config.work_fqn == '{}/retries.txt'.format(tc.TEST_DATA_DIR)
     try:
         sys.argv = ['test_command']
         test_work = TestWork()
@@ -563,9 +540,9 @@ def test_run_by_state_expects_retry_storage_name_instance(test_config):
     except mc.CadcException as e:
         assert False, 'but the work list is empty {}'.format(e)
 
-    if TEST_DATA_DIR.startswith('/usr/src/app'):
+    if tc.TEST_DATA_DIR.startswith('/usr/src/app'):
         # these checks fail on travis ....
-        assert os.path.exists('{}_0'.format(TEST_DATA_DIR))
+        assert os.path.exists('{}_0'.format(tc.TEST_DATA_DIR))
         assert os.path.exists(test_config.success_fqn)
         assert os.path.exists(test_config.failure_fqn)
         assert os.path.exists(test_config.retry_fqn)
@@ -576,7 +553,7 @@ def cleanup_log_txt(config):
                 config.rejected_fqn, config.progress_fqn]:
         if os.path.exists(fqn):
             os.unlink(fqn)
-    retry_dir = '{}_0'.format(TEST_DATA_DIR)
+    retry_dir = '{}_0'.format(tc.TEST_DATA_DIR)
     if os.path.exists(retry_dir):
         shutil.rmtree(retry_dir)
 
