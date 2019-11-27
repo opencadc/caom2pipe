@@ -1455,17 +1455,16 @@ def get_file_meta(fqn):
 
 def create_dir(dir_name):
     """Create the working area if it does not already exist."""
-    if os.path.exists(dir_name):
-        if os.path.isfile(dir_name):
-            raise CadcException(f'{dir_name} already exists as a file.')
-    else:
-        os.mkdir(dir_name)
+    try:
+        os.makedirs(dir_name, exist_ok=True)
         if not os.path.exists(dir_name):
             raise CadcException(
                 'Could not mkdir {}'.format(dir_name))
         if not os.access(dir_name, os.W_OK | os.X_OK):
             raise CadcException(
                 '{} is not writeable.'.format(dir_name))
+    except FileExistsError as e:
+        raise CadcException(f'{dir_name} already exists as a file.')
 
 
 def decompose_lineage(lineage):
