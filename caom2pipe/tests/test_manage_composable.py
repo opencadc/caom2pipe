@@ -69,37 +69,27 @@
 
 import os
 import pytest
-import sys
 
-import six
-
-from datetime import datetime
-from mock import Mock, patch
+from datetime import datetime, timedelta
+from unittest.mock import Mock, patch
 
 from caom2 import ProductType, ReleaseType, Artifact, ChecksumURI
 from caom2 import SimpleObservation
-if six.PY3:
-    from caom2pipe import manage_composable as mc
+from caom2pipe import manage_composable as mc
 
+import test_conf as tc
 
-PY_VERSION = '3.6'
-THIS_DIR = os.path.dirname(os.path.realpath(__file__))
-TEST_DATA_DIR = os.path.join(THIS_DIR, 'data')
-TEST_STATE_FILE = os.path.join(TEST_DATA_DIR, 'test_state.yml')
-TEST_OBS_FILE = os.path.join(TEST_DATA_DIR, 'test_obs_id.fits.xml')
+TEST_STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')
+TEST_OBS_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_obs_id.fits.xml')
 ISO8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_read_obs():
     test_subject = mc.read_obs_from_file(TEST_OBS_FILE)
     assert test_subject is not None, 'expect a result'
     assert isinstance(test_subject, SimpleObservation), 'wrong read'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_read_from_file():
     test_subject = mc.read_from_file(TEST_OBS_FILE)
     assert test_subject is not None, 'expect a result'
@@ -108,16 +98,12 @@ def test_read_from_file():
     assert test_subject[0].startswith('<?xml version'), 'read failed'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_build_uri():
     test_subject = mc.build_uri('archive', 'file_name.fits')
     assert test_subject is not None, 'expect a result'
     assert test_subject == 'ad:archive/file_name.fits', 'wrong result'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_query_endpoint():
 
     with patch('requests.Session.get') as session_get_mock:
@@ -127,10 +113,8 @@ def test_query_endpoint():
         session_get_mock.assert_called_with('https://localhost', timeout=25)
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_config_class():
-    os.getcwd = Mock(return_value=TEST_DATA_DIR)
+    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
     mock_root = '/usr/src/app/caom2pipe/caom2pipe/tests/data'
     test_config = mc.Config()
     test_config.get_executors()
@@ -161,26 +145,22 @@ def test_config_class():
     assert test_config.state_file_name == 'state.yml', 'state file name'
     assert test_config.state_fqn == '{}/state.yml'.format(mock_root), \
         'state fqn'
-    assert test_config.rejected_directory == TEST_DATA_DIR, \
+    assert test_config.rejected_directory == tc.TEST_DATA_DIR, \
         'wrong rejected dir'
     assert test_config.rejected_file_name == 'rejected.yml', \
         'wrong rejected file'
     assert test_config.rejected_fqn == '{}/rejected.yml'.format(
-        TEST_DATA_DIR), 'wrong rejected fqn'
+        tc.TEST_DATA_DIR), 'wrong rejected fqn'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_exec_cmd():
     test_cmd = 'ls /abc'
     with pytest.raises(mc.CadcException):
         mc.exec_cmd(test_cmd)
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support 3.6 only')
 def test_exec_cmd_redirect():
-    fqn = os.path.join(TEST_DATA_DIR, 'exec_cmd_redirect.txt')
+    fqn = os.path.join(tc.TEST_DATA_DIR, 'exec_cmd_redirect.txt')
     if os.path.exists(fqn):
         os.remove(fqn)
 
@@ -190,8 +170,6 @@ def test_exec_cmd_redirect():
     assert os.stat(fqn).st_size > 0
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_decompose_lineage():
     test_product_id = 'product_id'
     test_uri = 'ad:STARS/galaxies.fits.gz'
@@ -205,35 +183,31 @@ def test_decompose_lineage():
         mc.decompose_lineage('')
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_read_csv_file():
     # bad read
     with pytest.raises(mc.CadcException):
         mc.read_csv_file(None)
 
     # good read
-    test_file_name = os.path.join(TEST_DATA_DIR, 'test_csv.csv')
+    test_file_name = os.path.join(tc.TEST_DATA_DIR, 'test_csv.csv')
     content = mc.read_csv_file(test_file_name)
     assert content is not None, 'empty results returned'
     assert len(content) == 1, 'missed the comment and the header'
     assert len(content[0]) == 24, 'missed the content'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_get_file_meta():
     # None
     with pytest.raises(mc.CadcException):
         mc.get_file_meta(None)
 
     # non-existent file
-    fqn = os.path.join(TEST_DATA_DIR, 'abc.txt')
+    fqn = os.path.join(tc.TEST_DATA_DIR, 'abc.txt')
     with pytest.raises(mc.CadcException):
         mc.get_file_meta(fqn)
 
     # empty file
-    fqn = os.path.join(TEST_DATA_DIR, 'todo.txt')
+    fqn = os.path.join(tc.TEST_DATA_DIR, 'todo.txt')
     if os.path.exists(fqn):
         os.unlink(fqn)
     open(fqn, 'w').close()
@@ -241,14 +215,39 @@ def test_get_file_meta():
     assert result['size'] == 0, result['size']
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
-@patch('cadcdata.core.net.BaseWsClient')
-def test_read_file_list_from_archive(basews_mock):
-
+@patch('cadcdata.core.net.BaseWsClient.post')
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+def test_read_file_list_from_archive(caps_mock, ad_mock):
+    caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     response = Mock()
-    response.status_code.return_value = 200
-    basews_mock.return_value.get.return_value = response
+    response.status_code = 200
+    response.iter_content.return_value = \
+        [b'<?xml version="1.0" encoding="UTF-8"?>\n'
+         b'<VOTABLE xmlns="http://www.ivoa.net/xml/VOTable/v1.3" '
+         b'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+         b'version="1.3">\n'
+         b'<RESOURCE type="results">\n'
+         b'<INFO name="QUERY_STATUS" value="OK" />\n'
+         b'<INFO name="QUERY_TIMESTAMP" value="2019-11-27T00:07:08.736" />\n'
+         b'<INFO name="QUERY" value="SELECT ingestDate, fileName&#xA;FROM '
+         b'archive_files&#xA;WHERE archiveName = \'NEOSS\'&#xA;AND '
+         b'fileName = \'xEOS_SCI_2019319035900.fits\'" />\n'
+         b'<TABLE>\n'
+         b'<FIELD name="ingestDate" datatype="char" arraysize="*" '
+         b'xtype="timestamp">\n'
+         b'<DESCRIPTION>file ingest date</DESCRIPTION>\n'
+         b'</FIELD>\n'
+         b'<FIELD name="fileName" datatype="char" arraysize="255*">\n'
+         b'<DESCRIPTION>file name</DESCRIPTION>\n'
+         b'</FIELD>\n'
+         b'<DATA>\n'
+         b'<TABLEDATA />\n'
+         b'</DATA>\n'
+         b'</TABLE>\n'
+         b'<INFO name="QUERY_STATUS" value="OK" />\n'
+         b'</RESOURCE>\n'
+         b'</VOTABLE>\n']
+    ad_mock.return_value.__enter__.return_value = response
     test_config = mc.Config()
     result = mc.read_file_list_from_archive(test_config, 'test_app_name',
                                             '2018-11-18T22:39:56.186443+00:00',
@@ -258,11 +257,9 @@ def test_read_file_list_from_archive(basews_mock):
     assert len(result) == 0
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_write_to_file():
     content = ['a.txt', 'b.jpg', 'c.fits.gz']
-    test_fqn = '{}/test_out.txt'.format(TEST_DATA_DIR)
+    test_fqn = '{}/test_out.txt'.format(tc.TEST_DATA_DIR)
     if os.path.exists(test_fqn):
         os.remove(test_fqn)
 
@@ -270,18 +267,14 @@ def test_write_to_file():
     assert os.path.exists(test_fqn)
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support 3.6 only')
 def test_get_lineage():
     result = mc.get_lineage('TEST_COLLECTION', 'TEST_PRODUCT_ID',
                             'TEST_FILE_NAME.fits')
     assert result == 'TEST_PRODUCT_ID/ad:TEST_COLLECTION/TEST_FILE_NAME.fits'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_get_artifact_metadata():
-    test_fqn = os.path.join(TEST_DATA_DIR, 'config.yml')
+    test_fqn = os.path.join(tc.TEST_DATA_DIR, 'config.yml')
     test_uri = 'ad:TEST/config.yml'
 
     # wrong command line parameters
@@ -309,12 +302,10 @@ def test_get_artifact_metadata():
         'md5:fb28c7904ace71ba3c713fb796325318', 'wrong checksum'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('cadcdata.core.CadcDataClient')
 @patch('caom2pipe.manage_composable.Metrics')
 def test_data_put(mock_metrics, mock_client):
-    mc.data_put(mock_client, TEST_DATA_DIR, 'TEST.fits', 'TEST', 'default',
+    mc.data_put(mock_client, tc.TEST_DATA_DIR, 'TEST.fits', 'TEST', 'default',
                 metrics=mock_metrics)
     mock_client.put_file.assert_called_with(
         'TEST', 'TEST.fits', archive_stream='default',
@@ -327,29 +318,29 @@ def test_data_put(mock_metrics, mock_client):
     assert args[5] == 'TEST.fits', 'wrong id'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('cadcdata.core.CadcDataClient')
 def test_data_get(mock_client):
     test_config = mc.Config()
     test_config.observe_execution = True
     test_metrics = mc.Metrics(test_config)
     with pytest.raises(mc.CadcException):
-        mc.data_get(mock_client, TEST_DATA_DIR, 'TEST_get.fits', 'TEST',
+        mc.data_get(mock_client, tc.TEST_DATA_DIR, 'TEST_get.fits', 'TEST',
                     test_metrics)
     assert len(test_metrics.failures) == 1, 'wrong failures'
     assert test_metrics.failures['data']['get']['TEST_get.fits'] == 1, 'count'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_state():
     if os.path.exists(TEST_STATE_FILE):
         os.unlink(TEST_STATE_FILE)
     with open(TEST_STATE_FILE, 'w') as f:
-        f.write(
-            'bookmarks:\n  gemini_timestamp:\n    last_record: '
-            '2019-07-23 20:52:03.524443\n')
+        f.write('bookmarks:\n'
+                '  gemini_timestamp:\n'
+                '    last_record: 2019-07-23 20:52:03.524443\n'
+                'context:\n'
+                '  neossat_context:\n'
+                '    - NEOSS\n'
+                '    - 2020\n')
 
     with pytest.raises(mc.CadcException):
         test_subject = mc.State('nonexistent')
@@ -360,15 +351,24 @@ def test_state():
     assert test_result is not None, 'expect content'
     assert isinstance(test_result, datetime)
 
-    test_subject.save_state('gemini_timestamp', test_result)
+    test_context = test_subject.get_context('neossat_context')
+    assert test_context is not None, 'expect a result'
+    assert isinstance(test_context, list), 'wrong return type'
+    assert len(test_context) == 2, 'wrong return length'
+    assert 'NEOSS' in test_context, 'wrong content'
+    test_context.append('2019')
+
+    test_subject.save_state('gemini_timestamp',
+                            test_result + timedelta(3))
+    test_subject.save_state('neossat_context', test_context)
 
     with open(TEST_STATE_FILE, 'r') as f:
         text = f.readlines()
-        assert '20:52:03.524443' not in text, 'content not updated'
+        compare = ''.join(ii for ii in text)
+        assert '2019-07-23' not in compare, 'content not updated'
+        assert '2019' in compare, 'context content not updated'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_make_seconds():
     t1 = '2017-06-26T17:07:21.527+00'
     t1_dt = mc.make_seconds(t1)
@@ -386,8 +386,6 @@ def test_make_seconds():
     assert t3_dt == 1563268080.0, 'wrong result'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_increment_time():
     t1 = '2017-06-26T17:07:21.527'
     t1_dt = datetime.strptime(t1, mc.ISO_8601_FORMAT)
@@ -407,8 +405,6 @@ def test_increment_time():
         mc.increment_time(t2_dt, 23, '%f')
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('cadcdata.core.CadcDataClient')
 @patch('caom2pipe.manage_composable.http_get')
 def test_look_pull_and_put(http_mock, mock_client):
@@ -423,7 +419,7 @@ def test_look_pull_and_put(http_mock, mock_client):
         test_metrics = mc.Metrics(test_config)
         assert len(test_metrics.history) == 0, 'initial history conditions'
         assert len(test_metrics.failures) == 0, 'initial failure conditions'
-        mc.look_pull_and_put(f_name, TEST_DATA_DIR, url, 'TEST', 'default',
+        mc.look_pull_and_put(f_name, tc.TEST_DATA_DIR, url, 'TEST', 'default',
                              'application/fits', mock_client, 'md5:01234',
                              test_metrics)
         mock_client.put_file.assert_called_with(
@@ -431,15 +427,13 @@ def test_look_pull_and_put(http_mock, mock_client):
             mime_encoding=None,
             mime_type='application/fits'), 'mock not called'
         http_mock.assert_called_with(
-            url, os.path.join(TEST_DATA_DIR, f_name)), 'http mock not called'
+            url, os.path.join(tc.TEST_DATA_DIR, f_name)), 'http mock not called'
         assert len(test_metrics.history) == 1, 'history conditions'
         assert len(test_metrics.failures) == 0, 'failure conditions'
     finally:
         os.stat = stat_orig
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('caom2repo.core.CAOM2RepoClient')
 def test_repo_create(mock_client):
     test_obs = mc.read_obs_from_file(TEST_OBS_FILE)
@@ -465,8 +459,6 @@ def test_repo_create(mock_client):
     assert len(test_metrics.failures) == 1, 'should have failure counts'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('caom2repo.core.CAOM2RepoClient')
 def test_repo_get(mock_client):
     test_config = mc.Config()
@@ -492,8 +484,6 @@ def test_repo_get(mock_client):
     assert len(test_metrics.failures) == 1, 'should have failure counts'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('caom2repo.core.CAOM2RepoClient')
 def test_repo_update(mock_client):
     test_obs = mc.read_obs_from_file(TEST_OBS_FILE)
@@ -519,8 +509,6 @@ def test_repo_update(mock_client):
     assert len(test_metrics.failures) == 1, 'should have failure counts'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('caom2repo.core.CAOM2RepoClient')
 def test_repo_delete(mock_client):
     test_config = mc.Config()
@@ -545,8 +533,6 @@ def test_repo_delete(mock_client):
     assert len(test_metrics.failures) == 1, 'should have failure counts'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('requests.get')
 def test_http_get(mock_req):
     # Response mock
@@ -602,10 +588,8 @@ def test_http_get(mock_req):
     assert mock_req.called, 'mock not called'
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 def test_create_dir():
-    test_f_name = f'{TEST_DATA_DIR}/test_file_dir'
+    test_f_name = f'{tc.TEST_DATA_DIR}/test_file_dir'
     if os.path.exists(test_f_name):
         if os.path.isdir(test_f_name):
             os.rmdir(test_f_name)
@@ -638,8 +622,6 @@ class TestValidator(mc.Validator):
         return []
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
 @patch('cadcdata.core.net.BaseWsClient.post')
 @patch('cadcdata.core.net.BaseWsClient.get')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
@@ -690,7 +672,7 @@ def test_validator(caps_mock, ad_mock, tap_mock):
     ad_mock.return_value = ad_response
 
     getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=TEST_DATA_DIR)
+    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
 
     try:
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
@@ -702,7 +684,7 @@ def test_validator(caps_mock, ad_mock, tap_mock):
             f'wrong value format, should be just a file name, ' \
             f'{test_destination_meta[0]}'
 
-        test_listing_fqn = f'{TEST_DATA_DIR}/{mc.VALIDATE_OUTPUT}'
+        test_listing_fqn = f'{tc.TEST_DATA_DIR}/{mc.VALIDATE_OUTPUT}'
         if os.path.exists(test_listing_fqn):
             os.unlink(test_listing_fqn)
 
@@ -718,25 +700,64 @@ def test_validator(caps_mock, ad_mock, tap_mock):
         os.getcwd = getcwd_orig
 
 
-@pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
-                    reason='support one python version')
-@patch('cadcdata.core.net.BaseWsClient.get')
+@patch('cadcdata.core.net.BaseWsClient.post')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 def test_validator2(caps_mock, ad_mock):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     response = Mock()
     response.status_code = 200
-    response.text = \
-        ['ingestDate,fileName\n',
-         '2019-10-23T16:27:19.000,NEOS_SCI_2015347000000_clean.fits\n',
-         '2019-10-23T16:27:27.000,NEOS_SCI_2015347000000.fits\n',
-         '2019-10-23T16:27:33.000,NEOS_SCI_2015347002200_clean.fits\n',
-         '2019-10-23T16:27:40.000,NEOS_SCI_2015347002200.fits\n',
-         '2019-10-23T16:27:47.000,NEOS_SCI_2015347002500_clean.fits\n']
-
-    ad_mock.return_value = response
+    response.iter_content.return_value = \
+        [b'<?xml version="1.0" encoding="UTF-8"?>\n'
+         b'<VOTABLE xmlns="http://www.ivoa.net/xml/VOTable/v1.3" '
+         b'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+         b'version="1.3">\n'
+         b'<RESOURCE type="results">\n'
+         b'<INFO name="QUERY_STATUS" value="OK" />\n'
+         b'<INFO name="QUERY_TIMESTAMP" value="2019-11-14T16:26:46.274" />\n'
+         b'<INFO name="QUERY" value="SELECT distinct A.uri&#xA;FROM '
+         b'caom2.Observation as O&#xA;JOIN caom2.Plane as P on O.obsID = '
+         b'P.obsID&#xA;JOIN caom2.Artifact as A on P.planeID = A.planeID&#xA;'
+         b'WHERE O.collection = \'NEOSSAT\'&#xA;AND A.uri like '
+         b'\'%2019213215700%\'" />\n'
+         b'<TABLE>\n'
+         b'<FIELD name="ingestDate" datatype="char" arraysize="*" '
+         b'xtype="timestamp">\n'
+         b'<DESCRIPTION>file ingest date</DESCRIPTION>\n'
+         b'</FIELD>\n'
+         b'<FIELD name="fileName" datatype="char" arraysize="255*">\n'
+         b'<DESCRIPTION>file name</DESCRIPTION>\n'
+         b'</FIELD>\n'
+         b'<DATA>\n'
+         b'<TABLEDATA>\n'
+         b'<TR>\n'
+         b'<TD>2019-10-23T16:27:19.000</TD>\n'
+         b'<TD>NEOS_SCI_2015347000000_clean.fits</TD>\n'
+         b'</TR>\n'
+         b'<TR>\n'
+         b'<TD>2019-10-23T16:27:27.000</TD>\n'
+         b'<TD>NEOS_SCI_2015347000000.fits</TD>\n'
+         b'</TR>\n'
+         b'<TR>\n'
+         b'<TD>2019-10-23T16:27:33.000</TD>\n'
+         b'<TD>NEOS_SCI_2015347002200_clean.fits</TD>\n'
+         b'</TR>\n'
+         b'<TR>\n'
+         b'<TD>2019-10-23T16:27:40.000</TD>\n'
+         b'<TD>NEOS_SCI_2015347002200.fits</TD>\n'
+         b'</TR>\n'
+         b'<TR>\n'
+         b'<TD>2019-10-23T16:27:47.000</TD>\n'
+         b'<TD>NEOS_SCI_2015347002500_clean.fits</TD>\n'
+         b'</TR>\n'
+         b'</TABLEDATA>\n'
+         b'</DATA>\n'
+         b'</TABLE>\n'
+         b'<INFO name="QUERY_STATUS" value="OK" />\n'
+         b'</RESOURCE>\n'
+         b'</VOTABLE>\n']
+    ad_mock.return_value.__enter__.return_value = response
     getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=TEST_DATA_DIR)
+    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
     try:
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
         test_destination_data = test_subject._read_list_from_destination_data()
@@ -746,7 +767,7 @@ def test_validator2(caps_mock, ad_mock):
         assert test_result['fileName'] == 'NEOS_SCI_2015347000000.fits', \
             f'wrong value format, should be just a file name, ' \
             f'{test_result["fileName"]}'
-        assert test_result['ingestDate'] == '2019-10-23T16:27:27.000', \
+        assert test_result['ingestDate'] == b'2019-10-23T16:27:27.000', \
             f'wrong value format, should be a datetime value, ' \
             f'{test_result["ingestDate"]}'
     finally:
@@ -756,7 +777,7 @@ def test_validator2(caps_mock, ad_mock):
 def test_define_subject():
 
     getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=TEST_DATA_DIR)
+    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
 
     try:
         test_config = mc.Config()
@@ -777,7 +798,7 @@ def test_define_subject():
         assert test_subject is None, 'expect no subject, cannot find content'
         test_config.netrc_file = None
         # proxy pre-condition
-        test_config.proxy_fqn = f'{TEST_DATA_DIR}/proxy.pem'
+        test_config.proxy_fqn = f'{tc.TEST_DATA_DIR}/proxy.pem'
 
         if not os.path.exists(test_config.proxy_fqn):
             with open(test_config.proxy_fqn, 'w') as f:
@@ -786,11 +807,11 @@ def test_define_subject():
         test_subject = mc.define_subject(test_config)
         assert test_subject is not None, 'expect a proxy subject'
         test_config.proxy_fqn = '/nonexistent'
-        test_subject = mc.define_subject(test_config)
-        assert test_subject is None, 'expect no subject, cannot find content'
+        with pytest.raises(mc.CadcException):
+            mc.define_subject(test_config)
 
         test_config.proxy_fqn = None
-        test_subject = mc.define_subject(test_config)
-        assert test_subject is None, 'expect no subject, no defined sources'
+        with pytest.raises(mc.CadcException):
+            mc.define_subject(test_config)
     finally:
         os.getcwd = getcwd_orig
