@@ -215,12 +215,39 @@ def test_get_file_meta():
     assert result['size'] == 0, result['size']
 
 
-@patch('cadcdata.core.net.BaseWsClient')
-def test_read_file_list_from_archive(basews_mock):
-
+@patch('cadcdata.core.net.BaseWsClient.post')
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+def test_read_file_list_from_archive(caps_mock, ad_mock):
+    caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     response = Mock()
-    response.status_code.return_value = 200
-    basews_mock.return_value.get.return_value = response
+    response.status_code = 200
+    response.iter_content.return_value = \
+        [b'<?xml version="1.0" encoding="UTF-8"?>\n'
+         b'<VOTABLE xmlns="http://www.ivoa.net/xml/VOTable/v1.3" '
+         b'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+         b'version="1.3">\n'
+         b'<RESOURCE type="results">\n'
+         b'<INFO name="QUERY_STATUS" value="OK" />\n'
+         b'<INFO name="QUERY_TIMESTAMP" value="2019-11-27T00:07:08.736" />\n'
+         b'<INFO name="QUERY" value="SELECT ingestDate, fileName&#xA;FROM '
+         b'archive_files&#xA;WHERE archiveName = \'NEOSS\'&#xA;AND '
+         b'fileName = \'xEOS_SCI_2019319035900.fits\'" />\n'
+         b'<TABLE>\n'
+         b'<FIELD name="ingestDate" datatype="char" arraysize="*" '
+         b'xtype="timestamp">\n'
+         b'<DESCRIPTION>file ingest date</DESCRIPTION>\n'
+         b'</FIELD>\n'
+         b'<FIELD name="fileName" datatype="char" arraysize="255*">\n'
+         b'<DESCRIPTION>file name</DESCRIPTION>\n'
+         b'</FIELD>\n'
+         b'<DATA>\n'
+         b'<TABLEDATA />\n'
+         b'</DATA>\n'
+         b'</TABLE>\n'
+         b'<INFO name="QUERY_STATUS" value="OK" />\n'
+         b'</RESOURCE>\n'
+         b'</VOTABLE>\n']
+    ad_mock.return_value.__enter__.return_value = response
     test_config = mc.Config()
     result = mc.read_file_list_from_archive(test_config, 'test_app_name',
                                             '2018-11-18T22:39:56.186443+00:00',
@@ -673,21 +700,62 @@ def test_validator(caps_mock, ad_mock, tap_mock):
         os.getcwd = getcwd_orig
 
 
-@patch('cadcdata.core.net.BaseWsClient.get')
+@patch('cadcdata.core.net.BaseWsClient.post')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 def test_validator2(caps_mock, ad_mock):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     response = Mock()
     response.status_code = 200
-    response.text = \
-        ['ingestDate,fileName\n',
-         '2019-10-23T16:27:19.000,NEOS_SCI_2015347000000_clean.fits\n',
-         '2019-10-23T16:27:27.000,NEOS_SCI_2015347000000.fits\n',
-         '2019-10-23T16:27:33.000,NEOS_SCI_2015347002200_clean.fits\n',
-         '2019-10-23T16:27:40.000,NEOS_SCI_2015347002200.fits\n',
-         '2019-10-23T16:27:47.000,NEOS_SCI_2015347002500_clean.fits\n']
-
-    ad_mock.return_value = response
+    response.iter_content.return_value = \
+        [b'<?xml version="1.0" encoding="UTF-8"?>\n'
+         b'<VOTABLE xmlns="http://www.ivoa.net/xml/VOTable/v1.3" '
+         b'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+         b'version="1.3">\n'
+         b'<RESOURCE type="results">\n'
+         b'<INFO name="QUERY_STATUS" value="OK" />\n'
+         b'<INFO name="QUERY_TIMESTAMP" value="2019-11-14T16:26:46.274" />\n'
+         b'<INFO name="QUERY" value="SELECT distinct A.uri&#xA;FROM '
+         b'caom2.Observation as O&#xA;JOIN caom2.Plane as P on O.obsID = '
+         b'P.obsID&#xA;JOIN caom2.Artifact as A on P.planeID = A.planeID&#xA;'
+         b'WHERE O.collection = \'NEOSSAT\'&#xA;AND A.uri like '
+         b'\'%2019213215700%\'" />\n'
+         b'<TABLE>\n'
+         b'<FIELD name="ingestDate" datatype="char" arraysize="*" '
+         b'xtype="timestamp">\n'
+         b'<DESCRIPTION>file ingest date</DESCRIPTION>\n'
+         b'</FIELD>\n'
+         b'<FIELD name="fileName" datatype="char" arraysize="255*">\n'
+         b'<DESCRIPTION>file name</DESCRIPTION>\n'
+         b'</FIELD>\n'
+         b'<DATA>\n'
+         b'<TABLEDATA>\n'
+         b'<TR>\n'
+         b'<TD>2019-10-23T16:27:19.000</TD>\n'
+         b'<TD>NEOS_SCI_2015347000000_clean.fits</TD>\n'
+         b'</TR>\n'
+         b'<TR>\n'
+         b'<TD>2019-10-23T16:27:27.000</TD>\n'
+         b'<TD>NEOS_SCI_2015347000000.fits</TD>\n'
+         b'</TR>\n'
+         b'<TR>\n'
+         b'<TD>2019-10-23T16:27:33.000</TD>\n'
+         b'<TD>NEOS_SCI_2015347002200_clean.fits</TD>\n'
+         b'</TR>\n'
+         b'<TR>\n'
+         b'<TD>2019-10-23T16:27:40.000</TD>\n'
+         b'<TD>NEOS_SCI_2015347002200.fits</TD>\n'
+         b'</TR>\n'
+         b'<TR>\n'
+         b'<TD>2019-10-23T16:27:47.000</TD>\n'
+         b'<TD>NEOS_SCI_2015347002500_clean.fits</TD>\n'
+         b'</TR>\n'
+         b'</TABLEDATA>\n'
+         b'</DATA>\n'
+         b'</TABLE>\n'
+         b'<INFO name="QUERY_STATUS" value="OK" />\n'
+         b'</RESOURCE>\n'
+         b'</VOTABLE>\n']
+    ad_mock.return_value.__enter__.return_value = response
     getcwd_orig = os.getcwd
     os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
     try:
@@ -699,7 +767,7 @@ def test_validator2(caps_mock, ad_mock):
         assert test_result['fileName'] == 'NEOS_SCI_2015347000000.fits', \
             f'wrong value format, should be just a file name, ' \
             f'{test_result["fileName"]}'
-        assert test_result['ingestDate'] == '2019-10-23T16:27:27.000', \
+        assert test_result['ingestDate'] == b'2019-10-23T16:27:27.000', \
             f'wrong value format, should be a datetime value, ' \
             f'{test_result["ingestDate"]}'
     finally:
@@ -739,11 +807,11 @@ def test_define_subject():
         test_subject = mc.define_subject(test_config)
         assert test_subject is not None, 'expect a proxy subject'
         test_config.proxy_fqn = '/nonexistent'
-        test_subject = mc.define_subject(test_config)
-        assert test_subject is None, 'expect no subject, cannot find content'
+        with pytest.raises(mc.CadcException):
+            mc.define_subject(test_config)
 
         test_config.proxy_fqn = None
-        test_subject = mc.define_subject(test_config)
-        assert test_subject is None, 'expect no subject, no defined sources'
+        with pytest.raises(mc.CadcException):
+            mc.define_subject(test_config)
     finally:
         os.getcwd = getcwd_orig
