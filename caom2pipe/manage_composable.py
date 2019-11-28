@@ -239,18 +239,18 @@ class State(object):
     def get_bookmark(self, key):
         """Lookup for last_record key."""
         result = None
-        if self.bookmarks.get(key) is None:
-            self.logger.warning(f'No record found for {key}')
-        else:
+        if key in self.bookmarks:
             result = self.bookmarks.get(key).get('last_record')
+        else:
+            self.logger.warning(f'No record found for {key}')
         return result
 
     def get_context(self, key):
         result = None
-        if self.context.get(key) is None:
-            self.logger.warning(f'No context found for {key}')
-        else:
+        if key in self.context:
             result = self.context.get(key)
+        else:
+            self.logger.warning(f'No context found for {key}')
         return result
 
     def save_state(self, key, value):
@@ -258,20 +258,19 @@ class State(object):
         :param key which record is being updated
         :param value the value to update the record with
         """
-        if self.bookmarks.get(key) is None:
-            if self.context.get(key) is None:
-                self.logger.warning(f'No context found for {key}')
+        bookmarks = self.get_bookmark(key)
+        if bookmarks is None:
+            context = self.get_context(key)
+            if context is None:
+                self.logger.warning(f'No content found for {key}')
             else:
                 self.context[key] = value
                 logging.debug(f'Saving context {value} {self.fqn}')
                 write_as_yaml(self.content, self.fqn)
         else:
-            if self.bookmarks.get(key).get('last_record') is None:
-                self.logger.warning(f'No bookmark found for {key}')
-            else:
-                self.bookmarks[key]['last_record'] = value
-                logging.debug(f'Saving timestamp {value} {self.fqn}')
-                write_as_yaml(self.content, self.fqn)
+            self.bookmarks[key]['last_record'] = value
+            logging.debug(f'Saving bookmarked last record {value} {self.fqn}')
+            write_as_yaml(self.content, self.fqn)
 
 
 class Builder(object):
@@ -1282,6 +1281,9 @@ class Validator(object):
 
     CADC is the destination, where the data and metadata originate from
     is the source.
+
+    The method 'read_from_source' must be implemented for validate to
+    run to completion.
     """
     def __init__(self, source_name, scheme='ad', preview_suffix='jpg',
                  source_tz='UTC'):
@@ -1299,9 +1301,6 @@ class Validator(object):
         """
         self._config = Config()
         self._config.get_executors()
-        logger = logging.getLogger()
-        logger.setLevel(self._config.logging_level)
-        logging.debug(self._config)
         self._source = []
         self._destination_data = []
         self._destination_meta = []
@@ -1309,6 +1308,9 @@ class Validator(object):
         self._scheme = scheme
         self._preview_suffix = preview_suffix
         self._source_tz = timezone(source_tz)
+        self._logger = logging.getLogger()
+        self._logger.setLevel(self._config.logging_level)
+        self._logger.debug(self._config)
 
     def _filter_result(self):
         """The default implementation does nothing, but this allows
@@ -1317,7 +1319,7 @@ class Validator(object):
         pass
 
     def _find_unaligned_dates(self, source, meta, data):
-        result = []
+        result = set()
         if len(data) > 0:
             for f_name in meta:
                 if f_name in source and f_name in data['fileName']:
@@ -1331,36 +1333,25 @@ class Validator(object):
                     # AD - 2019-11-18 - 'ad' timezone is US/Pacific
                     dest_utc = dest_dt.astimezone(timezone('US/Pacific'))
                     if dest_utc < source_utc:
-                        result.append(f_name)
-        return list(set(result))
+                        result.add(f_name)
+        return result
 
     def _read_list_from_destination_data(self):
         """Code to execute a query for files and the arrival time, that are in
         CADC storage.
         """
         ad_resource_id = 'ivo://cadc.nrc.ca/ad'
-        agent = '{}/{}'.format(self._source_name, '1.0')
-        subject = define_subject(self._config)
-        client = net.BaseWsClient(resource_id=ad_resource_id,
-                                  subject=subject, agent=agent, retry=True)
-        query_meta = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
-                     f"archiveName = '{self._config.archive}' " \
-                     f"AND fileName not like '%{self._preview_suffix}' " \
-                     f"ORDER BY fileName"
-        data = {'QUERY': query_meta, 'LANG': 'ADQL', 'FORMAT': 'csv'}
-        logging.debug('Query is {}'.format(query_meta))
-        try:
-            response = client.get(
-                f'https://{client.host}/ad/sync?{parse.urlencode(data)}')
-            if response.status_code == 200:
-                table = Table.read(response.text, format='csv')
-                return table
-            else:
-                logging.warning('No work to do. Query failure {!r}'.format(
-                    response))
-                return Table()
-        except Exception as e:
-            raise CadcException('Failed ad content query: {}'.format(e))
+        query = f"SELECT fileName, min(ingestDate) FROM archive_files WHERE " \
+                f"archiveName = '{self._config.archive}' " \
+                f"AND fileName not like '%{self._preview_suffix}' " \
+                f"GROUP BY fileName " \
+                f"ORDER BY fileName"
+        self._logger.debug(f'Query is {query}')
+        subject = net.Subject(certificate=self._config.proxy_fqn)
+        tap_client = CadcTapClient(subject, resource_id=ad_resource_id)
+        buffer = io.BytesIO()
+        tap_client.query(query, output_file=buffer, data_only=True)
+        return parse_single_table(buffer).to_table()
 
     def _read_list_from_destination_meta(self):
         query = f"SELECT A.uri FROM caom2.Observation AS O " \
@@ -1368,7 +1359,7 @@ class Validator(object):
                 f"JOIN caom2.Artifact AS A ON P.planeID = A.planeID " \
                 f"WHERE O.collection='{self._config.collection}' " \
                 f"AND A.uri not like '%{self._preview_suffix}'"
-        logging.debug(f'Query is {query}')
+        self._logger.debug(f'Query is {query}')
         subject = net.Subject(certificate=self._config.proxy_fqn)
         tap_client = CadcTapClient(subject, resource_id=self._config.tap_id)
         buffer = io.BytesIO()
@@ -1387,31 +1378,32 @@ class Validator(object):
         raise NotImplementedError()
 
     def validate(self):
-        logging.info('Query destination metadata.')
+        self._logger.info('Query destination metadata.')
         dest_meta_temp = self._read_list_from_destination_meta()
 
-        logging.info('Query source metadata.')
+        self._logger.info('Query source metadata.')
         source_temp = self.read_from_source()
 
-        logging.info('Find files that do not appear at CADC.')
+        self._logger.info('Find files that do not appear at CADC.')
         self._destination_meta = find_missing(
             dest_meta_temp, source_temp.keys())
 
-        logging.info(f'Find files that do not appear at {self._source_name}.')
+        self._logger.info(
+            f'Find files that do not appear at {self._source_name}.')
         self._source = find_missing(source_temp.keys(), dest_meta_temp)
 
-        logging.info('Query destination data.')
+        self._logger.info('Query destination data.')
         dest_data_temp = self._read_list_from_destination_data()
 
-        logging.info(f'Find files that are newer at {self._source_name} '
-                     f'than at CADC.')
+        self._logger.info(f'Find files that are newer at {self._source_name} '
+                          f'than at CADC.')
         self._destination_data = self._find_unaligned_dates(
             source_temp, dest_meta_temp, dest_data_temp)
 
-        logging.info('Filter the results.')
+        self._logger.info(f'Filter the results.')
         self._filter_result()
 
-        logging.info('Log the results.')
+        self._logger.info('Log the results.')
         result = {f'{self._source_name}': self._source,
                   'cadc': self._destination_meta,
                   'timestamps': self._destination_data}
@@ -1419,14 +1411,15 @@ class Validator(object):
             self._config.working_directory, VALIDATE_OUTPUT)
         write_as_yaml(result, result_fqn)
 
-        logging.info(f'Results:\n'
-                     f'  - {len(self._source)} files at '
-                     f'{self._source_name} that are not referenced by CADC '
-                     f'CAOM entries\n'
-                     f'  - {len(self._destination_meta)} CAOM entries at '
-                     f'CADC that do not reference {self._source_name} files\n'
-                     f'  - {len(self._destination_data)} files that are '
-                     f'newer at {self._source_name} than in CADC storage')
+        self._logger.info(f'Results:\n'
+                          f'  - {len(self._source)} files at '
+                          f'{self._source_name} that are not referenced by '
+                          f'CADC CAOM entries\n'
+                          f'  - {len(self._destination_meta)} CAOM entries at '
+                          f'CADC that do not reference {self._source_name} '
+                          f'files\n'
+                          f'  - {len(self._destination_data)} files that are '
+                          f'newer at {self._source_name} than in CADC storage')
         return self._source, self._destination_meta, self._destination_data
 
     def write_todo(self):
@@ -1465,10 +1458,11 @@ def define_subject(config):
             logging.warning(f'Cannot find netrc file {netrc_fqn}')
     else:
         logging.warning(
-            'No credentials provided (proxy certificate or netrc file).')
-        logging.warning(
             'Proxy certificate is {}, netrc file is {}.'.format(
                 config.proxy_fqn, config.netrc_file))
+        raise CadcException(
+            'No credentials provided (proxy certificate or netrc file). '
+            'Cannot create an anonymous subject.')
     return subject
 
 
@@ -1575,6 +1569,7 @@ def ftp_get(ftp_host_name, source_fqn, dest_fqn):
                 logging.info('Downloaded {} from {}'.format(
                     source_fqn, ftp_host_name))
             else:
+                os.unlink(dest_fqn)
                 raise CadcException(
                     'File size error when transferring {} from {}'.format(
                         source_fqn, ftp_host_name))
@@ -1609,6 +1604,7 @@ def ftp_get_timeout(ftp_host_name, source_fqn, dest_fqn, timeout=20):
                 logging.info('Downloaded {} from {}'.format(
                     source_fqn, ftp_host_name))
             else:
+                os.unlink(dest_fqn)
                 raise CadcException(
                     'File size error when transferring {} from {}'.format(
                         source_fqn, ftp_host_name))
@@ -1693,17 +1689,16 @@ def get_file_meta(fqn):
 
 def create_dir(dir_name):
     """Create the working area if it does not already exist."""
-    if os.path.exists(dir_name):
-        if os.path.isfile(dir_name):
-            raise CadcException(f'{dir_name} already exists as a file.')
-    else:
-        os.mkdir(dir_name)
+    try:
+        os.makedirs(dir_name, exist_ok=True)
         if not os.path.exists(dir_name):
             raise CadcException(
                 'Could not mkdir {}'.format(dir_name))
         if not os.access(dir_name, os.W_OK | os.X_OK):
             raise CadcException(
                 '{} is not writeable.'.format(dir_name))
+    except FileExistsError as e:
+        raise CadcException(f'{dir_name} already exists as a file.')
 
 
 def decompose_lineage(lineage):
@@ -1819,29 +1814,18 @@ def read_file_list_from_archive(config, app_name, prev_exec_date, exec_date):
     start_time = format_time_for_query(prev_exec_date)
     end_time = format_time_for_query(exec_date)
     ad_resource_id = 'ivo://cadc.nrc.ca/ad'
-    agent = '{}/{}'.format(app_name, '1.0')
+    query = f"SELECT fileName, min(ingestDate) FROM archive_files WHERE " \
+            f"archiveName = '{config.archive}' AND ingestDate > " \
+            f"'{start_time}' and " \
+            f"ingestDate <= '{end_time}' ORDER BY ingestDate " \
+            f"GROUP BY ingestDate"
+    logging.debug(f'Query is {query}')
     subject = net.Subject(certificate=config.proxy_fqn)
-    client = net.BaseWsClient(resource_id=ad_resource_id,
-                              subject=subject, agent=agent, retry=True)
-    query_meta = "SELECT fileName FROM archive_files WHERE " \
-                 "archiveName = '{}' AND ingestDate > '{}' and " \
-                 "ingestDate <= '{}' ORDER BY ingestDate".format(
-                    config.archive, start_time, end_time)
-    data = {'QUERY': query_meta, 'LANG': 'ADQL', 'FORMAT': 'csv'}
-    logging.debug('Query is {}'.format(query_meta))
-    try:
-        response = client.get('https://{}/ad/sync?{}'.format(
-            client.host, parse.urlencode(data)), cert=config.proxy_fqn)
-        if response.status_code == 200:
-            # ignore the column name as the first part of the response
-            artifact_files_list = response.text.split()[1:]
-            return artifact_files_list
-        else:
-            logging.warning('No work to do. Query failure {!r}'.format(
-                response))
-            return []
-    except Exception as e:
-        raise CadcException('Failed ad content query: {}'.format(e))
+    tap_client = CadcTapClient(subject, resource_id=ad_resource_id)
+    buffer = io.BytesIO()
+    tap_client.query(query, output_file=buffer, data_only=True)
+    temp = parse_single_table(buffer).to_table()
+    return [ii.decode() for ii in temp['fileName']]
 
 
 def get_lineage(archive, product_id, file_name, scheme='ad'):
@@ -2204,4 +2188,9 @@ def repo_update(client, observation, metrics):
 
 
 def find_missing(compare_this, to_this):
-    return [ii for ii in compare_this if ii not in to_this]
+    """
+    :param compare_this: list
+    :param to_this: list
+    :return: list of elements from to_this not in compare_this
+    """
+    return list(set(compare_this).difference(to_this))

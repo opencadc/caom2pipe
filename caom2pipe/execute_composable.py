@@ -850,6 +850,7 @@ class PullClient(CaomExecute):
             hdulist.close()
         except (fits.VerifyError, OSError) as e:
             self.observable.rejected.record(mc.Rejected.BAD_DATA, self.fname)
+            os.unlink(self.local_fqn)
             raise mc.CadcException(
                 f'astropy verify error {self.local_fqn} when reading {e}')
         # a second check that fails for some NEOSSat cases - if this works,
@@ -860,6 +861,7 @@ class PullClient(CaomExecute):
             fits.getdata(self.local_fqn, ext=0)
         except TypeError as e:
             self.observable.rejected.record(mc.Rejected.BAD_DATA, self.fname)
+            os.unlink(self.local_fqn)
             raise mc.CadcException(
                 f'astropy getdata error {self.local_fqn} when reading {e}')
 
