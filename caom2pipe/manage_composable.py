@@ -797,7 +797,10 @@ class Config(object):
     @rejected_file_name.setter
     def rejected_file_name(self, value):
         self._rejected_file_name = value
-        if self._log_file_directory is not None:
+        if self._rejected_directory is not None:
+            self.rejected_fqn = os.path.join(
+                self._rejected_directory, self._rejected_file_name)
+        elif self._log_file_directory is not None:
             self.rejected_fqn = os.path.join(
                 self._log_file_directory, self._rejected_file_name)
 
@@ -930,8 +933,8 @@ class Config(object):
                 self.log_file_directory, self.success_log_file_name,
                 self.success_fqn, self.failure_log_file_name,
                 self.failure_fqn, self.retry_file_name, self.retry_fqn,
-                self.retry_failures, self.retry_count, self.rejected_file_name,
-                self.rejected_directory, self.rejected_fqn,
+                self.retry_failures, self.retry_count, self.rejected_directory,
+                self.rejected_file_name, self.rejected_fqn,
                 self.progress_file_name,
                 self.progress_fqn, self.proxy_fqn, self.state_fqn,
                 self.features, self.interval, self.observe_execution,
