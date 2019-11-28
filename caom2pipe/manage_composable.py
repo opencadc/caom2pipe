@@ -71,6 +71,7 @@ import csv
 import io
 import logging
 import os
+import re
 import requests
 import subprocess
 import sys
@@ -109,7 +110,8 @@ __all__ = ['CadcException', 'Config', 'State', 'to_float', 'TaskType',
            'increment_time', 'ISO_8601_FORMAT', 'http_get', 'Rejected',
            'record_progress', 'Builder', 'Work', 'look_pull_and_put',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
-           'repo_update', 'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT']
+           'repo_update', 'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
+           'Validator', 'CaomName', 'StorageName']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -368,6 +370,9 @@ class Rejected(object):
             if reason not in self.content:
                 self.content[reason] = []
 
+    def __str__(self):
+        return self.content.__str__()
+
     def check_and_record(self, message, obs_id):
         """Keep track of an additional entry.
         :returns boolean True if the failure is known and tracked."""
@@ -387,6 +392,15 @@ class Rejected(object):
             # ensure unique entries
             self.content[key] = list(set(value))
         write_as_yaml(self.content, self.fqn)
+
+    def get_bad_data(self):
+        return self.content[Rejected.BAD_DATA]
+
+    def get_bad_metadata(self):
+        return self.content[Rejected.BAD_METADATA]
+
+    def get_no_preview(self):
+        return self.content[Rejected.NO_PREVIEW]
 
     def is_bad_data(self, obs_id):
         return obs_id in self.content[Rejected.BAD_DATA]
@@ -473,6 +487,42 @@ class Observable(object):
     @property
     def metrics(self):
         return self._metrics
+
+
+class CaomName(object):
+    """The naming rules for making and decomposing CAOM URIs (i.e. Observation
+    URIs, Plane URIs, and archive URIs, all isolated in one class. There are
+    probably OMM assumptions built in, but those will slowly go away :). """
+
+    def __init__(self, uri):
+        self.uri = uri
+
+    @property
+    def file_id(self):
+        """
+
+        :return: Extracted from an Artifact URI, the file_id is the file
+        name portion of the URI with all file type and compression type
+        extensions removed.
+        """
+        return StorageName.remove_extensions(self.uri.split('/')[1])
+
+    @property
+    def file_name(self):
+        """:return The file name extracted from an Artifact URI."""
+        return self.uri.split('/')[1]
+
+    @property
+    def uncomp_file_name(self):
+        """:return The file name extracted from an Artifact URI, without
+        the compression extension."""
+        return self.file_name.replace('.gz', '')
+
+    @staticmethod
+    def make_obs_uri_from_obs_id(collection, obs_id):
+        """:return A string that conforms to the Observation URI
+        specification from CAOM."""
+        return 'caom:{}/{}'.format(collection, obs_id)
 
 
 class Config(object):
@@ -1047,6 +1097,181 @@ class Config(object):
             return None
 
 
+class StorageName(object):
+    """Naming rules for a collection:
+    - support mixed-case file name storage
+    - support gzipped and not zipped file names
+
+    This class assumes the obs_id is part of the file name. This assumption
+    may be broken in the future, in which case lots of CaomExecute
+    implementations will need to be re-addressed somehow.
+
+    This class assumes the file name in storage, and the file name on disk
+    are not necessarily the same thing.
+    """
+
+    def __init__(self, obs_id=None, collection=None, collection_pattern=None,
+                 fname_on_disk=None, scheme='ad', archive=None, url=None,
+                 mime_encoding=None, mime_type='application/fits'):
+        """
+
+        :param obs_id: string value for Observation.observationID
+        :param collection: string value for Observation.collection
+        :param collection_pattern: regular expression that can be used to
+            determine if a file name or observation id meets particular
+            patterns.
+        :param fname_on_disk: string value for the name of a file on disk,
+            which is not necessarily the same thing as the name of the file
+            in storage (i.e. extensions may exist in one location that do
+            not exist in another.
+        :param scheme: string value for the scheme of the file URI.
+        :param archive: ad storage unit, defaults to value of
+            'collection'
+        :param url: if the metadata/data is externally available via http,
+            the url for retrieval
+        """
+        self.obs_id = obs_id
+        self.collection = collection
+        self.collection_pattern = collection_pattern
+        self.scheme = scheme
+        self.fname_on_disk = fname_on_disk
+        if archive is not None:
+            self.archive = archive
+        else:
+            self.archive = collection
+        self._url = url
+        self._mime_encoding = mime_encoding
+        self._mime_type = mime_type
+
+    @property
+    def file_uri(self):
+        """The ad URI for the file. Assumes compression."""
+        return '{}:{}/{}.gz'.format(
+            self.scheme, self.archive, self.file_name)
+
+    @property
+    def file_name(self):
+        """The file name."""
+        return '{}.fits'.format(self.obs_id)
+
+    @property
+    def compressed_file_name(self):
+        """The compressed file name - adds the .gz extension."""
+        return '{}.fits.gz'.format(self.obs_id)
+
+    @property
+    def model_file_name(self):
+        """The file name used on local disk that holds the CAOM2 Observation
+        XML."""
+        return '{}.fits.xml'.format(self.obs_id)
+
+    @property
+    def prev(self):
+        """The preview file name for the file."""
+        return '{}_prev.jpg'.format(self.obs_id)
+
+    @property
+    def thumb(self):
+        """The thumbnail file name for the file."""
+        return '{}_prev_256.jpg'.format(self.obs_id)
+
+    @property
+    def prev_uri(self):
+        """The preview URI."""
+        return self._get_uri(self.prev)
+
+    @property
+    def thumb_uri(self):
+        """The thumbnail URI."""
+        return self._get_uri(self.thumb)
+
+    @property
+    def obs_id(self):
+        """The observation ID associated with the file name."""
+        return self._obs_id
+
+    @obs_id.setter
+    def obs_id(self, value):
+        self._obs_id = value
+
+    @property
+    def log_file(self):
+        """The log file name used when running any of the 'execute' steps."""
+        return '{}.log'.format(self.obs_id)
+
+    @property
+    def product_id(self):
+        """The relationship between the observation ID of an observation, and
+        the product ID of a plane."""
+        return self.obs_id
+
+    @property
+    def fname_on_disk(self):
+        """The file name on disk, which is not necessarily the same as the
+        file name in ad."""
+        return self._fname_on_disk
+
+    @property
+    def url(self):
+        """A URL from where a file can be retrieved."""
+        return self._url
+
+    @url.setter
+    def url(self, value):
+        self._url = value
+
+    @property
+    def mime_encoding(self):
+        """The mime encoding for the file, defaults to None."""
+        return self._mime_encoding
+
+    @mime_encoding.setter
+    def mime_encoding(self, value):
+        self._mime_encoding = value
+
+    @property
+    def mime_type(self):
+        """The mime type for the file, defaults to application/fits."""
+        return self._mime_type
+
+    @mime_type.setter
+    def mime_type(self, value):
+        self._mime_type = value
+
+    @property
+    def lineage(self):
+        """The value provided to the --lineage parameter for
+        fits2caom2 extensions."""
+        return '{}/{}'.format(self.product_id, self.file_uri)
+
+    @property
+    def external_urls(self):
+        return None
+
+    @fname_on_disk.setter
+    def fname_on_disk(self, value):
+        self._fname_on_disk = value
+
+    def is_valid(self):
+        """:return True if the observation ID conforms to naming rules."""
+        pattern = re.compile(self.collection_pattern)
+        return pattern.match(self.obs_id)
+
+    def _get_uri(self, fname):
+        """The ad URI for a file, without consideration for compression."""
+        return '{}:{}/{}'.format(self.scheme, self.archive, fname)
+
+    @staticmethod
+    def remove_extensions(name):
+        """How to get the file_id from a file_name."""
+        return name.replace('.fits', '').replace('.gz', '').replace('.header',
+                                                                    '')
+
+    @staticmethod
+    def is_preview(entry):
+        return '.jpg' in entry
+
+
 class Validator(object):
     """
     Compares the state of CAOM entries at CADC with the state of the source
@@ -1084,6 +1309,12 @@ class Validator(object):
         self._scheme = scheme
         self._preview_suffix = preview_suffix
         self._source_tz = timezone(source_tz)
+
+    def _filter_result(self):
+        """The default implementation does nothing, but this allows
+        implementations that extend this class to remove entries from
+        the comparison results for whatever reason might come up."""
+        pass
 
     def _find_unaligned_dates(self, source, meta, data):
         result = []
@@ -1143,9 +1374,10 @@ class Validator(object):
         buffer = io.BytesIO()
         tap_client.query(query, output_file=buffer, data_only=True)
         temp = parse_single_table(buffer).to_table()
-        return [ii.decode().replace(
-            f'{self._scheme}:{self._config.archive}/', '').strip()
-                for ii in temp['uri']]
+        return self.filter_meta(temp)
+
+    def filter_meta(self, meta):
+        return [CaomName(ii.decode().strip()).file_name for ii in meta['uri']]
 
     def read_from_source(self):
         """Read the entire source site listing. This function is expected to
@@ -1175,6 +1407,9 @@ class Validator(object):
                      f'than at CADC.')
         self._destination_data = self._find_unaligned_dates(
             source_temp, dest_meta_temp, dest_data_temp)
+
+        logging.info('Filter the results.')
+        self._filter_result()
 
         logging.info('Log the results.')
         result = {f'{self._source_name}': self._source,

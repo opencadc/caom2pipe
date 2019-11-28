@@ -73,7 +73,6 @@ import os
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
 from caom2 import ValueCoord2D
 
-from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
 
 __all__ = ['exec_footprintfinder', 'update_plane_provenance',
@@ -187,7 +186,7 @@ def update_plane_provenance(plane, headers, lookup, collection,
                 prov_obs_id, prov_prod_id = repair(value, obs_id)
                 if prov_obs_id is not None and prov_prod_id is not None:
                     obs_member_uri_str = \
-                        ec.CaomName.make_obs_uri_from_obs_id(
+                        mc.CaomName.make_obs_uri_from_obs_id(
                             collection, prov_obs_id)
                     obs_member_uri = ObservationURI(obs_member_uri_str)
                     plane_uri = PlaneURI.get_plane_uri(

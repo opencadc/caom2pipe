@@ -90,7 +90,7 @@ if six.PY3:
     from caom2pipe import manage_composable as mc
     import test_run_methods
 
-PY_VERSION = '3.6'
+PY_VERSION = '3.7'
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_DATA_DIR = os.path.join(THIS_DIR, 'data')
 TEST_APP = 'collection2caom2'
@@ -112,7 +112,7 @@ if six.PY3:
             assert z is not None, 'log file directory'
             assert observation is not None, 'undefined observation'
 
-    class TestStorageName(ec.StorageName):
+    class TestStorageName(mc.StorageName):
         def __init__(self, obs_id=None, file_name=None, fname_on_disk=None):
             super(TestStorageName, self).__init__(
                 'test_obs_id', 'TEST', '*', 'test_file.fits.gz')
@@ -899,7 +899,7 @@ def test_do_one(test_config):
 @pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
                     reason='support one python version')
 def test_storage_name():
-    sn = ec.StorageName(obs_id='test_obs_id', collection='TEST',
+    sn = mc.StorageName(obs_id='test_obs_id', collection='TEST',
                         collection_pattern='T[\\w+-]+')
     assert sn.file_uri == 'ad:TEST/test_obs_id.fits.gz'
     assert sn.file_name == 'test_obs_id.fits'
@@ -914,21 +914,21 @@ def test_storage_name():
     assert sn.product_id == 'test_obs_id'
     assert sn.fname_on_disk is None
     assert not sn.is_valid()
-    sn = ec.StorageName(obs_id='Test_obs_id', collection='TEST',
+    sn = mc.StorageName(obs_id='Test_obs_id', collection='TEST',
                         collection_pattern='T[\\w+-]+')
     assert sn.is_valid()
-    x = ec.StorageName.remove_extensions('test_obs_id.fits.header.gz')
+    x = mc.StorageName.remove_extensions('test_obs_id.fits.header.gz')
     assert x == 'test_obs_id'
 
 
 @pytest.mark.skipif(not sys.version.startswith(PY_VERSION),
                     reason='support one python version')
 def test_caom_name():
-    cn = ec.CaomName(uri='ad:TEST/test_obs_id.fits.gz')
+    cn = mc.CaomName(uri='ad:TEST/test_obs_id.fits.gz')
     assert cn.file_id == 'test_obs_id'
     assert cn.file_name == 'test_obs_id.fits.gz'
     assert cn.uncomp_file_name == 'test_obs_id.fits'
-    assert ec.CaomName.make_obs_uri_from_obs_id('TEST', 'test_obs_id') == \
+    assert mc.CaomName.make_obs_uri_from_obs_id('TEST', 'test_obs_id') == \
         'caom:TEST/test_obs_id'
 
 
@@ -1037,7 +1037,7 @@ def test_local_meta_update_client_remote_storage_execute(test_config):
 def test_omm_name_dots():
     TEST_NAME = 'C121121_J024345.57-021326.4_K_SCIRED'
     TEST_URI = 'ad:OMM/{}.fits.gz'.format(TEST_NAME)
-    test_file_id = ec.CaomName(TEST_URI).file_id
+    test_file_id = mc.CaomName(TEST_URI).file_id
     assert TEST_NAME == test_file_id, 'dots messing with things'
 
 
@@ -1071,9 +1071,11 @@ def test_pull_client(test_config):
     ec.CaomExecute._cleanup = Mock()
     with patch('requests.get') as get_mock:
         get_mock.return_value = Object()
+        test_observable = mc.Observable(
+            mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config))
         test_executor = ec.PullClient(test_config, test_sn, TEST_APP, None,
                                       data_client_mock, repo_client_mock,
-                                      observable=None)
+                                      observable=test_observable)
         with pytest.raises(mc.CadcException):
             test_executor.execute(None)
 

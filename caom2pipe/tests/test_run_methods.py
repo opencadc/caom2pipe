@@ -100,7 +100,7 @@ if six.PY3:
         assert do_mock.call_count == expected_call_count, do_mock.call_count
         args, kwargs = do_mock.call_args
         test_storage = args[2]
-        assert isinstance(test_storage, ec.StorageName), type(test_storage)
+        assert isinstance(test_storage, mc.StorageName), type(test_storage)
         assert test_storage.obs_id == test_obs_id, 'wrong obs id'
         assert test_storage.url == test_entry, test_storage.url
 
@@ -112,7 +112,7 @@ if six.PY3:
         mc.write_as_yaml(test_bookmark, STATE_FILE)
 
 
-PY_VERSION = '3.6'
+PY_VERSION = '3.7'
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_DATA_DIR = os.path.join(THIS_DIR, 'data')
 COMMAND_NAME = 'test_command'
@@ -147,7 +147,7 @@ def test_run_from_state(work_mock, do_mock, test_config):
 
     test_result = ec.run_from_state(
         test_config,
-        sname=ec.StorageName,
+        sname=mc.StorageName,
         command_name=COMMAND_NAME,
         meta_visitors=None,
         data_visitors=None,
@@ -179,7 +179,7 @@ def test_run_single_from_state(do_mock, test_config):
     mock_organizer = Mock()
 
     test_url = 'http://localhost/test_url.fits'
-    test_storage_name = ec.StorageName(url=test_url)
+    test_storage_name = mc.StorageName(url=test_url)
 
     test_result = ec.run_single_from_state(
         mock_organizer,
@@ -211,7 +211,7 @@ def test_run_single(do_mock, test_config):
     do_mock.return_value = -1
 
     test_url = 'http://localhost/test_url.fits'
-    test_storage_name = ec.StorageName(url=test_url)
+    test_storage_name = mc.StorageName(url=test_url)
 
     test_result = ec.run_single(
         test_config,
@@ -226,7 +226,7 @@ def test_run_single(do_mock, test_config):
     assert do_mock.call_count == 1, do_mock.call_count
     args, kwargs = do_mock.call_args
     test_storage = args[2]
-    assert isinstance(test_storage, ec.StorageName), type(test_storage)
+    assert isinstance(test_storage, mc.StorageName), type(test_storage)
     assert test_storage.obs_id is None, 'wrong obs id'
     assert test_storage.url == test_url, test_storage.url
 
@@ -252,7 +252,7 @@ def test_run_by_file(do_mock, test_config):
     sys.argv = ['test_command']
 
     test_result = ec.run_by_file(test_config,
-                                 storage_name=ec.StorageName,
+                                 storage_name=mc.StorageName,
                                  command_name=COMMAND_NAME,
                                  meta_visitors=None,
                                  data_visitors=None,
@@ -288,7 +288,7 @@ def test_run_by_file_use_local_files(do_mock, test_config):
         test_config.working_directory = os.path.join(
             TEST_DATA_DIR, 'local_files')
 
-        class TestStorageName(ec.StorageName):
+        class TestStorageName(mc.StorageName):
             def __init__(self, file_name=None, fname_on_disk=None):
                 super(TestStorageName, self).__init__()
                 if chooser is None:
@@ -357,7 +357,7 @@ def test_time_box(test_config):
     test_work = MakeWork()
 
     test_result = ec.run_from_state(test_config,
-                                    sname=ec.StorageName,
+                                    sname=mc.StorageName,
                                     command_name=COMMAND_NAME,
                                     meta_visitors=None,
                                     data_visitors=None,
@@ -402,7 +402,7 @@ def test_time_box_equal(test_config):
     test_work = MakeWork()
 
     test_result = ec.run_from_state(test_config,
-                                    sname=ec.StorageName,
+                                    sname=mc.StorageName,
                                     command_name=COMMAND_NAME,
                                     meta_visitors=None,
                                     data_visitors=None,
@@ -446,7 +446,7 @@ def test_time_box_once_through(test_config):
     test_work = MakeWork()
 
     test_result = ec.run_from_state(test_config,
-                                    sname=ec.StorageName,
+                                    sname=mc.StorageName,
                                     command_name=COMMAND_NAME,
                                     meta_visitors=None,
                                     data_visitors=None,
@@ -475,7 +475,7 @@ def test_run_by_file_use_local_files_gz(do_mock, test_config):
     test_config.working_directory = os.path.join(
         TEST_DATA_DIR, 'local_json_files')
 
-    class TestStorageName(ec.StorageName):
+    class TestStorageName(mc.StorageName):
         def __init__(self, file_name=None, fname_on_disk=None):
             super(TestStorageName, self).__init__()
             assert file_name == 'test_file.gz', 'wrong file name'

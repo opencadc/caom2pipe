@@ -80,7 +80,7 @@ import six
 if six.PY3:
     from caom2pipe import astro_composable as ac
 
-PY_VERSION = '3.6'
+PY_VERSION = '3.7'
 
 
 @pytest.mark.skipif(not sys.version.startswith(PY_VERSION),

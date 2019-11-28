@@ -85,7 +85,7 @@ if six.PY3:
     except ImportError:
         no_matplotlib = True
 
-PY_VERSION = '3.6'
+PY_VERSION = '3.7'
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_DATA_DIR = os.path.join(THIS_DIR, 'data')
 
