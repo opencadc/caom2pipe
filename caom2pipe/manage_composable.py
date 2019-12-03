@@ -1319,7 +1319,7 @@ class Validator(object):
                     # 0 - only one row in the mask
                     # 1 - timestamps are the second column
                     dest_dt_orig = data[mask][0][1]
-                    dest_dt = datetime.strptime(dest_dt_orig, ISO_8601_FORMAT)
+                    dest_dt = datetime.strptime(dest_dt_orig.decode(), ISO_8601_FORMAT)
                     # AD - 2019-11-18 - 'ad' timezone is US/Pacific
                     dest_utc = dest_dt.astimezone(timezone('US/Pacific'))
                     if dest_utc < source_utc:
