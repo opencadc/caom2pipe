@@ -630,40 +630,10 @@ def test_validator(caps_mock, ad_mock, tap_mock):
     tap_response = Mock()
     tap_response.status_code = 200
     tap_response.iter_content.return_value = \
-        [b'<?xml version="1.0" encoding="UTF-8"?>\n'
-         b'<VOTABLE xmlns="http://www.ivoa.net/xml/VOTable/v1.3" '
-         b'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
-         b'version="1.3">\n'
-         b'<RESOURCE type="results">\n'
-         b'<INFO name="QUERY_STATUS" value="OK" />\n'
-         b'<INFO name="QUERY_TIMESTAMP" value="2019-11-14T16:26:46.274" />\n'
-         b'<INFO name="QUERY" value="SELECT distinct A.uri&#xA;FROM '
-         b'caom2.Observation as O&#xA;JOIN caom2.Plane as P on O.obsID = '
-         b'P.obsID&#xA;JOIN caom2.Artifact as A on P.planeID = A.planeID&#xA;'
-         b'WHERE O.collection = \'NEOSSAT\'&#xA;AND A.uri like '
-         b'\'%2019213215700%\'" />\n'
-         b'<TABLE>\n'
-         b'<FIELD name="uri" datatype="char" arraysize="*" '
-         b'utype="caom2:Artifact.uri" xtype="uri">\n'
-         b'<DESCRIPTION>external URI for the physical artifact</DESCRIPTION>\n'
-         b'</FIELD>\n'
-         b'<DATA>\n'
-         b'<TABLEDATA>\n'
-         b'<TR>\n'
-         b'<TD>ad:NEOSS/NEOS_SCI_2019213215700_cord.fits</TD>\n'
-         b'</TR>\n'
-         b'<TR>\n'
-         b'<TD>ad:NEOSS/NEOS_SCI_2019213215700_cor.fits</TD>\n'
-         b'</TR>\n'
-         b'<TR>\n'
-         b'<TD>ad:NEOSS/NEOS_SCI_2019213215700.fits</TD>\n'
-         b'</TR>\n'
-         b'</TABLEDATA>\n'
-         b'</DATA>\n'
-         b'</TABLE>\n'
-         b'<INFO name="QUERY_STATUS" value="OK" />\n'
-         b'</RESOURCE>\n'
-         b'</VOTABLE>\n']
+        [b'uri\n'
+         b'ad:NEOSS/NEOS_SCI_2019213215700_cord.fits\n'
+         b'ad:NEOSS/NEOS_SCI_2019213215700_cor.fits\n'
+         b'ad:NEOSS/NEOS_SCI_2019213215700.fits\n']
 
     tap_mock.return_value.__enter__.return_value = tap_response
     ad_response = Mock()
@@ -707,54 +677,12 @@ def test_validator2(caps_mock, ad_mock):
     response = Mock()
     response.status_code = 200
     response.iter_content.return_value = \
-        [b'<?xml version="1.0" encoding="UTF-8"?>\n'
-         b'<VOTABLE xmlns="http://www.ivoa.net/xml/VOTable/v1.3" '
-         b'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
-         b'version="1.3">\n'
-         b'<RESOURCE type="results">\n'
-         b'<INFO name="QUERY_STATUS" value="OK" />\n'
-         b'<INFO name="QUERY_TIMESTAMP" value="2019-11-14T16:26:46.274" />\n'
-         b'<INFO name="QUERY" value="SELECT distinct A.uri&#xA;FROM '
-         b'caom2.Observation as O&#xA;JOIN caom2.Plane as P on O.obsID = '
-         b'P.obsID&#xA;JOIN caom2.Artifact as A on P.planeID = A.planeID&#xA;'
-         b'WHERE O.collection = \'NEOSSAT\'&#xA;AND A.uri like '
-         b'\'%2019213215700%\'" />\n'
-         b'<TABLE>\n'
-         b'<FIELD name="ingestDate" datatype="char" arraysize="*" '
-         b'xtype="timestamp">\n'
-         b'<DESCRIPTION>file ingest date</DESCRIPTION>\n'
-         b'</FIELD>\n'
-         b'<FIELD name="fileName" datatype="char" arraysize="255*">\n'
-         b'<DESCRIPTION>file name</DESCRIPTION>\n'
-         b'</FIELD>\n'
-         b'<DATA>\n'
-         b'<TABLEDATA>\n'
-         b'<TR>\n'
-         b'<TD>2019-10-23T16:27:19.000</TD>\n'
-         b'<TD>NEOS_SCI_2015347000000_clean.fits</TD>\n'
-         b'</TR>\n'
-         b'<TR>\n'
-         b'<TD>2019-10-23T16:27:27.000</TD>\n'
-         b'<TD>NEOS_SCI_2015347000000.fits</TD>\n'
-         b'</TR>\n'
-         b'<TR>\n'
-         b'<TD>2019-10-23T16:27:33.000</TD>\n'
-         b'<TD>NEOS_SCI_2015347002200_clean.fits</TD>\n'
-         b'</TR>\n'
-         b'<TR>\n'
-         b'<TD>2019-10-23T16:27:40.000</TD>\n'
-         b'<TD>NEOS_SCI_2015347002200.fits</TD>\n'
-         b'</TR>\n'
-         b'<TR>\n'
-         b'<TD>2019-10-23T16:27:47.000</TD>\n'
-         b'<TD>NEOS_SCI_2015347002500_clean.fits</TD>\n'
-         b'</TR>\n'
-         b'</TABLEDATA>\n'
-         b'</DATA>\n'
-         b'</TABLE>\n'
-         b'<INFO name="QUERY_STATUS" value="OK" />\n'
-         b'</RESOURCE>\n'
-         b'</VOTABLE>\n']
+        [b'ingestDate,fileName\n'
+         b'2019-10-23T16:27:19.000,NEOS_SCI_2015347000000_clean.fits\n'
+         b'2019-10-23T16:27:27.000,NEOS_SCI_2015347000000.fits\n'
+         b'2019-10-23T16:27:33.000,NEOS_SCI_2015347002200_clean.fits\n'
+         b'2019-10-23T16:27:40.000,NEOS_SCI_2015347002200.fits\n'
+         b'2019-10-23T16:27:47.000,NEOS_SCI_2015347002500_clean.fits\n']
     ad_mock.return_value.__enter__.return_value = response
     getcwd_orig = os.getcwd
     os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
@@ -767,7 +695,7 @@ def test_validator2(caps_mock, ad_mock):
         assert test_result['fileName'] == 'NEOS_SCI_2015347000000.fits', \
             f'wrong value format, should be just a file name, ' \
             f'{test_result["fileName"]}'
-        assert test_result['ingestDate'] == b'2019-10-23T16:27:27.000', \
+        assert test_result['ingestDate'] == '2019-10-23T16:27:27.000', \
             f'wrong value format, should be a datetime value, ' \
             f'{test_result["ingestDate"]}'
     finally:
@@ -815,3 +743,21 @@ def test_define_subject():
             mc.define_subject(test_config)
     finally:
         os.getcwd = getcwd_orig
+
+
+@patch('cadcutils.net.ws.BaseWsClient.post')
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+def test_query_tap(caps_mock, base_mock, test_config):
+    caps_mock.return_value = 'https://localhost'
+    response = Mock()
+    response.status_code = 200
+    response.iter_content.return_value = \
+        [b'count\n'
+         b'3212556\n']
+    base_mock.return_value.__enter__.return_value = response
+    test_config.tap_id = 'https://cadc.nrc.ca/sc2tap'
+    result = mc.query_tap('select count(*) from caom2.Observation',
+                          test_config.proxy_fqn, test_config.resource_id)
+    assert result is not None, 'expect a result'
+    assert len(result) == 1, 'wrong amount of test data'
+    assert result['count'] == 3212556, 'wrong test data'

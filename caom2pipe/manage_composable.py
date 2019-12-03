@@ -893,53 +893,40 @@ class Config(object):
         self._source_host = value
 
     def __str__(self):
-        return 'working_directory:: \'{}\' ' \
-               'work_fqn:: \'{}\' ' \
-               'netrc_file:: \'{}\' ' \
-               'archive:: \'{}\' ' \
-               'collection:: \'{}\' ' \
-               'task_types:: \'{}\' ' \
-               'stream:: \'{}\' ' \
-               'resource_id:: \'{}\' ' \
-               'tap_id:: \'{}\' ' \
-               'use_local_files:: \'{}\' ' \
-               'log_to_file:: \'{}\' ' \
-               'log_file_directory:: \'{}\' ' \
-               'success_log_file_name:: \'{}\' ' \
-               'success_fqn:: \'{}\' ' \
-               'failure_log_file_name:: \'{}\' ' \
-               'failure_fqn:: \'{}\' ' \
-               'retry_file_name:: \'{}\' ' \
-               'retry_fqn:: \'{}\' ' \
-               'retry_failures:: \'{}\' ' \
-               'retry_count:: \'{}\' ' \
-               'rejected_directory:: \'{}\' ' \
-               'rejected_file_name:: \'{}\' ' \
-               'rejected_fqn:: \'{}\' ' \
-               'progress_file_name:: \'{}\' ' \
-               'progress_fqn:: \'{}\' ' \
-               'proxy_file:: \'{}\' ' \
-               'state_fqn:: \'{}\' ' \
-               'features:: \'{}\' ' \
-               'interval:: \'{}\' ' \
-               'observe_execution:: \'{}\' ' \
-               'observable_directory:: \'{}\' ' \
-               'source_host:: \'{}\' ' \
-               'logging_level:: \'{}\''.format(
-                self.working_directory, self.work_fqn, self.netrc_file,
-                self.archive, self.collection, self.task_types, self.stream,
-                self.resource_id,
-                self.tap_id, self.use_local_files, self.log_to_file,
-                self.log_file_directory, self.success_log_file_name,
-                self.success_fqn, self.failure_log_file_name,
-                self.failure_fqn, self.retry_file_name, self.retry_fqn,
-                self.retry_failures, self.retry_count, self.rejected_directory,
-                self.rejected_file_name, self.rejected_fqn,
-                self.progress_file_name,
-                self.progress_fqn, self.proxy_fqn, self.state_fqn,
-                self.features, self.interval, self.observe_execution,
-                self.observable_directory, self.source_host,
-                self.logging_level)
+        return f'\nFrom {os.getcwd()}/config.yml:\n' \
+               f'archive:: {self.archive}\n' \
+               f'collection:: {self.collection}\n' \
+               f'failure_fqn:: {self.failure_fqn}\n' \
+               f'failure_log_file_name:: {self.failure_log_file_name}\n' \
+               f'features:: {self.features}\n' \
+               f'interval:: {self.interval}\n' \
+               f'log_file_directory:: {self.log_file_directory}\n' \
+               f'log_to_file:: {self.log_to_file}\n' \
+               f'logging_level:: {self.logging_level}\n' \
+               f'netrc_file:: {self.netrc_file}\n' \
+               f'observable_directory:: {self.observable_directory}\n' \
+               f'observe_execution:: {self.observe_execution}\n' \
+               f'progress_file_name:: {self.progress_file_name}\n' \
+               f'progress_fqn:: {self.progress_fqn}\n' \
+               f'proxy_file:: {self.proxy_fqn}\n' \
+               f'rejected_directory:: {self.rejected_directory}\n' \
+               f'rejected_file_name:: {self.rejected_file_name}\n' \
+               f'rejected_fqn:: {self.rejected_fqn}\n' \
+               f'resource_id:: {self.resource_id}\n' \
+               f'retry_count:: {self.retry_count}\n' \
+               f'retry_failures:: {self.retry_failures}\n' \
+               f'retry_file_name:: {self.retry_file_name}\n' \
+               f'retry_fqn:: {self.retry_fqn}\n' \
+               f'source_host:: {self.source_host}\n' \
+               f'state_fqn:: {self.state_fqn}\n' \
+               f'stream:: {self.stream}\n' \
+               f'success_fqn:: {self.success_fqn}\n' \
+               f'success_log_file_name:: {self.success_log_file_name}\n' \
+               f'tap_id:: {self.tap_id}\n' \
+               f'task_types:: {self.task_types}\n' \
+               f'use_local_files:: {self.use_local_files}\n' \
+               f'work_fqn:: {self.work_fqn}\n' \
+               f'working_directory:: {self.working_directory}'
 
     @staticmethod
     def _obtain_task_types(config, default=None):
@@ -1350,11 +1337,7 @@ class Validator(object):
                 f"GROUP BY fileName " \
                 f"ORDER BY fileName"
         self._logger.debug(f'Query is {query}')
-        subject = net.Subject(certificate=self._config.proxy_fqn)
-        tap_client = CadcTapClient(subject, resource_id=ad_resource_id)
-        buffer = io.BytesIO()
-        tap_client.query(query, output_file=buffer, data_only=True)
-        return parse_single_table(buffer).to_table()
+        return query_tap(query, self._config.proxy_fqn, ad_resource_id)
 
     def _read_list_from_destination_meta(self):
         query = f"SELECT A.uri FROM caom2.Observation AS O " \
@@ -1363,15 +1346,8 @@ class Validator(object):
                 f"WHERE O.collection='{self._config.collection}' " \
                 f"AND A.uri not like '%{self._preview_suffix}'"
         self._logger.debug(f'Query is {query}')
-        subject = net.Subject(certificate=self._config.proxy_fqn)
-        tap_client = CadcTapClient(subject, resource_id=self._config.tap_id)
-        buffer = io.BytesIO()
-        tap_client.query(query, output_file=buffer, data_only=True)
-        temp = parse_single_table(buffer).to_table()
-        return self.filter_meta(temp)
-
-    def filter_meta(self, meta):
-        return [CaomName(ii.decode().strip()).file_name for ii in meta['uri']]
+        temp = query_tap(query, self._config.proxy_fqn, self._config.tap_id)
+        return Validator.filter_meta(temp)
 
     def read_from_source(self):
         """Read the entire source site listing. This function is expected to
@@ -1429,6 +1405,10 @@ class Validator(object):
         """Write a todo.txt file, given the list of entries available from
         the source, that are not currently at the destination (CADC)."""
         raise NotImplementedError()
+
+    @staticmethod
+    def filter_meta(meta):
+        return [CaomName(ii.strip()).file_name for ii in meta['uri']]
 
 
 def to_float(value):
@@ -1660,6 +1640,10 @@ def get_cadc_meta(netrc_fqn, archive, fname):
 def get_file_meta(fqn):
     """
     Gets contentType, contentLength and contentChecksum of an artifact on disk.
+
+    At the time of writing, libmagic gets confused with gzip'd FITS files,
+    and identifies them as application/octet-stream, so, just have a bunch
+    of hard-coding instead.
 
     :param fqn: Fully-qualified name of the file for which to get the metadata.
     :return:
@@ -2131,6 +2115,23 @@ def look_pull_and_put(f_name, working_dir, url, archive, stream, mime_type,
         http_get(url, fqn)
         data_put(cadc_client, working_dir, f_name, archive, stream,
                  mime_type, mime_encoding=None, metrics=metrics)
+
+
+def query_tap(query_string, proxy_fqn, resource_id):
+    """
+    :param query_string ADQL
+    :param proxy_fqn proxy file location, credentials for the query
+    :param resource_id which tap service to query
+    :returns an astropy votable instance."""
+
+    logging.debug('query_tap: execute query {} against {}'.format(
+        query_string, resource_id))
+    subject = net.Subject(certificate=proxy_fqn)
+    tap_client = CadcTapClient(subject, resource_id=resource_id)
+    buffer = io.StringIO()
+    tap_client.query(query_string, output_file=buffer, data_only=True,
+                     response_format='csv')
+    return Table.read(buffer.getvalue().split('\n'), format='csv')
 
 
 def repo_create(client, observation, metrics):

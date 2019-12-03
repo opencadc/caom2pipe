@@ -1530,6 +1530,7 @@ def _do_one(config, organizer, storage_name, command_name, meta_visitors,
     :param meta_visitors List of metadata visit methods.
     :param data_visitors List of data visit methods.
     """
+    logging.debug(f'Begin _do_one {storage_name}')
     log_h = _set_up_file_logging(config, storage_name)
     start_s = datetime.utcnow().timestamp()
     try:
@@ -1581,6 +1582,7 @@ def _run_by_file_list(config, organizer, sname, command_name,
     :param data_visitors List of data visit methods.
     :param entry what is being processed.
     """
+    logging.debug(f'Begin _run_by_file_list {config.work_fqn}')
     if config.features.use_file_names:
         if config.use_local_files:
             storage_name = sname(file_name=entry, fname_on_disk=entry)
@@ -1614,6 +1616,7 @@ def _run_todo_file(config, organizer, sname, command_name,
     :param meta_visitors List of metadata visit methods.
     :param data_visitors List of data visit methods.
     """
+    logging.debug(f'Begin _run_todo_file {config.work_fqn}')
     with open(organizer.todo_fqn) as f:
         todo_list_length = sum(1 for _ in f)
     organizer.complete_record_count = todo_list_length
@@ -1651,6 +1654,7 @@ def _run_local_files(config, organizer, sname, command_name,
     :param data_visitors List of data visit methods.
     :param chooser OrganizeChooser access to collection-specific rules
     """
+    logging.debug(f'Begin _run_local_files {config.work_fqn}')
     file_list = os.listdir(config.working_directory)
     temp_list = []
     for f in file_list:
@@ -1722,6 +1726,7 @@ def run_by_file(config, storage_name, command_name, meta_visitors,
     :param chooser OrganizeChooser instance for detailed CaomExecute
         descendant choices
     """
+    logging.debug(f'Begin run_by_file {config.work_fqn}')
     logger = logging.getLogger()
     logger.setLevel(config.logging_level)
     logging.debug(config)
@@ -1782,6 +1787,7 @@ def run_by_file_storage_name(config, command_name, meta_visitors,
     :param chooser OrganizeChooser instance for detailed CaomExecute
         descendant choices
     """
+    logging.debug(f'Begin run_by_file_storage_name {config.work_fqn}')
     logger = logging.getLogger()
     logger.setLevel(config.logging_level)
     logging.debug(config)
@@ -1848,6 +1854,7 @@ def run_by_builder(config, command_name, bookmark_name, meta_visitors,
     :param chooser OrganizeChooser instance for detailed CaomExecute
         descendant choices
     """
+    logging.debug(f'Begin run_by_builder {config.work_fqn}')
     return _common_state(config, command_name, meta_visitors, data_visitors,
                          bookmark_name, work, middle=None, sname=name_builder,
                          through=_for_loop_through)
@@ -1865,6 +1872,7 @@ def run_single(config, storage_name, command_name, meta_visitors,
     :param chooser OrganizeChooser instance for detailed CaomExecute
         descendant choices
     """
+    logging.debug(f'Begin run_single {config.work_fqn}')
     organizer = OrganizeExecutes(config, chooser)
     organizer.complete_record_count = 1
     result = _do_one(config, organizer, storage_name,
@@ -1885,6 +1893,7 @@ def run_single_from_state(organizer, config, storage_name, command_name,
     :param data_visitors List of data visit methods.
     :param organizer single organizer instance, maintains log records.
     """
+    logging.debug(f'Begin run_single_from_state {config.work_fqn}')
     result = _do_one(config, organizer, storage_name,
                      command_name, meta_visitors, data_visitors)
     logging.info('Result is {} for {}'.format(result, storage_name.file_name))
@@ -1907,6 +1916,7 @@ def run_from_state(config, sname, command_name, meta_visitors,
         entries to be processed, init does anything required for work.query
         to make sense.
     """
+    logging.debug(f'Begin run_from_state {config.work_fqn}')
     return _common_state(config, command_name, meta_visitors, data_visitors,
                          bookmark_name, work, _state_middle, sname,
                          _timebox_through)
@@ -1927,6 +1937,7 @@ def run_from_storage_name_instance(config, command_name, meta_visitors,
         entries to be processed, init does anything required for work.query
         to make sense.
     """
+    logging.debug(f'Begin run_from_storage_name_instance {config.work_fqn}')
     return _common_state(config, command_name, meta_visitors, data_visitors,
                          bookmark_name, work, _storage_name_middle, sname=None,
                          through=_timebox_through)
@@ -1934,6 +1945,7 @@ def run_from_storage_name_instance(config, command_name, meta_visitors,
 
 def _storage_name_middle(organizer, entries, config, command_name,
                          meta_visitors, data_visitors, result, sname=None):
+    logging.debug(f'Begin _storage_name_middle {config.work_fqn}')
     organizer.complete_record_count = len(entries)
     organizer.success_count = 0
     for storage_name in entries:
@@ -1976,6 +1988,7 @@ def _storage_name_middle(organizer, entries, config, command_name,
 def _state_middle(organizer=None, entries=None, config=None,
                   command_name=None, meta_visitors=None, data_visitors=None,
                   result=None, sname=None):
+    logging.debug(f'Begin _state_middle {config.work_fqn}')
     mc.write_to_file(config.work_fqn, '\n'.join(entries))
     result |= run_by_file(config, sname, command_name,
                           meta_visitors, data_visitors)
@@ -1998,6 +2011,7 @@ def _common_state(config, command_name, meta_visitors,
         entries to be processed, init does anything required for work.query
         to make sense.
     """
+    logging.debug(f'Begin _common_state {config.work_fqn}')
     if not os.path.exists(os.path.dirname(config.progress_fqn)):
         os.makedirs(os.path.dirname(config.progress_fqn))
 
@@ -2035,6 +2049,7 @@ def _common_state(config, command_name, meta_visitors,
 def _timebox_through(config, state, work, middle, command_name, bookmark_name,
                      meta_visitors, data_visitors, sname, exec_time, end_time,
                      prev_exec_time, start_time):
+    logging.debug(f'Begin _timebox_through {config.work_fqn}')
     cumulative = 0
     result = 0
     organizer = OrganizeExecutes(config, chooser=None)
@@ -2075,6 +2090,7 @@ def _timebox_through(config, state, work, middle, command_name, bookmark_name,
 def _for_loop_through(config, state, work, middle, command_name, bookmark_name,
                       meta_visitors, data_visitors, name_builder, exec_time,
                       end_time, prev_exec_time, start_time):
+    logging.debug(f'Begin _for_loop_through {config.work_fqn}')
     result = 0
     organizer = OrganizeExecutes(config, chooser=None)
     todo_list = work.todo()

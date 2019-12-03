@@ -71,8 +71,6 @@ import math
 
 from astropy.io import fits
 
-from unittest.mock import Mock, patch
-
 from caom2pipe import astro_composable as ac
 
 
@@ -133,38 +131,6 @@ def test_get_time_delta_in_s():
     result = ac.get_timedelta_in_s('0:06:41')
     assert result is not None
     assert result == 401, 'wrong value returned'
-
-
-@patch('cadcutils.net.ws.BaseWsClient.post')
-@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_query_tap(caps_mock, base_mock, test_config):
-    caps_mock.return_value = 'https://localhost'
-    response = Mock()
-    response.status_code = 200
-    response.iter_content.return_value = \
-        [b'<?xml version="1.0" encoding="UTF-8"?>\r\n<VOTABLE '
-         b'xmlns="http://www.ivoa.net/xml/VOTable/v1.3" '
-         b'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
-         b'version="1.3">\r\n  <RESOURCE type="results">\r\n    '
-         b'<INFO name="QUERY_STATUS" value="OK" />\r\n    '
-         b'<INFO name="QUERY_TIMESTAMP" '
-         b'value="2019-06-02T21:46:15.212" />\r\n'
-         b'    <INFO name="QUERY" value="select count(*) from caom2.'
-         b'Observation" />\r\n    <TABLE>\r\n      '
-         b'<FIELD name="count" datatype="long" />\r\n      <DATA>\r\n        '
-         b'<TABLEDATA>\r\n          <TR>\r\n            '
-         b'<TD>3212556</TD>\r\n          </TR>\r\n        '
-         b'</TABLEDATA>\r\n      '
-         b'</DATA>\r\n    </TABLE>\r\n    '
-         b'<INFO name="QUERY_STATUS" value="OK" />\r\n  '
-         b'</RESOURCE>\r\n</VOTABLE>\r\n']
-    base_mock.return_value.__enter__.return_value = response
-    test_config.tap_id = 'https://cadc.nrc.ca/sc2tap'
-    result = ac.query_tap('select count(*) from caom2.Observation',
-                          test_config)
-    assert result is not None, 'expect a result'
-    assert len(result) == 1, 'wrong amount of test data'
-    assert result['count'] == 3212556, 'wrong test data'
 
 
 def test_build_ra_dec_as_deg():
