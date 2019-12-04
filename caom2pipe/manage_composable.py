@@ -1331,11 +1331,9 @@ class Validator(object):
         CADC storage.
         """
         ad_resource_id = 'ivo://cadc.nrc.ca/ad'
-        query = f"SELECT fileName, min(ingestDate) FROM archive_files WHERE " \
+        query = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
                 f"archiveName = '{self._config.archive}' " \
-                f"AND fileName not like '%{self._preview_suffix}' " \
-                f"GROUP BY fileName " \
-                f"ORDER BY fileName"
+                f"AND fileName not like '%{self._preview_suffix}'"
         self._logger.debug(f'Query is {query}')
         return query_tap(query, self._config.proxy_fqn, ad_resource_id)
 
