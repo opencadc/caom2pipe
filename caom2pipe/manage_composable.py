@@ -1319,7 +1319,7 @@ class Validator(object):
                     # 0 - only one row in the mask
                     # 1 - timestamps are the second column
                     dest_dt_orig = data[mask][0][1]
-                    dest_dt = datetime.strptime(dest_dt_orig.decode(), ISO_8601_FORMAT)
+                    dest_dt = datetime.strptime(dest_dt_orig, ISO_8601_FORMAT)
                     # AD - 2019-11-18 - 'ad' timezone is US/Pacific
                     dest_utc = dest_dt.astimezone(timezone('US/Pacific'))
                     if dest_utc < source_utc:
@@ -1805,12 +1805,8 @@ def read_file_list_from_archive(config, app_name, prev_exec_date, exec_date):
             f"ingestDate <= '{end_time}' ORDER BY ingestDate " \
             f"GROUP BY ingestDate"
     logging.debug(f'Query is {query}')
-    subject = net.Subject(certificate=config.proxy_fqn)
-    tap_client = CadcTapClient(subject, resource_id=ad_resource_id)
-    buffer = io.BytesIO()
-    tap_client.query(query, output_file=buffer, data_only=True)
-    temp = parse_single_table(buffer).to_table()
-    return [ii.decode() for ii in temp['fileName']]
+    temp = query_tap(query, config.proxy_fqn, config.resource_id)
+    return [ii for ii in temp['fileName']]
 
 
 def get_lineage(archive, product_id, file_name, scheme='ad'):

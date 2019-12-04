@@ -221,34 +221,11 @@ def test_read_file_list_from_archive(caps_mock, ad_mock):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     response = Mock()
     response.status_code = 200
-    response.iter_content.return_value = \
-        [b'<?xml version="1.0" encoding="UTF-8"?>\n'
-         b'<VOTABLE xmlns="http://www.ivoa.net/xml/VOTable/v1.3" '
-         b'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
-         b'version="1.3">\n'
-         b'<RESOURCE type="results">\n'
-         b'<INFO name="QUERY_STATUS" value="OK" />\n'
-         b'<INFO name="QUERY_TIMESTAMP" value="2019-11-27T00:07:08.736" />\n'
-         b'<INFO name="QUERY" value="SELECT ingestDate, fileName&#xA;FROM '
-         b'archive_files&#xA;WHERE archiveName = \'NEOSS\'&#xA;AND '
-         b'fileName = \'xEOS_SCI_2019319035900.fits\'" />\n'
-         b'<TABLE>\n'
-         b'<FIELD name="ingestDate" datatype="char" arraysize="*" '
-         b'xtype="timestamp">\n'
-         b'<DESCRIPTION>file ingest date</DESCRIPTION>\n'
-         b'</FIELD>\n'
-         b'<FIELD name="fileName" datatype="char" arraysize="255*">\n'
-         b'<DESCRIPTION>file name</DESCRIPTION>\n'
-         b'</FIELD>\n'
-         b'<DATA>\n'
-         b'<TABLEDATA />\n'
-         b'</DATA>\n'
-         b'</TABLE>\n'
-         b'<INFO name="QUERY_STATUS" value="OK" />\n'
-         b'</RESOURCE>\n'
-         b'</VOTABLE>\n']
+    response.iter_content.return_value = [b'fileName\n']
     ad_mock.return_value.__enter__.return_value = response
     test_config = mc.Config()
+    test_config.resource_id = 'ivo://cadc.nrc.ca/sc2tap'
+
     result = mc.read_file_list_from_archive(test_config, 'test_app_name',
                                             '2018-11-18T22:39:56.186443+00:00',
                                             '2018-11-19T22:39:56.186443+00:00')
