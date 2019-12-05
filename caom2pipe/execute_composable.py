@@ -116,6 +116,7 @@ from datetime import datetime
 from shutil import move
 
 from cadcdata import CadcDataClient
+from cadcutils.exceptions import NotFoundException
 from caom2repo import CAOM2RepoClient
 from caom2pipe import manage_composable as mc
 
@@ -321,9 +322,15 @@ class CaomExecute(object):
         """Execute CadcDataClient.get_file_info with the client instance from
         this class."""
         if self.fname is not None:
-            file_info = self.cadc_data_client.get_file_info(
-                self.archive, self.fname)
-            self.fname = file_info['name']
+            try:
+                file_info = self.cadc_data_client.get_file_info(
+                    self.archive, self.fname)
+                self.fname = file_info['name']
+            except NotFoundException as e:
+                # for Gemini, it's possible the metadata exists at CADC, but
+                # the file does not, when it's proprietary, so continue
+                # processing
+                logging.debug(f'{self.fname} does not exist at CADC.')
 
     def _read_model(self):
         """Read an observation into memory from an XML file on disk."""
