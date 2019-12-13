@@ -71,13 +71,32 @@ import logging
 import os
 
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
-from caom2 import ValueCoord2D
+from caom2 import ValueCoord2D, CompositeObservation, Algorithm
 
 from caom2pipe import manage_composable as mc
 
 __all__ = ['exec_footprintfinder', 'update_plane_provenance',
            'update_observation_members', 'reset_energy', 'reset_position',
-           'reset_observable']
+           'reset_observable', 'is_composite', 'change_to_composite']
+
+
+def change_to_composite(observation, algorithm_name='composite'):
+    """For the case where a SimpleObservation needs to become a
+    CompositeObservation."""
+    return CompositeObservation(observation.collection,
+                                observation.observation_id,
+                                Algorithm(algorithm_name),
+                                observation.sequence_number,
+                                observation.intent,
+                                observation.type,
+                                observation.proposal,
+                                observation.telescope,
+                                observation.instrument,
+                                observation.target,
+                                observation.meta_release,
+                                observation.planes,
+                                observation.environment,
+                                observation.target_position)
 
 
 def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
@@ -162,6 +181,20 @@ def _handle_footprint_logs(log_file_directory, log_file):
     else:
         logging.debug('Removing footprint log file {}'.format(orig_log_fqn))
         os.unlink(orig_log_fqn)
+
+
+def is_composite(headers):
+    """All the logic to determine if a file name is part of a
+    CompositeObservation, in one marvelous function."""
+    result = False
+
+    # look in the last header - IMCMB keywords are not in the zero'th header
+    header = headers[-1]
+    for ii in header:
+        if ii.startswith('IMCMB'):
+            result = True
+            break
+    return result
 
 
 def update_plane_provenance(plane, headers, lookup, collection,

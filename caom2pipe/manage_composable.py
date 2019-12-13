@@ -1101,7 +1101,8 @@ class StorageName(object):
 
     def __init__(self, obs_id=None, collection=None, collection_pattern=None,
                  fname_on_disk=None, scheme='ad', archive=None, url=None,
-                 mime_encoding=None, mime_type='application/fits'):
+                 mime_encoding=None, mime_type='application/fits',
+                 compression='.gz'):
         """
 
         :param obs_id: string value for Observation.observationID
@@ -1112,7 +1113,7 @@ class StorageName(object):
         :param fname_on_disk: string value for the name of a file on disk,
             which is not necessarily the same thing as the name of the file
             in storage (i.e. extensions may exist in one location that do
-            not exist in another.
+            not exist in another).
         :param scheme: string value for the scheme of the file URI.
         :param archive: ad storage unit, defaults to value of
             'collection'
@@ -1131,12 +1132,13 @@ class StorageName(object):
         self._url = url
         self._mime_encoding = mime_encoding
         self._mime_type = mime_type
+        self._compression = compression
 
     @property
     def file_uri(self):
         """The ad URI for the file. Assumes compression."""
-        return '{}:{}/{}.gz'.format(
-            self.scheme, self.archive, self.file_name)
+        return '{}:{}/{}{}'.format(
+            self.scheme, self.archive, self.file_name, self._compression)
 
     @property
     def file_name(self):
@@ -1146,7 +1148,7 @@ class StorageName(object):
     @property
     def compressed_file_name(self):
         """The compressed file name - adds the .gz extension."""
-        return '{}.fits.gz'.format(self.obs_id)
+        return '{}.fits{}'.format(self.obs_id, self._compression)
 
     @property
     def model_file_name(self):
@@ -1695,6 +1697,22 @@ def decompose_lineage(lineage):
         logging.debug('Lineage {} caused error {}. Expected '
                       'product_id/ad:ARCHIVE/FILE_NAME'.format(
                         lineage, e))
+        raise CadcException('Expected product_id/ad:ARCHIVE/FILE_NAME')
+
+
+def decompose_uri(uri):
+    """Returns a product id and an artifact uri from the command line."""
+    try:
+        temp = uri.split(':', 1)
+        scheme = temp[0]
+        temp1 = temp[1].split('/')
+        archive = temp1[0]
+        file_name = temp1[1]
+        return scheme, archive, file_name
+    except Exception as e:
+        logging.debug('URI {} caused error {}. Expected '
+                      'scheme:ARCHIVE/FILE_NAME'.format(
+                        uri, e))
         raise CadcException('Expected product_id/ad:ARCHIVE/FILE_NAME')
 
 

@@ -88,7 +88,7 @@ from caom2pipe import manage_composable as mc
 
 __all__ = ['convert_time', 'get_datetime', 'build_plane_time',
            'build_plane_time_interval', 'build_plane_time_sample',
-           'build_ra_dec_as_deg',
+           'build_ra_dec_as_deg', 'get_geocentric_location',
            'get_location', 'get_timedelta_in_s', 'make_headers_from_string']
 
 
@@ -135,24 +135,31 @@ def get_datetime(from_value):
     :param from_value:
     :return: datetime instance
     """
+    result = None
     if from_value is not None:
         try:
             result = Time(from_value)
-            result.format = 'mjd'
-            return result
         except ValueError:
-            try:
-                # VLASS has a format astropy fails to understand
-                # from datetime import datetime
-                result = Time(
-                    dt_datetime.strptime(from_value, '%H:%M:%S'))
-                result.format = 'mjd'
-                return result
-            except ValueError:
-                logging.error('Cannot parse datetime {}'.format(from_value))
-                return None
+            # VLASS has a format astropy fails to understand '%H:%M:%S'
+            # CFHT 2019/11/26
+            for fmt in ['%H:%M:%S', '%Y/%m/%d']:
+                try:
+                    result = Time(dt_datetime.strptime(from_value, fmt))
+                    break
+                except ValueError:
+                    pass
+    if result is None:
+        logging.error('Cannot parse datetime {}'.format(from_value))
     else:
-        return None
+        result.format = 'mjd'
+    return result
+
+
+def get_geocentric_location(site):
+    """Rely on astropy to provide the geocentric location of known
+    telescopes."""
+    result = EarthLocation.of_site(site)
+    return result.x.value, result.y.value, result.z.value
 
 
 def get_location(latitude, longitude, elevation):
