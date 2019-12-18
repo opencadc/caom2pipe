@@ -88,7 +88,6 @@ from requests.adapters import HTTPAdapter
 from urllib import parse as parse
 from urllib3 import Retry
 
-from astropy.io.votable import parse_single_table
 from astropy.table import Table
 
 from cadcutils import net, exceptions
@@ -111,7 +110,7 @@ __all__ = ['CadcException', 'Config', 'State', 'to_float', 'TaskType',
            'record_progress', 'Builder', 'Work', 'look_pull_and_put',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
-           'Validator', 'CaomName', 'StorageName']
+           'Validator', 'CaomName', 'StorageName', 'append_as_array']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -1411,6 +1410,22 @@ class Validator(object):
         return [CaomName(ii.strip()).file_name for ii in meta['uri']]
 
 
+def append_as_array(append_to, key, value):
+    """Because I've written this more than once ... code to append to an
+    existing array entry in a dict, if the key already exists. There may be
+    a more elegant way to do this, in which case, this function can be
+    implemented.
+    :param append_to dict
+    :param key may already exist in dict
+    :param value add to dict
+    """
+    if key in append_to:
+        temp = append_to.get(key)
+        temp.append(value)
+    else:
+        append_to[key] = [value]
+
+
 def to_float(value):
     """Cast to float, without throwing an exception."""
     return float(value) if value is not None else None
@@ -1449,12 +1464,12 @@ def define_subject(config):
     return subject
 
 
-def exec_cmd(cmd, log_leval_as=logging.debug):
+def exec_cmd(cmd, log_level_as=logging.debug):
     """
     This does command execution as a subprocess call.
 
     :param cmd the text version of the command being executed
-    :param log_leval_as control the logging level from the exec call
+    :param log_level_as control the logging level from the exec call
     :return None
     """
     logging.debug(cmd)
@@ -1464,7 +1479,7 @@ def exec_cmd(cmd, log_leval_as=logging.debug):
                                  stderr=subprocess.PIPE)
         output, outerr = child.communicate()
         if len(output) > 0:
-            log_leval_as('stdout {}'.format(output.decode('utf-8')))
+            log_level_as('stdout {}'.format(output.decode('utf-8')))
         if len(outerr) > 0:
             logging.error('stderr {}'.format(outerr.decode('utf-8')))
         if child.returncode != 0:
@@ -2006,8 +2021,8 @@ def make_seconds(from_time):
     except ValueError:
         index = len(from_time)
 
-    for fmt in [ISO_8601_FORMAT, '%Y-%m-%dT%H:%M:%S', '%d-%b-%Y %H:%M',
-                '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S']:
+    for fmt in [ISO_8601_FORMAT, '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S.%f',
+                '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S']:
         try:
             seconds_since_epoch = datetime.strptime(
                 from_time[:index], fmt).timestamp()
