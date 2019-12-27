@@ -67,16 +67,21 @@
 # ***********************************************************************
 #
 
+import io
 import logging
+import requests
 
 from astropy import units
 from astropy.io import fits
+from astropy.io.votable import parse_single_table
 from astropy.coordinates import EarthLocation
 from astropy.time import Time, TimeDelta
 from astropy.coordinates import SkyCoord
 
 from datetime import timedelta as dt_timedelta
 from datetime import datetime as dt_datetime
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 from time import strptime as dt_strptime
 
 from caom2 import Interval as caom_Interval
@@ -89,7 +94,11 @@ from caom2pipe import manage_composable as mc
 __all__ = ['convert_time', 'get_datetime', 'build_plane_time',
            'build_plane_time_interval', 'build_plane_time_sample',
            'build_ra_dec_as_deg', 'get_geocentric_location',
-           'get_location', 'get_timedelta_in_s', 'make_headers_from_string']
+           'get_location', 'get_timedelta_in_s', 'make_headers_from_string',
+           'get_vo_table', 'SVO_URL', 'FilterMetadataCache']
+
+
+SVO_URL = 'http://svo2.cab.inta-csic.es/svo/theory/fps3/fps.php?ID='
 
 
 def find_time_bounds(headers):
@@ -170,6 +179,35 @@ def get_location(latitude, longitude, elevation):
     return result.x.value, result.y.value, result.z.value
 
 
+def get_vo_table(url):
+    """
+    Download the VOTable XML for the given url and return a astropy.io.votable
+    object.
+
+    :param url: query url for the SVO service
+    :return: astropy.io.votable of the first table and
+             an error_message if there was an error downloading the data
+    """
+    session = requests.Session()
+    retry = Retry(connect=3, backoff_factor=0.5)
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    vo_table = None
+    response = None
+    error_message = None
+    try:
+        response = session.get(url)
+        fh = io.BytesIO(bytes(response.text, 'utf-8'))
+        response.close()
+        vo_table = parse_single_table(fh)
+    except Exception as e:
+        error_message = str(e)
+    if response:
+        response.close()
+    return vo_table, error_message
+
+
 def build_plane_time(start_date, end_date, exposure_time):
     """Calculate the plane-level bounding box for time, with one sample."""
     sample = build_plane_time_sample(start_date, end_date)
@@ -205,12 +243,12 @@ def build_plane_time_sample(start_date, end_date):
         mc.to_float(end_date.value))
 
 
-def build_ra_dec_as_deg(ra, dec):
+def build_ra_dec_as_deg(ra, dec, frame='icrs'):
     """
     Common code to go from units.hourangle, units.deg to both values in
     units.deg
     """
-    result = SkyCoord(ra, dec, frame='icrs',
+    result = SkyCoord(ra, dec, frame=frame,
                       unit=(units.hourangle, units.deg))
     return result.ra.degree, result.dec.degree
 
@@ -234,3 +272,72 @@ def make_headers_from_string(fits_header):
         [e + delim for e in fits_header.split(delim) if e.strip()]
     headers = [fits.Header.fromstring(e, sep='\n') for e in extensions]
     return headers
+
+
+class FilterMetadataCache(object):
+    """
+    Cache the results of calls to the SVO filter service. As part of the
+    caching, identify those filters that are not available from the service,
+    so there is no continual asking for something that doesn't exist.
+
+    Units are Angstroms.
+    """
+
+    def __init__(self, repair_filter_lookup, repair_instrument_lookup,
+                 telescope, cache=None, default_key='NONE'):
+        # a dict
+        # key - the collection filter name
+        # value - the filter name as used at SVO
+        self._repair_filter = repair_filter_lookup
+        self._repair_instrument = repair_instrument_lookup
+        self._telescope = telescope
+        self._cache = cache
+        # which value to use, when there is no lookup information
+        self._default_key = default_key
+        self._logger = logging.getLogger()
+
+    def _repair_filter_name(self, coll_filter_name):
+        return self._repair_filter.get(coll_filter_name, coll_filter_name)
+
+    def _repair_instrument_name(self, instrument):
+        return self._repair_instrument.get(instrument, instrument)
+
+    def get_svo_filter(self, instrument, filter_name):
+        """
+        Return FWHM and WavelengthCen from SVO for named instrument/filter
+        combinations.
+        :return: units are Angstroms
+        """
+        if instrument is None and filter_name is None:
+            result = self._cache.get(self._default_key)
+        else:
+            inst_r = self._repair_instrument_name(instrument)
+            fn_r = self._repair_filter_name(filter_name)
+            if fn_r in self._cache:
+                result = self._cache.get(fn_r)
+            else:
+                central_wl = None
+                fwhm = None
+                # VERB=0 means return the smalled amount of filter metadata
+                url = f'{SVO_URL}{self._telescope}/{inst_r}.{fn_r}&VERB=0'
+                self._logger.info(f'Query for filter information: {url}')
+                vo_table, error_message = get_vo_table(url)
+                if vo_table is None:
+                    self._logger.warning(
+                        f'Unable to download SVO filter information '
+                        f'from {url} because {error_message}')
+                else:
+                    fwhm = vo_table.get_field_by_id('FWHM').value
+                    central_wl = vo_table.get_field_by_id(
+                        'WavelengthCen').value
+                result = {'cw': central_wl, 'fwhm': fwhm}
+                self._cache[fn_r] = result
+        return result
+
+    @staticmethod
+    def get_central_wavelength(result):
+        return result.get('cw')
+
+    @staticmethod
+    def get_fwhm(result):
+        return result.get('fwhm')

@@ -792,6 +792,7 @@ def test_run_by_file(test_config):
         if os.path.exists(todo_fqn):
             os.unlink(todo_fqn)
 
+
 def test_run_by_file_expects_retry(test_config):
     test_run_methods.cleanup_log_txt(test_config)
 

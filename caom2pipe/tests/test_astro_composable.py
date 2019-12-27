@@ -69,7 +69,11 @@
 
 import math
 
+from mock import patch
+import test_conf as tc
+
 from astropy.io import fits
+from astropy.io.votable import parse_single_table
 
 from caom2pipe import astro_composable as ac
 
@@ -141,3 +145,67 @@ def test_build_ra_dec_as_deg():
     assert math.isclose(result_ra,  282.9446795833333), 'wrong ra value'
     assert result_dec is not None
     assert math.isclose(result_dec, 0.5923230555555556), 'wrong dec value'
+
+
+@patch('caom2pipe.astro_composable.get_vo_table')
+def test_filter_md_cache(query_mock):
+    call_count = 0
+
+    def _vo_mock(url):
+        result = None
+        error_message = None
+        table = None
+        if 'unrepaired_inst/unrepaired_fn' in url:
+            table = f'{tc.TEST_DATA_DIR}/votable/uncached.xml'
+            nonlocal call_count
+            call_count += 1
+        else:
+            error_message = f'Do not understand url {url}'
+        if table is not None:
+            result = parse_single_table(table)
+        return result, error_message
+    query_mock.side_effect = _vo_mock
+
+    fn_repair = {'collection': 'repaired'}
+    inst_repair = {'collection': 'repaired'}
+    test_cache = {'repaired': {'cw': 4444.2043, 'fwhm': 333.9806}}
+    test_subject = ac.FilterMetadataCache(fn_repair, inst_repair, test_cache)
+    assert 'unrepaired_fn' not in test_subject._cache, 'cache broken'
+
+    # uncached, unrepaired
+    test_result = test_subject.get_svo_filter(
+        'unrepaired_inst', 'unrepaired_fn')
+    assert test_result is not None, 'expect a result'
+    assert ac.FilterMetadataCache.get_central_wavelength(
+        test_result) == 3740.2043404255, 'wrong cw'
+    assert ac.FilterMetadataCache.get_fwhm(test_result) == 414.98068085106, \
+        'wrong fwhm'
+    assert call_count == 1, 'wrong execution path'
+    assert 'unrepaired_fn' in test_subject._cache, 'cache broken'
+
+    # cached, unrepaired
+    test_result = test_subject.get_svo_filter(
+        'unrepaired_inst', 'unrepaired_fn')
+    assert test_result is not None, 'expect a result'
+    assert ac.FilterMetadataCache.get_central_wavelength(
+        test_result) == 3740.2043404255, 'wrong cw'
+    assert ac.FilterMetadataCache.get_fwhm(test_result) == 414.98068085106, \
+        'wrong fwhm'
+    assert call_count == 1, 'wrong execution path'
+
+    # uncached, repaired
+    test_result = test_subject.get_svo_filter(
+        'collection', 'collection')
+    assert test_result is not None, 'expect a result'
+    assert ac.FilterMetadataCache.get_central_wavelength(
+        test_result) == 4444.2043, 'wrong cw'
+    assert ac.FilterMetadataCache.get_fwhm(test_result) == 333.9806, \
+        'wrong fwhm'
+
+    # unfound
+    test_result = test_subject.get_svo_filter('undefined', 'undefined')
+    assert test_result is not None, 'expect result'
+    assert ac.FilterMetadataCache.get_central_wavelength(
+        test_result) is None, 'wrong cw'
+    assert ac.FilterMetadataCache.get_fwhm(test_result) is None, \
+        'wrong fwhm'

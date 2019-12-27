@@ -105,12 +105,13 @@ __all__ = ['CadcException', 'Config', 'State', 'to_float', 'TaskType',
            'Features', 'write_to_file',
            'read_from_file', 'read_file_list_from_archive', 'update_typed_set',
            'get_cadc_headers', 'get_lineage', 'get_artifact_metadata',
-           'data_put', 'data_get', 'build_uri', 'make_seconds',
+           'data_put', 'data_get', 'build_uri', 'make_seconds', 'make_time',
            'increment_time', 'ISO_8601_FORMAT', 'http_get', 'Rejected',
            'record_progress', 'Builder', 'Work', 'look_pull_and_put',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
-           'Validator', 'CaomName', 'StorageName', 'append_as_array']
+           'Validator', 'CaomName', 'StorageName', 'append_as_array',
+           'to_float', 'to_int', 'to_str']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -1436,6 +1437,11 @@ def to_int(value):
     return int(value) if value is not None else None
 
 
+def to_str(value):
+    """Cast to str, without throwing an exception."""
+    return str(value) if value is not None else None
+
+
 def define_subject(config):
     """Common code to figure out which credentials to use based on the
     content of a Config instance."""
@@ -2022,7 +2028,8 @@ def make_seconds(from_time):
         index = len(from_time)
 
     for fmt in [ISO_8601_FORMAT, '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S.%f',
-                '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S']:
+                '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S',
+                '%Y-%m-%d']:
         try:
             seconds_since_epoch = datetime.strptime(
                 from_time[:index], fmt).timestamp()
@@ -2040,6 +2047,19 @@ def make_seconds(from_time):
     if seconds_since_epoch is None:
         raise CadcException('Could not make seconds from {}'.format(from_time))
     return seconds_since_epoch
+
+
+def make_time(from_str):
+    """Make a string into a datetime value.
+
+    :param from_str a string representing some time.
+    :return the time as a datetime
+    """
+    temp = make_seconds(from_str)
+    result = None
+    if temp is not None:
+        result = datetime.utcfromtimestamp(temp)
+    return result
 
 
 def increment_time(this_ts, by_interval, unit='%M'):

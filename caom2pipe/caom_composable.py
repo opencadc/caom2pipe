@@ -230,6 +230,46 @@ def update_plane_provenance(plane, headers, lookup, collection,
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
+def update_plane_provenance_single(plane, headers, lookup, collection, repair,
+                                   obs_id):
+    """Add inputs to Planes, based on a particular keyword prefix. This
+    differs from update_plane_provenance because all the values are in a
+    single keyword, such as COMMENT or HISTORY.
+
+    :param plane Plane instance to add inputs to
+    :param headers FITS keyword headers that have lookup values.
+    :param lookup The keyword pattern to find in the FITS header keywords for
+        input files.
+    :param collection The collection name for URI construction
+    :param repair The function to fix input values, to ensure they match
+        input observation ID values.
+    :param obs_id String value for logging only.
+    """
+    plane_inputs = TypedSet(PlaneURI,)
+
+    for header in headers:
+        for keyword in header:
+            if keyword.startswith(lookup):
+                value = header.get(keyword)
+                prov_ids = repair(value, obs_id)
+                for entry in prov_ids:
+                    # 0 - observation
+                    # 1 - plane
+                    obs_member_uri_str = \
+                        mc.CaomName.make_obs_uri_from_obs_id(
+                            collection, entry[0])
+                    obs_member_uri = ObservationURI(obs_member_uri_str)
+                    plane_uri = PlaneURI.get_plane_uri(
+                        obs_member_uri, entry[1])
+                    plane_inputs.add(plane_uri)
+                    logging.debug('Adding PlaneURI {}'.format(plane_uri))
+                # because all the content gets processed with one
+                # access to the keyword value, stop after one round
+                break
+
+    mc.update_typed_set(plane.provenance.inputs, plane_inputs)
+
+
 def update_observation_members(observation):
     """Add members to Observation from all its Planes.
 
