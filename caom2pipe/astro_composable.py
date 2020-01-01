@@ -296,8 +296,11 @@ class FilterMetadataCache(object):
         self._default_key = default_key
         self._logger = logging.getLogger()
 
-    def _repair_filter_name(self, coll_filter_name):
-        return self._repair_filter.get(coll_filter_name, coll_filter_name)
+    def _repair_filter_name(self, coll_filter_name, instrument):
+        result = self._repair_filter.get(coll_filter_name, coll_filter_name)
+        if result is None or result in ['NONE', 'Open']:
+            result = f'{instrument}.None'
+        return result
 
     def _repair_instrument_name(self, instrument):
         return self._repair_instrument.get(instrument, instrument)
@@ -308,11 +311,14 @@ class FilterMetadataCache(object):
         combinations.
         :return: units are Angstroms
         """
+        logging.error(f'instrument {instrument} filter {filter_name}')
+        if filter_name is None:
+            logging.error('filter name is none')
         if instrument is None and filter_name is None:
             result = self._cache.get(self._default_key)
         else:
             inst_r = self._repair_instrument_name(instrument)
-            fn_r = self._repair_filter_name(filter_name)
+            fn_r = self._repair_filter_name(filter_name, instrument)
             if fn_r in self._cache:
                 result = self._cache.get(fn_r)
             else:
@@ -335,9 +341,15 @@ class FilterMetadataCache(object):
         return result
 
     @staticmethod
-    def get_central_wavelength(result):
-        return result.get('cw')
+    def get_central_wavelength(energy):
+        result = None
+        if energy is not None:
+            result = energy.get('cw')
+        return result
 
     @staticmethod
-    def get_fwhm(result):
-        return result.get('fwhm')
+    def get_fwhm(energy):
+        result = None
+        if energy is not None:
+            result = energy.get('fwhm')
+        return result
