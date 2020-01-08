@@ -2029,7 +2029,7 @@ def make_seconds(from_time):
 
     for fmt in [ISO_8601_FORMAT, '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S.%f',
                 '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S',
-                '%Y-%m-%d', '%Y-%m-%dHST%H:%M:%S']:
+                '%Y-%m-%d', '%Y-%m-%dHST%H:%M:%S', '%a %b %d %H:%M:%S HST %Y']:
         try:
             seconds_since_epoch = datetime.strptime(
                 from_time[:index], fmt).timestamp()
@@ -2041,7 +2041,8 @@ def make_seconds(from_time):
                 dt_format = '{} %Y'.format(fmt)
                 seconds_since_epoch = datetime.strptime(
                     dt, dt_format).timestamp()
-            if fmt == '%Y-%m-%dHST%H:%M:%S':
+            if (fmt == '%Y-%m-%dHST%H:%M:%S' or
+                    fmt == '%a %b %d %H:%M:%S HST %Y'):
                 # change timezone from HST to UTC - add 10 hours -
                 # accurate enough implementation for the CFHT
                 # provenance.lastExecuted value

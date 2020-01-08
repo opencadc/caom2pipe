@@ -87,15 +87,17 @@ from time import strptime as dt_strptime
 from caom2 import Interval as caom_Interval
 from caom2 import Time as caom_Time
 from caom2 import shape as caom_shape
+from caom2 import CoordBounds1D, CoordRange1D, RefCoord
 
 from caom2pipe import manage_composable as mc
 
 
-__all__ = ['convert_time', 'get_datetime', 'build_plane_time',
-           'build_plane_time_interval', 'build_plane_time_sample',
-           'build_ra_dec_as_deg', 'get_geocentric_location',
-           'get_location', 'get_timedelta_in_s', 'make_headers_from_string',
-           'get_vo_table', 'SVO_URL', 'FilterMetadataCache']
+__all__ = ['convert_time', 'get_datetime', 'build_chunk_energy_bounds',
+           'build_plane_time', 'build_plane_time_interval',
+           'build_plane_time_sample', 'build_ra_dec_as_deg',
+           'get_geocentric_location', 'get_location', 'get_timedelta_in_s',
+           'make_headers_from_string', 'get_vo_table', 'read_fits_data',
+           'SVO_URL', 'FilterMetadataCache']
 
 
 SVO_URL = 'http://svo2.cab.inta-csic.es/svo/theory/fps3/fps.php?ID='
@@ -208,6 +210,35 @@ def get_vo_table(url):
     return vo_table, error_message
 
 
+def build_chunk_energy_bounds(wave, axis):
+    import numpy as np  # limit the  effect on container content
+    # caom2IngestEspadons.py, l698
+    x = np.arange(1, wave.size + 1, dtype='float32')
+    wavegrade = np.gradient(wave)
+    waveinflect = wave[np.where(abs(wavegrade) > 0.01)]
+    xinflect = x[np.where(abs(wavegrade) > 0.01)]
+    # add start and finish pixels onto waveinflect and xinflect and these are
+    # our list of sub-bounds.
+    allxinflect = np.append(x[0], xinflect)
+    allxinflect = np.append(allxinflect, x[-1])
+    allwaveinflect = np.append(wave[0], waveinflect)
+    allwaveinflect = np.append(allwaveinflect, wave[-1])
+    numwaveschunk = int(len(allxinflect) / 2.0)
+
+    bounds = CoordBounds1D()
+    for jj in range(numwaveschunk):
+        indexlo = jj * 2 + 0
+        indexhi = indexlo + 1
+        x1 = float(allxinflect[indexlo])
+        x2 = float(allxinflect[indexhi])
+        w1 = float(allwaveinflect[indexlo])
+        w2 = float(allwaveinflect[indexhi])
+        coord_range = CoordRange1D(RefCoord(x1, w1), RefCoord(x2, w2))
+        bounds.samples.append(coord_range)
+
+    return bounds
+
+
 def build_plane_time(start_date, end_date, exposure_time):
     """Calculate the plane-level bounding box for time, with one sample."""
     sample = build_plane_time_sample(start_date, end_date)
@@ -272,6 +303,16 @@ def make_headers_from_string(fits_header):
         [e + delim for e in fits_header.split(delim) if e.strip()]
     headers = [fits.Header.fromstring(e, sep='\n') for e in extensions]
     return headers
+
+
+def read_fits_data(fqn):
+    """Read a complete fits file, including the data.
+    :param fqn a string representing the fully-qualified name of the fits
+        file.
+    :return fits file content. The client needs to call close on the content.
+    """
+    hdus = fits.open(fqn, memmap=True, lazy_load_hdus=False)
+    return hdus
 
 
 class FilterMetadataCache(object):
