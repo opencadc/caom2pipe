@@ -352,9 +352,6 @@ class FilterMetadataCache(object):
         combinations.
         :return: units are Angstroms
         """
-        logging.error(f'instrument {instrument} filter {filter_name}')
-        if filter_name is None:
-            logging.error('filter name is none')
         if instrument is None and filter_name is None:
             result = self._cache.get(self._default_key)
         else:

@@ -99,7 +99,7 @@ from caom2 import ChecksumURI
 
 __all__ = ['CadcException', 'Config', 'State', 'to_float', 'TaskType',
            'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
-           'get_cadc_meta', 'get_file_meta',
+           'get_cadc_headers_client', 'get_cadc_meta', 'get_file_meta',
            'decompose_lineage', 'check_param', 'read_csv_file',
            'write_obs_to_file', 'read_obs_from_file',
            'Features', 'write_to_file',
@@ -1637,9 +1637,28 @@ def get_cadc_headers(uri):
     client = CadcDataClient(subject)
     # do a fhead on the file
     archive, file_id = file_url.path.split('/')
+    return get_cadc_headers_client(archive, file_id, client)
+
+
+def get_cadc_headers_client(archive, file_name, client):
+    """
+    Creates the FITS headers object by fetching the FITS headers of a CADC
+    file. The function takes advantage of the fhead feature of the CADC
+    storage service and retrieves just the headers and no data, minimizing
+    the transfer time.
+
+    The file may be public or proprietary, depending on the capabilities of
+    the supplied client parameter.
+
+    :param archive: CADC Archive reference, as a string
+    :param file_name: CADC Archive file name, as a string. Includes compression
+        and file type extensions.
+    :param client: CadcDataClient instance.
+    :return: a string of keyword/value pairs.
+    """
     b = BytesIO()
-    b.name = uri
-    client.get_file(archive, file_id, b, fhead=True)
+    b.name = file_name
+    client.get_file(archive, file_name, b, fhead=True)
     fits_header = b.getvalue().decode('ascii')
     b.close()
     return fits_header

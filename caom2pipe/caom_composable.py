@@ -72,31 +72,72 @@ import os
 
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
 from caom2 import ValueCoord2D, CompositeObservation, Algorithm
+from caom2.diff import get_differences
 
 from caom2pipe import manage_composable as mc
 
 __all__ = ['exec_footprintfinder', 'update_plane_provenance',
            'update_observation_members', 'reset_energy', 'reset_position',
-           'reset_observable', 'is_composite', 'change_to_composite']
+           'reset_observable', 'is_composite', 'change_to_composite',
+           'compare']
 
 
-def change_to_composite(observation, algorithm_name='composite'):
+def change_to_composite(observation, algorithm_name='composite',
+                        collection=None):
     """For the case where a SimpleObservation needs to become a
-    CompositeObservation."""
-    return CompositeObservation(observation.collection,
-                                observation.observation_id,
-                                Algorithm(algorithm_name),
-                                observation.sequence_number,
-                                observation.intent,
-                                observation.type,
-                                observation.proposal,
-                                observation.telescope,
-                                observation.instrument,
-                                observation.target,
-                                observation.meta_release,
-                                observation.planes,
-                                observation.environment,
-                                observation.target_position)
+    DerivedObservation."""
+    if collection is None or collection != 'CFHT':
+        return CompositeObservation(observation.collection,
+                                    observation.observation_id,
+                                    Algorithm(algorithm_name),
+                                    observation.sequence_number,
+                                    observation.intent,
+                                    observation.type,
+                                    observation.proposal,
+                                    observation.telescope,
+                                    observation.instrument,
+                                    observation.target,
+                                    observation.meta_release,
+                                    observation.planes,
+                                    observation.environment,
+                                    observation.target_position)
+    else:
+        from caom2 import DerivedObservation
+        return DerivedObservation(observation.collection,
+                                  observation.observation_id,
+                                  Algorithm(algorithm_name),
+                                  observation.sequence_number,
+                                  observation.intent,
+                                  observation.type,
+                                  observation.proposal,
+                                  observation.telescope,
+                                  observation.instrument,
+                                  observation.target,
+                                  observation.meta_release,
+                                  observation.meta_read_groups,
+                                  observation.planes,
+                                  observation.environment,
+                                  observation.target_position)
+
+
+def compare(ex_fqn, act_fqn, entry):
+    """Run get_differences for two files on disk.
+
+    :param ex_fqn: Fully-qualified file name for the expected observation
+    :param act_fqn: Fully-qualified file name for the actual observation
+    :param entry: String for logging information.
+    :return:
+    """
+    ex = mc.read_obs_from_file(ex_fqn)
+    act = mc.read_obs_from_file(act_fqn)
+    result = get_differences(ex, act, 'Observation')
+    if result:
+        result_str = '\n'.join([r for r in result])
+        msg = f'Differences found obs id {ex.observation_id} ' \
+              f'file id {entry} ' \
+              f'instr {ex.instrument.name}\n{result_str}'
+        return msg
+    return None
 
 
 def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
