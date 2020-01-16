@@ -155,7 +155,8 @@ def test_filter_md_cache(query_mock):
         result = None
         error_message = None
         table = None
-        if 'unrepaired_inst/unrepaired_fn' in url:
+        if 'unrepaired_inst.unrepaired_fn' in url:
+            logging.error('getting a table?')
             table = f'{tc.TEST_DATA_DIR}/votable/uncached.xml'
             nonlocal call_count
             call_count += 1
@@ -169,7 +170,8 @@ def test_filter_md_cache(query_mock):
     fn_repair = {'collection': 'repaired'}
     inst_repair = {'collection': 'repaired'}
     test_cache = {'repaired': {'cw': 4444.2043, 'fwhm': 333.9806}}
-    test_subject = ac.FilterMetadataCache(fn_repair, inst_repair, test_cache)
+    test_subject = ac.FilterMetadataCache(fn_repair, inst_repair,
+                                          telescope=None, cache=test_cache)
     assert 'unrepaired_fn' not in test_subject._cache, 'cache broken'
 
     # uncached, unrepaired

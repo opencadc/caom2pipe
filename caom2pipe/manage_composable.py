@@ -78,6 +78,7 @@ import sys
 import yaml
 
 from datetime import datetime
+from deprecated import deprecated
 from enum import Enum
 from ftplib import FTP
 from ftputil import FTPHost
@@ -303,6 +304,7 @@ class Builder(object):
         raise NotImplementedError
 
 
+@deprecated
 class Work(object):
     """"Abstract-like class that defines the operations used to chunk work when
     controlling execution by State."""
@@ -2200,6 +2202,21 @@ def query_tap(query_string, proxy_fqn, resource_id):
         query_string, resource_id))
     subject = net.Subject(certificate=proxy_fqn)
     tap_client = CadcTapClient(subject, resource_id=resource_id)
+    buffer = io.StringIO()
+    tap_client.query(query_string, output_file=buffer, data_only=True,
+                     response_format='csv')
+    return Table.read(buffer.getvalue().split('\n'), format='csv')
+
+
+def query_tap_client(query_string, tap_client, resource_id):
+    """
+    :param query_string ADQL
+    :param tap_client which client to query the service with
+    :param resource_id which tap service to query
+    :returns an astropy votable instance."""
+
+    logging.debug('query_tap_client: execute query {} against {}'.format(
+        query_string, resource_id))
     buffer = io.StringIO()
     tap_client.query(query_string, output_file=buffer, data_only=True,
                      response_format='csv')
