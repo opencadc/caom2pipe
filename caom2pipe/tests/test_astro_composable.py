@@ -156,7 +156,6 @@ def test_filter_md_cache(query_mock):
         error_message = None
         table = None
         if 'unrepaired_inst.unrepaired_fn' in url:
-            logging.error('getting a table?')
             table = f'{tc.TEST_DATA_DIR}/votable/uncached.xml'
             nonlocal call_count
             call_count += 1

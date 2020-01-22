@@ -268,7 +268,7 @@ def test_local_meta_update_client_execute(test_config):
         test_executor.execute(None)
         assert mc.exec_cmd.called
         mc.exec_cmd.assert_called_with(
-            '{} --debug None --in {}/test_obs_id.fits.xml '
+            '{} --debug  None --in {}/test_obs_id.fits.xml '
             '--out {}/test_obs_id.fits.xml --local {}/test_file.fits '
             '--plugin {} --module {} '
             '--lineage test_obs_id/ad:TEST/test_obs_id.fits.gz'.format(
@@ -298,7 +298,7 @@ def test_local_meta_delete_create_client_execute(test_config):
         test_executor.execute(None)
         assert mc.exec_cmd.called
         mc.exec_cmd.assert_called_with(
-            '{} --debug None --in {}/test_obs_id.fits.xml '
+            '{} --debug  None --in {}/test_obs_id.fits.xml '
             '--out {}/test_obs_id.fits.xml --local {}/test_file.fits '
             '--plugin {} --module {} '
             '--lineage test_obs_id/ad:TEST/test_obs_id.fits.gz'.format(
@@ -449,7 +449,7 @@ def test_scrape(test_config):
         test_executor.execute(None)
         assert mc.exec_cmd.called
         mc.exec_cmd.assert_called_with(
-            'command_name --verbose  '
+            'command_name --verbose --not_connected  '
             '--observation OMM test_obs_id --out {}/test_obs_id.fits.xml '
             '--plugin {} '
             '--module {} '
@@ -518,7 +518,7 @@ def test_organize_executes_client(test_config):
         executors = test_oe.choose(test_obs_id, 'command_name', [], [])
         assert executors is not None
         assert len(executors) == 1
-        assert isinstance(executors[0], ec.Scrape)
+        assert isinstance(executors[0], ec.ScrapeUpdate)
 
         test_config.task_types = [mc.TaskType.STORE,
                                   mc.TaskType.INGEST,
@@ -567,7 +567,7 @@ def test_organize_executes_client(test_config):
         executors = test_oe.choose(test_obs_id, 'command_name', [], [])
         assert executors is not None
         assert len(executors) == 2
-        assert isinstance(executors[0], ec.Scrape)
+        assert isinstance(executors[0], ec.ScrapeUpdate)
         assert isinstance(executors[1], ec.DataScrape)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
@@ -966,7 +966,7 @@ def test_local_meta_update_client_remote_storage_execute(test_config):
         assert repo_client_mock.update.called, 'update call missed'
         assert mc.exec_cmd.called, 'exec_cmd call missed'
         mc.exec_cmd.assert_called_with(
-            '{} --debug None --in {}/test_obs_id.fits.xml '
+            '{} --debug  None --in {}/test_obs_id.fits.xml '
             '--out {}/test_obs_id.fits.xml --local {} --plugin {} '
             '--module {} --lineage '
             'test_obs_id/ad:TEST/test_obs_id.fits.gz'.format(
@@ -1077,6 +1077,158 @@ def test_ftp_pull_client_error(test_config):
 
     assert not data_client_mock.put_file.called, 'put file call done'
     assert not ec.CaomExecute._cleanup.called, 'cleanup call done'
+
+
+def test_organize_executes_client_do_one(test_config):
+    test_obs_id = TestStorageName()
+    test_config.use_local_files = True
+    log_file_directory = os.path.join(tc.THIS_DIR, 'logs')
+    test_config.log_file_directory = log_file_directory
+    success_log_file_name = 'success_log.txt'
+    test_config.success_log_file_name = success_log_file_name
+    failure_log_file_name = 'failure_log.txt'
+    test_config.failure_log_file_name = failure_log_file_name
+    test_config.features.use_clients = True
+    retry_file_name = 'retries.txt'
+    test_config.retry_file_name = retry_file_name
+    exec_cmd_orig = mc.exec_cmd_info
+    repo_cmd_orig = ec.CaomExecute.repo_cmd_get_client
+    CadcDataClient.__init__ = Mock(return_value=None)
+    CAOM2RepoClient.__init__ = Mock(return_value=None)
+
+    try:
+        ec.CaomExecute.repo_cmd_get_client = Mock(return_value=None)
+        mc.exec_cmd_info = \
+            Mock(return_value='INFO:cadc-data:info\n'
+                              'File C170324_0054_SCI_prev.jpg:\n'
+                              '    archive: OMM\n'
+                              '   encoding: None\n'
+                              '    lastmod: Mon, 25 Jun 2018 16:52:07 GMT\n'
+                              '     md5sum: f37d21c53055498d1b5cb7753e1c6d6f\n'
+                              '       name: C120902_sh2-132_J_old_'
+                              'SCIRED.fits.gz\n'
+                              '       size: 754408\n'
+                              '       type: image/jpeg\n'
+                              '    umd5sum: 704b494a972eed30b18b817e243ced7d\n'
+                              '      usize: 754408\n'.encode('utf-8'))
+
+        test_config.task_types = [mc.TaskType.SCRAPE]
+        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
+                                               chooser=None)
+        executors = test_oe.choose(test_obs_id)
+        assert executors is not None
+        assert len(executors) == 1
+        assert isinstance(executors[0], ec.ScrapeUpdateDirect)
+
+        test_config.task_types = [mc.TaskType.STORE,
+                                  mc.TaskType.INGEST,
+                                  mc.TaskType.MODIFY]
+        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
+                                               chooser=None)
+        executors = test_oe.choose(test_obs_id)
+        assert executors is not None
+        assert len(executors) == 3
+        assert isinstance(executors[0], ec.StoreClient), \
+            type(executors[0])
+        assert isinstance(executors[1],
+                          ec.LocalMetaCreateDirect)
+        assert isinstance(executors[2], ec.LocalDataClient)
+        assert CadcDataClient.__init__.called, 'mock not called'
+        assert CAOM2RepoClient.__init__.called, 'mock not called'
+
+        test_config.use_local_files = False
+        test_config.task_types = [mc.TaskType.INGEST,
+                                  mc.TaskType.MODIFY]
+        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
+                                               chooser=None)
+        executors = test_oe.choose(test_obs_id)
+        assert executors is not None
+        assert len(executors) == 2
+        assert isinstance(executors[0], ec.MetaCreateDirect)
+        assert isinstance(executors[1], ec.DataClient)
+        assert CadcDataClient.__init__.called, 'mock not called'
+        assert CAOM2RepoClient.__init__.called, 'mock not called'
+
+        test_config.use_local_files = True
+        test_config.task_types = [mc.TaskType.INGEST,
+                                  mc.TaskType.MODIFY]
+        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
+                                               chooser=None)
+        executors = test_oe.choose(test_obs_id)
+        assert executors is not None
+        assert len(executors) == 2
+        assert isinstance(
+            executors[0], ec.LocalMetaCreateDirect)
+        assert isinstance(executors[1], ec.LocalDataClient)
+        assert CadcDataClient.__init__.called, 'mock not called'
+        assert CAOM2RepoClient.__init__.called, 'mock not called'
+
+        test_config.task_types = [mc.TaskType.SCRAPE,
+                                  mc.TaskType.MODIFY]
+        test_config.use_local_files = True
+        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
+                                               chooser=None)
+        executors = test_oe.choose(test_obs_id)
+        assert executors is not None
+        assert len(executors) == 2
+        assert isinstance(executors[0], ec.ScrapeUpdateDirect)
+        assert isinstance(executors[1], ec.DataScrape)
+        assert CadcDataClient.__init__.called, 'mock not called'
+        assert CAOM2RepoClient.__init__.called, 'mock not called'
+
+        test_config.task_types = [mc.TaskType.REMOTE]
+        test_config.use_local_files = True
+        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
+                                               chooser=None)
+        executors = test_oe.choose(test_obs_id)
+        assert executors is not None
+        assert len(executors) == 1
+        assert isinstance(executors[0], ec.LocalMetaCreateClientRemoteStorage)
+        assert CadcDataClient.__init__.called, 'mock not called'
+        assert CAOM2RepoClient.__init__.called, 'mock not called'
+
+        test_config.task_types = [mc.TaskType.INGEST]
+        test_config.use_local_files = False
+        test_chooser = TestChooser()
+        ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
+        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
+                                               chooser=test_chooser)
+        executors = test_oe.choose(test_obs_id)
+        assert executors is not None
+        assert len(executors) == 1
+        assert isinstance(executors[0], ec.MetaDeleteCreateDirect)
+        assert CadcDataClient.__init__.called, 'mock not called'
+        assert CAOM2RepoClient.__init__.called, 'mock not called'
+
+        test_config.task_types = [mc.TaskType.PULL]
+        test_config.use_local_files = False
+        test_chooser = TestChooser()
+        ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
+        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
+                                               chooser=test_chooser)
+        executors = test_oe.choose(test_obs_id)
+        assert executors is not None
+        assert len(executors) == 1
+        assert isinstance(executors[0], ec.PullClient)
+        assert CadcDataClient.__init__.called, 'mock not called'
+        assert CAOM2RepoClient.__init__.called, 'mock not called'
+        assert executors[0].url == 'https://test_url/', 'url'
+        assert executors[0].fname == 'test_obs_id.fits', 'file name'
+        assert executors[0].stream == 'TEST', 'stream'
+        assert executors[0].working_dir == f'{tc.THIS_DIR}/test_obs_id',  \
+            'working_dir'
+        assert executors[0].local_fqn == \
+            f'{tc.THIS_DIR}/test_obs_id/test_obs_id.fits', 'local_fqn'
+        assert test_oe.success_fqn == \
+            f'{tc.THIS_DIR}/logs/success_log.txt', 'wrong success'
+        assert test_oe.retry_fqn == \
+            f'{tc.THIS_DIR}/logs/retries.txt', 'wrong retry'
+        assert test_oe.failure_fqn == \
+            f'{tc.THIS_DIR}/logs/failure_log.txt', 'wrong failure'
+        assert test_oe.todo_fqn == f'{tc.THIS_DIR}/todo.txt', 'wrong todo'
+    finally:
+        mc.exec_cmd_orig = exec_cmd_orig
+        ec.CaomExecute.repo_cmd_get_client = repo_cmd_orig
 
 
 def _communicate():

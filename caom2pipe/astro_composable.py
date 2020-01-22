@@ -80,6 +80,7 @@ from astropy.coordinates import SkyCoord
 
 from datetime import timedelta as dt_timedelta
 from datetime import datetime as dt_datetime
+from enum import Enum
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 from time import strptime as dt_strptime
@@ -98,7 +99,6 @@ __all__ = ['convert_time', 'get_datetime', 'build_chunk_energy_bounds',
            'get_geocentric_location', 'get_location', 'get_timedelta_in_s',
            'make_headers_from_string', 'get_vo_table', 'read_fits_data',
            'SVO_URL', 'FilterMetadataCache']
-
 
 SVO_URL = 'http://svo2.cab.inta-csic.es/svo/theory/fps3/fps.php?ID='
 
@@ -325,7 +325,8 @@ class FilterMetadataCache(object):
     """
 
     def __init__(self, repair_filter_lookup, repair_instrument_lookup,
-                 telescope, cache=None, default_key='NONE'):
+                 telescope, cache=None, default_key='NONE',
+                 connected=True):
         # a dict
         # key - the collection filter name
         # value - the filter name as used at SVO
@@ -335,6 +336,9 @@ class FilterMetadataCache(object):
         self._cache = cache
         # which value to use, when there is no lookup information
         self._default_key = default_key
+        # a way to work with the TaskType.SCRAPE - False means no
+        # external connection, so the SVO query will fail, so don't try
+        self._connected = connected
         self._logger = logging.getLogger()
 
     def _repair_filter_name(self, coll_filter_name, instrument):
@@ -346,36 +350,53 @@ class FilterMetadataCache(object):
     def _repair_instrument_name(self, instrument):
         return self._repair_instrument.get(instrument, instrument)
 
+    @property
+    def connected(self):
+        return self._connected
+
+    @connected.setter
+    def connected(self, value):
+        self._connected = value
+
     def get_svo_filter(self, instrument, filter_name):
         """
         Return FWHM and WavelengthCen from SVO for named instrument/filter
         combinations.
         :return: units are Angstroms
         """
-        if instrument is None and filter_name is None:
-            result = self._cache.get(self._default_key)
-        else:
-            inst_r = self._repair_instrument_name(instrument)
-            fn_r = self._repair_filter_name(filter_name, instrument)
-            if fn_r in self._cache:
-                result = self._cache.get(fn_r)
+        if self._connected:
+            if ((instrument is None or
+                 (isinstance(instrument, Enum) and
+                  instrument.value is None)) and filter_name is None):
+                result = self._cache.get(self._default_key)
             else:
-                central_wl = None
-                fwhm = None
-                # VERB=0 means return the smalled amount of filter metadata
-                url = f'{SVO_URL}{self._telescope}/{inst_r}.{fn_r}&VERB=0'
-                self._logger.info(f'Query for filter information: {url}')
-                vo_table, error_message = get_vo_table(url)
-                if vo_table is None:
-                    self._logger.warning(
-                        f'Unable to download SVO filter information '
-                        f'from {url} because {error_message}')
-                else:
-                    fwhm = vo_table.get_field_by_id('FWHM').value
-                    central_wl = vo_table.get_field_by_id(
-                        'WavelengthCen').value
-                result = {'cw': central_wl, 'fwhm': fwhm}
-                self._cache[fn_r] = result
+
+                inst_r = self._repair_instrument_name(instrument)
+                fn_r = self._repair_filter_name(filter_name, instrument)
+                self._logger.debug(f'Looking for instrument {instrument}, '
+                                   f'repaired instrument {inst_r}, filter '
+                                   f'{filter_name} repaired filter {fn_r}.')
+                result = self._cache.get(fn_r)
+                if result is None:
+                    central_wl = None
+                    fwhm = None
+                    # VERB=0 means return the smalled amount of filter metadata
+                    url = f'{SVO_URL}{self._telescope}/{inst_r}.{fn_r}&VERB=0'
+                    self._logger.info(f'Query for filter information: {url}')
+                    vo_table, error_message = get_vo_table(url)
+                    if vo_table is None:
+                        self._logger.warning(
+                            f'Unable to download SVO filter information '
+                            f'from {url} because {error_message}')
+                    else:
+                        fwhm = vo_table.get_field_by_id('FWHM').value
+                        central_wl = vo_table.get_field_by_id(
+                            'WavelengthCen').value
+                    result = {'cw': central_wl, 'fwhm': fwhm}
+                    self._cache[fn_r] = result
+        else:
+            # some recognizably wrong value
+            result = {'cw': -0.1, 'fwhm': -0.1}
         return result
 
     @staticmethod

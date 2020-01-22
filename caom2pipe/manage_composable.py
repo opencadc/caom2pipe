@@ -68,6 +68,7 @@
 #
 
 import csv
+import importlib
 import io
 import logging
 import os
@@ -108,11 +109,11 @@ __all__ = ['CadcException', 'Config', 'State', 'to_float', 'TaskType',
            'get_cadc_headers', 'get_lineage', 'get_artifact_metadata',
            'data_put', 'data_get', 'build_uri', 'make_seconds', 'make_time',
            'increment_time', 'ISO_8601_FORMAT', 'http_get', 'Rejected',
-           'record_progress', 'Builder', 'Work', 'look_pull_and_put',
+           'record_progress', 'Work', 'look_pull_and_put',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
            'Validator', 'CaomName', 'StorageName', 'append_as_array',
-           'to_float', 'to_int', 'to_str']
+           'to_float', 'to_int', 'to_str', 'load_module']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -272,36 +273,6 @@ class State(object):
             self.bookmarks[key]['last_record'] = value
             logging.debug(f'Saving bookmarked last record {value} {self.fqn}')
             write_as_yaml(self.content, self.fqn)
-
-
-class Builder(object):
-    """"Abstract-like class that defines the operations used to build
-    StorageName instances"""
-
-    def __init__(self, config):
-        """
-        Ctor
-        :param config: the source of all knowledge.
-        """
-        self._config = config
-        self._todo_list = None
-
-    @property
-    def todo_list(self):
-        return self._todo_list
-
-    @todo_list.setter
-    def todo_list(self, to_list):
-        """Set the list of work to be done. It probably contains useful
-        information like timestamps, and relationships between obs ids
-        and file names, hence make it possible to set it independently."""
-        raise NotImplementedError
-
-    def build(self, entry):
-        """Returns an instance of StorageName, based on all the configuration
-         information, and the knowledge about the relationship between
-         file names and CAOM2 Observations that is specific to a Collection."""
-        raise NotImplementedError
 
 
 @deprecated
@@ -1101,7 +1072,7 @@ class StorageName(object):
     are not necessarily the same thing.
     """
 
-    def __init__(self, obs_id=None, collection=None, collection_pattern=None,
+    def __init__(self, obs_id=None, collection=None, collection_pattern='.*',
                  fname_on_disk=None, scheme='ad', archive=None, url=None,
                  mime_encoding=None, mime_type='application/fits',
                  compression='.gz'):
@@ -1135,6 +1106,13 @@ class StorageName(object):
         self._mime_encoding = mime_encoding
         self._mime_type = mime_type
         self._compression = compression
+        self._logger = logging.getLogger(__name__)
+
+    def __str__(self):
+        return f'obs_id {self.obs_id}, ' \
+               f'fname_on_disk {self.fname_on_disk}, ' \
+               f'file_name {self.file_name}, ' \
+               f'lineage {self.lineage}'
 
     @property
     def file_uri(self):
@@ -2032,6 +2010,31 @@ def write_as_yaml(content, fqn):
             logging.debug('End write_as_yaml.')
     except Exception as e:
         logging.error(e)
+
+
+def load_module(module, command_name):
+    """
+    Add code to the execution environment of the interpreter.
+
+    :param module the fully-qualified path name to the source code.
+    :param command_name what will be executed within the module.
+    """
+    mname = os.path.basename(module)
+    if '.' in mname:
+        # remove extension from the provided name
+        mname = mname.split('.')[0]
+    pname = os.path.dirname(module)
+    sys.path.append(pname)
+    try:
+        logging.debug(f'Looking for {command_name} in {module}.')
+        result = importlib.import_module(mname)
+        if not hasattr(result, command_name):
+            raise CadcException(f'Could not find command {command_name} in '
+                                f'module {module}.')
+    except ImportError as e:
+        logging.debug('Looking for {!r} in {!r}'.format(mname, pname))
+        raise e
+    return result
 
 
 def make_seconds(from_time):

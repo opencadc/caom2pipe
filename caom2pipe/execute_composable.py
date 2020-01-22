@@ -108,6 +108,7 @@ On the structure and responsibility of the 'run' methods:
 import distutils.sysconfig
 import logging
 import os
+import sys
 import traceback
 
 from argparse import ArgumentParser
@@ -202,6 +203,7 @@ class CaomExecute(object):
     def _create_dir(self):
         """Create the working area if it does not already exist."""
         mc.create_dir(self.working_dir)
+        logging.error(f'working_dir is {self.working_dir}')
 
     def _define_local_dirs(self, storage_name):
         """when files are on disk don't worry about a separate directory
@@ -223,16 +225,18 @@ class CaomExecute(object):
         return os.path.join(packages, '{}/{}.py'.format(self.command_name,
                                                         self.command_name))
 
-    def _fits2caom2_cmd_local(self):
+    def _fits2caom2_cmd_local(self, connected=True):
         """Execute fits2caom with a --local parameter."""
         fqn = os.path.join(self.working_dir, self.fname)
         plugin = self._find_fits2caom2_plugin()
+        conn = ''
+        if not connected:
+            conn = f'--not_connected'
         # so far, the plugin is also the module :)
-        cmd = '{} {} {} --observation {} {} --out {} ' \
-              '--plugin {} --module {} --local {} --lineage {}'.format(
-                self.command_name,
-                self.logging_level_param, self.cred_param, self.collection,
-                self.obs_id, self.model_fqn, plugin, plugin, fqn, self.lineage)
+        cmd = f'{self.command_name} {self.logging_level_param} {conn} ' \
+              f'{self.cred_param} --observation {self.collection} ' \
+              f'{self.obs_id} --out {self.model_fqn} --plugin {plugin} ' \
+              f'--module {plugin} --local {fqn} --lineage {self.lineage}'
         mc.exec_cmd(cmd, self.log_level_as)
 
     def _fits2caom2_cmd_client(self):
@@ -260,6 +264,33 @@ class CaomExecute(object):
                 plugin, plugin, self.lineage)
         mc.exec_cmd(cmd, self.log_level_as)
 
+    def _fits2caom2_cmd_local_direct(self):
+        """
+        Execute fits2caom with a --cert parameter and a --local parameter.
+        """
+        plugin = self._find_fits2caom2_plugin()
+        command = mc.load_module(plugin, 'to_caom2')
+        # so far, the plugin is also the module :)
+        local_fqn = os.path.join(self.working_dir, self.fname)
+        sys.argv = (f'{self.command_name} {self.logging_level_param} '
+                    f'{self.cred_param} --observation {self.collection} '
+                    f'{self.obs_id} --local {local_fqn} --out {self.model_fqn} '
+                    f'--plugin {plugin} --module {plugin} --lineage '
+                    f'{self.lineage}').split()
+        command.to_caom2()
+
+    def _fits2caom2_cmd_direct(self):
+        """Execute fits2caom with a --cert parameter."""
+        plugin = self._find_fits2caom2_plugin()
+        # so far, the plugin is also the module :)
+        command = mc.load_module(plugin, 'to_caom2')
+        sys.argv = (f'{self.command_name} {self.logging_level_param} '
+                    f'{self.cred_param} --observation {self.collection} '
+                    f'{self.obs_id} --out {self.model_fqn} '
+                    f'{self.external_urls_param} --plugin {plugin} --module '
+                    f'{plugin} --lineage {self.lineage}').split()
+        command.to_caom2()
+
     def _fits2caom2_cmd_in_out_client(self):
         """Execute fits2caom with a --in, a --external_url and a --cert
         parameter."""
@@ -272,17 +303,47 @@ class CaomExecute(object):
                 self.external_urls_param, plugin, plugin, self.lineage)
         mc.exec_cmd(cmd, self.log_level_as)
 
-    def _fits2caom2_cmd_in_out_local_client(self):
+    def _fits2caom2_cmd_in_out_direct(self):
+        """Execute fits2caom with a --in, a --external_url and a --cert
+        parameter."""
+        plugin = self._find_fits2caom2_plugin()
+        # so far, the plugin is also the module :)
+        command = mc.load_module(plugin, 'to_caom2')
+        sys.argv = (f'{self.command_name} {self.logging_level_param} '
+                    f'{self.cred_param} --in {self.model_fqn} --out '
+                    f'{self.model_fqn} {self.external_urls_param} --plugin '
+                    f'{plugin} --module {plugin} --lineage {self.lineage}'
+                    ).split()
+        command.to_caom2()
+
+    def _fits2caom2_cmd_in_out_local_client(self, connected=True):
         """Execute fits2caom with a --in, --local and a --cert parameter."""
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
         local_fqn = os.path.join(self.working_dir, self.fname)
-        cmd = '{} {} {} --in {} --out {} --local {} ' \
-              '--plugin {} --module {} --lineage {}'.format(
-                self.command_name, self.logging_level_param, self.cred_param,
-                self.model_fqn, self.model_fqn, local_fqn, plugin, plugin,
-                self.lineage)
+        conn = ''
+        if not connected:
+            conn = f'--not_connected'
+        cmd = f'{self.command_name} {self.logging_level_param} {conn} ' \
+              f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} ' \
+              f'--local {local_fqn} --plugin {plugin} --module {plugin} ' \
+              f'--lineage {self.lineage}'
         mc.exec_cmd(cmd, self.log_level_as)
+
+    def _fits2caom2_cmd_in_out_local_direct(self, connected=True):
+        """Execute fits2caom with a --in, --local and a --cert parameter."""
+        plugin = self._find_fits2caom2_plugin()
+        # so far, the plugin is also the module :)
+        command = mc.load_module(plugin, 'to_caom2')
+        local_fqn = os.path.join(self.working_dir, self.fname)
+        conn = ''
+        if not connected:
+            conn = f'--not_connected'
+        sys.argv = (f'{self.command_name} {self.logging_level_param} {conn} '
+                    f'{self.cred_param} --in {self.model_fqn} --out '
+                    f'{self.model_fqn} --local {local_fqn} --plugin {plugin} '
+                    f'--module {plugin} --lineage {self.lineage}').split()
+        command.to_caom2()
 
     def _repo_cmd_create_client(self, observation):
         """Create an observation instance from the input parameter."""
@@ -429,6 +490,50 @@ class MetaCreateClient(CaomExecute):
         self.logger.debug('End execute for {}'.format(__name__))
 
 
+class MetaCreateDirect(CaomExecute):
+    """Defines the pipeline step for Collection ingestion of metadata into CAOM.
+    This requires access to only header information.
+
+    This pipeline step will execute a caom2-repo create."""
+
+    def __init__(self, config, storage_name, command_name,
+                 cred_param, cadc_data_client, caom_repo_client,
+                 meta_visitors, observable):
+        super(MetaCreateDirect, self).__init__(
+            config, mc.TaskType.INGEST, storage_name, command_name,
+            cred_param, cadc_data_client, caom_repo_client, meta_visitors,
+            observable)
+
+    def execute(self, context):
+        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('the steps:')
+
+        self.logger.debug('Find the file name as stored.')
+        self._cadc_data_info_file_name_client()
+
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
+
+        self.logger.debug('the observation does not exist, so go '
+                          'straight to generating the xml, as the main_app '
+                          'will retrieve the headers')
+        self._fits2caom2_cmd_direct()
+
+        self.logger.debug('read the xml into memory from the file')
+        observation = self._read_model()
+
+        self.logger.debug('the metadata visitors')
+        self._visit_meta(observation)
+
+        self.logger.debug('create the observation with xml')
+        self._repo_cmd_create_client(observation)
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
+
+        self.logger.debug('End execute for {}'.format(__name__))
+
+
 class MetaUpdateClient(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
@@ -459,6 +564,55 @@ class MetaUpdateClient(CaomExecute):
         self.logger.debug('generate the xml, as the main_app will retrieve '
                           'the headers')
         self._fits2caom2_cmd_in_out_client()
+
+        self.logger.debug('read the xml from disk')
+        self.observation = self._read_model()
+
+        self.logger.debug('the metadata visitors')
+        self._visit_meta(self.observation)
+
+        self.logger.debug('write the observation to disk for next step')
+        self._write_model(self.observation)
+
+        self.logger.debug('update the observation with xml')
+        self._repo_cmd_update_client(self.observation)
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
+
+        self.logger.debug('End execute for {}'.format(__name__))
+
+
+class MetaUpdateDirect(CaomExecute):
+    """Defines the pipeline step for Collection ingestion of metadata into CAOM.
+    This requires access to only header information.
+
+    This pipeline step will execute a caom2-repo update."""
+
+    def __init__(self, config, storage_name, command_name, cred_param,
+                 cadc_data_client, caom_repo_client, observation,
+                 meta_visitors, observable):
+        super(MetaUpdateDirect, self).__init__(
+            config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
+            cadc_data_client, caom_repo_client, meta_visitors, observable)
+        self.observation = observation
+
+    def execute(self, context):
+        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('the steps:')
+
+        self.logger.debug('Find the file name as stored.')
+        self._cadc_data_info_file_name_client()
+
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
+
+        self.logger.debug('write the observation to disk for next step')
+        self._write_model(self.observation)
+
+        self.logger.debug('generate the xml, as the main_app will retrieve '
+                          'the headers')
+        self._fits2caom2_cmd_in_out_direct()
 
         self.logger.debug('read the xml from disk')
         self.observation = self._read_model()
@@ -531,6 +685,59 @@ class MetaDeleteCreateClient(CaomExecute):
         self.logger.debug('End execute for {}'.format(__name__))
 
 
+class MetaDeleteCreateDirect(CaomExecute):
+    """Defines the pipeline step for Collection ingestion of metadata into CAOM.
+    This requires access to only header information.
+
+    This pipeline step will execute a caom2-repo delete followed by
+    a create, because an update will not support a Simple->Composite
+    or Composite->Simple type change for the Observation
+    structure."""
+
+    def __init__(self, config, storage_name, command_name,
+                 cred_param, cadc_data_client, caom_repo_client,
+                 observation, meta_visitors, observable):
+        super(MetaDeleteCreateDirect, self).__init__(
+            config, mc.TaskType.INGEST, storage_name, command_name,
+            cred_param, cadc_data_client, caom_repo_client, meta_visitors,
+            observable)
+        self.observation = observation
+
+    def execute(self, context):
+        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('the steps:')
+
+        self.logger.debug('Find the file name as stored.')
+        self._cadc_data_info_file_name_client()
+
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
+
+        self.logger.debug('write the observation to disk for next step')
+        self._write_model(self.observation)
+
+        self.logger.debug('make a new observation from an existing '
+                          'observation')
+        self._fits2caom2_cmd_in_out_direct()
+
+        self.logger.debug('read the xml into memory from the file')
+        self.observation = self._read_model()
+
+        self.logger.debug('the metadata visitors')
+        self._visit_meta(self.observation)
+
+        self.logger.debug('the observation exists, delete it')
+        self._repo_cmd_delete_client(self.observation)
+
+        self.logger.debug('store the xml')
+        self._repo_cmd_create_client(self.observation)
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
+
+        self.logger.debug('End execute for {}'.format(__name__))
+
+
 class LocalMetaCreateClient(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
@@ -557,6 +764,48 @@ class LocalMetaCreateClient(CaomExecute):
                           'straight to generating the xml, as the main_app '
                           'will retrieve the headers')
         self._fits2caom2_cmd_client_local()
+
+        self.logger.debug('read the xml from disk')
+        observation = self._read_model()
+
+        self.logger.debug('the metadata visitors')
+        self._visit_meta(observation)
+
+        self.logger.debug('store the xml')
+        self._repo_cmd_create_client(observation)
+
+        self.logger.debug('write the updated xml to disk for debugging')
+        self._write_model(observation)
+
+        self.logger.debug('End execute for {}'.format(__name__))
+
+
+class LocalMetaCreateDirect(CaomExecute):
+    """Defines the pipeline step for Collection ingestion of metadata into CAOM.
+    This requires access to only header information.
+
+    This pipeline step will execute a caom2-repo create."""
+
+    def __init__(self, config, storage_name, command_name, cred_param,
+                 cadc_data_client, caom_repo_client, meta_visitors,
+                 observable):
+        super(LocalMetaCreateDirect, self).__init__(
+            config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
+            cadc_data_client, caom_repo_client, meta_visitors, observable)
+        self._define_local_dirs(storage_name)
+        self.fname = storage_name.fname_on_disk
+
+    def execute(self, context):
+        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('the steps:')
+
+        self.logger.debug('Find the file name as stored.')
+        self._cadc_data_info_file_name_client()
+
+        self.logger.debug('the observation does not exist, so go '
+                          'straight to generating the xml, as the main_app '
+                          'will retrieve the headers')
+        self._fits2caom2_cmd_client_local_direct()
 
         self.logger.debug('read the xml from disk')
         observation = self._read_model()
@@ -623,6 +872,56 @@ class LocalMetaDeleteCreateClient(CaomExecute):
         self.logger.debug('End execute for {}'.format(__name__))
 
 
+class LocalMetaDeleteCreateDirect(CaomExecute):
+    """Defines the pipeline step for Collection ingestion of metadata into CAOM.
+    This requires access to only header information.
+
+    This pipeline step will execute a caom2-repo delete followed by
+    a create, because an update will not support a Simple->Composite
+    or Composite->Simple type change for the Observation
+    structure."""
+
+    def __init__(self, config, storage_name, command_name, cred_param,
+                 cadc_data_client, caom_repo_client, observation,
+                 meta_visitors, observable):
+        super(LocalMetaDeleteCreateDirect, self).__init__(
+            config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
+            cadc_data_client, caom_repo_client, meta_visitors, observable)
+        self._define_local_dirs(storage_name)
+        self.observation = observation
+
+    def execute(self, context):
+        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('the steps:')
+
+        self.logger.debug('Find the file name as stored.')
+        self._cadc_data_info_file_name_client()
+
+        self.logger.debug('write the observation to disk for next step')
+        self._write_model(self.observation)
+
+        self.logger.debug('make a new observation from an existing '
+                          'observation')
+        self._fits2caom2_cmd_in_out_local_direct()
+
+        self.logger.debug('read the xml from disk')
+        observation = self._read_model()
+
+        self.logger.debug('the metadata visitors')
+        self._visit_meta(observation)
+
+        self.logger.debug('the observation exists, delete it')
+        self._repo_cmd_delete_client(self.observation)
+
+        self.logger.debug('store the xml')
+        self._repo_cmd_create_client(observation)
+
+        self.logger.debug('write the updated xml to disk for debugging')
+        self._write_model(observation)
+
+        self.logger.debug('End execute for {}'.format(__name__))
+
+
 class LocalMetaUpdateClient(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
@@ -651,6 +950,50 @@ class LocalMetaUpdateClient(CaomExecute):
         self.logger.debug('generate the xml, as the main_app will retrieve '
                           'the headers')
         self._fits2caom2_cmd_in_out_local_client()
+
+        self.logger.debug('read the xml from disk')
+        self.observation = self._read_model()
+
+        self.logger.debug('the metadata visitors')
+        self._visit_meta(self.observation)
+
+        self.logger.debug('store the xml')
+        self._repo_cmd_update_client(self.observation)
+
+        self.logger.debug('write the updated xml to disk for debugging')
+        self._write_model(self.observation)
+
+        self.logger.debug('End execute for {}'.format(__name__))
+
+
+class LocalMetaUpdateDirect(CaomExecute):
+    """Defines the pipeline step for Collection ingestion of metadata into CAOM.
+    This requires access to only header information.
+
+    This pipeline step will execute a caom2-repo update."""
+
+    def __init__(self, config, storage_name, command_name, cred_param,
+                 cadc_data_client, caom_repo_client, observation,
+                 meta_visitors, observable):
+        super(LocalMetaUpdateDirect, self).__init__(
+            config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
+            cadc_data_client, caom_repo_client, meta_visitors, observable)
+        self._define_local_dirs(storage_name)
+        self.observation = observation
+
+    def execute(self, context):
+        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('the steps:')
+
+        self.logger.debug('Find the file name as stored.')
+        self._cadc_data_info_file_name_client()
+
+        self.logger.debug('write the observation to disk for next step')
+        self._write_model(self.observation)
+
+        self.logger.debug('generate the xml, as the main_app will retrieve '
+                          'the headers')
+        self._fits2caom2_cmd_in_out_local_direct()
 
         self.logger.debug('read the xml from disk')
         self.observation = self._read_model()
@@ -947,7 +1290,82 @@ class Scrape(CaomExecute):
         self.logger.debug('the steps:')
 
         self.logger.debug('generate the xml from the file on disk')
-        self._fits2caom2_cmd_local()
+        self._fits2caom2_cmd_local(connected=False)
+
+        self.logger.debug('End execute for {}'.format(__name__))
+
+
+class ScrapeDirect(CaomExecute):
+    """Defines the pipeline step for Collection creation of a CAOM model
+    observation. The file containing the metadata is located on disk.
+    No record is written to a web service."""
+
+    def __init__(self, config, storage_name, command_name, observable):
+        super(ScrapeDirect, self).__init__(
+            config, mc.TaskType.SCRAPE, storage_name, command_name,
+            cred_param='', cadc_data_client=None, caom_repo_client=None,
+            meta_visitors=None, observable=observable)
+        self._define_local_dirs(storage_name)
+        self.fname = storage_name.fname_on_disk
+        if self.fname is None:
+            self.fname = storage_name.file_name
+
+    def execute(self, context):
+        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('the steps:')
+
+        self.logger.debug('generate the xml from the file on disk')
+        self._fits2caom2_cmd_local_direct(connected=False)
+
+        self.logger.debug('End execute for {}'.format(__name__))
+
+
+class ScrapeUpdate(CaomExecute):
+    """Defines the pipeline step for Collection creation of a CAOM model
+    observation. The file containing the metadata is located on disk.
+    No record is written to a web service."""
+
+    def __init__(self, config, storage_name, command_name, observable):
+        super(ScrapeUpdate, self).__init__(
+            config, mc.TaskType.SCRAPE, storage_name, command_name,
+            cred_param='', cadc_data_client=None, caom_repo_client=None,
+            meta_visitors=None, observable=observable)
+        self._define_local_dirs(storage_name)
+        self.fname = storage_name.fname_on_disk
+        if self.fname is None:
+            self.fname = storage_name.file_name
+
+    def execute(self, context):
+        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('the steps:')
+
+        self.logger.debug('generate the xml from the file on disk')
+        self._fits2caom2_cmd_in_out_local_client(connected=False)
+
+        self.logger.debug('End execute for {}'.format(__name__))
+
+
+class ScrapeUpdateDirect(CaomExecute):
+    """Defines the pipeline step for Collection creation of a CAOM model
+    observation. The file containing the metadata is located on disk.
+    No record is written to a web service."""
+
+    def __init__(self, config, storage_name, command_name, observable):
+        super(ScrapeUpdateDirect, self).__init__(
+            config, mc.TaskType.SCRAPE, storage_name, command_name,
+            cred_param='', cadc_data_client=None, caom_repo_client=None,
+            meta_visitors=None, observable=observable)
+        self._define_local_dirs(storage_name)
+        self.fname = storage_name.fname_on_disk
+        if self.fname is None:
+            self.fname = storage_name.file_name
+
+    def execute(self, context):
+        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('the steps:')
+
+        self.logger.debug('generate the xml from the file on disk')
+        self._fits2caom2_cmd_in_out_local_direct(connected=False)
 
         self.logger.debug('End execute for {}'.format(__name__))
 
@@ -1184,14 +1602,28 @@ class OrganizeExecutes(object):
             for task_type in self.task_types:
                 self.logger.debug(task_type)
                 if task_type == mc.TaskType.SCRAPE:
-                    if self.config.use_local_files:
-                        executors.append(
-                            Scrape(self.config, storage_name, command_name,
-                                   self.observable))
+                    model_fqn = os.path.join(self.config.working_directory,
+                                             storage_name.model_file_name)
+                    exists = os.path.exists(model_fqn)
+                    logging.error(f'{model_fqn} exists {exists}')
+                    if exists:
+                        if self.config.use_local_files:
+                            executors.append(
+                                ScrapeUpdate(self.config, storage_name,
+                                             command_name, self.observable))
+                        else:
+                            raise mc.CadcException(
+                                'use_local_files must be True with '
+                                'Task Type "SCRAPE"')
                     else:
-                        raise mc.CadcException(
-                            'use_local_files must be True with '
-                            'Task Type "SCRAPE"')
+                        if self.config.use_local_files:
+                            executors.append(
+                                Scrape(self.config, storage_name, command_name,
+                                       self.observable))
+                        else:
+                            raise mc.CadcException(
+                                'use_local_files must be True with '
+                                'Task Type "SCRAPE"')
                 elif task_type == mc.TaskType.STORE:
                     if self.config.use_local_files:
                         executors.append(
@@ -1260,8 +1692,8 @@ class OrganizeExecutes(object):
                 elif task_type == mc.TaskType.MODIFY:
                     if self.config.use_local_files:
                         if (executors is not None and len(executors) > 0 and
-                                isinstance(
-                                    executors[0], Scrape)):
+                                (isinstance(executors[0], Scrape) or
+                                 isinstance(executors[0], ScrapeUpdate))):
                             executors.append(
                                 DataScrape(self.config,
                                            storage_name,
@@ -1494,6 +1926,272 @@ class OrganizeExecutes(object):
             return str(e)
 
 
+class OrganizeExecutesWithDoOne(OrganizeExecutes):
+
+    def __init__(self, config, command_name, meta_visitors, data_visitors,
+                 chooser=None):
+        """
+
+        :param config:
+        :param command_name extension of fits2caom2 for the collection
+        :param meta_visitors List of metadata visit methods.
+        :param data_visitors List of data visit methods.
+        :param chooser:
+        """
+        super(OrganizeExecutesWithDoOne, self).__init__(config, chooser)
+        self._command_name = command_name
+        self._meta_visitors = meta_visitors
+        self._data_visitors = data_visitors
+        self._log_h = None
+
+    def _set_up_file_logging(self, storage_name):
+        """Configure logging to a separate file for each entry being
+        processed."""
+        if self.config.log_to_file:
+            log_fqn = os.path.join(self.config.working_directory,
+                                   storage_name.log_file)
+            if self.config.log_file_directory is not None:
+                log_fqn = os.path.join(self.config.log_file_directory,
+                                       storage_name.log_file)
+            self._log_h = logging.FileHandler(log_fqn)
+            formatter = logging.Formatter(
+                '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s')
+            self._log_h.setLevel(self.config.logging_level)
+            self._log_h.setFormatter(formatter)
+            logging.getLogger().addHandler(self._log_h)
+
+    def _unset_file_logging(self):
+        """Turn off the logging to the separate file for each entry being
+        processed."""
+        if self.config.log_to_file:
+            logging.getLogger().removeHandler(self._log_h)
+
+    def choose(self, storage_name):
+        """The logic that decides which descendants of CaomExecute to
+        instantiate. This is based on the content of the config.yml file
+        for an application.
+        :storage_name StorageName extension that handles the naming rules for
+            a file in ad.
+        :command_name Extension of fits2caom2 (or fits2caom2) that is executed
+            for blueprint handling.
+        :meta_visitors List of methods that implement the
+            visit(observation, **kwargs) signature that require metadata
+            access.
+        :data_visitors List of methods that implement the
+            visit(observation, **kwargs) signature that require data access."""
+        executors = []
+        if mc.TaskType.SCRAPE in self.task_types:
+            cred_param = None
+            cadc_data_client = None
+            caom_repo_client = None
+        else:
+            subject, cred_param = self._define_subject()
+            cadc_data_client = CadcDataClient(subject)
+            caom_repo_client = CAOM2RepoClient(
+                subject, self.config.logging_level,
+                self.config.resource_id)
+        for task_type in self.task_types:
+            self.logger.debug(task_type)
+            if task_type == mc.TaskType.SCRAPE:
+                model_fqn = os.path.join(self.config.working_directory,
+                                         storage_name.model_file_name)
+                exists = os.path.exists(model_fqn)
+                logging.error(f'{model_fqn} exists {exists}')
+                if exists:
+                    if self.config.use_local_files:
+                        executors.append(
+                            ScrapeUpdateDirect(self.config, storage_name,
+                                               self._command_name,
+                                               self.observable))
+                    else:
+                        raise mc.CadcException(
+                            'use_local_files must be True with '
+                            'Task Type "SCRAPE"')
+                else:
+                    if self.config.use_local_files:
+                        executors.append(ScrapeDirect(
+                            self.config, storage_name, self._command_name,
+                            self.observable))
+                    else:
+                        raise mc.CadcException(
+                            'use_local_files must be True with '
+                            'Task Type "SCRAPE"')
+            elif task_type == mc.TaskType.STORE:
+                if self.config.use_local_files:
+                    executors.append(
+                        StoreClient(
+                            self.config, storage_name, self._command_name,
+                            cred_param, cadc_data_client,
+                            caom_repo_client, self.observable))
+                else:
+                    raise mc.CadcException(
+                        'use_local_files must be True with '
+                        'Task Type "STORE"')
+            elif task_type == mc.TaskType.INGEST:
+                observation = CaomExecute.repo_cmd_get_client(
+                    caom_repo_client, self.config.collection,
+                    storage_name.obs_id, self.observable.metrics)
+                if observation is None:
+                    if self.config.use_local_files:
+                        executors.append(
+                            LocalMetaCreateDirect(
+                                self.config, storage_name, self._command_name,
+                                cred_param, cadc_data_client,
+                                caom_repo_client, self._meta_visitors,
+                                self.observable))
+                    else:
+                        executors.append(MetaCreateDirect(
+                            self.config, storage_name, self._command_name,
+                            cred_param, cadc_data_client, caom_repo_client,
+                            self._meta_visitors, self.observable))
+                else:
+                    if self.config.use_local_files:
+                        if (self.chooser is not None and
+                                self.chooser.needs_delete(observation)):
+                            executors.append(
+                                LocalMetaDeleteCreateDirect(
+                                    self.config, storage_name,
+                                    self._command_name,
+                                    cred_param, cadc_data_client,
+                                    caom_repo_client, observation,
+                                    self._meta_visitors, self.observable))
+                        else:
+                            executors.append(
+                                LocalMetaUpdateDirect(
+                                    self.config, storage_name,
+                                    self._command_name,
+                                    cred_param, cadc_data_client,
+                                    caom_repo_client, observation,
+                                    self._meta_visitors, self.observable))
+                    else:
+                        if (self.chooser is not None and
+                                self.chooser.needs_delete(observation)):
+                            executors.append(
+                                MetaDeleteCreateDirect(
+                                    self.config, storage_name,
+                                    self._command_name,
+                                    cred_param, cadc_data_client,
+                                    caom_repo_client, observation,
+                                    self._meta_visitors, self.observable))
+                        else:
+                            executors.append(
+                                MetaUpdateDirect(
+                                    self.config, storage_name,
+                                    self._command_name, cred_param,
+                                    cadc_data_client, caom_repo_client,
+                                    observation, self._meta_visitors,
+                                    self.observable))
+            elif task_type == mc.TaskType.MODIFY:
+                if self.config.use_local_files:
+                    if (executors is not None and len(executors) > 0 and
+                            (isinstance(executors[0], ScrapeDirect) or
+                             isinstance(executors[0], ScrapeUpdateDirect))):
+                        executors.append(
+                            DataScrape(self.config, storage_name,
+                                       self._command_name, self._data_visitors,
+                                       self.observable))
+                    else:
+                        executors.append(
+                            LocalDataClient(
+                                self.config, storage_name, self._command_name,
+                                cred_param, cadc_data_client,
+                                caom_repo_client, self._data_visitors,
+                                self.observable))
+                else:
+                    executors.append(DataClient(
+                        self.config, storage_name, self._command_name,
+                        cred_param, cadc_data_client, caom_repo_client,
+                        self._data_visitors, mc.TaskType.MODIFY,
+                        self.observable))
+            elif task_type == mc.TaskType.VISIT:
+                executors.append(ClientVisit(
+                    self.config, storage_name, cred_param,
+                    cadc_data_client, caom_repo_client, self._meta_visitors,
+                    self.observable))
+            elif task_type == mc.TaskType.REMOTE:
+                observation = CaomExecute.repo_cmd_get_client(
+                    caom_repo_client, self.config.collection,
+                    storage_name.obs_id, self.observable.metrics)
+                if observation is None:
+                    if self.config.use_local_files:
+                        executors.append(
+                            LocalMetaCreateClientRemoteStorage(
+                                self.config, storage_name, self._command_name,
+                                cred_param, cadc_data_client,
+                                caom_repo_client, self._meta_visitors,
+                                self.observable))
+                    else:
+                        raise mc.CadcException(
+                            'use_local_files must be True with '
+                            'Task Type "REMOTE"')
+                else:
+                    if self.config.use_local_files:
+                        executors.append(
+                            LocalMetaUpdateClientRemoteStorage(
+                                self.config, storage_name, self._command_name,
+                                cred_param, cadc_data_client,
+                                caom_repo_client, observation,
+                                self._meta_visitors, self.observable))
+                    else:
+                        raise mc.CadcException(
+                            'use_local_files must be True with '
+                            'Task Type "REMOTE"')
+            elif task_type == mc.TaskType.PULL:
+                if self.config.features.use_urls:
+                    executors.append(
+                        PullClient(self.config, storage_name, self._command_name,
+                                   cred_param, cadc_data_client,
+                                   caom_repo_client, self.observable))
+                else:
+                    executors.append(
+                        FtpPullClient(self.config, storage_name,
+                                      self._command_name, cred_param,
+                                      cadc_data_client, caom_repo_client,
+                                      self.observable))
+            elif task_type == mc.TaskType.DEFAULT:
+                pass
+            else:
+                raise mc.CadcException(
+                    'Do not understand task type {}'.format(task_type))
+        return executors
+
+    def do_one(self, storage_name):
+        """Process one entry.
+        :param storage_name instance of StorageName for the collection
+        """
+        logging.debug(f'Begin _do_one {storage_name}')
+        self._set_up_file_logging(storage_name)
+        start_s = datetime.utcnow().timestamp()
+        try:
+            if self.is_rejected(storage_name):
+                self.capture_failure(storage_name.obs_id,
+                                     storage_name.file_name, e='Rejected')
+                # successful rejection of the execution case
+                return 0
+            executors = self.choose(storage_name)
+            for executor in executors:
+                logging.info('Step {} for {}'.format(
+                    executor.task_type, storage_name.obs_id))
+                executor.execute(context=None)
+            if len(executors) > 0:
+                self.capture_success(storage_name.obs_id,
+                                     storage_name.file_name, start_s)
+                return 0
+            else:
+                logging.info('No executors for {}'.format(
+                    storage_name))
+                return -1  # cover the case where file name validation fails
+        except Exception as e:
+            self.capture_failure(storage_name.obs_id, storage_name.file_name,
+                                 e=traceback.format_exc())
+            logging.warning('Execution failed for {} with {}'.format(
+                storage_name.obs_id, e))
+            logging.error(traceback.format_exc())
+            return -1
+        finally:
+            self._unset_file_logging()
+
+
 def _set_up_file_logging(config, storage_name):
     """Configure logging to a separate file for each entry being processed."""
     log_h = None
@@ -1565,9 +2263,9 @@ def _do_one(config, organizer, storage_name, command_name, meta_visitors,
         organizer.capture_failure(storage_name.obs_id,
                                   storage_name.file_name,
                                   e=traceback.format_exc())
-        logging.info('Execution failed for {} with {}'.format(
+        logging.warning('Execution failed for {} with {}'.format(
             storage_name.obs_id, e))
-        logging.debug(traceback.format_exc())
+        logging.error(traceback.format_exc())
         return -1
     finally:
         _unset_file_logging(config, log_h)
@@ -1820,7 +2518,7 @@ def run_by_file_storage_name(config, command_name, meta_visitors,
                     entry, entry, e=traceback.format_exc())
                 logging.info('Execution failed for {} with {}'.format(
                     entry, e))
-                logging.debug(traceback.format_exc())
+                logging.error(traceback.format_exc())
                 # then keep processing the rest of the entries
                 result = -1
     _finish_run(organizer, config)
