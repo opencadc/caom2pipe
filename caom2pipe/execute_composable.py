@@ -805,7 +805,7 @@ class LocalMetaCreateDirect(CaomExecute):
         self.logger.debug('the observation does not exist, so go '
                           'straight to generating the xml, as the main_app '
                           'will retrieve the headers')
-        self._fits2caom2_cmd_client_local_direct()
+        self._fits2caom2_cmd_local_direct()
 
         self.logger.debug('read the xml from disk')
         observation = self._read_model()
@@ -1943,6 +1943,10 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
         self._meta_visitors = meta_visitors
         self._data_visitors = data_visitors
         self._log_h = None
+
+    @property
+    def command_name(self):
+        return self._command_name
 
     def _set_up_file_logging(self, storage_name):
         """Configure logging to a separate file for each entry being

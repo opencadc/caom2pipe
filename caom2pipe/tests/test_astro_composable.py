@@ -69,7 +69,7 @@
 
 import math
 
-from mock import patch
+from mock import patch, Mock
 import test_conf as tc
 
 from astropy.io import fits

@@ -73,6 +73,7 @@ import traceback
 
 from datetime import datetime
 
+from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 
 __all__ = ['TodoRunner', 'StateRunner']
@@ -109,20 +110,36 @@ class TodoRunner(object):
         self._organizer.observable.rejected.persist_state()
         self._organizer.observable.metrics.capture()
 
+    def _process_entry(self, entry):
+        storage_name = self._builder.build(entry)
+        try:
+            if storage_name.is_valid():
+                result = self._organizer.do_one(storage_name)
+            else:
+                logging.error(
+                    f'{storage_name.obs_id} failed naming validation check.')
+                self._organizer.capture_failure(storage_name.obs_id,
+                                                storage_name.file_name,
+                                                'Invalid name format.')
+                result = -1
+        except Exception as e:
+            logging.error('hello cryek wirkd')
+            self._organizer.capture_failure(storage_name.obs_id,
+                                            storage_name.file_name,
+                                            e=traceback.format_exc())
+            logging.info(
+                f'Execution failed for {storage_name.file_name} with {e}')
+            logging.debug(traceback.format_exc())
+            # keep processing the rest of the entries, so don't throw
+            # this or any other exception at this point
+            result = -1
+        return result
+
     def _run_todo_list(self):
         self._logger.debug('Begin _run_todo_list.')
         result = 0
         for entry in self._todo_list:
-            storage_name = self._builder.build(entry)
-            if storage_name.is_valid():
-                logging.info(f'Processing {storage_name}')
-                result |= self._organizer.do_one(storage_name)
-            else:
-                logging.error('{} failed naming validation check.'.format(
-                    storage_name.obs_id))
-                self._organizer.capture_failure(storage_name.obs_id,
-                                                storage_name.file_name,
-                                                'Invalid name format.')
+            result |= self._process_entry(entry)
         self._finish_run()
         self._logger.debug('End _run_todo_list.')
         return result
@@ -140,71 +157,60 @@ class TodoRunner(object):
 
 class StateRunner(TodoRunner):
 
-    def __init__(self, config, organizer, builder, data_source, bookmark_name):
+    def __init__(self, config, organizer, builder, data_source, bookmark_name,
+                 max_ts=None):
         super(StateRunner, self).__init__(config, organizer, builder,
                                           data_source)
         self._bookmark_name = bookmark_name
+        self._end_time = datetime.utcnow() if max_ts is None else max_ts
 
     def run(self):
-        logging.debug(f'Begin run {self._config.work_fqn}')
+        logging.debug(f'Begin run state for {self._bookmark_name}')
         if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
 
-        logger = logging.getLogger()
-        logger.setLevel(self._config.logging_level)
-        logging.debug(self._config)
-
         state = mc.State(self._config.state_fqn)
         start_time = state.get_bookmark(self._bookmark_name)
-        end_time = datetime.fromtimestamp(self._data_source.max_ts_s)
 
         # make sure prev_exec_time is type datetime
         prev_exec_time = mc.increment_time(start_time, 0)
         exec_time = min(
-            mc.increment_time(prev_exec_time, self._config.interval), end_time)
+            mc.increment_time(prev_exec_time, self._config.interval),
+            self._end_time)
 
-        logging.debug(
-            'Starting at {}, ending at {}'.format(start_time, end_time))
+        logging.debug(f'Starting at {start_time}, ending at {self._end_time}')
         result = 0
-        if prev_exec_time == end_time:
+        if prev_exec_time == self._end_time:
             logging.info(
-                'Start time is the same as end time {}, stopping.'.format(
-                    start_time))
+                f'Start time is the same as end time {start_time}, stopping.')
             exec_time = prev_exec_time
         else:
             cumulative = 0
             result = 0
-            while exec_time <= end_time:
-                logging.info('Processing from {} to {}'.format(prev_exec_time,
-                                                               exec_time))
-                entries = self._data_source.todo(prev_exec_time, exec_time)
-                if len(entries) > 0:
-                    self._data_source.initialize()
-                    logging.info('Processing {} entries.'.format(len(entries)))
-                    self._organizer.complete_record_count = len(entries)
+            while exec_time <= self._end_time:
+                logging.info(
+                    f'Processing from {prev_exec_time} to {exec_time}')
+                save_time = exec_time
+                entries = self._data_source.get_work(prev_exec_time, exec_time)
+                num_entries = len(entries)
+
+                if num_entries > 0:
+                    logging.info(f'Processing {num_entries} entries.')
+                    self._organizer.complete_record_count = num_entries
                     self._organizer.success_count = 0
-                    for storage_name in entries:
-                        try:
-                            result |= self._organizer.do_one(storage_name)
-                        except Exception as e:
-                            self._organizer.capture_failure(
-                                storage_name.obs_id, storage_name.file_name,
-                                e=traceback.format_exc())
-                            logging.info(
-                                'Execution failed for {} with {}'.format(
-                                    storage_name.file_name, e))
-                            logging.debug(traceback.format_exc())
-                            # then keep processing the rest of the lines in
-                            # the file
-                            result |= -1
+                    for entry in entries:
+                        entry_name = entry[0]
+                        entry_time = ac.get_datetime(entry[1])
+                        result |= self._process_entry(entry_name)
+                        save_time = min(entry_time, exec_time)
                     self._finish_run()
-                cumulative += len(entries)
-                mc.record_progress(self._config, self._organizer._command_name,
-                                   len(entries), cumulative, start_time)
 
-                state.save_state(self._bookmark_name, exec_time)
+                cumulative += num_entries
+                mc.record_progress(self._config, self._organizer.command_name,
+                                   num_entries, cumulative, start_time)
+                state.save_state(self._bookmark_name, save_time)
 
-                if exec_time == end_time:
+                if exec_time == self._end_time:
                     # the last interval will always have the exec time
                     # equal to the end time, which will fail the while check
                     # so leave after the last interval has been processed
@@ -214,15 +220,12 @@ class StateRunner(TodoRunner):
                     # so don't get rid of the '=' in the while loop
                     # comparison, just because this one exists
                     break
-
                 prev_exec_time = exec_time
                 exec_time = min(
                     mc.increment_time(prev_exec_time, self._config.interval),
-                    end_time)
+                    self._end_time)
 
-            # return result, exec_time
         state.save_state(self._bookmark_name, exec_time)
         logging.info(
-            'Done {}, saved state is {}'.format(self._organizer._command_name,
-                                                exec_time))
+            f'Done {self._organizer.command_name}, saved state is {exec_time}')
         return result

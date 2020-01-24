@@ -70,6 +70,9 @@
 import logging
 import os
 
+from cadctap import CadcTapClient
+from caom2pipe import manage_composable as mc
+
 __all__ = ['DataSource']
 
 
@@ -155,3 +158,35 @@ class TodoFileDataSource(DataSource):
                 work.append(line.strip())
         logging.debug(f'End get_work')
         return work
+
+
+class QueryTimeBoxDataSource(DataSource):
+    """
+    Implements the identification of the work to be done, by querying a
+    TAP service, in time-boxed chunks.
+    """
+
+    def __init__(self, config, preview_suffix='jpg'):
+        super(QueryTimeBoxDataSource, self).__init__(config)
+        self._preview_suffix = preview_suffix
+        subject = mc.define_subject(config)
+        self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
+
+    def get_work(self, prev_exec_time, exec_time):
+        """
+        Get a set of file names from an archive. Limit the entries by
+        time-boxing on ingestDate, and don't include previews.
+
+        :param prev_exec_time datetime start of the timestamp chunk
+        :param exec_time datetime end of the timestamp chunk
+        :return: a list of file names in the CADC storage system
+        """
+        self._logger.debug('Entering QueryTimeBoxDataSource.get_work')
+        query = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
+                f"archiveName = '{self._config.archive}' " \
+                f"AND fileName not like '%{self._preview_suffix}' " \
+                f"AND ingestDate > '{prev_exec_time}' " \
+                f"AND ingestDate <= '{exec_time}' " \
+                "ORDER BY ingestDate ASC "
+        self._logger.debug(query)
+        return mc.query_tap_client(query, self._client, self._config.tap_id)

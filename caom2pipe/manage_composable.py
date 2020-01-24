@@ -112,7 +112,7 @@ __all__ = ['CadcException', 'Config', 'State', 'to_float', 'TaskType',
            'record_progress', 'Work', 'look_pull_and_put',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
-           'Validator', 'CaomName', 'StorageName', 'append_as_array',
+           'Validator', 'Cache', 'CaomName', 'StorageName', 'append_as_array',
            'to_float', 'to_int', 'to_str', 'load_module']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
@@ -461,6 +461,39 @@ class Observable(object):
         return self._metrics
 
 
+class Cache(object):
+    """Abstract-like class to store persistent information that originates
+    from outside of a pipeline invocation.
+    """
+
+    def __init__(self):
+        """
+        """
+        config = Config()
+        config.get_executors()
+        self._fqn = config.cache_fqn
+        self._logger = logging.getLogger(__name__)
+        try:
+            self._cache = read_as_yaml(self._fqn)
+        except Exception as e:
+            raise CadcException(f'Cache read failure {e}. Stopping pipeline.')
+
+    def add_to(self, key, values):
+        """Add to or update the content of the cache. This is an over-write
+        operation."""
+        self._cache[key] = values
+
+    def get_from(self, key):
+        result = self._cache.get(key)
+        if result is None:
+            raise CadcException(f'{key} is not cached.')
+        return result
+
+    def save(self):
+        """Write the current state as a YAML file."""
+        write_as_yaml(self._cache, self._fqn)
+
+
 class CaomName(object):
     """The naming rules for making and decomposing CAOM URIs (i.e. Observation
     URIs, Plane URIs, and archive URIs, all isolated in one class. There are
@@ -545,6 +578,9 @@ class Config(object):
         self._observe_execution = False
         self._observable_directory = None
         self._source_host = None
+        self._cache_file_name = None
+        # the fully qualified name for the file
+        self.cache_fqn = None
         self._features = Features()
 
     @property
@@ -820,6 +856,20 @@ class Config(object):
                 self._working_directory, self._state_file_name)
 
     @property
+    def cache_file_name(self):
+        """If using a cache file to communicate persistent information between
+        invocations, identify the fully-qualified pathname here."""
+        return self._cache_file_name
+
+    @cache_file_name.setter
+    def cache_file_name(self, value):
+        self._cache_file_name = value
+        if (self._working_directory is not None and
+                self._cache_file_name is not None):
+            self.cache_fqn = os.path.join(
+                self._working_directory, self._cache_file_name)
+
+    @property
     def features(self):
         """Feature flag setting access."""
         return self._features
@@ -868,6 +918,7 @@ class Config(object):
     def __str__(self):
         return f'\nFrom {os.getcwd()}/config.yml:\n' \
                f'archive:: {self.archive}\n' \
+               f'cache_fqn:: {self.cache_fqn}\n' \
                f'collection:: {self.collection}\n' \
                f'failure_fqn:: {self.failure_fqn}\n' \
                f'failure_log_file_name:: {self.failure_log_file_name}\n' \
@@ -972,6 +1023,7 @@ class Config(object):
             self.features = self._obtain_features(config)
             self.proxy_file_name = config.get('proxy_file_name', None)
             self.state_file_name = config.get('state_file_name', None)
+            self.cache_file_name = config.get('cache_file_name', None)
             self.observe_execution = config.get('observe_execution', False)
             self.observable_directory = config.get(
                 'observable_directory', None)
@@ -979,6 +1031,10 @@ class Config(object):
         except KeyError as e:
             raise CadcException(
                 'Error in config file {}'.format(e))
+
+        logger = logging.getLogger()
+        logger.setLevel(self.logging_level)
+        logging.debug(self)
 
     def get_config(self):
         """Return a configuration dictionary. Assumes a file named config.yml
@@ -1281,8 +1337,6 @@ class Validator(object):
         self._preview_suffix = preview_suffix
         self._source_tz = timezone(source_tz)
         self._logger = logging.getLogger()
-        self._logger.setLevel(self._config.logging_level)
-        self._logger.debug(self._config)
 
     def _filter_result(self):
         """The default implementation does nothing, but this allows
@@ -1945,6 +1999,7 @@ def data_get(client, working_directory, file_name, archive, metrics):
     :param working_directory: Where 'file_name' will be written.
     :param file_name: What to copy from CADC storage.
     :param archive: Which archive to retrieve the file from.
+    :param metrics: track success execution times, and failure counts.
     """
     start = current()
     fqn = os.path.join(working_directory, file_name)
