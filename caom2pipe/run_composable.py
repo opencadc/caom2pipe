@@ -74,9 +74,12 @@ import traceback
 from datetime import datetime
 
 from caom2pipe import astro_composable as ac
+from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
+from caom2pipe import builder
+from caom2pipe import data_source
 
-__all__ = ['TodoRunner', 'StateRunner']
+__all__ = ['TodoRunner', 'StateRunner', 'run_by_todo', 'run_by_state']
 
 
 class TodoRunner(object):
@@ -123,7 +126,6 @@ class TodoRunner(object):
                                                 'Invalid name format.')
                 result = -1
         except Exception as e:
-            logging.error('hello cryek wirkd')
             self._organizer.capture_failure(storage_name.obs_id,
                                             storage_name.file_name,
                                             e=traceback.format_exc())
@@ -229,3 +231,41 @@ class StateRunner(TodoRunner):
         logging.info(
             f'Done {self._organizer.command_name}, saved state is {exec_time}')
         return result
+
+
+def run_by_todo(config=None, name_builder=None, chooser=None,
+                command_name=None, meta_visitors=[], data_visitors=[]):
+    """A default implementation for using the TodoRunner."""
+    if config is None:
+        config = mc.Config()
+        config.get_executors()
+
+    if name_builder is None:
+        name_builder = builder.StorageNameInstanceBuilder(config.collection)
+    organizer = ec.OrganizeExecutesWithDoOne(
+        config, command_name, meta_visitors, data_visitors)
+    if config.use_local_files:
+        source = data_source.ListDirDataSource(config, chooser)
+    else:
+        source = data_source.TodoFileDataSource(config)
+    runner = TodoRunner(config, organizer, name_builder, source)
+    return runner.run()
+
+
+def run_by_state(config=None, name_builder=None, command_name=None,
+                 bookmark_name=None, meta_visitors=[], data_visitors=[],
+                 end_time=None, chooser=None):
+    """A default implementation for using the StateRunner."""
+    if config is None:
+        config = mc.Config()
+        config.get_executors()
+
+    if name_builder is None:
+        name_builder = builder.StorageNameInstanceBuilder(config.collection)
+
+    organizer = ec.OrganizeExecutesWithDoOne(
+        config, command_name, meta_visitors, data_visitors, chooser)
+    source = data_source.QueryTimeBoxDataSource(config)
+    runner = StateRunner(config, organizer, name_builder, source,
+                         bookmark_name, end_time)
+    return runner.run()

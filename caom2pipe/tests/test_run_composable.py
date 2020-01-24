@@ -68,7 +68,6 @@
 #
 
 import distutils
-import logging
 import os
 
 from astropy.table import Table
@@ -79,11 +78,10 @@ from mock import Mock, patch
 import test_conf as tc
 
 from caom2 import SimpleObservation, Algorithm
-from caom2pipe import data_source as ds
-from caom2pipe import builder as b
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
 from caom2pipe import run_composable as rc
+from caom2pipe import builder as b
 
 
 STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')
@@ -100,14 +98,10 @@ def test_run_todo_list_dir_data_source(fits2caom2_mock, test_config):
     test_config.use_local_files = True
     test_config.task_types = [mc.TaskType.SCRAPE]
 
-    test_builder = b.StorageNameInstanceBuilder(test_config.collection)
     test_chooser = ec.OrganizeChooser()
-    test_data_source = ds.ListDirDataSource(test_config, test_chooser)
-    test_organizer = ec.OrganizeExecutesWithDoOne(
-            test_config, TEST_COMMAND, [], [], test_chooser)
-    test_subject = rc.TodoRunner(test_config, test_organizer,
-                                 test_builder, test_data_source, test_chooser)
-    test_result = test_subject.run()
+    test_result = rc.run_by_todo(config=test_config,
+                                 chooser=test_chooser,
+                                 command_name=TEST_COMMAND)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert fits2caom2_mock.called, 'expect fits2caom2 call'
@@ -140,12 +134,10 @@ def test_run_todo_list_dir_data_source_invalid_fname(test_config):
 
     test_builder = TestStorageNameInstanceBuilder()
     test_chooser = ec.OrganizeChooser()
-    test_data_source = ds.ListDirDataSource(test_config, test_chooser)
-    test_organizer = ec.OrganizeExecutesWithDoOne(
-            test_config, TEST_COMMAND, [], [], test_chooser)
-    test_subject = rc.TodoRunner(test_config, test_organizer,
-                                 test_builder, test_data_source, test_chooser)
-    test_result = test_subject.run()
+    test_result = rc.run_by_todo(config=test_config,
+                                 chooser=test_chooser,
+                                 name_builder=test_builder,
+                                 command_name=TEST_COMMAND)
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect failure, because of file naming'
     assert not os.path.exists(test_config.failure_fqn), 'no logging, no ' \
@@ -153,7 +145,9 @@ def test_run_todo_list_dir_data_source_invalid_fname(test_config):
     assert not os.path.exists(test_config.retry_fqn), 'no logging, no ' \
                                                       'retry file'
     test_config.log_to_file = True
-    test_result = test_subject.run()
+    test_result = rc.run_by_todo(config=test_config,
+                                 chooser=test_chooser,
+                                 command_name=TEST_COMMAND)
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect failure, because of file naming'
     assert os.path.exists(test_config.failure_fqn), 'expect failure file'
@@ -185,14 +179,10 @@ def test_run_todo_file_data_source(repo_get_mock, repo_mock, caps_mock,
     test_config.task_types = [mc.TaskType.VISIT]
     test_config.log_to_file = True
 
-    test_builder = b.StorageNameInstanceBuilder(test_config.collection)
     test_chooser = ec.OrganizeChooser()
-    test_data_source = ds.TodoFileDataSource(test_config)
-    test_organizer = ec.OrganizeExecutesWithDoOne(
-            test_config, TEST_COMMAND, [], [], test_chooser)
-    test_subject = rc.TodoRunner(test_config, test_organizer,
-                                 test_builder, test_data_source, test_chooser)
-    test_result = test_subject.run()
+    test_result = rc.run_by_todo(config=test_config,
+                                 chooser=test_chooser,
+                                 command_name=TEST_COMMAND)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert os.path.exists(test_config.success_fqn), 'expect success file'
@@ -228,15 +218,12 @@ def test_run_state(fits2caom2_mock, data_mock, repo_mock, tap_mock,
     if os.path.exists(test_config.progress_fqn):
         os.unlink(test_config.progress_fqn)
 
-    test_builder = b.StorageNameInstanceBuilder(test_config.collection)
     test_chooser = ec.OrganizeChooser()
-    test_organizer = ec.OrganizeExecutesWithDoOne(
-            test_config, TEST_COMMAND, [], [], test_chooser)
-    test_data_source = ds.QueryTimeBoxDataSource(test_config)
-    test_subject = rc.StateRunner(test_config, test_organizer, test_builder,
-                                  test_data_source, TEST_BOOKMARK,
-                                  test_end_time)
-    test_result = test_subject.run()
+    test_result = rc.run_by_state(config=test_config,
+                                  chooser=test_chooser,
+                                  command_name=TEST_COMMAND,
+                                  bookmark_name=TEST_BOOKMARK,
+                                  end_time=test_end_time)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert fits2caom2_mock.called, 'expect fits2caom2 call'
@@ -250,11 +237,14 @@ def test_run_state(fits2caom2_mock, data_mock, repo_mock, tap_mock,
     start_time = test_end_time
     _write_state(start_time)
     fits2caom2_mock.reset_mock()
-    test_result = test_subject.run()
+    test_result = rc.run_by_state(config=test_config,
+                                  chooser=test_chooser,
+                                  command_name=TEST_COMMAND,
+                                  bookmark_name=TEST_BOOKMARK,
+                                  end_time=test_end_time)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert not fits2caom2_mock.called, 'expect no fits2caom2 call'
-
 
 
 @patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
@@ -271,14 +261,10 @@ def test_run_todo_list_dir_data_source_exception(do_one_mock, test_config):
     if os.path.exists(test_config.retry_fqn):
         os.unlink(test_config.retry_fqn)
 
-    test_builder = b.StorageNameInstanceBuilder(test_config.collection)
     test_chooser = ec.OrganizeChooser()
-    test_data_source = ds.ListDirDataSource(test_config, test_chooser)
-    test_organizer = ec.OrganizeExecutesWithDoOne(
-            test_config, TEST_COMMAND, [], [], test_chooser)
-    test_subject = rc.TodoRunner(test_config, test_organizer,
-                                 test_builder, test_data_source, test_chooser)
-    test_result = test_subject.run()
+    test_result = rc.run_by_todo(config=test_config,
+                                 chooser=test_chooser,
+                                 command_name=TEST_COMMAND)
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect failure'
     assert do_one_mock.called, 'expect do_one call'
