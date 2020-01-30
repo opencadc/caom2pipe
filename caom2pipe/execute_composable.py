@@ -917,12 +917,23 @@ class StoreClient(CaomExecute):
         self.working_dir = self.root_dir
         self.stream = config.stream
         self.fname = storage_name.fname_on_disk
+        self.multi = storage_name.is_multi
+        self.multiple_files = storage_name.multiple_files(config)
 
     def execute(self, context):
         self.logger.debug('Begin execute for {} Data'.format(__name__))
 
-        self.logger.debug('store the input file {} to ad'.format(self.fname))
-        self._cadc_data_put_client()
+        if self.multi:
+            self.logger.debug('Store multiple files to ad.')
+            for entry in self.multiple_files:
+                self.fname = entry
+                self.logger.debug(
+                    'store the input file {} to ad'.format(self.fname))
+                self._cadc_data_put_client()
+        else:
+            self.logger.debug(
+                'store the input file {} to ad'.format(self.fname))
+            self._cadc_data_put_client()
 
         self.logger.debug('End execute for {}'.format(__name__))
 
@@ -1679,6 +1690,8 @@ def _run_local_files(config, organizer, sname, command_name,
         elif f.endswith('.header'):
             temp_list.append(f)
         elif f.endswith('.gz'):
+            temp_list.append(f)
+        elif f.endswith('.json'):
             temp_list.append(f)
 
     # make the entries unique
