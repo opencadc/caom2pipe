@@ -312,11 +312,13 @@ class Rejected(object):
     NO_REASON = ''
     BAD_DATA = 'bad_data'
     BAD_METADATA = 'bad_metadata'
+    INVALID_FORMAT = 'is_valid_fails'
     NO_PREVIEW = 'no_preview'
 
     # A map to the logging message string representing acknowledged rejections
     reasons = {BAD_DATA: 'Header missing END card',
                BAD_METADATA: 'Cannot build an observation',
+               INVALID_FORMAT: 'Invalid observation ID',
                NO_PREVIEW: '404 Client Error: Not Found for url'}
 
     def __init__(self, fqn):
@@ -1277,6 +1279,13 @@ class StorageName(object):
     def external_urls(self):
         return None
 
+    @property
+    def is_multi(self):
+        return False
+
+    def multiple_files(self, config=None):
+        return []
+
     @fname_on_disk.setter
     def fname_on_disk(self, value):
         self._fname_on_disk = value
@@ -1741,7 +1750,7 @@ def get_file_meta(fqn):
     elif fqn.endswith('.jpg'):
         meta['type'] = 'image/jpeg'
     elif fqn.endswith('tar.gz'):
-        meta['type'] = 'application/tar+gzip'
+        meta['type'] = 'application/x-tar'
     elif fqn.endswith('h5'):
         meta['type'] = 'application/x-hdf5'
     else:
