@@ -476,7 +476,8 @@ class Cache(object):
         try:
             self._cache = read_as_yaml(self._fqn)
         except Exception as e:
-            raise CadcException(f'Cache read failure {e}. Stopping pipeline.')
+            raise CadcException(
+                f'Cache {self._fqn} read failure {e}. Stopping pipeline.')
 
     def add_to(self, key, values):
         """Add to or update the content of the cache. This is an over-write
@@ -486,7 +487,8 @@ class Cache(object):
     def get_from(self, key):
         result = self._cache.get(key)
         if result is None:
-            raise CadcException(f'{key} is not cached.')
+            raise CadcException(
+                f'Failed to find key {key} in cache {self._fqn}.')
         return result
 
     def save(self):

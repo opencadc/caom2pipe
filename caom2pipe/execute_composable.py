@@ -203,7 +203,6 @@ class CaomExecute(object):
     def _create_dir(self):
         """Create the working area if it does not already exist."""
         mc.create_dir(self.working_dir)
-        logging.error(f'working_dir is {self.working_dir}')
 
     def _define_local_dirs(self, storage_name):
         """when files are on disk don't worry about a separate directory
@@ -264,15 +263,18 @@ class CaomExecute(object):
                 plugin, plugin, self.lineage)
         mc.exec_cmd(cmd, self.log_level_as)
 
-    def _fits2caom2_cmd_local_direct(self):
+    def _fits2caom2_cmd_local_direct(self, connected=True):
         """
         Execute fits2caom with a --cert parameter and a --local parameter.
         """
         plugin = self._find_fits2caom2_plugin()
         command = mc.load_module(plugin, 'to_caom2')
         # so far, the plugin is also the module :)
+        conn = ''
+        if not connected:
+            conn = f'--not_connected'
         local_fqn = os.path.join(self.working_dir, self.fname)
-        sys.argv = (f'{self.command_name} {self.logging_level_param} '
+        sys.argv = (f'{self.command_name} {self.logging_level_param} {conn} '
                     f'{self.cred_param} --observation {self.collection} '
                     f'{self.obs_id} --local {local_fqn} --out {self.model_fqn} '
                     f'--plugin {plugin} --module {plugin} --lineage '
@@ -1943,6 +1945,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
         self._meta_visitors = meta_visitors
         self._data_visitors = data_visitors
         self._log_h = None
+        self._logger = logging.getLogger(__name__)
 
     @property
     def command_name(self):
@@ -2000,7 +2003,6 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                 model_fqn = os.path.join(self.config.working_directory,
                                          storage_name.model_file_name)
                 exists = os.path.exists(model_fqn)
-                logging.error(f'{model_fqn} exists {exists}')
                 if exists:
                     if self.config.use_local_files:
                         executors.append(
@@ -2163,7 +2165,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
         """Process one entry.
         :param storage_name instance of StorageName for the collection
         """
-        logging.debug(f'Begin _do_one {storage_name}')
+        self._logger.debug(f'Begin _do_one {storage_name}')
         self._set_up_file_logging(storage_name)
         start_s = datetime.utcnow().timestamp()
         try:
@@ -2174,7 +2176,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                 return 0
             executors = self.choose(storage_name)
             for executor in executors:
-                logging.info('Step {} for {}'.format(
+                self._logger.info('Step {} for {}'.format(
                     executor.task_type, storage_name.obs_id))
                 executor.execute(context=None)
             if len(executors) > 0:
@@ -2182,15 +2184,15 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                                      storage_name.file_name, start_s)
                 return 0
             else:
-                logging.info('No executors for {}'.format(
+                self._logger.info('No executors for {}'.format(
                     storage_name))
                 return -1  # cover the case where file name validation fails
         except Exception as e:
             self.capture_failure(storage_name.obs_id, storage_name.file_name,
                                  e=traceback.format_exc())
-            logging.warning('Execution failed for {} with {}'.format(
+            self._logger.warning('Execution failed for {} with {}'.format(
                 storage_name.obs_id, e))
-            logging.error(traceback.format_exc())
+            self._logger.error(traceback.format_exc())
             return -1
         finally:
             self._unset_file_logging()

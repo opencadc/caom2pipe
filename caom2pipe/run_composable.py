@@ -97,7 +97,7 @@ class TodoRunner(object):
         # the list of work to be done, containing whatever is returned from
         # the DataSource instance
         self._todo_list = []
-        self._logger = logging.getLogger()
+        self._logger = logging.getLogger(__name__)
 
     def _build_todo_list(self):
         self._logger.debug('Begin _build_todo_list.')
@@ -165,6 +165,7 @@ class StateRunner(TodoRunner):
                                           data_source)
         self._bookmark_name = bookmark_name
         self._end_time = datetime.utcnow() if max_ts is None else max_ts
+        self._logger = logging.getLogger(__name__)
 
     def run(self):
         logging.debug(f'Begin run state for {self._bookmark_name}')
