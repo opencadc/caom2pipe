@@ -1663,7 +1663,7 @@ def get_file_meta(fqn):
     elif fqn.endswith('.jpg'):
         meta['type'] = 'image/jpeg'
     elif fqn.endswith('tar.gz'):
-        meta['type'] = 'application/tar+gzip'
+        meta['type'] = 'application/x-tar'
     elif fqn.endswith('h5'):
         meta['type'] = 'application/x-hdf5'
     else:
