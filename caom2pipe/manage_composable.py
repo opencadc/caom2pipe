@@ -2277,15 +2277,14 @@ def query_tap(query_string, proxy_fqn, resource_id):
     return Table.read(buffer.getvalue().split('\n'), format='csv')
 
 
-def query_tap_client(query_string, tap_client, resource_id):
+def query_tap_client(query_string, tap_client):
     """
     :param query_string ADQL
     :param tap_client which client to query the service with
     :param resource_id which tap service to query
     :returns an astropy votable instance."""
 
-    logging.debug('query_tap_client: execute query {} against {}'.format(
-        query_string, resource_id))
+    logging.debug(f'query_tap_client: execute query \n{query_string}')
     buffer = io.StringIO()
     tap_client.query(query_string, output_file=buffer, data_only=True,
                      response_format='csv')

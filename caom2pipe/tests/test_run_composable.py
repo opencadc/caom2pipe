@@ -81,7 +81,7 @@ from caom2 import SimpleObservation, Algorithm
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
 from caom2pipe import run_composable as rc
-from caom2pipe import builder as b
+from caom2pipe import name_builder_composable as b
 
 
 STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')

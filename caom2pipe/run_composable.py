@@ -76,8 +76,8 @@ from datetime import datetime
 from caom2pipe import astro_composable as ac
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
-from caom2pipe import builder
-from caom2pipe import data_source
+from caom2pipe import name_builder_composable
+from caom2pipe import data_source_composable
 
 __all__ = ['TodoRunner', 'StateRunner', 'run_by_todo', 'run_by_state']
 
@@ -202,6 +202,9 @@ class StateRunner(TodoRunner):
                     self._organizer.complete_record_count = num_entries
                     self._organizer.success_count = 0
                     for entry in entries:
+                        self._logger.error(entry)
+                        self._logger.error(self._process_entry)
+                        self._logger.error(result)
                         entry_name = entry[0]
                         entry_time = ac.get_datetime(entry[1])
                         result |= self._process_entry(entry_name)
@@ -234,6 +237,11 @@ class StateRunner(TodoRunner):
         return result
 
 
+def _get_utc_now():
+    """So that utcnow can be mocked."""
+    return datetime.utcnow()
+
+
 def run_by_todo(config=None, name_builder=None, chooser=None,
                 command_name=None, meta_visitors=[], data_visitors=[]):
     """A default implementation for using the TodoRunner."""
@@ -242,31 +250,40 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
         config.get_executors()
 
     if name_builder is None:
-        name_builder = builder.StorageNameInstanceBuilder(config.collection)
+        name_builder = name_builder_composable.StorageNameInstanceBuilder(
+            config.collection)
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors)
     if config.use_local_files:
-        source = data_source.ListDirDataSource(config, chooser)
+        source = data_source_composable.ListDirDataSource(config, chooser)
     else:
-        source = data_source.TodoFileDataSource(config)
+        source = data_source_composable.TodoFileDataSource(config)
     runner = TodoRunner(config, organizer, name_builder, source)
     return runner.run()
 
 
 def run_by_state(config=None, name_builder=None, command_name=None,
                  bookmark_name=None, meta_visitors=[], data_visitors=[],
-                 end_time=None, chooser=None):
+                 end_time=None, chooser=None, source=None):
     """A default implementation for using the StateRunner."""
     if config is None:
         config = mc.Config()
         config.get_executors()
 
     if name_builder is None:
-        name_builder = builder.StorageNameInstanceBuilder(config.collection)
+        name_builder = name_builder_composable.StorageNameInstanceBuilder(
+            config.collection)
+
+    if source is None:
+        logging.error(f'config is {config}')
+        source = data_source_composable.QueryTimeBoxDataSource(config)
+
+    if end_time is None:
+        end_time = _get_utc_now()
 
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser)
-    source = data_source.QueryTimeBoxDataSource(config)
+
     runner = StateRunner(config, organizer, name_builder, source,
                          bookmark_name, end_time)
     return runner.run()

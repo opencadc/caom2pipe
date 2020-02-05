@@ -67,9 +67,29 @@
 # ***********************************************************************
 #
 
+from deprecated import deprecated
+
 from caom2pipe import manage_composable as mc
 
-__all__ = ['StorageNameBuilder']
+__all__ = ['StorageNameBuilder', 'Builder']
+
+
+@deprecated
+class Builder(object):
+    def __init__(self, config):
+        self._config = config
+        self._todo_list = []
+
+    @property
+    def todo_list(self):
+        return self._todo_list
+
+    @todo_list.setter
+    def todo_list(self, to_list):
+        self._todo_list = to_list
+
+    def build(self, entry):
+        return entry
 
 
 class StorageNameBuilder(object):

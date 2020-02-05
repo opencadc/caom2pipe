@@ -153,7 +153,11 @@ def get_datetime(from_value):
         except ValueError:
             # VLASS has a format astropy fails to understand '%H:%M:%S'
             # CFHT 2019/11/26
-            for fmt in ['%H:%M:%S', '%Y/%m/%d']:
+            # Gemini 2019-11-01 00:01:34.610517+00:00
+            if '+00:00' in from_value:
+                # because %z doesn't expect the ':' in the timezone field
+                from_value = from_value[:-6]
+            for fmt in ['%H:%M:%S', '%Y/%m/%d', '%Y-%m-%d %H:%M:%S.%f']:
                 try:
                     result = Time(dt_datetime.strptime(from_value, fmt))
                     break

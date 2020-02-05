@@ -459,7 +459,9 @@ def test_run_by_file_use_local_files_gz(do_mock, test_config):
     class TestStorageName(mc.StorageName):
         def __init__(self, file_name=None, fname_on_disk=None):
             super(TestStorageName, self).__init__()
-            assert file_name == 'test_file.gz', 'wrong file name'
+            assert file_name in ['test_file.gz',
+                                 'test_file.json'], \
+                f'wrong file name {file_name}'
 
     test_result = ec.run_by_file(test_config,
                                  storage_name=TestStorageName,
@@ -470,9 +472,9 @@ def test_run_by_file_use_local_files_gz(do_mock, test_config):
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'wrong result'
 
-    # no local files, should not be called
+    # local files, one .gz, one .json
     assert do_mock.called, 'do mock not called'
-    assert do_mock.call_count == 1, do_mock.call_count
+    assert do_mock.call_count == 2, do_mock.call_count
 
 
 @patch('caom2pipe.execute_composable._do_one')
