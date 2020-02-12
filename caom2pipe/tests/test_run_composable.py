@@ -282,12 +282,57 @@ def test_run_todo_list_dir_data_source_exception(do_one_mock, test_config):
         assert content == 'abc.fits\n', 'wrong retry content'
 
 
+@patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
+def test_run_todo_retry(do_one_mock, test_config):
+
+    retry_success_fqn = f'{tc.TEST_DATA_DIR}_0/' \
+                        f'{test_config.success_log_file_name}'
+    retry_failure_fqn = f'{tc.TEST_DATA_DIR}_0/' \
+                        f'{test_config.failure_log_file_name}'
+    retry_retry_fqn = f'{tc.TEST_DATA_DIR}_0/{test_config.retry_file_name}'
+    for ii in [test_config.success_fqn, test_config.failure_fqn,
+               test_config.retry_fqn, retry_failure_fqn, retry_retry_fqn,
+               retry_success_fqn]:
+        if os.path.exists(ii):
+            os.unlink(ii)
+
+    do_one_mock.side_effect = _mock_do_one
+
+    test_config.work_fqn = f'{tc.TEST_DATA_DIR}/todo.txt'
+    test_config.log_to_file = True
+    test_config.retry_failures = True
+    _write_todo(test_config)
+
+    test_result = rc.run_by_todo(config=test_config,
+                                 command_name=TEST_COMMAND)
+
+    assert test_result is not None, 'expect a result'
+    assert test_result == -1, 'expect success'
+    assert os.path.exists(test_config.success_fqn), 'empty success file'
+    success_size = mc.get_file_size(test_config.success_fqn)
+    assert success_size == 0, 'empty success file'
+    assert os.path.exists(test_config.failure_fqn), 'expect failure file'
+    assert os.path.exists(test_config.retry_fqn), 'expect retry file'
+    assert os.path.exists(retry_success_fqn), 'empty success file'
+    success_size = mc.get_file_size(retry_success_fqn)
+    assert success_size == 0, 'empty success file'
+    assert os.path.exists(retry_failure_fqn), 'expect failure file'
+    assert os.path.exists(retry_retry_fqn), 'expect retry file'
+    assert do_one_mock.called, 'expect do_one call'
+    assert do_one_mock.call_count == 2, 'wrong number of calls'
+
+
 def _write_state(start_time):
     if os.path.exists(STATE_FILE):
         os.unlink(STATE_FILE)
     test_bookmark = {'bookmarks': {TEST_BOOKMARK:
                                    {'last_record': start_time}}}
     mc.write_as_yaml(test_bookmark, STATE_FILE)
+
+
+def _write_todo(test_config):
+    with open(test_config.work_fqn, 'w') as f:
+        f.write(f'test_obs_id.fits.gz')
 
 
 call_count = 0
@@ -306,6 +351,22 @@ def _mock_query(arg1, arg2, arg3):
         return Table.read(
             'fileName,ingestDate\n'.split('\n'),
             format='csv')
+
+
+def _mock_do_one(arg1):
+    assert isinstance(arg1, mc.StorageName), 'expect StorageName instance'
+    if arg1.obs_id == 'TEST_OBS_ID':
+        assert arg1.lineage == 'TEST_OBS_ID/ad:OMM/TEST_OBS_ID.fits.gz', \
+            'wrong lineage'
+        assert arg1.file_name == 'TEST_OBS_ID.fits', 'wrong file name'
+        with open(f'{tc.TEST_DATA_DIR}/retry.txt', 'w') as f:
+            f.write(f'ghi.fits.gz')
+    elif arg1.obs_id == 'ghi':
+        assert arg1.lineage == 'ghi/ad:OMM/ghi.fits.gz', 'wrong lineage'
+        assert arg1.file_name == 'ghi.fits', 'wrong file name'
+    else:
+        assert False, f'unexpected obs id {arg1.obs_id}'
+    return -1
 
 
 def _mock_write():

@@ -1560,8 +1560,7 @@ class OrganizeExecutes(object):
         # if log_to_file is False, should leave no logging trace behind
         if self.config.log_to_file:
             for fqn in [self.failure_fqn, self.retry_fqn, self.success_fqn]:
-                back_fqn = '{}.{}.txt'.format(fqn.replace('.txt', ''), now_s)
-                OrganizeExecutes._init_log_file(fqn, back_fqn)
+                OrganizeExecutes.init_log_file(fqn, now_s)
         self._success_count = 0
         self._complete_record_count = 0
         self.observable = mc.Observable(mc.Rejected(self.rejected_fqn),
@@ -1884,10 +1883,12 @@ class OrganizeExecutes(object):
         return subject, cred_param
 
     @staticmethod
-    def _init_log_file(log_fqn, log_fqn_backup):
+    def init_log_file(log_fqn, now_s):
         """Keep old versions of the progress files."""
+        log_fid = log_fqn.replace('.txt', '')
+        back_fqn = f'{log_fid}.{now_s}.txt'
         if os.path.exists(log_fqn) and os.path.getsize(log_fqn) != 0:
-            move(log_fqn, log_fqn_backup)
+            move(log_fqn, back_fqn)
         f_handle = open(log_fqn, 'w')
         f_handle.close()
 

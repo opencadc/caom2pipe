@@ -1735,10 +1735,8 @@ def get_file_meta(fqn):
     """
     if fqn is None or not os.path.exists(fqn):
         raise CadcException('Could not find {} in get_file_meta'.format(fqn))
-    meta = {}
-    s = os.stat(fqn)
-    meta['size'] = s.st_size
-    meta['md5sum'] = md5(open(fqn, 'rb').read()).hexdigest()
+    meta = {'size': get_file_size(fqn),
+            'md5sum': md5(open(fqn, 'rb').read()).hexdigest()}
     if fqn.endswith('.header') or fqn.endswith('.txt'):
         meta['type'] = 'text/plain'
     elif fqn.endswith('.csv'):
@@ -1757,6 +1755,15 @@ def get_file_meta(fqn):
         meta['type'] = 'application/fits'
     logging.debug(meta)
     return meta
+
+
+def get_file_size(fqn):
+    """Get a file size on disk.
+
+    :param fqn: Fully-qualified name of the file for which to get the size
+    """
+    s = os.stat(fqn)
+    return s.st_size
 
 
 def create_dir(dir_name):

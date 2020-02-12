@@ -376,7 +376,7 @@ class FilterMetadataCache(object):
             else:
 
                 inst_r = self._repair_instrument_name(instrument)
-                fn_r = self._repair_filter_name(filter_name, instrument)
+                fn_r = self._repair_filter_name(filter_name, inst_r)
                 self._logger.debug(f'Looking for instrument {instrument}, '
                                    f'repaired instrument {inst_r}, filter '
                                    f'{filter_name} repaired filter {fn_r}.')

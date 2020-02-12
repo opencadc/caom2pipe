@@ -146,6 +146,18 @@ class TodoRunner(object):
         self._logger.debug('End _run_todo_list.')
         return result
 
+    def _reset_for_retry(self, count):
+        self._config.update_for_retry(count)
+        mc.create_dir(self._config.log_file_directory)
+        now_s = _get_utc_now().timestamp()
+        for fqn in [self._config.failure_fqn,
+                    self._config.retry_fqn,
+                    self._config.success_fqn]:
+            ec.OrganizeExecutes.init_log_file(fqn, now_s)
+        self._organizer._success_count = 0
+        self._data_source = data_source_composable.TodoFileDataSource(
+            self._config)
+
     def run(self):
         self._logger.debug('Begin run.')
         self._build_todo_list()
@@ -154,6 +166,25 @@ class TodoRunner(object):
                           f'of {self._organizer.complete_record_count} '
                           f'correctly.')
         self._logger.debug('End run.')
+        return result
+
+    def run_retry(self):
+        self._logger.debug('Begin retry run.')
+        result = 0
+        if self._config.need_to_retry():
+            for count in range(0, self._config.retry_count):
+                self._logger.warning(
+                    f'Beginning retry {count + 1} in {os.getcwd()}')
+                self._reset_for_retry(count)
+                # make another file list
+                self._build_todo_list()
+                self._logger.warning(
+                    f'Retry {self._organizer.complete_record_count} entries')
+                result |= self._run_todo_list()
+                if not self._config.need_to_retry():
+                    break
+            self._logger.warning('Done retry attempts.')
+        self._logger.debug('End retry run.')
         return result
 
 
@@ -252,14 +283,19 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
             config.collection)
-    organizer = ec.OrganizeExecutesWithDoOne(
-        config, command_name, meta_visitors, data_visitors)
+
     if config.use_local_files:
         source = data_source_composable.ListDirDataSource(config, chooser)
     else:
         source = data_source_composable.TodoFileDataSource(config)
+
+    organizer = ec.OrganizeExecutesWithDoOne(
+        config, command_name, meta_visitors, data_visitors)
+
     runner = TodoRunner(config, organizer, name_builder, source)
-    return runner.run()
+    result = runner.run()
+    result |= runner.run_retry()
+    return result
 
 
 def run_by_state(config=None, name_builder=None, command_name=None,
@@ -275,7 +311,6 @@ def run_by_state(config=None, name_builder=None, command_name=None,
             config.collection)
 
     if source is None:
-        logging.error(f'config is {config}')
         source = data_source_composable.QueryTimeBoxDataSource(config)
 
     if end_time is None:
@@ -286,4 +321,6 @@ def run_by_state(config=None, name_builder=None, command_name=None,
 
     runner = StateRunner(config, organizer, name_builder, source,
                          bookmark_name, end_time)
-    return runner.run()
+    result = runner.run()
+    result |= runner.run_retry()
+    return result
