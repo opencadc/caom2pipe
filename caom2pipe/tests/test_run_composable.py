@@ -203,7 +203,7 @@ def test_run_state(fits2caom2_mock, data_mock, repo_mock, tap_mock,
                    test_config):
     fits2caom2_mock.side_effect = _mock_write
     data_mock.return_value.get_file_info.return_value = {'name':
-                                                             'test_file.fits'}
+                                                         'test_file.fits'}
     repo_mock.return_value.read.side_effect = Mock(return_value=None)
     tap_mock.side_effect = _mock_query
     CadcTapClient.__init__ = Mock(return_value=None)
@@ -284,17 +284,8 @@ def test_run_todo_list_dir_data_source_exception(do_one_mock, test_config):
 
 @patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
 def test_run_todo_retry(do_one_mock, test_config):
-
-    retry_success_fqn = f'{tc.TEST_DATA_DIR}_0/' \
-                        f'{test_config.success_log_file_name}'
-    retry_failure_fqn = f'{tc.TEST_DATA_DIR}_0/' \
-                        f'{test_config.failure_log_file_name}'
-    retry_retry_fqn = f'{tc.TEST_DATA_DIR}_0/{test_config.retry_file_name}'
-    for ii in [test_config.success_fqn, test_config.failure_fqn,
-               test_config.retry_fqn, retry_failure_fqn, retry_retry_fqn,
-               retry_success_fqn]:
-        if os.path.exists(ii):
-            os.unlink(ii)
+    retry_success_fqn, retry_failure_fqn, retry_retry_fqn = \
+        _clean_up_log_files(test_config)
 
     do_one_mock.side_effect = _mock_do_one
 
@@ -308,6 +299,59 @@ def test_run_todo_retry(do_one_mock, test_config):
 
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect success'
+    _check_log_files(test_config, retry_success_fqn, retry_failure_fqn,
+                     retry_retry_fqn)
+    assert do_one_mock.called, 'expect do_one call'
+    assert do_one_mock.call_count == 2, 'wrong number of calls'
+
+
+@patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
+@patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.__init__')
+@patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.get_work')
+def test_run_state_retry(get_work_mock, init_mock, do_one_mock, test_config):
+    _write_state(rc._get_utc_now().timestamp())
+    retry_success_fqn, retry_failure_fqn, retry_retry_fqn = \
+        _clean_up_log_files(test_config)
+    global call_count
+    call_count = 0
+    get_work_mock.side_effect = _mock_get_work
+    init_mock.return_value = None
+    do_one_mock.side_effect = _mock_do_one
+
+    test_config.log_to_file = True
+    test_config.retry_failures = True
+    test_config.state_fqn = STATE_FILE
+    test_config.interval = 10
+
+    test_result = rc.run_by_state(config=test_config,
+                                  command_name=TEST_COMMAND,
+                                  bookmark_name=TEST_BOOKMARK)
+
+    assert test_result is not None, 'expect a result'
+    assert test_result == -1, 'expect success'
+    _check_log_files(test_config, retry_success_fqn, retry_failure_fqn,
+                     retry_retry_fqn)
+    assert do_one_mock.called, 'expect do_one call'
+    assert do_one_mock.call_count == 2, 'wrong number of calls'
+    assert init_mock.called, 'init should be called'
+
+
+def _clean_up_log_files(test_config):
+    retry_success_fqn = f'{tc.TEST_DATA_DIR}_0/' \
+                        f'{test_config.success_log_file_name}'
+    retry_failure_fqn = f'{tc.TEST_DATA_DIR}_0/' \
+                        f'{test_config.failure_log_file_name}'
+    retry_retry_fqn = f'{tc.TEST_DATA_DIR}_0/{test_config.retry_file_name}'
+    for ii in [test_config.success_fqn, test_config.failure_fqn,
+               test_config.retry_fqn, retry_failure_fqn, retry_retry_fqn,
+               retry_success_fqn]:
+        if os.path.exists(ii):
+            os.unlink(ii)
+    return retry_success_fqn, retry_failure_fqn, retry_retry_fqn
+
+
+def _check_log_files(test_config, retry_success_fqn, retry_failure_fqn,
+                     retry_retry_fqn):
     assert os.path.exists(test_config.success_fqn), 'empty success file'
     success_size = mc.get_file_size(test_config.success_fqn)
     assert success_size == 0, 'empty success file'
@@ -318,8 +362,6 @@ def test_run_todo_retry(do_one_mock, test_config):
     assert success_size == 0, 'empty success file'
     assert os.path.exists(retry_failure_fqn), 'expect failure file'
     assert os.path.exists(retry_retry_fqn), 'expect retry file'
-    assert do_one_mock.called, 'expect do_one call'
-    assert do_one_mock.call_count == 2, 'wrong number of calls'
 
 
 def _write_state(start_time):
@@ -336,6 +378,10 @@ def _write_todo(test_config):
 
 
 call_count = 0
+
+
+def _mock_get_work(arg1, arg2):
+    return _mock_query(None, None, None)
 
 
 def _mock_query(arg1, arg2, arg3):
