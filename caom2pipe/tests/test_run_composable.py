@@ -309,7 +309,7 @@ def test_run_todo_retry(do_one_mock, test_config):
 @patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.__init__')
 @patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.get_work')
 def test_run_state_retry(get_work_mock, init_mock, do_one_mock, test_config):
-    _write_state(rc._get_utc_now().timestamp())
+    _write_state(rc.get_utc_now().timestamp())
     retry_success_fqn, retry_failure_fqn, retry_retry_fqn = \
         _clean_up_log_files(test_config)
     global call_count

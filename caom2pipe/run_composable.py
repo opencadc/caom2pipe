@@ -79,7 +79,8 @@ from caom2pipe import manage_composable as mc
 from caom2pipe import name_builder_composable
 from caom2pipe import data_source_composable
 
-__all__ = ['TodoRunner', 'StateRunner', 'run_by_todo', 'run_by_state']
+__all__ = ['TodoRunner', 'StateRunner', 'run_by_todo', 'run_by_state',
+           'get_utc_now']
 
 
 class TodoRunner(object):
@@ -149,7 +150,7 @@ class TodoRunner(object):
     def _reset_for_retry(self, count):
         self._config.update_for_retry(count)
         mc.create_dir(self._config.log_file_directory)
-        now_s = _get_utc_now().timestamp()
+        now_s = get_utc_now().timestamp()
         for fqn in [self._config.failure_fqn,
                     self._config.retry_fqn,
                     self._config.success_fqn]:
@@ -268,7 +269,7 @@ class StateRunner(TodoRunner):
         return result
 
 
-def _get_utc_now():
+def get_utc_now():
     """So that utcnow can be mocked."""
     return datetime.utcnow()
 
@@ -314,7 +315,7 @@ def run_by_state(config=None, name_builder=None, command_name=None,
         source = data_source_composable.QueryTimeBoxDataSource(config)
 
     if end_time is None:
-        end_time = _get_utc_now()
+        end_time = get_utc_now()
 
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser)
