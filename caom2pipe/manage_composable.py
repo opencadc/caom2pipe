@@ -1499,7 +1499,7 @@ def define_subject(config):
     elif config.netrc_file is not None:
         netrc_fqn = os.path.join(config.working_directory, config.netrc_file)
         if os.path.exists(netrc_fqn):
-            logging.error(
+            logging.debug(
                 f'Using netrc file {netrc_fqn} for credentials.')
             subject = net.Subject(username=None, certificate=None,
                                   netrc=netrc_fqn)
