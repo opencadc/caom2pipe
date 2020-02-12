@@ -99,7 +99,7 @@ from caom2 import ObservationWriter, ObservationReader, Artifact
 from caom2 import ChecksumURI
 
 
-__all__ = ['CadcException', 'Config', 'State', 'to_float', 'TaskType',
+__all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
            'get_cadc_headers_client', 'get_cadc_meta', 'get_file_meta',
            'decompose_lineage', 'check_param', 'read_csv_file',
@@ -1474,7 +1474,13 @@ def append_as_array(append_to, key, value):
 
 def to_float(value):
     """Cast to float, without throwing an exception."""
-    return float(value) if value is not None else None
+    result = None
+    if value is not None:
+        if isinstance(value, float):
+            result = value
+        elif isinstance(value, str) and len(value.strip()) > 0:
+            result = float(value)
+    return result
 
 
 def to_int(value):
