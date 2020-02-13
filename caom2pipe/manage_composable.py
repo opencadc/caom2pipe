@@ -1476,7 +1476,7 @@ def to_float(value):
     """Cast to float, without throwing an exception."""
     result = None
     if value is not None:
-        if isinstance(value, float):
+        if isinstance(value, float) or isinstance(value, int):
             result = value
         elif isinstance(value, str) and len(value.strip()) > 0:
             result = float(value)
