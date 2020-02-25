@@ -224,7 +224,7 @@ def _handle_footprint_logs(log_file_directory, log_file):
         os.unlink(orig_log_fqn)
 
 
-def is_composite(headers):
+def is_composite(headers, keyword_prefix='IMCMB'):
     """All the logic to determine if a file name is part of a
     CompositeObservation, in one marvelous function."""
     result = False
@@ -232,7 +232,7 @@ def is_composite(headers):
     # look in the last header - IMCMB keywords are not in the zero'th header
     header = headers[-1]
     for ii in header:
-        if ii.startswith('IMCMB'):
+        if ii.startswith(keyword_prefix):
             result = True
             break
     return result
