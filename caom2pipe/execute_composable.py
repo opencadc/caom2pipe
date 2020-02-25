@@ -1836,10 +1836,12 @@ class OrganizeExecutes(object):
                         datetime.now(), obs_id, file_name, execution_s))
             finally:
                 success.close()
+        logging.debug('******************************************************')
         logging.info('Progress - record {} of {} records processed in '
                      '{:.2f} s.'.format(self.success_count,
                                         self.complete_record_count,
                                         execution_s))
+        logging.debug('******************************************************')
 
     def is_rejected(self, storage_name):
         """Common code to use the appropriate identifier when checking for
