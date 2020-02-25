@@ -600,7 +600,7 @@ class MetaUpdateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('Begin execute for MetaUpdateDirect')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -631,7 +631,7 @@ class MetaUpdateDirect(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug('End execute for MetaUpdateDirect')
 
 
 class MetaDeleteCreateClient(CaomExecute):
@@ -706,7 +706,7 @@ class MetaDeleteCreateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('Begin execute for MetaDeleteCreateDirect')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -737,7 +737,7 @@ class MetaDeleteCreateDirect(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug('End execute for MetaDeleteCreateDirect')
 
 
 class LocalMetaCreateClient(CaomExecute):
@@ -893,7 +893,7 @@ class LocalMetaDeleteCreateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('Begin execute for LocalMetaDeleteCreateDirect')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -921,7 +921,7 @@ class LocalMetaDeleteCreateDirect(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug('End execute for LocalMetaDeleteCreateDirect')
 
 
 class LocalMetaUpdateClient(CaomExecute):
@@ -984,7 +984,7 @@ class LocalMetaUpdateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('Begin execute for LocalMetaUpdateDirect')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -1009,7 +1009,7 @@ class LocalMetaUpdateDirect(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(self.observation)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug('End execute for LocalMetaUpdateDirect')
 
 
 class ClientVisit(CaomExecute):
@@ -2177,7 +2177,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
         """Process one entry.
         :param storage_name instance of StorageName for the collection
         """
-        self._logger.debug(f'Begin _do_one {storage_name}')
+        self._logger.debug(f'Begin do_one {storage_name}')
         self._set_up_file_logging(storage_name)
         start_s = datetime.utcnow().timestamp()
         try:

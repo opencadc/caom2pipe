@@ -90,7 +90,7 @@ class TodoRunner(object):
     translating a list of work into a collection-specific name
     (StorageNameBuilder extensions).
     """
-    def __init__(self, config, organizer, builder, data_source, chooser=None):
+    def __init__(self, config, organizer, builder, data_source):
         self._builder = builder
         self._data_source = data_source
         self._config = config
@@ -301,7 +301,7 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
         source = data_source_composable.TodoFileDataSource(config)
 
     organizer = ec.OrganizeExecutesWithDoOne(
-        config, command_name, meta_visitors, data_visitors)
+        config, command_name, meta_visitors, data_visitors, chooser)
 
     runner = TodoRunner(config, organizer, name_builder, source)
     result = runner.run()
