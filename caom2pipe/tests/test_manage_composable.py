@@ -122,35 +122,35 @@ def test_config_class():
     assert test_config.work_file == 'todo.txt'
     assert test_config.features is not None
     assert test_config.features.supports_composite is False
-    assert test_config.working_directory == mock_root, 'wrong dir'
-    assert test_config.work_fqn == '{}/todo.txt'.format(mock_root), 'work_fqn'
-    assert test_config.netrc_file == '.netrc', 'netrc'
+    assert test_config.working_directory == tc.TEST_DATA_DIR, 'wrong dir'
+    assert test_config.work_fqn == f'{tc.TEST_DATA_DIR}/todo.txt', 'work_fqn'
+    assert test_config.netrc_file == 'test_netrc', 'netrc'
     assert test_config.archive == 'NEOSS', 'archive'
     assert test_config.collection == 'NEOSSAT', 'collection'
-    assert test_config.log_file_directory == mock_root, 'logging dir'
-    assert test_config.success_fqn == '{}/success_log.txt'.format(mock_root), \
+    assert test_config.log_file_directory == tc.TEST_DATA_DIR, 'logging dir'
+    assert test_config.success_fqn == f'{tc.TEST_DATA_DIR}/success_log.txt', \
         'success fqn'
     assert test_config.success_log_file_name == 'success_log.txt', \
         'success file'
-    assert test_config.failure_fqn == '{}/failure_log.txt'.format(mock_root), \
+    assert test_config.failure_fqn == f'{tc.TEST_DATA_DIR}/failure_log.txt', \
         'failure fqn'
     assert test_config.failure_log_file_name == 'failure_log.txt', \
         'failure file'
     assert test_config.retry_file_name == 'retries.txt', 'retry file'
-    assert test_config.retry_fqn == '{}/retries.txt'.format(mock_root), \
+    assert test_config.retry_fqn == f'{tc.TEST_DATA_DIR}/retries.txt', \
         'retry fqn'
     assert test_config.proxy_file_name == 'test_proxy.pem', 'proxy file name'
-    assert test_config.proxy_fqn == '{}/test_proxy.pem'.format(mock_root), \
+    assert test_config.proxy_fqn == f'{tc.TEST_DATA_DIR}/test_proxy.pem', \
         'proxy fqn'
     assert test_config.state_file_name == 'state.yml', 'state file name'
-    assert test_config.state_fqn == '{}/state.yml'.format(mock_root), \
+    assert test_config.state_fqn == f'{tc.TEST_DATA_DIR}/state.yml', \
         'state fqn'
     assert test_config.rejected_directory == tc.TEST_DATA_DIR, \
         'wrong rejected dir'
     assert test_config.rejected_file_name == 'rejected.yml', \
         'wrong rejected file'
-    assert test_config.rejected_fqn == '{}/rejected.yml'.format(
-        tc.TEST_DATA_DIR), 'wrong rejected fqn'
+    assert test_config.rejected_fqn == f'{tc.TEST_DATA_DIR}/rejected.yml', \
+        'wrong rejected fqn'
 
 
 def test_exec_cmd():
@@ -173,11 +173,10 @@ def test_exec_cmd_redirect():
 def test_decompose_lineage():
     test_product_id = 'product_id'
     test_uri = 'ad:STARS/galaxies.fits.gz'
-    test_lineage = '{}/{}'.format(test_product_id, test_uri)
+    test_lineage = f'{test_product_id}/{test_uri}'
     actual_product_id, actual_uri = mc.decompose_lineage(test_lineage)
-    assert actual_product_id == test_product_id, 'expected {}'.format(
-        test_product_id)
-    assert actual_uri == test_uri, 'expected {}'.format(test_uri)
+    assert actual_product_id == test_product_id, f'expected {test_product_id}'
+    assert actual_uri == test_uri, f'expected {test_uri}'
 
     with pytest.raises(mc.CadcException):
         mc.decompose_lineage('')
@@ -236,7 +235,7 @@ def test_read_file_list_from_archive(caps_mock, ad_mock):
 
 def test_write_to_file():
     content = ['a.txt', 'b.jpg', 'c.fits.gz']
-    test_fqn = '{}/test_out.txt'.format(tc.TEST_DATA_DIR)
+    test_fqn = f'{tc.TEST_DATA_DIR}/test_out.txt'
     if os.path.exists(test_fqn):
         os.remove(test_fqn)
 
@@ -265,9 +264,9 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.product_type == ProductType.WEIGHT, 'wrong product type'
-    assert result.content_length == 349, 'wrong length'
+    assert result.content_length == 359, 'wrong length'
     assert result.content_checksum.uri == \
-        'md5:fb28c7904ace71ba3c713fb796325318', 'wrong checksum'
+        'md5:a6046e5076565014f8bdcb5f0f5cfeca', 'wrong checksum'
 
     # update action
     result.content_checksum = ChecksumURI('md5:abc')
@@ -276,7 +275,7 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.content_checksum.uri == \
-        'md5:fb28c7904ace71ba3c713fb796325318', 'wrong checksum'
+        'md5:a6046e5076565014f8bdcb5f0f5cfeca', 'wrong checksum'
 
 
 @patch('cadcdata.core.CadcDataClient')
@@ -390,7 +389,7 @@ def test_look_pull_and_put(http_mock, mock_client):
     os.stat.return_value = Mock(st_size=1234)
     try:
         f_name = 'test_f_name.fits'
-        url = 'https://localhost/{}'.format(f_name)
+        url = f'https://localhost/{f_name}'
         test_config = mc.Config()
         test_config.observe_execution = True
         test_metrics = mc.Metrics(test_config)

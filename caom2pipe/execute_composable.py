@@ -600,7 +600,7 @@ class MetaUpdateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('Begin execute for MetaUpdateDirect')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -631,7 +631,7 @@ class MetaUpdateDirect(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug('End execute for MetaUpdateDirect')
 
 
 class MetaDeleteCreateClient(CaomExecute):
@@ -706,7 +706,7 @@ class MetaDeleteCreateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('Begin execute for MetaDeleteCreateDirect')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -737,7 +737,7 @@ class MetaDeleteCreateDirect(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug('End execute for MetaDeleteCreateDirect')
 
 
 class LocalMetaCreateClient(CaomExecute):
@@ -893,7 +893,7 @@ class LocalMetaDeleteCreateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('Begin execute for LocalMetaDeleteCreateDirect')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -921,7 +921,7 @@ class LocalMetaDeleteCreateDirect(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug('End execute for LocalMetaDeleteCreateDirect')
 
 
 class LocalMetaUpdateClient(CaomExecute):
@@ -984,7 +984,7 @@ class LocalMetaUpdateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('Begin execute for LocalMetaUpdateDirect')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -1009,7 +1009,7 @@ class LocalMetaUpdateDirect(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(self.observation)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug('End execute for LocalMetaUpdateDirect')
 
 
 class ClientVisit(CaomExecute):
@@ -1030,7 +1030,7 @@ class ClientVisit(CaomExecute):
         self.fname = None
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug('Begin execute for ClientVisit.')
         self.logger.debug('the steps:')
 
         self.logger.debug('create the work space, if it does not exist')
@@ -1055,7 +1055,7 @@ class ClientVisit(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug('End execute for ClientVisit')
 
 
 class DataClient(CaomExecute):
@@ -1777,12 +1777,10 @@ class OrganizeExecutes(object):
         else:
             logging.error('{} failed naming validation check.'.format(
                 storage_name.obs_id))
-            self.capture_failure(storage_name.obs_id,
-                                 storage_name.file_name,
-                                 'Invalid observation ID')
+            self.capture_failure(storage_name, 'Invalid observation ID')
         return executors
 
-    def capture_failure(self, obs_id, file_name, e):
+    def capture_failure(self, storage_name, e):
         """Log an error message to the failure file.
 
         If the failure is of a known type, also capture it to the rejected
@@ -1802,7 +1800,8 @@ class OrganizeExecutes(object):
             with open(self.failure_fqn, 'a') as failure:
                 min_error = self._minimize_error_message(e)
                 failure.write(
-                    '{} {} {} {}\n'.format(datetime.now(), obs_id, file_name,
+                    '{} {} {} {}\n'.format(datetime.now(), storage_name.obs_id,
+                                           storage_name.file_name,
                                            min_error))
 
         # only retry entries that are not permanently marked as rejected
@@ -1810,13 +1809,14 @@ class OrganizeExecutes(object):
         if reason == mc.Rejected.NO_REASON:
             if self.config.log_to_file:
                 with open(self.retry_fqn, 'a') as retry:
-                    if (self.config.features.use_file_names or
-                            self.config.use_local_files):
-                        retry.write('{}\n'.format(file_name))
+                    if self.config.use_local_files:
+                        retry.write('{}\n'.format(storage_name.fname_on_disk))
+                    elif self.config.features.use_file_names:
+                        retry.write('{}\n'.format(storage_name.file_name))
                     else:
-                        retry.write('{}\n'.format(obs_id))
+                        retry.write('{}\n'.format(storage_name.obs_id))
         else:
-            self.observable.rejected.record(reason, obs_id)
+            self.observable.rejected.record(reason, storage_name.obs_id)
 
     def capture_success(self, obs_id, file_name, start_time):
         """Capture, with a timestamp, the successful observations/file names
@@ -2179,13 +2179,12 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
         """Process one entry.
         :param storage_name instance of StorageName for the collection
         """
-        self._logger.debug(f'Begin _do_one {storage_name}')
+        self._logger.debug(f'Begin do_one {storage_name}')
         self._set_up_file_logging(storage_name)
         start_s = datetime.utcnow().timestamp()
         try:
             if self.is_rejected(storage_name):
-                self.capture_failure(storage_name.obs_id,
-                                     storage_name.file_name, e='Rejected')
+                self.capture_failure(storage_name, e='Rejected')
                 # successful rejection of the execution case
                 return 0
             executors = self.choose(storage_name)
@@ -2202,8 +2201,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                     storage_name))
                 return -1  # cover the case where file name validation fails
         except Exception as e:
-            self.capture_failure(storage_name.obs_id, storage_name.file_name,
-                                 e=traceback.format_exc())
+            self.capture_failure(storage_name, e=traceback.format_exc())
             self._logger.warning('Execution failed for {} with {}'.format(
                 storage_name.obs_id, e))
             self._logger.error(traceback.format_exc())
@@ -2260,8 +2258,7 @@ def _do_one(config, organizer, storage_name, command_name, meta_visitors,
     start_s = datetime.utcnow().timestamp()
     try:
         if organizer.is_rejected(storage_name):
-            organizer.capture_failure(storage_name.obs_id,
-                                      storage_name.file_name, e='Rejected')
+            organizer.capture_failure(storage_name, e='Rejected')
             # successful rejection of the execution case
             return 0
         executors = organizer.choose(storage_name, command_name,
@@ -2280,9 +2277,7 @@ def _do_one(config, organizer, storage_name, command_name, meta_visitors,
                 storage_name))
             return -1  # cover the case where file name validation fails
     except Exception as e:
-        organizer.capture_failure(storage_name.obs_id,
-                                  storage_name.file_name,
-                                  e=traceback.format_exc())
+        organizer.capture_failure(storage_name, e=traceback.format_exc())
         logging.warning('Execution failed for {} with {}'.format(
             storage_name.obs_id, e))
         logging.error(traceback.format_exc())
@@ -2354,8 +2349,7 @@ def _run_todo_file(config, organizer, sname, command_name,
                                             command_name, meta_visitors,
                                             data_visitors, entry)
             except Exception as e:
-                organizer.capture_failure(
-                    entry, entry, e=traceback.format_exc())
+                organizer.capture_failure(sname, e=traceback.format_exc())
                 logging.info('Execution failed for {} with {}'.format(
                     entry, e))
                 logging.debug(traceback.format_exc())
@@ -2537,7 +2531,7 @@ def run_by_file_storage_name(config, command_name, meta_visitors,
                                   data_visitors)
             except Exception as e:
                 organizer.capture_failure(
-                    entry, entry, e=traceback.format_exc())
+                    storage_name, e=traceback.format_exc())
                 logging.info('Execution failed for {} with {}'.format(
                     entry, e))
                 logging.error(traceback.format_exc())
@@ -2682,8 +2676,7 @@ def _storage_name_middle(organizer, entries, config, command_name,
                               data_visitors)
         except Exception as e:
             organizer.capture_failure(
-                storage_name.obs_id, storage_name.file_name,
-                e=traceback.format_exc())
+                storage_name, e=traceback.format_exc())
             logging.info('Execution failed for {} with {}'.format(
                 storage_name.file_name, e))
             logging.debug(traceback.format_exc())
@@ -2825,16 +2818,15 @@ def _for_loop_through(config, state, work, middle, command_name, bookmark_name,
     organizer.complete_record_count = len(todo_list)
     for entry in todo_list.values():
         logging.info(f'Processing {entry}')
+        storage_name = name_builder.build(entry)
         try:
-            storage_name = name_builder.build(entry)
             result |= _do_one(config, organizer, storage_name,
                               command_name, meta_visitors,
                               data_visitors)
             # the todo list is sorted by last modified timestamps
             exec_time = storage_name.last_modified_s
         except Exception as e:
-            organizer.capture_failure(
-                entry, entry, e=traceback.format_exc())
+            organizer.capture_failure(storage_name, e=traceback.format_exc())
             logging.info(f'Execution failed for {entry} with {e}.')
             logging.debug(traceback.format_exc())
             # then keep processing the rest of the entries

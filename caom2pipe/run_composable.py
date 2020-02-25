@@ -67,6 +67,7 @@
 # ***********************************************************************
 #
 
+import construct
 import logging
 import os
 import traceback
@@ -90,7 +91,7 @@ class TodoRunner(object):
     translating a list of work into a collection-specific name
     (StorageNameBuilder extensions).
     """
-    def __init__(self, config, organizer, builder, data_source, chooser=None):
+    def __init__(self, config, organizer, builder, data_source):
         self._builder = builder
         self._data_source = data_source
         self._config = config
@@ -113,6 +114,11 @@ class TodoRunner(object):
         mc.create_dir(self._config.log_file_directory)
         self._organizer.observable.rejected.persist_state()
         self._organizer.observable.metrics.capture()
+        self._logger.info('----------------------------------------')
+        self._logger.info(f'Done, processed {self._organizer.success_count} '
+                          f'of {self._organizer.complete_record_count} '
+                          f'correctly.')
+        self._logger.info('----------------------------------------')
 
     def _process_entry(self, entry):
         storage_name = self._builder.build(entry)
@@ -120,19 +126,17 @@ class TodoRunner(object):
             if storage_name.is_valid():
                 result = self._organizer.do_one(storage_name)
             else:
-                logging.error(
+                self._logger.error(
                     f'{storage_name.obs_id} failed naming validation check.')
-                self._organizer.capture_failure(storage_name.obs_id,
-                                                storage_name.file_name,
+                self._organizer.capture_failure(storage_name,
                                                 'Invalid name format.')
                 result = -1
         except Exception as e:
-            self._organizer.capture_failure(storage_name.obs_id,
-                                            storage_name.file_name,
+            self._organizer.capture_failure(storage_name,
                                             e=traceback.format_exc())
-            logging.info(
+            self._logger.info(
                 f'Execution failed for {storage_name.file_name} with {e}')
-            logging.debug(traceback.format_exc())
+            self._logger.debug(traceback.format_exc())
             # keep processing the rest of the entries, so don't throw
             # this or any other exception at this point
             result = -1
@@ -163,9 +167,6 @@ class TodoRunner(object):
         self._logger.debug('Begin run.')
         self._build_todo_list()
         result = self._run_todo_list()
-        self._logger.info(f'Done, processed {self._organizer.success_count} '
-                          f'of {self._organizer.complete_record_count} '
-                          f'correctly.')
         self._logger.debug('End run.')
         return result
 
@@ -185,6 +186,8 @@ class TodoRunner(object):
                 if not self._config.need_to_retry():
                     break
             self._logger.warning('Done retry attempts.')
+        else:
+            self._logger.info('No failures to be retried.')
         self._logger.debug('End retry run.')
         return result
 
@@ -200,7 +203,7 @@ class StateRunner(TodoRunner):
         self._logger = logging.getLogger(__name__)
 
     def run(self):
-        logging.debug(f'Begin run state for {self._bookmark_name}')
+        self._logger.debug(f'Begin run state for {self._bookmark_name}')
         if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
 
@@ -213,24 +216,27 @@ class StateRunner(TodoRunner):
             mc.increment_time(prev_exec_time, self._config.interval),
             self._end_time)
 
-        logging.debug(f'Starting at {start_time}, ending at {self._end_time}')
+        self._logger.debug(f'Starting at {start_time}, ending at '
+                           f'{self._end_time}')
         result = 0
+        cumulative = 0
+        cumulative_correct = 0
         if prev_exec_time == self._end_time:
-            logging.info(
+            self._logger.info(
                 f'Start time is the same as end time {start_time}, stopping.')
             exec_time = prev_exec_time
         else:
             cumulative = 0
             result = 0
             while exec_time <= self._end_time:
-                logging.info(
+                self._logger.info(
                     f'Processing from {prev_exec_time} to {exec_time}')
                 save_time = exec_time
                 entries = self._data_source.get_work(prev_exec_time, exec_time)
                 num_entries = len(entries)
 
                 if num_entries > 0:
-                    logging.info(f'Processing {num_entries} entries.')
+                    self._logger.info(f'Processing {num_entries} entries.')
                     self._organizer.complete_record_count = num_entries
                     self._organizer.success_count = 0
                     for entry in entries:
@@ -244,6 +250,7 @@ class StateRunner(TodoRunner):
                     self._finish_run()
 
                 cumulative += num_entries
+                cumulative_correct += self._organizer._success_count
                 mc.record_progress(self._config, self._organizer.command_name,
                                    num_entries, cumulative, start_time)
                 state.save_state(self._bookmark_name, save_time)
@@ -264,8 +271,12 @@ class StateRunner(TodoRunner):
                     self._end_time)
 
         state.save_state(self._bookmark_name, exec_time)
-        logging.info(
+        self._logger.info('==================================================')
+        self._logger.info(
             f'Done {self._organizer.command_name}, saved state is {exec_time}')
+        self._logger.info(f'{cumulative_correct} of {cumulative} records '
+                          f'processed correctly.')
+        self._logger.info('==================================================')
         return result
 
 
@@ -275,7 +286,8 @@ def get_utc_now():
 
 
 def run_by_todo(config=None, name_builder=None, chooser=None,
-                command_name=None, meta_visitors=[], data_visitors=[]):
+                command_name=None, meta_visitors=[], data_visitors=[],
+                version=None):
     """A default implementation for using the TodoRunner."""
     if config is None:
         config = mc.Config()
@@ -291,7 +303,10 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
         source = data_source_composable.TodoFileDataSource(config)
 
     organizer = ec.OrganizeExecutesWithDoOne(
-        config, command_name, meta_visitors, data_visitors)
+        config, command_name, meta_visitors, data_visitors, chooser)
+
+    if version is not None:
+        logging.info(f'Pipeline version is {version}')
 
     runner = TodoRunner(config, organizer, name_builder, source)
     result = runner.run()
