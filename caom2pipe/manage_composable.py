@@ -921,40 +921,40 @@ class Config(object):
 
     def __str__(self):
         return f'\nFrom {os.getcwd()}/config.yml:\n' \
-               f'archive:: {self.archive}\n' \
-               f'cache_fqn:: {self.cache_fqn}\n' \
-               f'collection:: {self.collection}\n' \
-               f'failure_fqn:: {self.failure_fqn}\n' \
-               f'failure_log_file_name:: {self.failure_log_file_name}\n' \
-               f'features:: {self.features}\n' \
-               f'interval:: {self.interval}\n' \
-               f'log_file_directory:: {self.log_file_directory}\n' \
-               f'log_to_file:: {self.log_to_file}\n' \
-               f'logging_level:: {self.logging_level}\n' \
-               f'netrc_file:: {self.netrc_file}\n' \
-               f'observable_directory:: {self.observable_directory}\n' \
-               f'observe_execution:: {self.observe_execution}\n' \
-               f'progress_file_name:: {self.progress_file_name}\n' \
-               f'progress_fqn:: {self.progress_fqn}\n' \
-               f'proxy_file:: {self.proxy_fqn}\n' \
-               f'rejected_directory:: {self.rejected_directory}\n' \
-               f'rejected_file_name:: {self.rejected_file_name}\n' \
-               f'rejected_fqn:: {self.rejected_fqn}\n' \
-               f'resource_id:: {self.resource_id}\n' \
-               f'retry_count:: {self.retry_count}\n' \
-               f'retry_failures:: {self.retry_failures}\n' \
-               f'retry_file_name:: {self.retry_file_name}\n' \
-               f'retry_fqn:: {self.retry_fqn}\n' \
-               f'source_host:: {self.source_host}\n' \
-               f'state_fqn:: {self.state_fqn}\n' \
-               f'stream:: {self.stream}\n' \
-               f'success_fqn:: {self.success_fqn}\n' \
-               f'success_log_file_name:: {self.success_log_file_name}\n' \
-               f'tap_id:: {self.tap_id}\n' \
-               f'task_types:: {self.task_types}\n' \
-               f'use_local_files:: {self.use_local_files}\n' \
-               f'work_fqn:: {self.work_fqn}\n' \
-               f'working_directory:: {self.working_directory}'
+               f'  archive:: {self.archive}\n' \
+               f'  cache_fqn:: {self.cache_fqn}\n' \
+               f'  collection:: {self.collection}\n' \
+               f'  failure_fqn:: {self.failure_fqn}\n' \
+               f'  failure_log_file_name:: {self.failure_log_file_name}\n' \
+               f'  features:: {self.features}\n' \
+               f'  interval:: {self.interval}\n' \
+               f'  log_file_directory:: {self.log_file_directory}\n' \
+               f'  log_to_file:: {self.log_to_file}\n' \
+               f'  logging_level:: {self.logging_level}\n' \
+               f'  netrc_file:: {self.netrc_file}\n' \
+               f'  observable_directory:: {self.observable_directory}\n' \
+               f'  observe_execution:: {self.observe_execution}\n' \
+               f'  progress_file_name:: {self.progress_file_name}\n' \
+               f'  progress_fqn:: {self.progress_fqn}\n' \
+               f'  proxy_file:: {self.proxy_fqn}\n' \
+               f'  rejected_directory:: {self.rejected_directory}\n' \
+               f'  rejected_file_name:: {self.rejected_file_name}\n' \
+               f'  rejected_fqn:: {self.rejected_fqn}\n' \
+               f'  resource_id:: {self.resource_id}\n' \
+               f'  retry_count:: {self.retry_count}\n' \
+               f'  retry_failures:: {self.retry_failures}\n' \
+               f'  retry_file_name:: {self.retry_file_name}\n' \
+               f'  retry_fqn:: {self.retry_fqn}\n' \
+               f'  source_host:: {self.source_host}\n' \
+               f'  state_fqn:: {self.state_fqn}\n' \
+               f'  stream:: {self.stream}\n' \
+               f'  success_fqn:: {self.success_fqn}\n' \
+               f'  success_log_file_name:: {self.success_log_file_name}\n' \
+               f'  tap_id:: {self.tap_id}\n' \
+               f'  task_types:: {self.task_types}\n' \
+               f'  use_local_files:: {self.use_local_files}\n' \
+               f'  work_fqn:: {self.work_fqn}\n' \
+               f'  working_directory:: {self.working_directory}'
 
     @staticmethod
     def _obtain_task_types(config, default=None):

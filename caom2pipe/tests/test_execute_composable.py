@@ -748,8 +748,10 @@ def test_capture_failure(test_config):
         os.remove(test_config.rejected_fqn)
 
     test_oe = ec.OrganizeExecutes(test_config)
-    test_oe.capture_failure(test_obs_id_2, None, 'Cannot build an observation')
-    test_oe.capture_failure(test_obs_id, None, 'exception text')
+    test_sname = TestStorageName(obs_id=test_obs_id_2)
+    test_oe.capture_failure(test_sname, 'Cannot build an observation')
+    test_sname = TestStorageName(obs_id=test_obs_id)
+    test_oe.capture_failure(test_sname, 'exception text')
     test_oe.capture_success(test_obs_id, 'C121212_01234_CAL.fits.gz', start_s)
     ec._finish_run(test_oe, test_config)
 
@@ -765,14 +767,14 @@ def test_capture_failure(test_config):
     assert retry_content == 'test_obs_id\n'
     failure_content = open(test_config.failure_fqn).read()
     assert failure_content.endswith(
-        'test_obs_id None exception text\n'), failure_content
+        'test_obs_id test_obs_id.fits exception text\n'), failure_content
     assert os.path.exists(test_config.rejected_fqn), test_config.rejected_fqn
     rejected_content = mc.read_as_yaml(test_config.rejected_fqn)
     assert rejected_content is not None, 'expect a result'
     test_result = rejected_content.get('bad_metadata')
     assert test_result is not None, 'wrong result'
     assert len(test_result) == 1, 'wrong number of entries'
-    assert test_result[0] == test_obs_id_2, 'wrong entry'
+    assert test_result[0] == test_obs_id, 'wrong entry'
 
 
 def test_run_by_file(test_config):
