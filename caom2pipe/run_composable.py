@@ -67,7 +67,6 @@
 # ***********************************************************************
 #
 
-import construct
 import logging
 import os
 import traceback
