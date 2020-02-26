@@ -264,9 +264,9 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.product_type == ProductType.WEIGHT, 'wrong product type'
-    assert result.content_length == 359, 'wrong length'
+    assert result.content_length == 353, 'wrong length'
     assert result.content_checksum.uri == \
-        'md5:a6046e5076565014f8bdcb5f0f5cfeca', 'wrong checksum'
+        'md5:7795d9a1720a7a8a2c79a5a2f5f77434', 'wrong checksum'
 
     # update action
     result.content_checksum = ChecksumURI('md5:abc')
@@ -275,7 +275,7 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.content_checksum.uri == \
-        'md5:a6046e5076565014f8bdcb5f0f5cfeca', 'wrong checksum'
+        'md5:7795d9a1720a7a8a2c79a5a2f5f77434', 'wrong checksum'
 
 
 @patch('cadcdata.core.CadcDataClient')
