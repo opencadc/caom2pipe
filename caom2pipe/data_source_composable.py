@@ -131,7 +131,7 @@ class ListDirDataSource(DataSource):
                 f_name = f
             elif f.endswith('.fz'):
                 f_name = f
-            elif f.endswith('.hdf5'):
+            elif f.endswith('.hdf5') or f.endswith('.h5'):
                 f_name = f
             if f_name is not None:
                 logging.debug(f'Adding file {f_name} to work list.')

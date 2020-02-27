@@ -1306,6 +1306,10 @@ class StorageName(object):
                                                                     '')
 
     @staticmethod
+    def is_hdf5(entry):
+        return '.hdf5' in entry or '.h5' in entry
+
+    @staticmethod
     def is_preview(entry):
         return '.jpg' in entry
 
@@ -1755,8 +1759,8 @@ def get_file_meta(fqn):
         meta['type'] = 'image/jpeg'
     elif fqn.endswith('tar.gz'):
         meta['type'] = 'application/x-tar'
-    elif fqn.endswith('h5'):
-        meta['type'] = 'application/x-hdf5'
+    elif fqn.endswith('h5') or fqn.endswith('hdf5'):
+        meta['type'] = 'application/x-hdf'
     else:
         meta['type'] = 'application/fits'
     logging.debug(meta)
@@ -2294,7 +2298,6 @@ def query_tap_client(query_string, tap_client):
     """
     :param query_string ADQL
     :param tap_client which client to query the service with
-    :param resource_id which tap service to query
     :returns an astropy votable instance."""
 
     logging.debug(f'query_tap_client: execute query \n{query_string}')
