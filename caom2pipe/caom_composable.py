@@ -103,7 +103,7 @@ def change_to_composite(observation, algorithm_name='composite',
                                     observation.target_position)
     else:
         from caom2 import DerivedObservation
-        return DerivedObservation(observation.collection,
+        temp = DerivedObservation(observation.collection,
                                   observation.observation_id,
                                   Algorithm(algorithm_name),
                                   observation.sequence_number,
@@ -118,6 +118,8 @@ def change_to_composite(observation, algorithm_name='composite',
                                   observation.planes,
                                   observation.environment,
                                   observation.target_position)
+        temp.meta_producer = observation.meta_producer
+        return temp
 
 
 def compare(ex_fqn, act_fqn, entry):

@@ -84,6 +84,7 @@ from enum import Enum
 from ftplib import FTP
 from ftputil import FTPHost
 from hashlib import md5
+from importlib_metadata import version
 from io import BytesIO
 from pytz import timezone
 from requests.adapters import HTTPAdapter
@@ -1801,6 +1802,11 @@ def get_file_size(fqn):
     """
     s = os.stat(fqn)
     return s.st_size
+
+
+def get_version(entry):
+    """A common implementation to retrieve a pipeline version."""
+    return f'{entry}/{version(entry)}'
 
 
 def create_dir(dir_name):
