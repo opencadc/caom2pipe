@@ -2102,27 +2102,32 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                                     observation, self._meta_visitors,
                                     self.observable))
             elif task_type == mc.TaskType.MODIFY:
-                if self.config.use_local_files:
-                    if (executors is not None and len(executors) > 0 and
-                            (isinstance(executors[0], ScrapeDirect) or
-                             isinstance(executors[0], ScrapeUpdateDirect))):
-                        executors.append(
-                            DataScrape(self.config, storage_name,
-                                       self._command_name, self._data_visitors,
-                                       self.observable))
+                if storage_name.is_feasible:
+                    if self.config.use_local_files:
+                        if (executors is not None and len(executors) > 0 and
+                                (isinstance(executors[0], ScrapeDirect) or
+                                 isinstance(executors[0], ScrapeUpdateDirect))):
+                            executors.append(
+                                DataScrape(self.config, storage_name,
+                                           self._command_name,
+                                           self._data_visitors,
+                                           self.observable))
+                        else:
+                            executors.append(
+                                LocalDataClient(
+                                    self.config, storage_name,
+                                    self._command_name, cred_param,
+                                    cadc_data_client, caom_repo_client,
+                                    self._data_visitors, self.observable))
                     else:
-                        executors.append(
-                            LocalDataClient(
-                                self.config, storage_name, self._command_name,
-                                cred_param, cadc_data_client,
-                                caom_repo_client, self._data_visitors,
-                                self.observable))
+                        executors.append(DataClient(
+                            self.config, storage_name, self._command_name,
+                            cred_param, cadc_data_client, caom_repo_client,
+                            self._data_visitors, mc.TaskType.MODIFY,
+                            self.observable))
                 else:
-                    executors.append(DataClient(
-                        self.config, storage_name, self._command_name,
-                        cred_param, cadc_data_client, caom_repo_client,
-                        self._data_visitors, mc.TaskType.MODIFY,
-                        self.observable))
+                    self._logger.info(f'Skipping the MODIFY task for '
+                                      f'{storage_name.file_name}.')
             elif task_type == mc.TaskType.VISIT:
                 executors.append(ClientVisit(
                     self.config, storage_name, cred_param,

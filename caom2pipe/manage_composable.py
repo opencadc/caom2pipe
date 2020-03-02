@@ -97,6 +97,7 @@ from cadcdata import CadcDataClient
 from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact
 from caom2 import ChecksumURI
+from caom2.diff import get_differences
 
 
 __all__ = ['CadcException', 'Config', 'State', 'TaskType',
@@ -113,7 +114,8 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
            'Validator', 'Cache', 'CaomName', 'StorageName', 'append_as_array',
-           'to_float', 'to_int', 'to_str', 'load_module']
+           'to_float', 'to_int', 'to_str', 'load_module',
+           'compare_observations']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -920,6 +922,7 @@ class Config(object):
         self._source_host = value
 
     def __str__(self):
+        logging.error(f'From {os.getcwd()}/config.yml:')
         return f'\nFrom {os.getcwd()}/config.yml:\n' \
                f'  archive:: {self.archive}\n' \
                f'  cache_fqn:: {self.cache_fqn}\n' \
@@ -1280,6 +1283,14 @@ class StorageName(object):
         return None
 
     @property
+    def is_feasible(self):
+        """
+        To support the exclusion of CFHT HDF5 files in the pipeline.
+        :return:
+        """
+        return True
+
+    @property
     def is_multi(self):
         return False
 
@@ -1474,6 +1485,22 @@ def append_as_array(append_to, key, value):
         temp.append(value)
     else:
         append_to[key] = [value]
+
+
+def compare_observations(actual_fqn, expected_fqn):
+    """Compare the observation captured in actual_fqn with the observation
+    captured in the expected_fqn. Returns the differences as a pretty
+    string for logging.
+    """
+    actual = read_obs_from_file(actual_fqn)
+    expected = read_obs_from_file(expected_fqn)
+    result = get_differences(expected, actual, 'Observation')
+    msg = None
+    if result:
+        compare_text = '\n'.join([r for r in result])
+        msg = f'Differences found in observation {expected.observation_id}\n' \
+              f'{compare_text}'
+    return msg
 
 
 def to_float(value):

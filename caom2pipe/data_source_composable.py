@@ -108,16 +108,17 @@ class ListDirDataSource(DataSource):
     def __init__(self, config, chooser):
         super(ListDirDataSource, self).__init__(config)
         self._chooser = chooser
+        self._logger = logging.getLogger(__name__)
 
     def get_work(self):
-        self._logger.error(
+        self._logger.debug(
             f'Begin get_work in {self._config.working_directory}.')
         file_list = os.listdir(self._config.working_directory)
         work = []
         for f in file_list:
             f_name = None
             if f.endswith('.fits') or f.endswith('.fits.gz'):
-                if self._chooser is not None and self._chooser.use_compressed():
+                if self._chooser is not None and self._chooser.use_compressed(f):
                     if f.endswith('.fits'):
                         f_name = f'{f}.gz'
                     else:
@@ -134,7 +135,7 @@ class ListDirDataSource(DataSource):
             elif f.endswith('.hdf5') or f.endswith('.h5'):
                 f_name = f
             if f_name is not None:
-                logging.debug(f'Adding file {f_name} to work list.')
+                self._logger.debug(f'{f_name} added to work list.')
                 work.append(f_name)
         self._logger.debug('End get_work.')
         return work

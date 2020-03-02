@@ -400,6 +400,8 @@ class FilterMetadataCache(object):
                     self._cache[fn_r] = result
         else:
             # some recognizably wrong value
+            logging.warning(f'Not connected - using default energy values for '
+                            f'{instrument} and {filter_name}')
             result = {'cw': -0.1, 'fwhm': -0.1}
         return result
 
