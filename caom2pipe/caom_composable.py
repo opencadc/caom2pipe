@@ -83,10 +83,11 @@ __all__ = ['exec_footprintfinder', 'update_plane_provenance',
 
 
 def change_to_composite(observation, algorithm_name='composite',
-                        collection=None):
+                        collection=None, features=None):
     """For the case where a SimpleObservation needs to become a
     DerivedObservation."""
-    if collection is None or collection != 'CFHT':
+    if (collection is None or collection != 'CFHT' or
+            (features is not None and not features.supports_latest_caom)):
         return CompositeObservation(observation.collection,
                                     observation.observation_id,
                                     Algorithm(algorithm_name),

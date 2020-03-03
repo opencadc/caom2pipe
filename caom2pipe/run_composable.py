@@ -285,8 +285,7 @@ def get_utc_now():
 
 
 def run_by_todo(config=None, name_builder=None, chooser=None,
-                command_name=None, meta_visitors=[], data_visitors=[],
-                version=None):
+                command_name=None, meta_visitors=[], data_visitors=[]):
     """A default implementation for using the TodoRunner."""
     if config is None:
         config = mc.Config()
@@ -303,9 +302,6 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
 
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser)
-
-    if version is not None:
-        logging.info(f'Pipeline version is {version}')
 
     runner = TodoRunner(config, organizer, name_builder, source)
     result = runner.run()

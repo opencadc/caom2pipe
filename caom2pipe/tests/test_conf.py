@@ -93,5 +93,5 @@ class TestChooser(ec.OrganizeChooser):
     def needs_delete(self, observation):
         return True
 
-    def use_compressed(self):
+    def use_compressed(self, ignore):
         return True

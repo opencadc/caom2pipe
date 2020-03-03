@@ -118,6 +118,7 @@ from shutil import move
 
 from cadcdata import CadcDataClient
 from cadcutils.exceptions import NotFoundException
+from caom2 import obs_reader_writer
 from caom2repo import CAOM2RepoClient
 from caom2pipe import manage_composable as mc
 
@@ -192,6 +193,10 @@ class CaomExecute(object):
         self.observable = observable
         self.mime_encoding = storage_name.mime_encoding
         self.mime_type = storage_name.mime_type
+        if config.features.supports_latest_caom:
+            self.namespace = obs_reader_writer.CAOM24_NAMESPACE
+        else:
+            self.namespace = obs_reader_writer.CAOM23_NAMESPACE
 
     def _cleanup(self):
         """Remove a directory and all its contents."""
@@ -401,7 +406,7 @@ class CaomExecute(object):
 
     def _write_model(self, observation):
         """Write an observation to disk from memory, represented in XML."""
-        mc.write_obs_to_file(observation, self.model_fqn)
+        mc.write_obs_to_file(observation, self.model_fqn, self.namespace)
 
     def _visit_meta(self, observation):
         """Execute metadata-only visitors on an Observation in
@@ -1517,7 +1522,7 @@ class OrganizeChooser(object):
     def needs_delete(self, observation):
         return False
 
-    def use_compressed(self):
+    def use_compressed(self, f=None):
         return False
 
 

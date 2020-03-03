@@ -98,6 +98,7 @@ from cadcdata import CadcDataClient
 from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact
 from caom2 import ChecksumURI
+from caom2.obs_reader_writer import CAOM23_NAMESPACE
 from caom2.diff import get_differences
 
 
@@ -138,6 +139,8 @@ class Features(object):
         self._run_in_airflow = True
         self._supports_composite = True
         self._supports_catalog = True
+        self._supports_latest_caom = False
+        self._supports_multiple_files = False
         self._expects_retry = True
 
     @property
@@ -191,6 +194,26 @@ class Features(object):
     @supports_catalog.setter
     def supports_catalog(self, value):
         self._supports_catalog = value
+
+    @property
+    def supports_latest_caom(self):
+        """If true, will execute any latest-version-specific code when creating
+         a CAOM instance."""
+        return self._supports_latest_caom
+
+    @supports_latest_caom.setter
+    def supports_latest_caom(self, value):
+        self._supports_latest_caom = value
+
+    @property
+    def supports_multiple_files(self):
+        """If true, will execute any specific code where the cardinality
+        between metadata and files is 1:n."""
+        return self._supports_multiple_files
+
+    @supports_multiple_files.setter
+    def supports_multiple_files(self, value):
+        self._supports_multiple_files = value
 
     @property
     def expects_retry(self):
@@ -1887,9 +1910,9 @@ def record_progress(config, application, count, cumulative, start_time):
                 datetime.now(), application, count, start_time, cumulative))
 
 
-def write_obs_to_file(obs, fqn):
+def write_obs_to_file(obs, fqn, namespace=CAOM23_NAMESPACE):
     """Common code to write a CAOM Observation to a file."""
-    ow = ObservationWriter()
+    ow = ObservationWriter(namespace=namespace)
     ow.write(obs, fqn)
 
 
