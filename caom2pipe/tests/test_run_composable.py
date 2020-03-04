@@ -205,7 +205,7 @@ def test_run_state(fits2caom2_mock, data_mock, repo_mock, tap_mock,
     data_mock.return_value.get_file_info.return_value = {'name':
                                                          'test_file.fits'}
     repo_mock.return_value.read.side_effect = Mock(return_value=None)
-    tap_mock.side_effect = _mock_query
+    tap_mock.side_effect = _mock_get_work
     CadcTapClient.__init__ = Mock(return_value=None)
 
     test_end_time = datetime.fromtimestamp(1579740838)
@@ -307,7 +307,8 @@ def test_run_todo_retry(do_one_mock, test_config):
 
 @patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
 @patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.__init__')
-@patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.get_work')
+@patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.'
+       'get_time_box_work')
 def test_run_state_retry(get_work_mock, init_mock, do_one_mock, test_config):
     _write_state(rc.get_utc_now().timestamp())
     retry_success_fqn, retry_failure_fqn, retry_retry_fqn = \

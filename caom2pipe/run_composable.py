@@ -231,7 +231,8 @@ class StateRunner(TodoRunner):
                 self._logger.info(
                     f'Processing from {prev_exec_time} to {exec_time}')
                 save_time = exec_time
-                entries = self._data_source.get_work(prev_exec_time, exec_time)
+                entries = self._data_source.get_time_box_work(
+                    prev_exec_time, exec_time)
                 num_entries = len(entries)
 
                 if num_entries > 0:

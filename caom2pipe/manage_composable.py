@@ -1320,7 +1320,6 @@ class StorageName(object):
         """
         return True
 
-    @property
     def multiple_files(self, config=None):
         return []
 

@@ -1112,7 +1112,7 @@ def test_organize_executes_client_do_one(test_config):
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 3
-        assert isinstance(executors[0], ec.StoreClient), \
+        assert isinstance(executors[0], ec.StoreMultipleClient), \
             type(executors[0])
         assert isinstance(executors[1],
                           ec.LocalMetaCreateDirect)

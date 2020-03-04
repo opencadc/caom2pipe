@@ -98,6 +98,9 @@ class DataSource(object):
     def get_work(self):
         return []
 
+    def get_time_box_work(self, prev_exec_time, exec_time):
+        return []
+
 
 class ListDirDataSource(DataSource):
     """
@@ -111,14 +114,16 @@ class ListDirDataSource(DataSource):
         self._logger = logging.getLogger(__name__)
 
     def get_work(self):
-        self._logger.debug(
-            f'Begin get_work in {self._config.working_directory}.')
+        self._logger.debug(f'Begin get_work from '
+                           f'{self._config.working_directory} in '
+                           f'{self.__class__.__name__}.')
         file_list = os.listdir(self._config.working_directory)
         work = []
         for f in file_list:
             f_name = None
             if f.endswith('.fits') or f.endswith('.fits.gz'):
-                if self._chooser is not None and self._chooser.use_compressed(f):
+                if (self._chooser is not None and
+                        self._chooser.use_compressed(f)):
                     if f.endswith('.fits'):
                         f_name = f'{f}.gz'
                     else:
@@ -139,7 +144,7 @@ class ListDirDataSource(DataSource):
             if f_name is not None:
                 self._logger.debug(f'{f_name} added to work list.')
                 work.append(f_name)
-        self._logger.debug('End get_work.')
+        self._logger.debug(f'End get_work in {self.__class__.__name__}.')
         return work
 
 
@@ -151,15 +156,17 @@ class TodoFileDataSource(DataSource):
 
     def __init__(self, config):
         super(TodoFileDataSource, self).__init__(config)
+        self._logger = logging.getLogger(__name__)
 
     def get_work(self):
-        logging.debug(f'Begin get_work {self._config.work_fqn}')
+        self._logger.debug(f'Begin get_work from {self._config.work_fqn} in '
+                           f'{self.__class__.__name__}')
         work = []
         with open(self._config.work_fqn) as f:
             for line in f:
                 logging.debug(f'Adding entry {line.strip()} to work list.')
                 work.append(line.strip())
-        logging.debug(f'End get_work')
+        self._logger.debug(f'End get_work in {self.__class__.__name__}')
         return work
 
 
@@ -174,8 +181,9 @@ class QueryTimeBoxDataSource(DataSource):
         self._preview_suffix = preview_suffix
         subject = mc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
+        self._logger = logging.getLogger(__name__)
 
-    def get_work(self, prev_exec_time, exec_time):
+    def get_time_box_work(self, prev_exec_time, exec_time):
         """
         Get a set of file names from an archive. Limit the entries by
         time-boxing on ingestDate, and don't include previews.
@@ -184,7 +192,7 @@ class QueryTimeBoxDataSource(DataSource):
         :param exec_time datetime end of the timestamp chunk
         :return: a list of file names in the CADC storage system
         """
-        self._logger.debug('Entering QueryTimeBoxDataSource.get_work')
+        self._logger.debug(f'Begin get_work in {self.__class__.__name__}.')
         query = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
                 f"archiveName = '{self._config.archive}' " \
                 f"AND fileName not like '%{self._preview_suffix}' " \
@@ -192,4 +200,4 @@ class QueryTimeBoxDataSource(DataSource):
                 f"AND ingestDate <= '{exec_time}' " \
                 "ORDER BY ingestDate ASC "
         self._logger.debug(query)
-        return mc.query_tap_client(query, self._client, self._config.tap_id)
+        return mc.query_tap_client(query, self._client)
