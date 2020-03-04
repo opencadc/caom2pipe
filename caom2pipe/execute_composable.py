@@ -226,8 +226,8 @@ class CaomExecute(object):
         module installed in a site package location.
         """
         packages = distutils.sysconfig.get_python_lib()
-        return os.path.join(packages, '{}/{}.py'.format(self.command_name,
-                                                        self.command_name))
+        return os.path.join(
+            packages, f'{self.command_name}/{self.command_name}.py')
 
     def _fits2caom2_cmd_local(self, connected=True):
         """Execute fits2caom with a --local parameter."""
@@ -247,11 +247,11 @@ class CaomExecute(object):
         """Execute fits2caom with a --cert parameter."""
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
-        cmd = '{} {} {} --observation {} {} --out {} {} ' \
-              '--plugin {} --module {} --lineage {}'.format(
-                self.command_name, self.logging_level_param, self.cred_param,
-                self.collection, self.obs_id, self.model_fqn,
-                self.external_urls_param, plugin, plugin, self.lineage)
+        cmd = f'{self.command_name} {self.logging_level_param} ' \
+              f'{self.cred_param} --observation {self.collection} ' \
+              f'{self.obs_id} --out {self.model_fqn} ' \
+              f'{self.external_urls_param} --plugin {plugin} --module ' \
+              f'{plugin} --lineage {self.lineage}'
         mc.exec_cmd(cmd, self.log_level_as)
 
     def _fits2caom2_cmd_client_local(self):
@@ -261,11 +261,10 @@ class CaomExecute(object):
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
         local_fqn = os.path.join(self.working_dir, self.fname)
-        cmd = '{} {} {} --observation {} {} --local {} --out {} ' \
-              '--plugin {} --module {} --lineage {}'.format(
-                self.command_name, self.logging_level_param, self.cred_param,
-                self.collection, self.obs_id, local_fqn, self.model_fqn,
-                plugin, plugin, self.lineage)
+        cmd = f'{self.command_name} {self.logging_level_param} ' \
+              f'{self.cred_param} --observation {self.collection} {self.obs_id} ' \
+              f'--local {local_fqn} --out {self.model_fqn} --plugin {plugin} ' \
+              f'--module {plugin} --lineage {self.lineage}'
         mc.exec_cmd(cmd, self.log_level_as)
 
     def _fits2caom2_cmd_local_direct(self, connected=True):
@@ -303,11 +302,10 @@ class CaomExecute(object):
         parameter."""
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
-        cmd = '{} {} {} --in {} --out {} {} ' \
-              '--plugin {} --module {} --lineage {}'.format(
-                self.command_name, self.logging_level_param,
-                self.cred_param, self.model_fqn, self.model_fqn,
-                self.external_urls_param, plugin, plugin, self.lineage)
+        cmd = f'{self.command_name} {self.logging_level_param} ' \
+              f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} ' \
+              f'{self.external_urls_param} --plugin {plugin} --module {plugin} ' \
+              f'--lineage {self.lineage}'
         mc.exec_cmd(cmd, self.log_level_as)
 
     def _fits2caom2_cmd_in_out_direct(self):
@@ -419,7 +417,7 @@ class CaomExecute(object):
                       'observable': self.observable}
             for visitor in self.meta_visitors:
                 try:
-                    self.logger.debug('Visit for {}'.format(visitor))
+                    self.logger.debug(f'Visit for {visitor}')
                     visitor.visit(observation, **kwargs)
                 except Exception as e:
                     raise mc.CadcException(e)
@@ -430,7 +428,7 @@ class CaomExecute(object):
         if external_urls is None:
             result = ''
         else:
-            result = '--external_url {}'.format(external_urls)
+            result = f'--external_url {external_urls}'
         return result
 
     @staticmethod
@@ -468,7 +466,7 @@ class MetaCreateClient(CaomExecute):
             observable)
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -494,7 +492,7 @@ class MetaCreateClient(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class MetaCreateDirect(CaomExecute):
@@ -512,7 +510,7 @@ class MetaCreateDirect(CaomExecute):
             observable)
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -538,7 +536,7 @@ class MetaCreateDirect(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class MetaUpdateClient(CaomExecute):
@@ -556,7 +554,7 @@ class MetaUpdateClient(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -587,7 +585,7 @@ class MetaUpdateClient(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class MetaUpdateDirect(CaomExecute):
@@ -605,7 +603,7 @@ class MetaUpdateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for MetaUpdateDirect')
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -636,7 +634,7 @@ class MetaUpdateDirect(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for MetaUpdateDirect')
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class MetaDeleteCreateClient(CaomExecute):
@@ -658,7 +656,7 @@ class MetaDeleteCreateClient(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -689,7 +687,7 @@ class MetaDeleteCreateClient(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class MetaDeleteCreateDirect(CaomExecute):
@@ -711,7 +709,7 @@ class MetaDeleteCreateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for MetaDeleteCreateDirect')
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -742,7 +740,7 @@ class MetaDeleteCreateDirect(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for MetaDeleteCreateDirect')
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class LocalMetaCreateClient(CaomExecute):
@@ -761,7 +759,7 @@ class LocalMetaCreateClient(CaomExecute):
         self.fname = storage_name.fname_on_disk
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -784,7 +782,7 @@ class LocalMetaCreateClient(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class LocalMetaCreateDirect(CaomExecute):
@@ -803,7 +801,7 @@ class LocalMetaCreateDirect(CaomExecute):
         self.fname = storage_name.fname_on_disk
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -826,7 +824,7 @@ class LocalMetaCreateDirect(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class LocalMetaDeleteCreateClient(CaomExecute):
@@ -848,7 +846,7 @@ class LocalMetaDeleteCreateClient(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -876,7 +874,7 @@ class LocalMetaDeleteCreateClient(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class LocalMetaDeleteCreateDirect(CaomExecute):
@@ -898,7 +896,7 @@ class LocalMetaDeleteCreateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for LocalMetaDeleteCreateDirect')
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -926,7 +924,7 @@ class LocalMetaDeleteCreateDirect(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
 
-        self.logger.debug('End execute for LocalMetaDeleteCreateDirect')
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class LocalMetaUpdateClient(CaomExecute):
@@ -945,7 +943,7 @@ class LocalMetaUpdateClient(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -970,7 +968,7 @@ class LocalMetaUpdateClient(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(self.observation)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class LocalMetaUpdateDirect(CaomExecute):
@@ -989,7 +987,7 @@ class LocalMetaUpdateDirect(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for LocalMetaUpdateDirect')
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -1014,7 +1012,7 @@ class LocalMetaUpdateDirect(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(self.observation)
 
-        self.logger.debug('End execute for LocalMetaUpdateDirect')
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class ClientVisit(CaomExecute):
@@ -1035,7 +1033,7 @@ class ClientVisit(CaomExecute):
         self.fname = None
 
     def execute(self, context):
-        self.logger.debug('Begin execute for ClientVisit.')
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('create the work space, if it does not exist')
@@ -1060,7 +1058,7 @@ class ClientVisit(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for ClientVisit')
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class DataClient(CaomExecute):
@@ -1080,7 +1078,7 @@ class DataClient(CaomExecute):
         self.thumb_fname = storage_name.thumb
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Data'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
 
         self.logger.debug('Find the file name as stored.')
         self._cadc_data_info_file_name_client()
@@ -1103,7 +1101,7 @@ class DataClient(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
     def _visit_data(self, observation):
         """Execute the visitors that require access to the full data content
@@ -1116,7 +1114,7 @@ class DataClient(CaomExecute):
                   'observable': self.observable}
         for visitor in self.data_visitors:
             try:
-                self.logger.debug('Visit for {}'.format(visitor))
+                self.logger.debug(f'Visit for {visitor}')
                 visitor.visit(observation, **kwargs)
             except Exception as e:
                 raise mc.CadcException(e)
@@ -1140,7 +1138,7 @@ class LocalDataClient(DataClient):
         self.fname = storage_name.fname_on_disk
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Data'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
 
         self.logger.debug('get the observation for the existing model')
         observation = self._repo_cmd_read_client()
@@ -1154,7 +1152,7 @@ class LocalDataClient(DataClient):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class PullClient(CaomExecute):
@@ -1173,7 +1171,7 @@ class PullClient(CaomExecute):
         self.local_fqn = os.path.join(self.working_dir, self.fname)
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Data'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
 
         self.logger.debug('create the work space, if it does not exist')
         self._create_dir()
@@ -1181,21 +1179,20 @@ class PullClient(CaomExecute):
         self.logger.debug('get the input file')
         self._transfer_get()
 
-        self.logger.debug(
-            'store the input file {} to ad'.format(self.local_fqn))
+        self.logger.debug(f'store the input file {self.local_fqn} to ad')
         self._cadc_data_put_client()
 
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
     def _transfer_get(self):
         """Retrieve a file via http to temporary local storage."""
-        self.logger.debug('retrieve {} from {}'.format(self.fname, self.url))
+        self.logger.debug(f'retrieve {self.fname} from {self.url}')
         mc.http_get(self.url, self.local_fqn)
         self._transfer_check()
-        self.logger.debug('Successfully retrieved {}'.format(self.fname))
+        self.logger.debug(f'Successfully retrieved {self.fname}')
 
     def _transfer_check(self):
         try:
@@ -1245,11 +1242,10 @@ class FtpPullClient(PullClient):
         # todo.txt file, because ftp clients have been beyond me. Later,
         # that might change, but I'm working on that, so deal with
         # the info that I have for now.
-        self.logger.debug('retrieve {} from {}'.format(
-            self.ftp_fqn, self.ftp_host))
+        self.logger.debug(f'retrieve {self.ftp_fqn} from {self.ftp_host}')
         mc.ftp_get_timeout(self.ftp_host, self.ftp_fqn, self.local_fqn)
         self._transfer_check()
-        self.logger.debug('Successfully retrieved {}'.format(self.fname))
+        self.logger.debug(f'Successfully retrieved {self.fname}')
 
 
 class StoreClient(CaomExecute):
@@ -1267,25 +1263,43 @@ class StoreClient(CaomExecute):
         self.working_dir = self.root_dir
         self.stream = config.stream
         self.fname = storage_name.fname_on_disk
-        self.multi = storage_name.is_multi
-        self.multiple_files = storage_name.multiple_files(config)
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Data'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
 
-        if self.multi:
-            self.logger.debug('Store multiple files to ad.')
-            for entry in self.multiple_files:
-                self.fname = entry
-                self.logger.debug(
-                    'store the input file {} to ad'.format(self.fname))
-                self._cadc_data_put_client()
-        else:
-            self.logger.debug(
-                'store the input file {} to ad'.format(self.fname))
+        self.logger.debug(f'store the input file {self.fname} to ad')
+        self._cadc_data_put_client()
+
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
+
+
+class StoreMultipleClient(CaomExecute):
+    """Defines the pipeline step for Collection storage of a file. This
+    requires access to the file on disk."""
+
+    def __init__(self, config, storage_name, command_name, cred_param,
+                 cadc_data_client, caom_repo_client, observable):
+        super(StoreMultipleClient, self).__init__(
+            config, mc.TaskType.STORE, storage_name, command_name, cred_param,
+            cadc_data_client, caom_repo_client, meta_visitors=None,
+            observable=observable)
+        # when files are on disk don't worry about a separate directory
+        # per observation
+        self.working_dir = self.root_dir
+        self.stream = config.stream
+        self.fname = storage_name.fname_on_disk
+        self.multiple_files = storage_name.multiple_files(self.working_dir)
+
+    def execute(self, context):
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+
+        self.logger.debug('Store multiple files to ad.')
+        for entry in self.multiple_files:
+            self.fname = entry
+            self.logger.debug(f'store the input file {self.fname} to ad')
             self._cadc_data_put_client()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class Scrape(CaomExecute):
@@ -1304,13 +1318,13 @@ class Scrape(CaomExecute):
             self.fname = storage_name.file_name
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('generate the xml from the file on disk')
         self._fits2caom2_cmd_local(connected=False)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class ScrapeDirect(CaomExecute):
@@ -1329,13 +1343,13 @@ class ScrapeDirect(CaomExecute):
             self.fname = storage_name.file_name
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('generate the xml from the file on disk')
         self._fits2caom2_cmd_local_direct(connected=False)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class ScrapeUpdate(CaomExecute):
@@ -1354,13 +1368,13 @@ class ScrapeUpdate(CaomExecute):
             self.fname = storage_name.file_name
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('generate the xml from the file on disk')
         self._fits2caom2_cmd_in_out_local_client(connected=False)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class ScrapeUpdateDirect(CaomExecute):
@@ -1379,13 +1393,13 @@ class ScrapeUpdateDirect(CaomExecute):
             self.fname = storage_name.file_name
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('generate the xml from the file on disk')
         self._fits2caom2_cmd_in_out_local_direct(connected=False)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class DataScrape(DataClient):
@@ -1410,7 +1424,7 @@ class DataScrape(DataClient):
         self.thumb_fname = storage_name.thumb
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Data'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
 
         self.logger.debug('get observation for the existing model from disk')
         observation = self._read_model()
@@ -1421,7 +1435,7 @@ class DataScrape(DataClient):
         self.logger.debug('output the updated xml')
         self._write_model(observation)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class LocalMetaCreateClientRemoteStorage(CaomExecute):
@@ -1443,7 +1457,7 @@ class LocalMetaCreateClientRemoteStorage(CaomExecute):
         self._define_local_dirs(storage_name)
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('create the work space, if it does not exist')
@@ -1466,7 +1480,7 @@ class LocalMetaCreateClientRemoteStorage(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class LocalMetaUpdateClientRemoteStorage(CaomExecute):
@@ -1488,7 +1502,7 @@ class LocalMetaUpdateClientRemoteStorage(CaomExecute):
         self.observation = observation
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Meta'.format(__name__))
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
         self.logger.debug('write the observation to disk for next step')
@@ -1510,7 +1524,7 @@ class LocalMetaUpdateClientRemoteStorage(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(self.observation)
 
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
 class OrganizeChooser(object):
@@ -1539,19 +1553,19 @@ class OrganizeExecutes(object):
             todo_name = os.path.basename(todo_file).split('.')[0]
             self.success_fqn = os.path.join(
                 self.config.log_file_directory,
-                '{}_success_log.txt'.format(todo_name))
+                f'{todo_name}_success_log.txt')
             config.success_fqn = self.success_fqn
             self.failure_fqn = os.path.join(
                 self.config.log_file_directory,
-                '{}_failure_log.txt'.format(todo_name))
+                f'{todo_name}_failure_log.txt')
             config.failure_fqn = self.failure_fqn
             self.retry_fqn = os.path.join(
                 self.config.log_file_directory,
-                '{}_retries.txt'.format(todo_name))
+                f'{todo_name}_retries.txt')
             config.retry_fqn = self.retry_fqn
             self.rejected_fqn = os.path.join(
                 self.config.log_file_directory,
-                '{}_rejected.yml'.format(todo_name))
+                f'{todo_name}_rejected.yml')
             config.rejected_fqn = self.rejected_fqn
         else:
             self.todo_fqn = config.work_fqn
@@ -1778,10 +1792,10 @@ class OrganizeExecutes(object):
                     pass
                 else:
                     raise mc.CadcException(
-                        'Do not understand task type {}'.format(task_type))
+                        f'Do not understand task type {task_type}')
         else:
-            logging.error('{} failed naming validation check.'.format(
-                storage_name.obs_id))
+            logging.error(f'{storage_name.obs_id} failed naming validation '
+                          f'check.')
             self.capture_failure(storage_name, 'Invalid observation ID')
         return executors
 
@@ -1804,10 +1818,8 @@ class OrganizeExecutes(object):
         if self.config.log_to_file:
             with open(self.failure_fqn, 'a') as failure:
                 min_error = self._minimize_error_message(e)
-                failure.write(
-                    '{} {} {} {}\n'.format(datetime.now(), storage_name.obs_id,
-                                           storage_name.file_name,
-                                           min_error))
+                failure.write(f'{datetime.now()} {storage_name.obs_id} '
+                              f'{storage_name.file_name} {min_error}\n')
 
         # only retry entries that are not permanently marked as rejected
         reason = mc.Rejected.known_failure(e)
@@ -1815,11 +1827,11 @@ class OrganizeExecutes(object):
             if self.config.log_to_file:
                 with open(self.retry_fqn, 'a') as retry:
                     if self.config.use_local_files:
-                        retry.write('{}\n'.format(storage_name.fname_on_disk))
+                        retry.write(f'{storage_name.fname_on_disk}\n')
                     elif self.config.features.use_file_names:
-                        retry.write('{}\n'.format(storage_name.file_name))
+                        retry.write(f'{storage_name.file_name}\n')
                     else:
-                        retry.write('{}\n'.format(storage_name.obs_id))
+                        retry.write(f'{storage_name.obs_id}\n')
         else:
             self.observable.rejected.record(reason, storage_name.obs_id)
 
@@ -1836,16 +1848,14 @@ class OrganizeExecutes(object):
         if self.config.log_to_file:
             success = open(self.success_fqn, 'a')
             try:
-                success.write(
-                    '{} {} {} {:.2f}\n'.format(
-                        datetime.now(), obs_id, file_name, execution_s))
+                success.write(f'{datetime.now()} {obs_id} {file_name} '
+                              f'{execution_s:.2f}\n')
             finally:
                 success.close()
         logging.debug('******************************************************')
-        logging.info('Progress - record {} of {} records processed in '
-                     '{:.2f} s.'.format(self.success_count,
-                                        self.complete_record_count,
-                                        execution_s))
+        logging.info(f'Progress - record {self.success_count} of '
+                     f'{self.complete_record_count} records processed in '
+                     f'{execution_s:.2f} s.')
         logging.debug('******************************************************')
 
     def is_rejected(self, storage_name):
@@ -1861,9 +1871,8 @@ class OrganizeExecutes(object):
             result = self.observable.rejected.is_bad_metadata(
                 storage_name.obs_id)
         if result:
-            logging.info(
-                'Rejected observation {} because of bad metadata'.format(
-                    storage_name.obs_id))
+            logging.info(f'Rejected observation {storage_name.obs_id} because '
+                         f'of bad metadata')
         return result
 
     def _define_subject(self):
@@ -1872,21 +1881,20 @@ class OrganizeExecutes(object):
         subject = mc.define_subject(self.config)
         if (self.config.proxy_fqn is not None and os.path.exists(
                 self.config.proxy_fqn)):
-            logging.debug('Using proxy certificate {} for credentials.'.format(
-                self.config.proxy_fqn))
-            cred_param = '--cert {}'.format(self.config.proxy_fqn)
+            logging.debug(f'Using proxy certificate {self.config.proxy_fqn} for '
+                          f'credentials.')
+            cred_param = f'--cert {self.config.proxy_fqn}'
         elif (self.config.netrc_file is not None and os.path.exists(
                 self.config.netrc_file)):
-            logging.debug('Using netrc file {} for credentials.'.format(
-                self.config.netrc_file))
-            cred_param = '--netrc {}'.format(self.config.netrc_file)
+            logging.debug(f'Using netrc file {self.config.netrc_file} for '
+                          f'credentials.')
+            cred_param = f'--netrc {self.config.netrc_file}'
         else:
             cred_param = ''
             logging.warning(
                 'No credentials provided (proxy certificate or netrc file).')
-            logging.warning(
-                'Proxy certificate is {}, netrc file is {}.'.format(
-                    self.config.proxy_fqn, self.config.netrc_file))
+            logging.warning(f'Proxy certificate is {self.config.proxy_fqn}, '
+                            f'netrc file is {self.config.netrc_file}.')
         return subject, cred_param
 
     @staticmethod
@@ -2043,11 +2051,18 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                             'Task Type "SCRAPE"')
             elif task_type == mc.TaskType.STORE:
                 if self.config.use_local_files:
-                    executors.append(
-                        StoreClient(
-                            self.config, storage_name, self._command_name,
-                            cred_param, cadc_data_client,
-                            caom_repo_client, self.observable))
+                    if self.config.features.supports_multiple_files:
+                        executors.append(
+                            StoreMultipleClient(
+                                self.config, storage_name, self._command_name,
+                                cred_param, cadc_data_client,
+                                caom_repo_client, self.observable))
+                    else:
+                        executors.append(
+                            StoreClient(
+                                self.config, storage_name, self._command_name,
+                                cred_param, cadc_data_client,
+                                caom_repo_client, self.observable))
                 else:
                     raise mc.CadcException(
                         'use_local_files must be True with '
@@ -2182,7 +2197,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                 pass
             else:
                 raise mc.CadcException(
-                    'Do not understand task type {}'.format(task_type))
+                    f'Do not understand task type {task_type}')
         return executors
 
     def do_one(self, storage_name):
@@ -2199,21 +2214,20 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                 return 0
             executors = self.choose(storage_name)
             for executor in executors:
-                self._logger.info('Step {} for {}'.format(
-                    executor.task_type, storage_name.obs_id))
+                self._logger.info(f'Step {executor.task_type} for '
+                                  f'{storage_name.obs_id}')
                 executor.execute(context=None)
             if len(executors) > 0:
                 self.capture_success(storage_name.obs_id,
                                      storage_name.file_name, start_s)
                 return 0
             else:
-                self._logger.info('No executors for {}'.format(
-                    storage_name))
+                self._logger.info(f'No executors for {storage_name}')
                 return -1  # cover the case where file name validation fails
         except Exception as e:
             self.capture_failure(storage_name, e=traceback.format_exc())
-            self._logger.warning('Execution failed for {} with {}'.format(
-                storage_name.obs_id, e))
+            self._logger.warning(f'Execution failed for {storage_name.obs_id} '
+                                 f'with {e}')
             self._logger.error(traceback.format_exc())
             return -1
         finally:
@@ -2274,8 +2288,8 @@ def _do_one(config, organizer, storage_name, command_name, meta_visitors,
         executors = organizer.choose(storage_name, command_name,
                                      meta_visitors, data_visitors)
         for executor in executors:
-            logging.info('Step {} for {}'.format(
-                executor.task_type, storage_name.obs_id))
+            logging.info(
+                f'Step {executor.task_type} for {storage_name.obs_id}')
             executor.execute(context=None)
         if len(executors) > 0:
             organizer.capture_success(storage_name.obs_id,
@@ -2283,13 +2297,12 @@ def _do_one(config, organizer, storage_name, command_name, meta_visitors,
                                       start_s)
             return 0
         else:
-            logging.info('No executors for {}'.format(
-                storage_name))
+            logging.info(f'No executors for {storage_name}')
             return -1  # cover the case where file name validation fails
     except Exception as e:
         organizer.capture_failure(storage_name, e=traceback.format_exc())
-        logging.warning('Execution failed for {} with {}'.format(
-            storage_name.obs_id, e))
+        logging.warning(f'Execution failed for {storage_name.obs_id} with '
+                        f'{e}')
         logging.error(traceback.format_exc())
         return -1
     finally:
@@ -2360,8 +2373,7 @@ def _run_todo_file(config, organizer, sname, command_name,
                                             data_visitors, entry)
             except Exception as e:
                 organizer.capture_failure(sname, e=traceback.format_exc())
-                logging.info('Execution failed for {} with {}'.format(
-                    entry, e))
+                logging.info(f'Execution failed for {entry} with {e}')
                 logging.debug(traceback.format_exc())
                 # then keep processing the rest of the lines in the file
                 result = -1
@@ -2390,7 +2402,7 @@ def _run_local_files(config, organizer, sname, command_name,
         if f.endswith('.fits') or f.endswith('.fits.gz'):
             if chooser is not None and chooser.use_compressed():
                 if f.endswith('.fits'):
-                    temp_list.append('{}.gz'.format(f))
+                    temp_list.append(f'{f}.gz')
                 else:
                     temp_list.append(f)
             else:
@@ -2415,8 +2427,7 @@ def _run_local_files(config, organizer, sname, command_name,
 
     if config.need_to_retry():
         for count in range(0, config.retry_count):
-            logging.warning(
-                'Beginning retry {} in {}'.format(count + 1, os.getcwd()))
+            logging.warning(f'Beginning retry {count + 1} in {os.getcwd()}')
             config.update_for_retry(count)
 
             # make another file list
@@ -2424,11 +2435,10 @@ def _run_local_files(config, organizer, sname, command_name,
             todo_list = []
             for ii in temp_list:
                 # because the entries in retry aren't compressed names
-                todo_list.append('{}.gz'.format(ii.strip()))
+                todo_list.append(f'{ii.strip()}.gz')
             organizer = OrganizeExecutes(config, chooser)
             organizer.complete_record_count = len(todo_list)
-            logging.info('Retry {} entries'.format(
-                organizer.complete_record_count))
+            logging.info(f'Retry {organizer.complete_record_count} entries')
             for redo_file in todo_list:
                 try:
                     _run_by_file_list(config, organizer, sname, command_name,
@@ -2465,8 +2475,7 @@ def run_by_file(config, storage_name, command_name, meta_visitors,
     result = 0
 
     if config.use_local_files:
-        logging.debug(
-            'Using files from {}'.format(config.working_directory))
+        logging.debug(f'Using files from {config.working_directory}')
         organize = OrganizeExecutes(config, chooser)
         _run_local_files(config, organize, storage_name, command_name,
                          meta_visitors, data_visitors, chooser)
@@ -2476,18 +2485,16 @@ def run_by_file(config, storage_name, command_name, meta_visitors,
                             help='Fully-qualified todo file name.')
         args = parser.parse_args()
         if args.todo is not None:
-            logging.debug('Using entries from todo file {}'.format(
-                args.todo))
+            logging.debug(f'Using entries from todo file {args.todo}')
             organize = OrganizeExecutes(config, chooser, args.todo)
         else:
-            logging.debug('Using entries from file {}'.format(
-                config.work_fqn))
+            logging.debug(f'Using entries from file {config.work_fqn}')
             organize = OrganizeExecutes(config, chooser)
         result |= _run_todo_file(config, organize, storage_name, command_name,
                                  meta_visitors, data_visitors)
         if config.need_to_retry():
             for count in range(0, config.retry_count):
-                logging.warning('Beginning retry {}'.format(count + 1))
+                logging.warning(f'Beginning retry {count + 1}')
                 config.update_for_retry(count)
                 organize = OrganizeExecutes(config, chooser)
                 try:
@@ -2500,8 +2507,8 @@ def run_by_file(config, storage_name, command_name, meta_visitors,
                     break
             logging.warning('Done retry attempts.')
 
-    logging.info('Done, processed {} of {} correctly.'.format(
-        organize.success_count, organize.complete_record_count))
+    logging.info(f'Done, processed {organize.success_count} of '
+                 f'{organize.complete_record_count} correctly.')
     return result
 
 
@@ -2542,31 +2549,14 @@ def run_by_file_storage_name(config, command_name, meta_visitors,
             except Exception as e:
                 organizer.capture_failure(
                     storage_name, e=traceback.format_exc())
-                logging.info('Execution failed for {} with {}'.format(
-                    entry, e))
+                logging.info(f'Execution failed for {entry} with {e}')
                 logging.error(traceback.format_exc())
                 # then keep processing the rest of the entries
                 result = -1
     _finish_run(organizer, config)
 
-    # if config.need_to_retry():  # TODO
-    #     for count in range(0, config.retry_count):
-    #         logging.warning('Beginning retry {}'.format(count + 1))
-    #         config.update_for_retry(count)
-    #         organize = OrganizeExecutes(config, chooser)
-    #         try:
-    #             _run_todo_file(config, organize, storage_name,
-    #                            command_name, meta_visitors,
-    #                            data_visitors)
-    #         except Exception as e:
-    #             logging.error(e)
-    #             result = -1
-    #         if not config.need_to_retry():
-    #             break
-    #     logging.warning('Done retry attempts.')
-
-    logging.info('Done, processed {} of {} correctly.'.format(
-        organizer.success_count, organizer.complete_record_count))
+    logging.info(f'Done, processed {organizer.success_count} of '
+                 f'{organizer.complete_record_count} correctly.')
     return result
 
 
@@ -2608,7 +2598,7 @@ def run_single(config, storage_name, command_name, meta_visitors,
     organizer.complete_record_count = 1
     result = _do_one(config, organizer, storage_name,
                      command_name, meta_visitors, data_visitors)
-    logging.debug('run_single result is {}'.format(result))
+    logging.debug(f'run_single result is {result}')
     _finish_run(organizer, config)
     return result
 
@@ -2627,7 +2617,7 @@ def run_single_from_state(organizer, config, storage_name, command_name,
     logging.debug(f'Begin run_single_from_state {config.work_fqn}')
     result = _do_one(config, organizer, storage_name,
                      command_name, meta_visitors, data_visitors)
-    logging.info('Result is {} for {}'.format(result, storage_name.file_name))
+    logging.info(f'Result is {result} for {storage_name.file_name}')
     _finish_run(organizer, config)
     return result
 
@@ -2687,30 +2677,12 @@ def _storage_name_middle(organizer, entries, config, command_name,
         except Exception as e:
             organizer.capture_failure(
                 storage_name, e=traceback.format_exc())
-            logging.info('Execution failed for {} with {}'.format(
-                storage_name.file_name, e))
+            logging.info(f'Execution failed for {storage_name.file_name} with '
+                         f'{e}')
             logging.debug(traceback.format_exc())
             # then keep processing the rest of the lines in the file
             result |= -1
     _finish_run(organizer, config)
-
-    # TODO - figure this out, do it without using a todo file
-    # if config.need_to_retry():
-    #     for count in range(0, config.retry_count):
-    #         logging.warning('Beginning retry {}'.format(
-    # count + 1))
-    #         config.update_for_retry(count)
-    #         organize = OrganizeExecutes(config, chooser)
-    #         try:
-    #             _run_todo_file(config, organize, storage_name,
-    #                            command_name, meta_visitors,
-    # data_visitors)
-    #         except Exception as e:
-    #             logging.error(e)
-    #             result = -1
-    #         if not config.need_to_retry():
-    #             break
-    #     logging.warning('Done retry attempts.')
 
     return result
 
@@ -2758,11 +2730,11 @@ def _common_state(config, command_name, meta_visitors,
     exec_time = min(
         mc.increment_time(prev_exec_time, config.interval), end_time)
 
-    logging.debug('Starting at {}, ending at {}'.format(start_time, end_time))
+    logging.debug(f'Starting at {start_time}, ending at {end_time}')
     result = 0
     if prev_exec_time == end_time:
-        logging.info('Start time is the same as end time {}, stopping.'.format(
-            start_time))
+        logging.info(f'Start time is the same as end time {start_time}, '
+                     f'stopping.')
         exec_time = prev_exec_time
     else:
         temp_result, exec_time = through(
@@ -2771,8 +2743,7 @@ def _common_state(config, command_name, meta_visitors,
             prev_exec_time, start_time)
         result |= temp_result
     state.save_state(bookmark_name, exec_time)
-    logging.info(
-        'Done {}, saved state is {}'.format(command_name, exec_time))
+    logging.info(f'Done {command_name}, saved state is {exec_time}')
     return result
 
 
@@ -2784,12 +2755,11 @@ def _timebox_through(config, state, work, middle, command_name, bookmark_name,
     result = 0
     organizer = OrganizeExecutes(config, chooser=None)
     while exec_time <= end_time:
-        logging.info(
-            'Processing from {} to {}'.format(prev_exec_time, exec_time))
+        logging.info(f'Processing from {prev_exec_time} to {exec_time}')
         entries = work.todo(prev_exec_time, exec_time)
         if len(entries) > 0:
             work.initialize()
-            logging.info('Processing {} entries.'.format(len(entries)))
+            logging.info(f'Processing {len(entries)} entries.')
             result |= middle(organizer, entries, config, command_name,
                              meta_visitors, data_visitors, result, sname)
         cumulative += len(entries)
@@ -2853,22 +2823,6 @@ def _for_loop_through(config, state, work, middle, command_name, bookmark_name,
             # known
 
     _finish_run(organizer, config)
-
-    # if config.need_to_retry():  # TODO
-    #     for count in range(0, config.retry_count):
-    #         logging.warning('Beginning retry {}'.format(count + 1))
-    #         config.update_for_retry(count)
-    #         organize = OrganizeExecutes(config, chooser)
-    #         try:
-    #             _run_todo_file(config, organize, storage_name,
-    #                            command_name, meta_visitors,
-    #                            data_visitors)
-    #         except Exception as e:
-    #             logging.error(e)
-    #             result = -1
-    #         if not config.need_to_retry():
-    #             break
-    #     logging.warning('Done retry attempts.')
 
     logging.info(f'Done, processed {organizer.success_count} of '
                  f'{organizer.complete_record_count} correctly.')

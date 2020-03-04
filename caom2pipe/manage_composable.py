@@ -134,13 +134,16 @@ class Features(object):
     """Boolean feature flag implementation."""
 
     def __init__(self):
+        # the Config class setter expects the default value to be True,
+        # values must be in the config.yml file if they are expected to be
+        # False
         self._use_file_names = True
         self._use_urls = True
         self._run_in_airflow = True
         self._supports_composite = True
         self._supports_catalog = True
-        self._supports_latest_caom = False
-        self._supports_multiple_files = False
+        self._supports_latest_caom = True
+        self._supports_multiple_files = True
         self._expects_retry = True
 
     @property
@@ -946,7 +949,6 @@ class Config(object):
         self._source_host = value
 
     def __str__(self):
-        logging.error(f'From {os.getcwd()}/config.yml:')
         return f'\nFrom {os.getcwd()}/config.yml:\n' \
                f'  archive:: {self.archive}\n' \
                f'  cache_fqn:: {self.cache_fqn}\n' \
@@ -996,7 +998,11 @@ class Config(object):
 
     @staticmethod
     def _obtain_features(config):
-        """Make the configuration file entries into the class members."""
+        """Make the configuration file entries into the class members.
+
+        Feature flags default to True, so only cover the case where setting to
+        False.
+        """
         feature_flags = Features()
         if 'features' in config:
             for ii in config['features']:
@@ -1315,9 +1321,6 @@ class StorageName(object):
         return True
 
     @property
-    def is_multi(self):
-        return False
-
     def multiple_files(self, config=None):
         return []
 

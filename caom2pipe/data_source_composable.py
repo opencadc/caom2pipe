@@ -134,6 +134,8 @@ class ListDirDataSource(DataSource):
                 f_name = f
             elif f.endswith('.hdf5') or f.endswith('.h5'):
                 f_name = f
+            elif f.endswith('.json'):
+                f_name = f
             if f_name is not None:
                 self._logger.debug(f'{f_name} added to work list.')
                 work.append(f_name)
