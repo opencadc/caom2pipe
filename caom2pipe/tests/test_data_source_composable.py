@@ -82,6 +82,11 @@ def test_list_dir_data_source():
     os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
     test_config = mc.Config()
     test_config.get_executors()
+    test_config.working_directory = '/test_files'
+
+    if not os.path.exists(f'{test_config.working_directory}/TEST.fits.gz'):
+        with open(f'{test_config.working_directory}/TEST.fits.gz', 'w') as f:
+            f.write('test content')
 
     test_chooser = tc.TestChooser()
     try:
