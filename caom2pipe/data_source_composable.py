@@ -144,8 +144,10 @@ class ListDirDataSource(DataSource):
             if f_name is not None:
                 self._logger.debug(f'{f_name} added to work list.')
                 work.append(f_name)
+        # ensure unique entries
+        temp = list(set(work))
         self._logger.debug(f'End get_work in {self.__class__.__name__}.')
-        return work
+        return temp
 
 
 class TodoFileDataSource(DataSource):
