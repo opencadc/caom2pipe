@@ -279,10 +279,10 @@ class CaomExecute(object):
             conn = f'--not_connected'
         local_fqn = os.path.join(self.working_dir, self.fname)
         sys.argv = (f'{self.command_name} {self.logging_level_param} {conn} '
-                    f'{self.cred_param} --observation {self.collection} '
-                    f'{self.obs_id} --local {local_fqn} --out {self.model_fqn} '
-                    f'--plugin {plugin} --module {plugin} --lineage '
-                    f'{self.lineage}').split()
+                    f'{self.cred_param} --caom_namespace {self.namespace} '
+                    f'--observation {self.collection} {self.obs_id} --local'
+                    f' {local_fqn} --out {self.model_fqn} --plugin {plugin} '
+                    f'--module {plugin} --lineage {self.lineage}').split()
         command.to_caom2()
 
     def _fits2caom2_cmd_direct(self):
@@ -291,10 +291,11 @@ class CaomExecute(object):
         # so far, the plugin is also the module :)
         command = mc.load_module(plugin, 'to_caom2')
         sys.argv = (f'{self.command_name} {self.logging_level_param} '
-                    f'{self.cred_param} --observation {self.collection} '
-                    f'{self.obs_id} --out {self.model_fqn} '
-                    f'{self.external_urls_param} --plugin {plugin} --module '
-                    f'{plugin} --lineage {self.lineage}').split()
+                    f'{self.cred_param}  --caom_namespace {self.namespace} '
+                    f'--observation {self.collection} {self.obs_id} --out '
+                    f'{self.model_fqn} {self.external_urls_param} --plugin '
+                    f'{plugin} --module {plugin} --lineage '
+                    f'{self.lineage}').split()
         command.to_caom2()
 
     def _fits2caom2_cmd_in_out_client(self):
@@ -315,10 +316,10 @@ class CaomExecute(object):
         # so far, the plugin is also the module :)
         command = mc.load_module(plugin, 'to_caom2')
         sys.argv = (f'{self.command_name} {self.logging_level_param} '
-                    f'{self.cred_param} --in {self.model_fqn} --out '
-                    f'{self.model_fqn} {self.external_urls_param} --plugin '
-                    f'{plugin} --module {plugin} --lineage {self.lineage}'
-                    ).split()
+                    f'{self.cred_param}  --caom_namespace {self.namespace} '
+                    f'--in {self.model_fqn} --out {self.model_fqn} '
+                    f'{self.external_urls_param} --plugin {plugin} --module '
+                    f'{plugin} --lineage {self.lineage}').split()
         command.to_caom2()
 
     def _fits2caom2_cmd_in_out_local_client(self, connected=True):
@@ -345,9 +346,10 @@ class CaomExecute(object):
         if not connected:
             conn = f'--not_connected'
         sys.argv = (f'{self.command_name} {self.logging_level_param} {conn} '
-                    f'{self.cred_param} --in {self.model_fqn} --out '
-                    f'{self.model_fqn} --local {local_fqn} --plugin {plugin} '
-                    f'--module {plugin} --lineage {self.lineage}').split()
+                    f'{self.cred_param}  --caom_namespace {self.namespace} '
+                    f'--in {self.model_fqn} --out {self.model_fqn} --local '
+                    f'{local_fqn} --plugin {plugin} --module {plugin} --lineage '
+                    f'{self.lineage}').split()
         command.to_caom2()
 
     def _repo_cmd_create_client(self, observation):
