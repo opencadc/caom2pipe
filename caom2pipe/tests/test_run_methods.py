@@ -277,6 +277,14 @@ def test_run_by_file_use_local_files(do_mock, test_config):
         test_config.working_directory = os.path.join(
             tc.TEST_DATA_DIR, 'local_files')
 
+        for ii in ['test_file.fits',
+                   'test_file.fits.gz',
+                   'test_file.fits.header']:
+            fqn = os.path.join(f'{test_config.working_directory}/{ii}')
+            if not os.path.exists(fqn):
+                with open(fqn, 'w') as f:
+                    f.write('test content')
+
         class TestStorageName(mc.StorageName):
             def __init__(self, file_name=None, fname_on_disk=None):
                 super(TestStorageName, self).__init__()
