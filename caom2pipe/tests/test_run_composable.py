@@ -94,7 +94,7 @@ TEST_SOURCE = '{}/test_command/test_command.py'.format(
 
 @patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local_direct')
 def test_run_todo_list_dir_data_source(fits2caom2_mock, test_config):
-    test_config.working_directory = TEST_DIR
+    test_config.working_directory = tc.TEST_FILES_DIR
     test_config.use_local_files = True
     test_config.task_types = [mc.TaskType.SCRAPE]
 
