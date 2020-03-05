@@ -1,4 +1,4 @@
-working_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data/run_composable
+working_directory: /test_files
 netrc_filename: .netrc
 proxy_file_name: test_proxy.pem
 resource_id: ivo://cadc.nrc.ca/sc2repo
