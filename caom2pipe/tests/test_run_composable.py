@@ -117,6 +117,9 @@ def test_run_todo_list_dir_data_source_invalid_fname(test_config):
         os.unlink(test_config.failure_fqn)
     if os.path.exists(test_config.retry_fqn):
         os.unlink(test_config.retry_fqn)
+    if not os.path.exists(f'{TEST_DIR}/abc.fits.gz'):
+        with open(f'{TEST_DIR}/abc.fits.gz', 'w') as f:
+            f.write('abc')
 
     class TestStorageName(mc.StorageName):
         def __init__(self, entry):
