@@ -74,6 +74,7 @@ from caom2pipe import manage_composable as mc
 
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_DATA_DIR = os.path.join(THIS_DIR, 'data')
+TEST_FILES_DIR = '/test_files'
 
 
 class TestStorageName(mc.StorageName):

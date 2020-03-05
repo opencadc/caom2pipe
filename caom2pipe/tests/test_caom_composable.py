@@ -99,7 +99,7 @@ def test_exec_footprintfinder():
             '0'].chunks.pop()
     test_file_id = 'VLASS1.2.ql.T24t07.J065836+563000.10.2048.v1.I.iter1.' \
                    'image.pbcor.tt0.subim'
-    test_file = os.path.join('/test_files', '{}.fits'.format(test_file_id))
+    test_file = os.path.join(tc.TEST_FILES_DIR, '{}.fits'.format(test_file_id))
     test_log_dir = os.path.join(tc.TEST_DATA_DIR, 'logs')
     assert test_chunk is not None, 'chunk expected'
     assert test_chunk.position is not None, 'position expected'

@@ -281,11 +281,11 @@ def test_get_artifact_metadata():
 @patch('cadcdata.core.CadcDataClient')
 @patch('caom2pipe.manage_composable.Metrics')
 def test_data_put(mock_metrics, mock_client):
-    if not os.path.exists('/test_files/TEST.fits'):
-        with open('/test_files/TEST.fits', 'w') as f:
+    if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
+        with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
             f.write('test content')
 
-    mc.data_put(mock_client, '/test_files', 'TEST.fits', 'TEST', 'default',
+    mc.data_put(mock_client, tc.TEST_FILES_DIR, 'TEST.fits', 'TEST', 'default',
                 metrics=mock_metrics)
     mock_client.put_file.assert_called_with(
         'TEST', 'TEST.fits', archive_stream='default',
