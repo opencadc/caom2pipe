@@ -624,6 +624,11 @@ def test_validator(caps_mock, ad_mock, tap_mock):
     getcwd_orig = os.getcwd
     os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
 
+    cert_file = f'{tc.TEST_DATA_DIR}/test_proxy.pem'
+    if not os.path.exists(cert_file):
+        with open(cert_file, 'w') as f:
+            f.write('test content')
+
     try:
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
         test_destination_meta = test_subject._read_list_from_destination_meta()
