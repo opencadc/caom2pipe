@@ -1057,7 +1057,6 @@ class Config(object):
         If log_to_file is not set to True, there is no retry file content
         to retry on.
 
-         :param config does the configuration identify retry information?
          :return True if the configuration and logging information indicate a
             need to attempt to retry the pipeline execution for any entries.
          """
@@ -1089,8 +1088,8 @@ class Config(object):
         """
         self.work_file = '{}'.format(self.retry_file_name)
         self.work_fqn = self.retry_fqn
-        if '_' in self.log_file_directory:
-            temp = self.log_file_directory.split('_')[0]
+        if '_' in os.path.basename(self.log_file_directory):
+            temp = self.log_file_directory.rsplit('_', 1)[0]
             self.log_file_directory = '{}_{}'.format(temp, count)
         else:
             self.log_file_directory = '{}_{}'.format(
@@ -1100,7 +1099,11 @@ class Config(object):
         self.failure_log_file_name = self.failure_log_file_name
         self.retry_file_name = self.retry_file_name
 
-        logging.info('Retry work file is {}'.format(self.work_fqn))
+        logging.info(f'Retry work file is {self.work_fqn}')
+        logging.debug(f'Retry logging files are:\n  '
+                      f'success: {self.success_fqn}\n  '
+                      f'failure: {self.failure_fqn}\n  '
+                      f'retry:   {self.retry_fqn}')
 
     @staticmethod
     def load_config(config_fqn):

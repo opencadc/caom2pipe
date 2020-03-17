@@ -1527,9 +1527,27 @@ class OrganizeExecutes(object):
         self.config = config
         self.chooser = chooser
         self.task_types = config.task_types
-        self.logger = logging.getLogger()
+        self.logger = logging.getLogger(__name__)
         self.logger.setLevel(config.logging_level)
-        if todo_file is not None:
+        self.todo_fqn = None
+        self.success_fqn = None
+        self.failure_fqn = None
+        self.retry_fqn = None
+        self.rejected_fqn = None
+        self.set_log_location(todo_file)
+        self._success_count = 0
+        self._complete_record_count = 0
+        self.observable = mc.Observable(mc.Rejected(self.rejected_fqn),
+                                        mc.Metrics(config))
+
+    def set_log_files(self, config, todo_file=None):
+        if todo_file is None:
+            self.todo_fqn = config.work_fqn
+            self.success_fqn = config.success_fqn
+            self.failure_fqn = config.failure_fqn
+            self.retry_fqn = config.retry_fqn
+            self.rejected_fqn = config.rejected_fqn
+        else:
             self.todo_fqn = todo_file
             todo_name = os.path.basename(todo_file).split('.')[0]
             self.success_fqn = os.path.join(
@@ -1548,23 +1566,6 @@ class OrganizeExecutes(object):
                 self.config.log_file_directory,
                 '{}_rejected.yml'.format(todo_name))
             config.rejected_fqn = self.rejected_fqn
-        else:
-            self.todo_fqn = config.work_fqn
-            self.success_fqn = config.success_fqn
-            self.failure_fqn = config.failure_fqn
-            self.retry_fqn = config.retry_fqn
-            self.rejected_fqn = config.rejected_fqn
-
-        mc.create_dir(self.config.log_file_directory)
-        now_s = datetime.utcnow().timestamp()
-        # if log_to_file is False, should leave no logging trace behind
-        if self.config.log_to_file:
-            for fqn in [self.failure_fqn, self.retry_fqn, self.success_fqn]:
-                OrganizeExecutes.init_log_file(fqn, now_s)
-        self._success_count = 0
-        self._complete_record_count = 0
-        self.observable = mc.Observable(mc.Rejected(self.rejected_fqn),
-                                        mc.Metrics(config))
 
     @property
     def success_count(self):
@@ -1616,9 +1617,7 @@ class OrganizeExecutes(object):
                 if task_type == mc.TaskType.SCRAPE:
                     model_fqn = os.path.join(self.config.working_directory,
                                              storage_name.model_file_name)
-                    exists = os.path.exists(model_fqn)
-                    logging.error(f'{model_fqn} exists {exists}')
-                    if exists:
+                    if os.path.exists(model_fqn):
                         if self.config.use_local_files:
                             executors.append(
                                 ScrapeUpdate(self.config, storage_name,
@@ -1842,6 +1841,15 @@ class OrganizeExecutes(object):
                                         self.complete_record_count,
                                         execution_s))
         logging.debug('******************************************************')
+
+    def set_log_location(self, todo_file=None):
+        self.set_log_files(self.config, todo_file)
+        if self.config.log_to_file:
+            mc.create_dir(self.config.log_file_directory)
+            now_s = datetime.utcnow().timestamp()
+            for fqn in [self.success_fqn, self.failure_fqn, self.retry_fqn]:
+                OrganizeExecutes.init_log_file(fqn, now_s)
+        self._success_count = 0
 
     def is_rejected(self, storage_name):
         """Common code to use the appropriate identifier when checking for

@@ -264,9 +264,9 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.product_type == ProductType.WEIGHT, 'wrong product type'
-    assert result.content_length == 359, 'wrong length'
+    assert result.content_length == 353, 'wrong length'
     assert result.content_checksum.uri == \
-        'md5:a6046e5076565014f8bdcb5f0f5cfeca', 'wrong checksum'
+        'md5:7795d9a1720a7a8a2c79a5a2f5f77434', 'wrong checksum'
 
     # update action
     result.content_checksum = ChecksumURI('md5:abc')
@@ -275,7 +275,7 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.content_checksum.uri == \
-        'md5:a6046e5076565014f8bdcb5f0f5cfeca', 'wrong checksum'
+        'md5:7795d9a1720a7a8a2c79a5a2f5f77434', 'wrong checksum'
 
 
 @patch('cadcdata.core.CadcDataClient')
@@ -619,6 +619,11 @@ def test_validator(caps_mock, ad_mock, tap_mock):
 
     getcwd_orig = os.getcwd
     os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+
+    cert_file = f'{tc.TEST_DATA_DIR}/test_proxy.pem'
+    if not os.path.exists(cert_file):
+        with open(cert_file, 'w') as f:
+            f.write('test content')
 
     try:
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')

@@ -152,13 +152,8 @@ class TodoRunner(object):
 
     def _reset_for_retry(self, count):
         self._config.update_for_retry(count)
-        mc.create_dir(self._config.log_file_directory)
-        now_s = get_utc_now().timestamp()
-        for fqn in [self._config.failure_fqn,
-                    self._config.retry_fqn,
-                    self._config.success_fqn]:
-            ec.OrganizeExecutes.init_log_file(fqn, now_s)
-        self._organizer._success_count = 0
+        # the log location changes for each retry
+        self._organizer.set_log_location()
         self._data_source = data_source_composable.TodoFileDataSource(
             self._config)
 
