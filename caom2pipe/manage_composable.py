@@ -590,6 +590,7 @@ class Config(object):
         self._failure_log_file_name = None
         # the fully qualified name for the file
         self.failure_fqn = None
+        self._report_fqn = None
         self._retry_file_name = None
         # the fully qualified name for the file
         self.retry_fqn = None
@@ -778,6 +779,10 @@ class Config(object):
         if self._log_file_directory is not None:
             self.failure_fqn = os.path.join(
                 self._log_file_directory, self._failure_log_file_name)
+
+    @property
+    def report_fqn(self):
+        return self._report_fqn
 
     @property
     def retry_file_name(self):
@@ -969,6 +974,7 @@ class Config(object):
                f'  rejected_directory:: {self.rejected_directory}\n' \
                f'  rejected_file_name:: {self.rejected_file_name}\n' \
                f'  rejected_fqn:: {self.rejected_fqn}\n' \
+               f'  report_fqn:: {self.report_fqn}\n' \
                f'  resource_id:: {self.resource_id}\n' \
                f'  retry_count:: {self.retry_count}\n' \
                f'  retry_failures:: {self.retry_failures}\n' \
@@ -1065,6 +1071,9 @@ class Config(object):
             self.observable_directory = config.get(
                 'observable_directory', None)
             self.source_host = config.get('source_host', None)
+            self._report_fqn = f'{self.log_file_directory}/' \
+                               f'{os.path.basename(self.working_directory)}' \
+                               f'_report.txt'
         except KeyError as e:
             raise CadcException(
                 'Error in config file {}'.format(e))
@@ -1082,6 +1091,13 @@ class Config(object):
             raise CadcException(
                 'Could not find the file {}'.format(config_fqn))
         return config
+
+    def count_retries(self):
+        result = []
+        if os.path.exists(self.retry_fqn):
+            with open(self.retry_fqn, 'r') as f:
+                result = f.readlines()
+        return len(result)
 
     def need_to_retry(self):
         """Evaluate the need to have the pipeline try to re-execute for any

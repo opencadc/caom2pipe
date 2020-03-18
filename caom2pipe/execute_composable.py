@@ -1558,6 +1558,7 @@ class OrganizeExecutes(object):
         self.set_log_location(todo_file)
         self._success_count = 0
         self._complete_record_count = 0
+        self._timeout = 0
         self.observable = mc.Observable(mc.Rejected(self.rejected_fqn),
                                         mc.Metrics(config))
 
@@ -1607,6 +1608,10 @@ class OrganizeExecutes(object):
     @complete_record_count.setter
     def complete_record_count(self, value):
         self._complete_record_count = value
+
+    @property
+    def timeouts(self):
+        return self._timeout
 
     def choose(self, storage_name, command_name, meta_visitors, data_visitors):
         """The logic that decides which descendants of CaomExecute to
@@ -1917,13 +1922,13 @@ class OrganizeExecutes(object):
         f_handle = open(log_fqn, 'w')
         f_handle.close()
 
-    @staticmethod
-    def _minimize_error_message(e):
+    def _minimize_error_message(self, e):
         """Turn the long-winded stack trace into something minimal that lends
         itself to awk."""
         if e is None:
             return 'None'
         elif 'Read timed out' in e:
+            self._timeout += 1
             return 'Read timed out'
         elif 'failed to load external entity' in e:
             return 'caom2repo xml error'
@@ -1946,8 +1951,10 @@ class OrganizeExecutes(object):
         elif 'failed to compute metadata' in e:
             return 'Failed to compute metadata'
         elif 'reset by peer' in e:
+            self._timeout += 1
             return 'Connection reset by peer'
         elif 'ConnectTimeoutError' in e:
+            self._timeout += 1
             return 'Connection to host timed out'
         elif 'FileNotFoundError' in e:
             return 'No such file or directory'
@@ -1960,6 +1967,7 @@ class OrganizeExecutes(object):
         elif 'Could not read observation record' in e:
             return 'Observation not found'
         elif 'Broken pipe' in e:
+            self._timeout += 1
             return 'Broken pipe'
         else:
             return str(e)
