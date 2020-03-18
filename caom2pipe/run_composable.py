@@ -317,6 +317,7 @@ class StateRunner(TodoRunner):
                     mc.increment_time(prev_exec_time, self._config.interval),
                     self._end_time)
 
+        self._reporter.add_entries(cumulative)
         state.save_state(self._bookmark_name, exec_time)
         self._logger.info('==================================================')
         self._logger.info(
