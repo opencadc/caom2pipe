@@ -1605,7 +1605,7 @@ def exec_cmd(cmd, log_level_as=logging.debug):
     :param log_level_as control the logging level from the exec call
     :return None
     """
-    logging.debug(cmd)
+    logging.error(cmd)
     cmd_array = cmd.split()
     try:
         child = subprocess.Popen(cmd_array, stdout=subprocess.PIPE,
@@ -1621,7 +1621,7 @@ def exec_cmd(cmd, log_level_as=logging.debug):
                 'Command {} had stdout{} stderr {}'.format(
                     cmd, output.decode('utf-8'), outerr.decode('utf-8')))
     except Exception as e:
-        logging.debug('Error with command {}:: {}'.format(cmd, e))
+        logging.warning('Error with command {}:: {}'.format(cmd, e))
         raise CadcException('Could not execute cmd {}. '
                             'Exception {}'.format(cmd, e))
 
