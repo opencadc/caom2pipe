@@ -1607,7 +1607,7 @@ def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
         raising the TimeoutExpired exception.
     :return None
     """
-    logging.error(cmd)
+    logging.debug(cmd)
     cmd_array = cmd.split()
     try:
         child = subprocess.Popen(cmd_array, stdout=subprocess.PIPE,
