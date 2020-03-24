@@ -399,6 +399,7 @@ def test_data_store(test_config):
     stat_orig = os.stat
     os.stat = Mock()
     os.stat.st_size.return_value = 1243
+    test_config.features.supports_multiple_files = False
     try:
         test_executor = ec.StoreClient(
             test_config, tc.TestStorageName(), 'command_name', '',

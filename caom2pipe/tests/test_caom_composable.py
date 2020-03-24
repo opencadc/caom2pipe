@@ -69,6 +69,7 @@
 
 import os
 import pytest
+import shutil
 
 no_matplotlib = False
 from caom2 import ValueCoord2D
@@ -100,6 +101,8 @@ def test_exec_footprintfinder():
     test_file_id = 'VLASS1.2.ql.T24t07.J065836+563000.10.2048.v1.I.iter1.' \
                    'image.pbcor.tt0.subim'
     test_file = os.path.join(tc.TEST_FILES_DIR, '{}.fits'.format(test_file_id))
+    if not os.path.exists(test_file):
+        shutil.copy(f'/usr/src/app/test_files/{test_file_id}.fits', test_file)
     test_log_dir = os.path.join(tc.TEST_DATA_DIR, 'logs')
     assert test_chunk is not None, 'chunk expected'
     assert test_chunk.position is not None, 'position expected'
@@ -120,6 +123,9 @@ def test_exec_footprintfinder():
     assert test_chunk.position.axis.bounds.vertices[16] == \
         ValueCoord2D(coord1=105.165491,
                      coord2=56.050318), 'wrong last vertex'
+
+    if os.path.exists(test_file):
+        os.unlink(test_file)
 
 
 def test_reset():

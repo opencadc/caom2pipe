@@ -93,7 +93,7 @@ def test_list_dir_data_source():
         test_subject = dsc.ListDirDataSource(test_config, test_chooser)
         test_result = test_subject.get_work()
         assert test_result is not None, 'expected a result'
-        assert len(test_result) == 2, 'wrong result'
+        assert len(test_result) == 1, 'wrong result'
         assert 'TEST.fits.gz' in test_result, 'wrong extensions'
     finally:
         os.getcwd = get_cwd_orig
