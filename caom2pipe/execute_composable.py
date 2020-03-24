@@ -384,7 +384,9 @@ class CaomExecute(object):
     def _cadc_data_info_file_name_client(self):
         """Execute CadcDataClient.get_file_info with the client instance from
         this class."""
-        if self.fname is not None:
+        if self.fname is None:
+            logging.warning(f'self.fname is None for {self.obs_id}.')
+        else:
             try:
                 file_info = self.cadc_data_client.get_file_info(
                     self.archive, self.fname)
@@ -393,7 +395,7 @@ class CaomExecute(object):
                 # for Gemini, it's possible the metadata exists at CADC, but
                 # the file does not, when it's proprietary, so continue
                 # processing
-                logging.debug(f'{self.fname} does not exist at CADC.')
+                logging.warning(f'{self.fname} does not exist at CADC.')
 
     def _read_model(self):
         """Read an observation into memory from an XML file on disk."""
@@ -982,9 +984,10 @@ class LocalMetaUpdateDirect(CaomExecute):
             cadc_data_client, caom_repo_client, meta_visitors, observable)
         self._define_local_dirs(storage_name)
         self.observation = observation
+        self.logger = logging.getLogger(__name__)
 
     def execute(self, context):
-        self.logger.debug('Begin execute for LocalMetaUpdateDirect')
+        self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -1009,7 +1012,7 @@ class LocalMetaUpdateDirect(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(self.observation)
 
-        self.logger.debug('End execute for LocalMetaUpdateDirect')
+        self.logger.debug('End execute')
 
 
 class ClientVisit(CaomExecute):
