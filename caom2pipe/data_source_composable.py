@@ -110,14 +110,16 @@ class ListDirDataSource(DataSource):
         self._chooser = chooser
 
     def get_work(self):
-        self._logger.error(
-            f'Begin get_work in {self._config.working_directory}.')
+        self._logger.debug(f'Begin get_work from '
+                           f'{self._config.working_directory} in '
+                           f'{self.__class__.__name__}.')
         file_list = os.listdir(self._config.working_directory)
         work = []
         for f in file_list:
             f_name = None
             if f.endswith('.fits') or f.endswith('.fits.gz'):
-                if self._chooser is not None and self._chooser.use_compressed():
+                if (self._chooser is not None and
+                        self._chooser.use_compressed()):
                     if f.endswith('.fits'):
                         f_name = f'{f}.gz'
                     else:
@@ -131,13 +133,17 @@ class ListDirDataSource(DataSource):
                 f_name = f
             elif f.endswith('.fz'):
                 f_name = f
-            elif f.endswith('.hdf5'):
+            elif f.endswith('.hdf5') or f.endswith('.h5'):
+                f_name = f
+            elif f.endswith('.json'):
                 f_name = f
             if f_name is not None:
-                logging.debug(f'Adding file {f_name} to work list.')
+                self._logger.debug(f'{f_name} added to work list.')
                 work.append(f_name)
-        self._logger.debug('End get_work.')
-        return work
+        # ensure unique entries
+        temp = list(set(work))
+        self._logger.debug(f'End get_work in {self.__class__.__name__}.')
+        return temp
 
 
 class TodoFileDataSource(DataSource):

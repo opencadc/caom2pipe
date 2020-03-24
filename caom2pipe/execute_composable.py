@@ -1262,12 +1262,12 @@ class StoreClient(CaomExecute):
         self.working_dir = self.root_dir
         self.stream = config.stream
         self.fname = storage_name.fname_on_disk
-        self.multi = storage_name.is_multi
-        self.multiple_files = storage_name.multiple_files(config)
+        self.multi = config.features.supports_multiple_files
+        self.multiple_files = storage_name.multiple_files(self.working_dir)
+        self.logger = logging.getLogger(__name__)
 
     def execute(self, context):
-        self.logger.debug('Begin execute for {} Data'.format(__name__))
-
+        self.logger.debug('Begin execute.')
         if self.multi:
             self.logger.debug('Store multiple files to ad.')
             for entry in self.multiple_files:
@@ -1279,8 +1279,7 @@ class StoreClient(CaomExecute):
             self.logger.debug(
                 'store the input file {} to ad'.format(self.fname))
             self._cadc_data_put_client()
-
-        self.logger.debug('End execute for {}'.format(__name__))
+        self.logger.debug('End execute.')
 
 
 class Scrape(CaomExecute):

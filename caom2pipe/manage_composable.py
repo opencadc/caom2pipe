@@ -84,6 +84,7 @@ from enum import Enum
 from ftplib import FTP
 from ftputil import FTPHost
 from hashlib import md5
+from importlib_metadata import version
 from io import BytesIO
 from pytz import timezone
 from requests.adapters import HTTPAdapter
@@ -97,11 +98,11 @@ from cadcdata import CadcDataClient
 from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact
 from caom2 import ChecksumURI
+from caom2.obs_reader_writer import CAOM23_NAMESPACE
 from caom2.diff import get_differences
 
 
 __all__ = ['CadcException', 'Config', 'State', 'TaskType',
-           'compare_observations',
            'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
            'get_cadc_headers_client', 'get_cadc_meta', 'get_file_meta',
            'decompose_lineage', 'check_param', 'read_csv_file',
@@ -115,7 +116,8 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
            'Validator', 'Cache', 'CaomName', 'StorageName', 'append_as_array',
-           'to_float', 'to_int', 'to_str', 'load_module']
+           'to_float', 'to_int', 'to_str', 'load_module',
+           'compare_observations']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -132,11 +134,16 @@ class Features(object):
     """Boolean feature flag implementation."""
 
     def __init__(self):
+        # the Config class setter expects the default value to be True,
+        # values must be in the config.yml file if they are expected to be
+        # False
         self._use_file_names = True
         self._use_urls = True
         self._run_in_airflow = True
         self._supports_composite = True
         self._supports_catalog = True
+        self._supports_latest_caom = True
+        self._supports_multiple_files = True
         self._expects_retry = True
 
     @property
@@ -190,6 +197,26 @@ class Features(object):
     @supports_catalog.setter
     def supports_catalog(self, value):
         self._supports_catalog = value
+
+    @property
+    def supports_latest_caom(self):
+        """If true, will execute any latest-version-specific code when creating
+         a CAOM instance."""
+        return self._supports_latest_caom
+
+    @supports_latest_caom.setter
+    def supports_latest_caom(self, value):
+        self._supports_latest_caom = value
+
+    @property
+    def supports_multiple_files(self):
+        """If true, will execute any specific code where the cardinality
+        between metadata and files is 1:n."""
+        return self._supports_multiple_files
+
+    @supports_multiple_files.setter
+    def supports_multiple_files(self, value):
+        self._supports_multiple_files = value
 
     @property
     def expects_retry(self):
@@ -977,7 +1004,11 @@ class Config(object):
 
     @staticmethod
     def _obtain_features(config):
-        """Make the configuration file entries into the class members."""
+        """Make the configuration file entries into the class members.
+
+        Feature flags default to True, so only cover the case where setting to
+        False.
+        """
         feature_flags = Features()
         if 'features' in config:
             for ii in config['features']:
@@ -1301,8 +1332,12 @@ class StorageName(object):
         return None
 
     @property
-    def is_multi(self):
-        return False
+    def is_feasible(self):
+        """
+        To support the exclusion of CFHT HDF5 files in the pipeline.
+        :return:
+        """
+        return True
 
     def multiple_files(self, config=None):
         return []
@@ -1325,6 +1360,10 @@ class StorageName(object):
         """How to get the file_id from a file_name."""
         return name.replace('.fits', '').replace('.gz', '').replace('.header',
                                                                     '')
+
+    @staticmethod
+    def is_hdf5(entry):
+        return '.hdf5' in entry or '.h5' in entry
 
     @staticmethod
     def is_preview(entry):
@@ -1558,12 +1597,14 @@ def define_subject(config):
     return subject
 
 
-def exec_cmd(cmd, log_level_as=logging.debug):
+def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
     """
     This does command execution as a subprocess call.
 
     :param cmd the text version of the command being executed
     :param log_level_as control the logging level from the exec call
+    :param timeout value in seconds, after which the process is terminated
+        raising the TimeoutExpired exception.
     :return None
     """
     logging.debug(cmd)
@@ -1571,20 +1612,26 @@ def exec_cmd(cmd, log_level_as=logging.debug):
     try:
         child = subprocess.Popen(cmd_array, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
-        output, outerr = child.communicate()
+        try:
+            output, outerr = child.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            logging.warning(f'Command {cmd_array[0]} timed out.')
+            # child process is not killed if the timeout expires, so the
+            # process and finish communication
+            child.kill()
+            output, outerr = child.communicate()
         if len(output) > 0:
-            log_level_as('stdout {}'.format(output.decode('utf-8')))
+            log_level_as(f'stdout {output.decode("utf-8")}')
         if len(outerr) > 0:
-            logging.error('stderr {}'.format(outerr.decode('utf-8')))
+            logging.error(f'stderr {outerr.decode("utf-8")}')
         if child.returncode != 0:
-            logging.debug('Command {} failed.'.format(cmd))
-            raise CadcException(
-                'Command {} had stdout{} stderr {}'.format(
-                    cmd, output.decode('utf-8'), outerr.decode('utf-8')))
+            logging.debug(f'Command {cmd} failed.')
+            raise CadcException(f'Command {cmd} had '
+                                f'stdout{output.decode("utf-8")} stderr '
+                                f'{outerr.decode("utf-8")}')
     except Exception as e:
-        logging.debug('Error with command {}:: {}'.format(cmd, e))
-        raise CadcException('Could not execute cmd {}. '
-                            'Exception {}'.format(cmd, e))
+        logging.warning(f'Error with command {cmd}:: {e}')
+        raise CadcException(f'Could not execute cmd {cmd}. Exception {e}')
 
 
 def exec_cmd_info(cmd):
@@ -1792,8 +1839,8 @@ def get_file_meta(fqn):
         meta['type'] = 'image/jpeg'
     elif fqn.endswith('tar.gz'):
         meta['type'] = 'application/x-tar'
-    elif fqn.endswith('h5'):
-        meta['type'] = 'application/x-hdf5'
+    elif fqn.endswith('h5') or fqn.endswith('hdf5'):
+        meta['type'] = 'application/x-hdf'
     else:
         meta['type'] = 'application/fits'
     logging.debug(meta)
@@ -1807,6 +1854,11 @@ def get_file_size(fqn):
     """
     s = os.stat(fqn)
     return s.st_size
+
+
+def get_version(entry):
+    """A common implementation to retrieve a pipeline version."""
+    return f'{entry}/{version(entry)}'
 
 
 def create_dir(dir_name):
@@ -1887,9 +1939,9 @@ def record_progress(config, application, count, cumulative, start_time):
                 datetime.now(), application, count, start_time, cumulative))
 
 
-def write_obs_to_file(obs, fqn):
+def write_obs_to_file(obs, fqn, namespace=CAOM23_NAMESPACE):
     """Common code to write a CAOM Observation to a file."""
-    ow = ObservationWriter()
+    ow = ObservationWriter(namespace=namespace)
     ow.write(obs, fqn)
 
 
@@ -2333,7 +2385,6 @@ def query_tap_client(query_string, tap_client):
     """
     :param query_string ADQL
     :param tap_client which client to query the service with
-    :param resource_id which tap service to query
     :returns an astropy votable instance."""
 
     logging.debug(f'query_tap_client: execute query \n{query_string}')
