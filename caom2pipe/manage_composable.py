@@ -1597,12 +1597,14 @@ def define_subject(config):
     return subject
 
 
-def exec_cmd(cmd, log_level_as=logging.debug):
+def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
     """
     This does command execution as a subprocess call.
 
     :param cmd the text version of the command being executed
     :param log_level_as control the logging level from the exec call
+    :param timeout value in seconds, after which the process is terminated
+        raising the TimeoutExpired exception.
     :return None
     """
     logging.debug(cmd)
@@ -1610,20 +1612,26 @@ def exec_cmd(cmd, log_level_as=logging.debug):
     try:
         child = subprocess.Popen(cmd_array, stdout=subprocess.PIPE,
                                  stderr=subprocess.PIPE)
-        output, outerr = child.communicate()
+        try:
+            output, outerr = child.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            logging.warning(f'Command {cmd_array[0]} timed out.')
+            # child process is not killed if the timeout expires, so the
+            # process and finish communication
+            child.kill()
+            output, outerr = child.communicate()
         if len(output) > 0:
-            log_level_as('stdout {}'.format(output.decode('utf-8')))
+            log_level_as(f'stdout {output.decode("utf-8")}')
         if len(outerr) > 0:
-            logging.error('stderr {}'.format(outerr.decode('utf-8')))
+            logging.error(f'stderr {outerr.decode("utf-8")}')
         if child.returncode != 0:
-            logging.debug('Command {} failed.'.format(cmd))
-            raise CadcException(
-                'Command {} had stdout{} stderr {}'.format(
-                    cmd, output.decode('utf-8'), outerr.decode('utf-8')))
+            logging.debug(f'Command {cmd} failed.')
+            raise CadcException(f'Command {cmd} had '
+                                f'stdout{output.decode("utf-8")} stderr '
+                                f'{outerr.decode("utf-8")}')
     except Exception as e:
-        logging.debug('Error with command {}:: {}'.format(cmd, e))
-        raise CadcException('Could not execute cmd {}. '
-                            'Exception {}'.format(cmd, e))
+        logging.warning(f'Error with command {cmd}:: {e}')
+        raise CadcException(f'Could not execute cmd {cmd}. Exception {e}')
 
 
 def exec_cmd_info(cmd):

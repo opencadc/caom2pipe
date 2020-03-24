@@ -98,7 +98,7 @@ __all__ = ['convert_time', 'get_datetime', 'build_chunk_energy_bounds',
            'build_plane_time_sample', 'build_ra_dec_as_deg',
            'get_geocentric_location', 'get_location', 'get_timedelta_in_s',
            'make_headers_from_string', 'get_vo_table', 'read_fits_data',
-           'SVO_URL', 'FilterMetadataCache']
+           'read_fits_headers', 'SVO_URL', 'FilterMetadataCache']
 
 SVO_URL = 'http://svo2.cab.inta-csic.es/svo/theory/fps3/fps.php?ID='
 
@@ -317,6 +317,18 @@ def read_fits_data(fqn):
     """
     hdus = fits.open(fqn, memmap=True, lazy_load_hdus=False)
     return hdus
+
+
+def read_fits_headers(fqn):
+    """Read the headers from a fits file.
+    :param fqn a string representing the fully-qualified name of the fits
+        file.
+    :return fits file headers.
+    """
+    hdulist = fits.open(fqn, memmap=True, lazy_load_hdus=False)
+    hdulist.close()
+    headers = [h.header for h in hdulist]
+    return headers
 
 
 class FilterMetadataCache(object):
