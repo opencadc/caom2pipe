@@ -97,9 +97,11 @@ from cadcdata import CadcDataClient
 from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact
 from caom2 import ChecksumURI
+from caom2.diff import get_differences
 
 
 __all__ = ['CadcException', 'Config', 'State', 'TaskType',
+           'compare_observations',
            'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
            'get_cadc_headers_client', 'get_cadc_meta', 'get_file_meta',
            'decompose_lineage', 'check_param', 'read_csv_file',
@@ -1489,6 +1491,22 @@ def append_as_array(append_to, key, value):
         temp.append(value)
     else:
         append_to[key] = [value]
+
+
+def compare_observations(actual_fqn, expected_fqn):
+    """Compare the observation captured in actual_fqn with the observation
+    captured in the expected_fqn. Returns the differences as a pretty
+    string for logging.
+    """
+    actual = read_obs_from_file(actual_fqn)
+    expected = read_obs_from_file(expected_fqn)
+    result = get_differences(expected, actual, 'Observation')
+    msg = None
+    if result:
+        compare_text = '\n'.join([r for r in result])
+        msg = f'Differences found in observation {expected.observation_id}\n' \
+              f'{compare_text}'
+    return msg
 
 
 def to_float(value):
