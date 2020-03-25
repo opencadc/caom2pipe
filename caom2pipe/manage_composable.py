@@ -1519,7 +1519,7 @@ class Validator(object):
 def append_as_array(append_to, key, value):
     """Because I've written this more than once ... code to append to an
     existing array entry in a dict, if the key already exists. There may be
-    a more elegant way to do this, in which case, this function can be
+    a more elegant way to do this, in which case, the more elegant way can be
     implemented.
     :param append_to dict
     :param key may already exist in dict

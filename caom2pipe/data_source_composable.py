@@ -91,7 +91,7 @@ class DataSource(object):
         list of work todo as a method implementation
     """
 
-    def __init__(self, config):
+    def __init__(self, config=None):
         self._config = config
         self._logger = logging.getLogger(__name__)
 

@@ -296,9 +296,6 @@ class StateRunner(TodoRunner):
                     self._organizer.complete_record_count = num_entries
                     self._organizer.success_count = 0
                     for entry in entries:
-                        self._logger.error(entry)
-                        self._logger.error(self._process_entry)
-                        self._logger.error(result)
                         entry_name = entry[0]
                         entry_time = ac.get_datetime(entry[1])
                         result |= self._process_entry(entry_name)
@@ -345,7 +342,21 @@ def get_utc_now():
 
 def run_by_todo(config=None, name_builder=None, chooser=None,
                 command_name=None, meta_visitors=[], data_visitors=[]):
-    """A default implementation for using the TodoRunner."""
+    """A default implementation for using the TodoRunner.
+
+    :param config Config instance
+    :param name_builder NameBuilder extension that creates an instance of
+        a StorageName extension, from an entry from a DataSourceComposable
+        listing
+    :param command_name string that represents the specific pipeline
+        application name
+    :param meta_visitors list of modules with visit methods, that expect
+        the metadata of a work file to exist on disk
+    :param data_visitors list of modules with visit methods, that expect the
+        work file to exist on disk
+    :param chooser OrganizerChooser, if there's strange rules about file
+        naming.
+    """
     if config is None:
         config = mc.Config()
         config.get_executors()
@@ -372,7 +383,25 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
 def run_by_state(config=None, name_builder=None, command_name=None,
                  bookmark_name=None, meta_visitors=[], data_visitors=[],
                  end_time=None, chooser=None, source=None):
-    """A default implementation for using the StateRunner."""
+    """A default implementation for using the StateRunner.
+
+    :param config Config instance
+    :param name_builder NameBuilder extension that creates an instance of
+        a StorageName extension, from an entry from a DataSourceComposable
+        listing
+    :param command_name string that represents the specific pipeline
+        application name
+    :param bookmark_name string that represents the state.yml lookup value
+    :param meta_visitors list of modules with visit methods, that expect
+        the metadata of a work file to exist on disk
+    :param data_visitors list of modules with visit methods, that expect the
+        work file to exist on disk
+    :param end_time datetime for stopping a run, should be in UTC.
+    :param chooser OrganizerChooser, if there's strange rules about file
+        naming.
+    :param source DataSourceComposable extension that identifies work to be
+        done.
+    """
     if config is None:
         config = mc.Config()
         config.get_executors()

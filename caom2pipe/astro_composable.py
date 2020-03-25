@@ -148,21 +148,27 @@ def get_datetime(from_value):
     """
     result = None
     if from_value is not None:
-        try:
-            result = Time(from_value)
-        except ValueError:
-            # VLASS has a format astropy fails to understand '%H:%M:%S'
-            # CFHT 2019/11/26
-            # Gemini 2019-11-01 00:01:34.610517+00:00
-            if '+00:00' in from_value:
-                # because %z doesn't expect the ':' in the timezone field
-                from_value = from_value[:-6]
-            for fmt in ['%H:%M:%S', '%Y/%m/%d', '%Y-%m-%d %H:%M:%S.%f']:
-                try:
-                    result = Time(dt_datetime.strptime(from_value, fmt))
-                    break
-                except ValueError:
-                    pass
+        import numpy
+        # local import, in case the container is not provisioned with
+        # numpy
+        if isinstance(from_value, str):
+            try:
+                result = Time(from_value)
+            except ValueError:
+                # VLASS has a format astropy fails to understand '%H:%M:%S'
+                # CFHT 2019/11/26
+                # Gemini 2019-11-01 00:01:34.610517+00:00
+                if '+00:00' in from_value:
+                    # because %z doesn't expect the ':' in the timezone field
+                    from_value = from_value[:-6]
+                for fmt in ['%H:%M:%S', '%Y/%m/%d', '%Y-%m-%d %H:%M:%S.%f']:
+                    try:
+                        result = Time(dt_datetime.strptime(from_value, fmt))
+                        break
+                    except ValueError:
+                        pass
+        elif isinstance(from_value, numpy.int32):
+            result = Time(dt_datetime.fromtimestamp(from_value))
     if result is None:
         logging.error('Cannot parse datetime {}'.format(from_value))
     else:
