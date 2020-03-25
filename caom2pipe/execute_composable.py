@@ -156,7 +156,7 @@ class CaomExecute(object):
             to metadata only.
         :param observable: things that last longer than a pipeline execution
         """
-        self.logger = logging.getLogger()
+        self.logger = logging.getLogger(__name__)
         self.logger.setLevel(config.logging_level)
         formatter = logging.Formatter(
             '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s')
@@ -512,9 +512,10 @@ class MetaCreateDirect(CaomExecute):
             config, mc.TaskType.INGEST, storage_name, command_name,
             cred_param, cadc_data_client, caom_repo_client, meta_visitors,
             observable)
+        self.logger = logging.getLogger(__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
         self.logger.debug('Find the file name as stored.')
@@ -540,7 +541,7 @@ class MetaCreateDirect(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
+        self.logger.debug('End execute')
 
 
 class MetaUpdateClient(CaomExecute):
