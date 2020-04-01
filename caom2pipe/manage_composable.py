@@ -104,7 +104,8 @@ from caom2.diff import get_differences
 
 __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
-           'get_cadc_headers_client', 'get_cadc_meta', 'get_file_meta',
+           'get_cadc_headers_client', 'get_cadc_meta',
+           'get_cadc_meta_client', 'get_file_meta',
            'decompose_lineage', 'check_param', 'read_csv_file',
            'write_obs_to_file', 'read_obs_from_file',
            'Features', 'write_to_file',
@@ -561,6 +562,15 @@ class CaomName(object):
         """:return A string that conforms to the Observation URI
         specification from CAOM."""
         return 'caom:{}/{}'.format(collection, obs_id)
+
+    @staticmethod
+    def decompose_provenance_input(uri):
+        # looks like:
+        # caom:OMM/C170323_0151_CAL/C170323_0151_CAL
+        bits = uri.split('/')
+        obs_id = bits[1]
+        product_id = bits[2]
+        return obs_id, product_id
 
 
 class Config(object):
@@ -1812,6 +1822,17 @@ def get_cadc_meta(netrc_fqn, archive, fname):
     return client.get_file_info(archive, fname)
 
 
+def get_cadc_meta_client(client, archive, fname):
+    """
+    Gets contentType, contentLength and contentChecksum of a CADC artifact
+    :param client: CadcDataClient instance
+    :param archive: archive file has been stored to
+    :param fname: name of file in the archive
+    :return:
+    """
+    return client.get_file_info(archive, fname)
+
+
 def get_file_meta(fqn):
     """
     Gets contentType, contentLength and contentChecksum of an artifact on disk.
@@ -1827,7 +1848,7 @@ def get_file_meta(fqn):
         raise CadcException('Could not find {} in get_file_meta'.format(fqn))
     meta = {'size': get_file_size(fqn),
             'md5sum': md5(open(fqn, 'rb').read()).hexdigest()}
-    if fqn.endswith('.header') or fqn.endswith('.txt'):
+    if fqn.endswith('.header') or fqn.endswith('.txt') or fqn.endswith('.cat'):
         meta['type'] = 'text/plain'
     elif fqn.endswith('.csv'):
         meta['type'] = 'text/csv'
@@ -2054,6 +2075,40 @@ def get_artifact_metadata(fqn, product_type, release_type, uri=None,
         artifact.product_type = product_type
         artifact.content_type = local_meta['type']
         artifact.content_length = local_meta['size']
+        artifact.content_checksum = md5uri
+        return artifact
+
+
+def get_artifact_metadata_client(client, file_name, product_type, release_type,
+                                 archive, uri=None, artifact=None):
+    """
+    Build or update artifact content metadata using the CAOM2 objects, and
+    with access to a file at CADC.
+
+    :param client: CadcDataClient instance
+    :param file_name: The name of the file in CADC storage, for which an
+        Artifact is being created or updated.
+    :param product_type: which ProductType enumeration value
+    :param release_type: which ReleaseType enumeration value
+    :param archive: str narrows down CADC storage location
+    :param uri: mandatory if creating an Artifact, a URI of the form
+        scheme:ARCHIVE/file_name
+    :param artifact: use when updating an existing Artifact instance
+
+    :return: the created or updated Artifact instance, with the
+        content_* elements filled in.
+    """
+    meta = get_cadc_meta_client(client, archive, file_name)
+    md5uri = ChecksumURI('md5:{}'.format(meta.get('md5sum')))
+    if artifact is None:
+        if uri is None:
+            raise CadcException('Cannot build an Artifact without a URI.')
+        return Artifact(uri, product_type, release_type, meta.get('type'),
+                        meta.get('size'), md5uri)
+    else:
+        artifact.product_type = product_type
+        artifact.content_type = meta.get('type')
+        artifact.content_length = meta.get('size')
         artifact.content_checksum = md5uri
         return artifact
 

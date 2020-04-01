@@ -70,16 +70,51 @@
 import logging
 import os
 
+from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
-from caom2 import ValueCoord2D, CompositeObservation, Algorithm
+from caom2 import ValueCoord2D, CompositeObservation, Algorithm, Artifact
 from caom2.diff import get_differences
 
+from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 
 __all__ = ['exec_footprintfinder', 'update_plane_provenance',
            'update_observation_members', 'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
            'compare']
+
+
+def build_chunk_energy_range(chunk, filter_name, filter_md):
+    """
+    Set a range axis for chunk energy using central wavelength and FWHM.
+    Units are Angstroms. Axis is set to 4.
+
+    :param chunk: Chunk to add a CoordRange1D Axis to
+    :param filter_name: string to set to bandpassName
+    :param filter_md: dict with a 'cw' and 'fwhm' value
+    """
+    # If n_axis=1 (as I guess it will be for all but processes GRACES
+    # spectra now?) that means crpix=0.5 and the corresponding crval would
+    # central_wl - bandpass/2.0 (i.e. the minimum wavelength).   It is fine
+    # if you instead change crpix to 1.0.   I guess since the ‘range’ of
+    # one pixel is 0.5 to 1.5.
+
+    cw = ac.FilterMetadataCache.get_central_wavelength(filter_md)
+    fwhm = ac.FilterMetadataCache.get_fwhm(filter_md)
+    resolving_power = ac.FilterMetadataCache.get_resolving_power(filter_md)
+    axis = CoordAxis1D(axis=Axis(ctype='WAVE', cunit='A'))
+    ref_coord1 = RefCoord(0.5, cw - fwhm / 2.0)
+    ref_coord2 = RefCoord(1.5, cw + fwhm / 2.0)
+    axis.range = CoordRange1D(ref_coord1, ref_coord2)
+
+    energy = SpectralWCS(axis=axis,
+                         specsys='TOPOCENT',
+                         ssyssrc=None,
+                         ssysobs=None,
+                         bandpass_name=filter_name,
+                         resolving_power=resolving_power)
+    chunk.energy = energy
+    chunk.energy_axis = 4
 
 
 def change_to_composite(observation, algorithm_name='composite',
@@ -141,6 +176,38 @@ def compare(ex_fqn, act_fqn, entry):
               f'instr {ex.instrument.name}\n{result_str}'
         return msg
     return None
+
+
+def copy_artifact(from_artifact, features=None):
+    """Make a copy of an artifact. This works around the CAOM2 constraint
+    'org.postgresql.util.PSQLException: ERROR: duplicate key value violates
+    unique constraint "artifact_pkey"', when trying to use the same artifact
+    information in different planes (e.g. when referring to the same
+    thumbnail and preview files.
+
+    :param from_artifact Artifact of which to make a shallow copy
+    :param features which version of CAOM to use
+    :return a copy of the from_artifact, with parts set to None
+    """
+    if features is not None and features.supports_latest_caom:
+        copy = Artifact(uri=from_artifact.uri,
+                        product_type=from_artifact.product_type,
+                        release_type=from_artifact.release_type,
+                        content_type=from_artifact.content_type,
+                        content_length=from_artifact.content_length,
+                        content_checksum=from_artifact.content_checksum,
+                        content_release=from_artifact.content_release,
+                        content_read_groups=from_artifact.content_read_groups,
+                        parts=None)
+    else:
+        copy = Artifact(uri=from_artifact.uri,
+                        product_type=from_artifact.product_type,
+                        release_type=from_artifact.release_type,
+                        content_type=from_artifact.content_type,
+                        content_length=from_artifact.content_length,
+                        content_checksum=from_artifact.content_checksum,
+                        parts=None)
+    return copy
 
 
 def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
