@@ -103,7 +103,7 @@ class StorageNameBuilder(object):
         entry is about to begin, for the case where StorageName construction
         is more expensive execution-time or storage-wise
     - the collection class directly. This choice is usually masked behind
-        a specialization of the work_composable.work class.
+        a specialization of the data_source_composable.get_work class.
     """
     def __init__(self):
         pass
@@ -122,7 +122,7 @@ class StorageNameBuilder(object):
 class StorageNameInstanceBuilder(StorageNameBuilder):
 
     def __init__(self, collection):
-        super(StorageNameInstanceBuilder).__init__()
+        super(StorageNameInstanceBuilder, self).__init__()
         self._collection = collection
 
     def build(self, entry):
