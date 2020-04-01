@@ -141,6 +141,12 @@ class ListDirDataSource(DataSource):
                 f_name = f
             elif f.endswith('.json'):
                 f_name = f
+            elif f.endswith('.cat'):
+                # NGVS
+                f_name = f
+            elif f.endswith('.mask.rd.reg'):
+                # NGVS
+                f_name = f
             if f_name is not None:
                 self._logger.debug(f'{f_name} added to work list.')
                 work.append(f_name)
