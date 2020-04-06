@@ -114,7 +114,8 @@ def build_chunk_energy_range(chunk, filter_name, filter_md):
                          bandpass_name=filter_name,
                          resolving_power=resolving_power)
     chunk.energy = energy
-    chunk.energy_axis = 4
+    # PD - in general, do not set the energy_axis, unless the energy axis
+    # was really in the fits header
 
 
 def change_to_composite(observation, algorithm_name='composite',
