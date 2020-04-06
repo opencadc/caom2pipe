@@ -101,21 +101,22 @@ def build_chunk_energy_range(chunk, filter_name, filter_md):
 
     cw = ac.FilterMetadataCache.get_central_wavelength(filter_md)
     fwhm = ac.FilterMetadataCache.get_fwhm(filter_md)
-    resolving_power = ac.FilterMetadataCache.get_resolving_power(filter_md)
-    axis = CoordAxis1D(axis=Axis(ctype='WAVE', cunit='A'))
-    ref_coord1 = RefCoord(0.5, cw - fwhm / 2.0)
-    ref_coord2 = RefCoord(1.5, cw + fwhm / 2.0)
-    axis.range = CoordRange1D(ref_coord1, ref_coord2)
+    if cw is not None and fwhm is not None:
+        resolving_power = ac.FilterMetadataCache.get_resolving_power(filter_md)
+        axis = CoordAxis1D(axis=Axis(ctype='WAVE', cunit='A'))
+        ref_coord1 = RefCoord(0.5, cw - fwhm / 2.0)
+        ref_coord2 = RefCoord(1.5, cw + fwhm / 2.0)
+        axis.range = CoordRange1D(ref_coord1, ref_coord2)
 
-    energy = SpectralWCS(axis=axis,
-                         specsys='TOPOCENT',
-                         ssyssrc=None,
-                         ssysobs=None,
-                         bandpass_name=filter_name,
-                         resolving_power=resolving_power)
-    chunk.energy = energy
-    # PD - in general, do not set the energy_axis, unless the energy axis
-    # was really in the fits header
+        energy = SpectralWCS(axis=axis,
+                             specsys='TOPOCENT',
+                             ssyssrc=None,
+                             ssysobs=None,
+                             bandpass_name=filter_name,
+                             resolving_power=resolving_power)
+        chunk.energy = energy
+        # PD - in general, do not set the energy_axis, unless the energy axis
+        # was really in the fits header
 
 
 def change_to_composite(observation, algorithm_name='composite',

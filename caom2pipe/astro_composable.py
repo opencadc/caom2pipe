@@ -441,4 +441,7 @@ class FilterMetadataCache(object):
     def get_resolving_power(energy):
         cw = FilterMetadataCache.get_central_wavelength(energy)
         fwhm = FilterMetadataCache.get_fwhm(energy)
-        return cw / fwhm
+        result = None
+        if cw is not None and fwhm is not None:
+            result = cw / fwhm
+        return result
