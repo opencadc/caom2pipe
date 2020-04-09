@@ -169,24 +169,30 @@ class TodoRunner(object):
         self._logger.info('----------------------------------------')
 
     def _process_entry(self, entry):
-        storage_name = self._builder.build(entry)
-        if storage_name.is_valid():
-            try:
+        storage_name = None
+        try:
+            storage_name = self._builder.build(entry)
+            if storage_name.is_valid():
                 result = self._organizer.do_one(storage_name)
-            except Exception as e:
+            else:
+                self._logger.error(
+                    f'{storage_name.obs_id} failed naming validation check.')
                 self._organizer.capture_failure(storage_name,
-                                                e=traceback.format_exc())
-                self._logger.info(
-                    f'Execution failed for {storage_name.file_name} with {e}')
-                self._logger.debug(traceback.format_exc())
-                # keep processing the rest of the entries, so don't throw
-                # this or any other exception at this point
+                                                'Invalid name format.')
                 result = -1
-        else:
-            self._logger.error(
-                f'{storage_name.obs_id} failed naming validation check.')
+        except Exception as e:
+            if storage_name is None:
+                # keep going through storage name build failures
+                self._logger.warning(f'Using a default StorageName instance '
+                                     f'for {entry}')
+                storage_name = mc.StorageName(obs_id=entry)
             self._organizer.capture_failure(storage_name,
-                                            'Invalid name format.')
+                                            e=traceback.format_exc())
+            self._logger.info(
+                f'Execution failed for {storage_name.file_name} with {e}')
+            self._logger.debug(traceback.format_exc())
+            # keep processing the rest of the entries, so don't throw
+            # this or any other exception at this point
             result = -1
         return result
 

@@ -72,7 +72,7 @@ import os
 
 from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
-from caom2 import ValueCoord2D, CompositeObservation, Algorithm, Artifact
+from caom2 import ValueCoord2D, CompositeObservation, Algorithm, Artifact, Part
 from caom2.diff import get_differences
 
 from caom2pipe import astro_composable as ac
@@ -81,7 +81,7 @@ from caom2pipe import manage_composable as mc
 __all__ = ['exec_footprintfinder', 'update_plane_provenance',
            'update_observation_members', 'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
-           'compare']
+           'compare', 'copy_artifact', 'copy_chunk', 'copy_part']
 
 
 def build_chunk_energy_range(chunk, filter_name, filter_md):
@@ -185,7 +185,7 @@ def copy_artifact(from_artifact, features=None):
     'org.postgresql.util.PSQLException: ERROR: duplicate key value violates
     unique constraint "artifact_pkey"', when trying to use the same artifact
     information in different planes (e.g. when referring to the same
-    thumbnail and preview files.
+    thumbnail and preview files).
 
     :param from_artifact Artifact of which to make a shallow copy
     :param features which version of CAOM to use
@@ -209,6 +209,68 @@ def copy_artifact(from_artifact, features=None):
                         content_length=from_artifact.content_length,
                         content_checksum=from_artifact.content_checksum,
                         parts=None)
+    return copy
+
+
+def copy_chunk(from_chunk, features=None):
+    """Make a copy of a Chunk. This works around the CAOM2 constraint
+    'org.postgresql.util.PSQLException: ERROR: duplicate key value violates
+    unique constraint "chunk_pkey"', when trying to use the same chunk
+    information in different parts (e.g. when referring to hdf5 files).
+
+    :param from_chunk Chunk of which to make a copy
+    :param features which version of CAOM to use
+    :return a copy of the from_chunk
+    """
+    if features is not None and features.supports_latest_caom:
+        copy = Chunk(product_type=from_chunk.product_type,
+                     naxis=from_chunk.naxis,
+                     position_axis_1=from_chunk.position_axis_1,
+                     position_axis_2=from_chunk.position_axis_2,
+                     position=from_chunk.position,
+                     energy_axis=from_chunk.energy_axis,
+                     energy=from_chunk.energy,
+                     time_axis=from_chunk.time_axis,
+                     time=from_chunk.time,
+                     custom_axis=from_chunk.custom_axis,
+                     custom=from_chunk.custom,
+                     polarization_axis=from_chunk.polarization_axis,
+                     polarization=from_chunk.polarization,
+                     observable_axis=from_chunk.observable_axis,
+                     observable=from_chunk.observable)
+        copy.meta_producer = from_chunk.meta_producer
+    else:
+        copy = Chunk(product_type=from_chunk.product_type,
+                     naxis=from_chunk.naxis,
+                     position_axis_1=from_chunk.position_axis_1,
+                     position_axis_2=from_chunk.position_axis_2,
+                     position=from_chunk.position,
+                     energy_axis=from_chunk.energy_axis,
+                     energy=from_chunk.energy,
+                     time_axis=from_chunk.time_axis,
+                     time=from_chunk.time,
+                     polarization_axis=from_chunk.polarization_axis,
+                     polarization=from_chunk.polarization,
+                     observable_axis=from_chunk.observable_axis,
+                     observable=from_chunk.observable)
+    return copy
+
+
+def copy_part(from_part, features=None):
+    """Make a copy of a Part. This works around the CAOM2 constraint
+    'org.postgresql.util.PSQLException: ERROR: duplicate key value violates
+    unique constraint "part_pkey"', when trying to use the same part
+    information in different artifacts (e.g. when referring to hdf5 files).
+
+    :param from_part Part of which to make a shallow copy
+    :param features which version of CAOM to use
+    :return a copy of the from_part, with chunks set to None
+    """
+    copy = Part(name=from_part.name,
+                product_type=from_part.product_type,
+                chunks=None)
+    if features is not None and features.supports_latest_caom:
+        copy.meta_producer = from_part.meta_producer
     return copy
 
 
