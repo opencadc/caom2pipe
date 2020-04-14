@@ -67,6 +67,7 @@
 # ***********************************************************************
 #
 
+import glob
 import os
 
 from mock import Mock
@@ -82,18 +83,40 @@ def test_list_dir_data_source():
     os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
     test_config = mc.Config()
     test_config.get_executors()
-    test_config.working_directory = '/test_files'
+    test_config.working_directory = '/test_files/1'
 
-    if not os.path.exists(f'{test_config.working_directory}/TEST.fits.gz'):
-        with open(f'{test_config.working_directory}/TEST.fits.gz', 'w') as f:
-            f.write('test content')
+    if not os.path.exists(test_config.working_directory):
+        os.mkdir(test_config.working_directory, 0x777)
+
+    for entry in ['TEST.fits.gz', 'TEST1.fits', 'TEST2.fits.fz', 'TEST3.hdf5']:
+        if not os.path.exists(f'{test_config.working_directory}/{entry}'):
+            with open(f'{test_config.working_directory}/{entry}', 'w') as f:
+                f.write('test content')
 
     test_chooser = tc.TestChooser()
     try:
         test_subject = dsc.ListDirDataSource(test_config, test_chooser)
         test_result = test_subject.get_work()
         assert test_result is not None, 'expected a result'
-        assert len(test_result) == 1, 'wrong result'
-        assert 'TEST.fits.gz' in test_result, 'wrong extensions'
+        assert len(test_result) == 4, 'wrong result'
+        assert 'TEST.fits.gz' in test_result, 'wrong gz extensions'
+        assert 'TEST1.fits.gz' in test_result, 'wrong no extension'
+        assert 'TEST2.fits.fz' in test_result, 'wrong fz extensions'
+        assert 'TEST3.hdf5' in test_result, 'wrong hdf5'
+
+        test_subject = dsc.ListDirDataSource(test_config, chooser=None)
+        test_result = test_subject.get_work()
+        assert test_result is not None, 'expected a result'
+        assert len(test_result) == 4, 'wrong result'
+        assert 'TEST.fits.gz' in test_result, 'wrong gz extensions'
+        assert 'TEST1.fits' in test_result, 'wrong no extension'
+        assert 'TEST2.fits.fz' in test_result, 'wrong fz extensions'
+        assert 'TEST3.hdf5' in test_result, 'wrong hdf5'
+
     finally:
         os.getcwd = get_cwd_orig
+
+        if os.path.exists(test_config.working_directory):
+            for entry in glob.glob(f'{test_config.working_directory}/*'):
+                os.unlink(entry)
+            os.rmdir(test_config.working_directory)

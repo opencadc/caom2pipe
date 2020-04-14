@@ -122,17 +122,19 @@ class ListDirDataSource(DataSource):
         for f in file_list:
             f_name = None
             if f.endswith('.fits') or f.endswith('.fits.gz'):
-                if (self._chooser is not None and
-                        self._chooser.use_compressed(f)):
-                    if f.endswith('.fits'):
-                        f_name = f'{f}.gz'
-                    else:
-                        f_name = f
+                if self._chooser is None:
+                    f_name = f
                 else:
-                    if f.endswith('.fits.gz'):
-                        f_name = f.replace('.gz', '')
+                    if self._chooser.use_compressed(f):
+                        if f.endswith('.fits'):
+                            f_name = f'{f}.gz'
+                        else:
+                            f_name = f
                     else:
-                        f_name = f
+                        if f.endswith('.fits.gz'):
+                            f_name = f.replace('.gz', '')
+                        else:
+                            f_name = f
             elif f.endswith('.header'):
                 f_name = f
             elif f.endswith('.fz'):
