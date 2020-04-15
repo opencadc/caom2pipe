@@ -398,12 +398,12 @@ class FilterMetadataCache(object):
                 else:
                     inst_r = self._repair_instrument_name(instrument)
                 fn_r = self._repair_filter_name(filter_name, inst_r)
-                cache_key = f'{inst_r}.{fn_r}'
-                if inst_r in fn_r:
-                    cache_key = fn_r
                 self._logger.debug(f'Looking for instrument {instrument}, '
                                    f'repaired instrument {inst_r}, filter '
                                    f'{filter_name} repaired filter {fn_r}.')
+                cache_key = f'{inst_r}.{fn_r}'
+                if inst_r in fn_r:
+                    cache_key = fn_r
                 result = self._cache.get(cache_key)
                 if result is None:
                     central_wl = None
