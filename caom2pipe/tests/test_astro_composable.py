@@ -182,7 +182,8 @@ def test_filter_md_cache(query_mock):
     assert ac.FilterMetadataCache.get_fwhm(test_result) == 414.98068085106, \
         'wrong fwhm'
     assert call_count == 1, 'wrong execution path'
-    assert 'unrepaired_fn' in test_subject._cache, 'cache broken'
+    assert 'unrepaired_inst.unrepaired_fn' in test_subject._cache, \
+        'cache broken'
 
     # cached, unrepaired
     test_result = test_subject.get_svo_filter(

@@ -393,17 +393,23 @@ class FilterMetadataCache(object):
                 result = self._cache.get(self._default_key)
             else:
 
-                inst_r = self._repair_instrument_name(instrument)
+                if isinstance(instrument, Enum):
+                    inst_r = self._repair_instrument_name(instrument.value)
+                else:
+                    inst_r = self._repair_instrument_name(instrument)
                 fn_r = self._repair_filter_name(filter_name, inst_r)
+                cache_key = f'{inst_r}.{fn_r}'
+                if inst_r in fn_r:
+                    cache_key = fn_r
                 self._logger.debug(f'Looking for instrument {instrument}, '
                                    f'repaired instrument {inst_r}, filter '
                                    f'{filter_name} repaired filter {fn_r}.')
-                result = self._cache.get(fn_r)
+                result = self._cache.get(cache_key)
                 if result is None:
                     central_wl = None
                     fwhm = None
                     # VERB=0 means return the smalled amount of filter metadata
-                    url = f'{SVO_URL}{self._telescope}/{inst_r}.{fn_r}&VERB=0'
+                    url = f'{SVO_URL}{self._telescope}/{cache_key}&VERB=0'
                     self._logger.info(f'Query for filter information: {url}')
                     vo_table, error_message = get_vo_table(url)
                     if vo_table is None:
@@ -415,7 +421,7 @@ class FilterMetadataCache(object):
                         central_wl = vo_table.get_field_by_id(
                             'WavelengthCen').value
                     result = {'cw': central_wl, 'fwhm': fwhm}
-                    self._cache[fn_r] = result
+                    self._cache[cache_key] = result
         else:
             # some recognizably wrong value
             logging.warning(f'Not connected - using default energy values for '

@@ -73,6 +73,7 @@ import os
 from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
 from caom2 import ValueCoord2D, CompositeObservation, Algorithm, Artifact, Part
+from caom2 import Instrument
 from caom2.diff import get_differences
 
 from caom2pipe import astro_composable as ac
@@ -81,7 +82,8 @@ from caom2pipe import manage_composable as mc
 __all__ = ['exec_footprintfinder', 'update_plane_provenance',
            'update_observation_members', 'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
-           'compare', 'copy_artifact', 'copy_chunk', 'copy_part']
+           'compare', 'copy_artifact', 'copy_chunk', 'copy_instrument',
+           'copy_part']
 
 
 def build_chunk_energy_range(chunk, filter_name, filter_md):
@@ -253,6 +255,20 @@ def copy_chunk(from_chunk, features=None):
                      polarization=from_chunk.polarization,
                      observable_axis=from_chunk.observable_axis,
                      observable=from_chunk.observable)
+    return copy
+
+
+def copy_instrument(from_instrument, new_name):
+    """Make a copy of an Instrument. This is the only way to change an
+    Instrument name.
+
+    :param from_instrument Instrument of which to make a copy
+    :param new_name String for Instrument.name parameter
+    :return a copy of the from_instrument
+    """
+    copy = Instrument(name=new_name)
+    for entry in from_instrument.keywords:
+        copy.keywords.add(entry)
     return copy
 
 
