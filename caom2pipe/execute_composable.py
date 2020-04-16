@@ -393,6 +393,11 @@ class CaomExecute(object):
             logging.warning(f'self.fname is None for {self.obs_id}.')
         else:
             try:
+                # this handles the case where the file name as stored in ad
+                # is not the same as the file name given for processing. This
+                # can occur most often when the file is named in list of work
+                # to be done without compression but stored with compression,
+                # or vice versa.
                 file_info = self.cadc_data_client.get_file_info(
                     self.archive, self.fname)
                 self.fname = file_info['name']

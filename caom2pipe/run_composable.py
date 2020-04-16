@@ -85,7 +85,7 @@ __all__ = ['TodoRunner', 'StateRunner', 'run_by_todo', 'run_by_state',
 
 class RunnerReport(object):
     """
-    This class contains metrics for reporting.
+    This class contains metrics for reporting on pipeline runs.
     """
     def __init__(self, location):
         self._location = os.path.basename(location)

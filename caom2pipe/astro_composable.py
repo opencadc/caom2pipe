@@ -363,6 +363,20 @@ class FilterMetadataCache(object):
         self._connected = connected
         self._logger = logging.getLogger()
 
+    def _get_cache_key(self, instrument, filter_name):
+        if isinstance(instrument, Enum):
+            inst_r = self._repair_instrument_name(instrument.value)
+        else:
+            inst_r = self._repair_instrument_name(instrument)
+        fn_r = self._repair_filter_name(filter_name, inst_r)
+        self._logger.debug(f'Looking for instrument {instrument}, '
+                           f'repaired instrument {inst_r}, filter '
+                           f'{filter_name} repaired filter {fn_r}.')
+        cache_key = f'{inst_r}.{fn_r}'
+        if inst_r in fn_r:
+            cache_key = fn_r
+        return cache_key
+
     def _repair_filter_name(self, coll_filter_name, instrument):
         result = self._repair_filter.get(coll_filter_name, coll_filter_name)
         if result is None or result in ['NONE', 'Open']:
@@ -392,22 +406,9 @@ class FilterMetadataCache(object):
                   instrument.value is None)) and filter_name is None):
                 result = self._cache.get(self._default_key)
             else:
-
-                if isinstance(instrument, Enum):
-                    inst_r = self._repair_instrument_name(instrument.value)
-                else:
-                    inst_r = self._repair_instrument_name(instrument)
-                fn_r = self._repair_filter_name(filter_name, inst_r)
-                self._logger.debug(f'Looking for instrument {instrument}, '
-                                   f'repaired instrument {inst_r}, filter '
-                                   f'{filter_name} repaired filter {fn_r}.')
-                cache_key = f'{inst_r}.{fn_r}'
-                if inst_r in fn_r:
-                    cache_key = fn_r
+                cache_key = self._get_cache_key(instrument, filter_name)
                 result = self._cache.get(cache_key)
                 if result is None:
-                    central_wl = None
-                    fwhm = None
                     # VERB=0 means return the smalled amount of filter metadata
                     url = f'{SVO_URL}{self._telescope}/{cache_key}&VERB=0'
                     self._logger.info(f'Query for filter information: {url}')
@@ -416,6 +417,10 @@ class FilterMetadataCache(object):
                         self._logger.warning(
                             f'Unable to download SVO filter information '
                             f'from {url} because {error_message}')
+                        # identify missing SVO lookups as un-defined cache
+                        # values
+                        fwhm = -2
+                        central_wl = -2
                     else:
                         fwhm = vo_table.get_field_by_id('FWHM').value
                         central_wl = vo_table.get_field_by_id(
@@ -427,6 +432,14 @@ class FilterMetadataCache(object):
             logging.warning(f'Not connected - using default energy values for '
                             f'{instrument} and {filter_name}')
             result = {'cw': -0.1, 'fwhm': -0.1}
+        return result
+
+    def is_cached(self, instrument, filter_name):
+        cache_key = self._get_cache_key(instrument, filter_name)
+        temp = self._cache.get(cache_key)
+        result = True
+        if temp.get('cw') == -2 and temp.get('fwhm') == -2:
+            result = False
         return result
 
     @staticmethod
