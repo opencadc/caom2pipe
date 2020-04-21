@@ -1625,21 +1625,27 @@ def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
         try:
             output, outerr = child.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            logging.warning(f'Command {cmd_array[0]} timed out.')
-            # child process is not killed if the timeout expires, so the
+            logging.warning(f'Command {cmd_array} timed out.')
+            # child process is not killed if the timeout expires, so kill the
             # process and finish communication
             child.kill()
+            child.stdout.close()
+            child.stderr.close()
             output, outerr = child.communicate()
         if len(output) > 0:
             log_level_as(f'stdout {output.decode("utf-8")}')
         if len(outerr) > 0:
             logging.error(f'stderr {outerr.decode("utf-8")}')
-        if child.returncode != 0:
-            logging.debug(f'Command {cmd} failed.')
-            raise CadcException(f'Command {cmd} had '
-                                f'stdout{output.decode("utf-8")} stderr '
-                                f'{outerr.decode("utf-8")}')
+        if child.returncode != 0 and child.returncode != -9:
+            # not killed due to a timeout
+            logging.warning(f'Command {cmd} failed with {child.returncode}.')
+            raise CadcException(f'Command {cmd} ::\nreturncode '
+                                f'{child.returncode}, \nstdout '
+                                f'\'{output.decode("utf-8")}\' \nstderr '
+                                f'\'{outerr.decode("utf-8")}\'')
     except Exception as e:
+        if isinstance(e, CadcException):
+            raise e
         logging.warning(f'Error with command {cmd}:: {e}')
         raise CadcException(f'Could not execute cmd {cmd}. Exception {e}')
 
