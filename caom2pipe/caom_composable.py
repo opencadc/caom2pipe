@@ -73,14 +73,15 @@ import os
 from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
 from caom2 import ValueCoord2D, CompositeObservation, Algorithm, Artifact, Part
-from caom2 import Instrument
+from caom2 import Instrument, TypedOrderedDict
 from caom2.diff import get_differences
 
 from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 
 __all__ = ['exec_footprintfinder', 'update_plane_provenance',
-           'update_observation_members', 'reset_energy', 'reset_position',
+           'update_observation_members', 'rename_parts',
+           'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
            'compare', 'copy_artifact', 'copy_chunk', 'copy_instrument',
            'copy_part']
@@ -386,6 +387,30 @@ def is_composite(headers, keyword_prefix='IMCMB'):
             result = True
             break
     return result
+
+
+def rename_parts(observation, headers):
+    """
+    By default, the values for part.name are extension numbers. Replace those
+    with the value of the EXTNAME keyword. The part.name is the key value in
+    the TypedOrderedDict, so this is done as a pop/push.
+
+    :param observation Observation instance with parts that may have the
+        wrong names
+    :param headers astropy FITS Header list
+    """
+    part_keys = [str(ii) for ii in range(1, headers[0].get('NEXTEND') + 1)]
+    for plane in observation.planes.values():
+        for artifact in plane.artifacts.values():
+            temp_parts = TypedOrderedDict(Part, )
+            for part_key in part_keys:
+                if part_key in artifact.parts:
+                    hdu_count = mc.to_int(part_key)
+                    temp = artifact.parts.pop(part_key)
+                    temp.name = headers[hdu_count].get('EXTNAME')
+                    temp_parts.add(temp)
+            for part in temp_parts.values():
+                artifact.parts.add(part)
 
 
 def update_plane_provenance(plane, headers, lookup, collection,
