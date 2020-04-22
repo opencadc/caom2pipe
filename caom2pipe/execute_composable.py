@@ -1566,6 +1566,7 @@ class OrganizeExecutes(object):
         self.rejected_fqn = None
         self.set_log_location(todo_file)
         self._success_count = 0
+        self._rejected_count = 0
         self._complete_record_count = 0
         self._timeout = 0
         self.observable = mc.Observable(mc.Rejected(self.rejected_fqn),
@@ -1597,6 +1598,13 @@ class OrganizeExecutes(object):
                 self.config.log_file_directory,
                 f'{todo_name}_rejected.yml')
             config.rejected_fqn = self.rejected_fqn
+
+    @property
+    def rejected_count(self):
+        """:return integer indicating how many inputs (files or observations,
+         depending on the configuration) have been rejected for well-known
+         reasons."""
+        return self._rejected_count
 
     @property
     def success_count(self):
@@ -1849,6 +1857,7 @@ class OrganizeExecutes(object):
                         retry.write(f'{storage_name.obs_id}\n')
         else:
             self.observable.rejected.record(reason, storage_name.obs_id)
+            self._rejected_count += 1
 
     def capture_success(self, obs_id, file_name, start_time):
         """Capture, with a timestamp, the successful observations/file names

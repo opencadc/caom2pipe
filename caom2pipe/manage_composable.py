@@ -343,12 +343,14 @@ class Rejected(object):
     BAD_DATA = 'bad_data'
     BAD_METADATA = 'bad_metadata'
     INVALID_FORMAT = 'is_valid_fails'
+    NO_INSTRUMENT = 'no_instrument'
     NO_PREVIEW = 'no_preview'
 
     # A map to the logging message string representing acknowledged rejections
     reasons = {BAD_DATA: 'Header missing END card',
                BAD_METADATA: 'Cannot build an observation',
                INVALID_FORMAT: 'Invalid observation ID',
+               NO_INSTRUMENT: 'Unknown value for instrument',
                NO_PREVIEW: '404 Client Error: Not Found for url'}
 
     def __init__(self, fqn):

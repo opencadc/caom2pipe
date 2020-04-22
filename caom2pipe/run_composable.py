@@ -95,6 +95,7 @@ class RunnerReport(object):
         self._retry_sum = 0
         self._errors_sum = 0
         self._success_sum = 0
+        self._rejection_sum = 0
 
     def add_entries(self, value):
         self._entries_sum += value
@@ -111,23 +112,27 @@ class RunnerReport(object):
     def add_successes(self, value):
         self._success_sum += value
 
+    def add_rejections(self, value):
+        self._rejection_sum += value
+
     def report(self):
         msg1 = f'Location: {self._location}'
         msg2 = f'Date: {datetime.isoformat(datetime.utcnow())}'
         execution_time = get_utc_now().timestamp() - self._start_time
         msg3 = f'Execution Time: {execution_time:.2f} s'
-        msg4 = f'   Number of Inputs: {self._entries_sum}'
-        msg5 = f'Number of Successes: {self._success_sum}'
-        msg6 = f' Number of Timeouts: {self._timeouts_sum}'
-        msg7 = f'  Number of Retries: {self._retry_sum}'
-        msg8 = f'   Number of Errors: {self._errors_sum}'
+        msg4 = f'    Number of Inputs: {self._entries_sum}'
+        msg5 = f' Number of Successes: {self._success_sum}'
+        msg6 = f'  Number of Timeouts: {self._timeouts_sum}'
+        msg7 = f'   Number of Retries: {self._retry_sum}'
+        msg8 = f'    Number of Errors: {self._errors_sum}'
+        msg9 = f'Number of Rejections: {self._rejection_sum}'
         max_length = max(len(msg1), len(msg2), len(msg3), len(msg4), len(msg5),
-                         len(msg6), len(msg7), len(msg8))
+                         len(msg6), len(msg7), len(msg8), len(msg9))
         msg_highlight = '*' * max_length
         msg = f'\n\n{msg_highlight}\n' \
               f'{msg1}\n{msg2}\n{msg3}\n{msg4}\n' \
               f'{msg5}\n{msg6}\n{msg7}\n{msg8}\n' \
-              f'{msg_highlight}\n\n'
+              f'{msg9}\n{msg_highlight}\n\n'
         return msg
 
 
@@ -215,6 +220,7 @@ class TodoRunner(object):
     def report(self):
         self._reporter.add_timeouts(self._organizer.timeouts)
         self._reporter.add_errors(self._config.count_retries())
+        self._reporter.add_rejections(self._organizer.rejected_count)
         msg = self._reporter.report()
         self._logger.info(msg)
         mc.write_to_file(self._config.report_fqn, msg)
