@@ -2521,3 +2521,10 @@ def find_missing(compare_this, to_this):
     :return: list of elements from to_this not in compare_this
     """
     return list(set(compare_this).difference(to_this))
+
+
+def delete_list_of_files(file_list):
+    for entry in file_list:
+        if os.path.exists(entry):
+            logging.warning(f'Deleting {entry}')
+            os.unlink(entry)

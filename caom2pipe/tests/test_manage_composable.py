@@ -151,6 +151,12 @@ def test_config_class():
         'wrong rejected file'
     assert test_config.rejected_fqn == f'{tc.TEST_DATA_DIR}/rejected.yml', \
         'wrong rejected fqn'
+    assert test_config.features.run_in_airflow is True, 'wrong runs in airflow'
+    assert test_config.features.supports_catalog is True, \
+        'wrong supports catalog'
+    test_config.features.supports_catalog = False
+    assert test_config.features.supports_catalog is False, \
+        'modified supports catalog'
 
 
 def test_exec_cmd():

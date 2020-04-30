@@ -84,7 +84,7 @@ __all__ = ['exec_footprintfinder', 'update_plane_provenance',
            'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
            'compare', 'copy_artifact', 'copy_chunk', 'copy_instrument',
-           'copy_part']
+           'copy_part', 'undo_astropy_cdfix_call']
 
 
 def build_chunk_energy_range(chunk, filter_name, filter_md):
@@ -527,3 +527,19 @@ def reset_observable(chunk):
     """
     chunk.observable = None
     chunk.observable_axis = None
+
+
+def undo_astropy_cdfix_call(chunk, time_delta):
+    """
+    undo the effects of the astropy cdfix call on a
+    matrix, in fits2caom2.WcsParser, which sets the
+    diagonal element of the matrix to unity if all
+    keywords associated with a given axis were
+    omitted.
+    See:
+    https://docs.astropy.org/en/stable/api/astropy.
+    wc.Wcsprm.html#astropy.wcs.Wcsprm.cdfix
+    """
+    if (time_delta == 0.0 and
+            chunk.time.axis.function.delta == 1.0):
+        chunk.time.axis.function.delta = 0.0
