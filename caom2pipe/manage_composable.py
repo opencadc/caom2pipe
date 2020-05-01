@@ -96,7 +96,7 @@ from astropy.table import Table
 from cadcutils import net, exceptions
 from cadcdata import CadcDataClient
 from cadctap import CadcTapClient
-from caom2 import ObservationWriter, ObservationReader, Artifact
+from caom2 import ObservationWriter, ObservationReader, Artifact, Observation
 from caom2 import ChecksumURI
 from caom2.obs_reader_writer import CAOM23_NAMESPACE
 from caom2.diff import get_differences
@@ -1181,6 +1181,92 @@ class Config(object):
         except (yaml.scanner.ScannerError, FileNotFoundError) as e:
             logging.error(e)
             return None
+
+
+class PreviewVisitor(object):
+    """
+    Common code for creating thumbnails and previews. Must be extended with
+    the code that does the actual generation.
+    """
+
+    def __init__(self, archive, release_type, mime_type='image/jpg', **kwargs):
+        self._archive = archive
+        self._release_type = release_type
+        self._mime_type = mime_type
+        self._logger = logging.getLogger(__name__)
+        self._working_dir = kwargs.get('working_directory', './')
+        self._cadc_client = kwargs.get('cadc_client')
+        if self._cadc_client is None:
+            self._logger.warning(
+                'Visitor needs a cadc_client parameter to store previews.')
+        self._stream = kwargs.get('stream')
+        if self._stream is None:
+            raise CadcException('Visitor needs a stream parameter.')
+        self._observable = kwargs.get('observable')
+        if self._observable is None:
+            raise CadcException('Visitor needs a observable parameter.')
+        self._science_file = kwargs.get('science_file')
+        if self._science_file is None:
+            raise CadcException('Visitor needs a science_file parameter.')
+        self._delete_list = []
+        # keys are uris, values are lists, where the 0th entry is a file name,
+        # and the 1th entry is the artifact type
+        self._previews = {}
+
+    def visit(self, observation):
+        check_param(observation, Observation)
+        count = 0
+        for plane in observation.planes.values():
+            for artifact in plane.artifacts.values():
+                if artifact.uri.endswith(self._science_file):
+                    count += self._do_prev(plane, observation.observation_id)
+
+            # add preview artifacts here, because cannot modify the OrderedDict
+            # collection while iterating through it
+            self._augment_artifacts(plane)
+
+        self._delete_list_of_files()
+        logging.info('Completed preview augmentation for {}.'.format(
+            observation.observation_id))
+        return {'artifacts': count}
+
+    def add_preview(self, uri, f_name, product_type):
+        self._previews[uri] = [f_name, product_type]
+
+    def add_to_delete(self, fqn):
+        self._delete_list.append(fqn)
+
+    def _augment_artifacts(self, plane):
+        for uri, entry in self._previews.items():
+            temp = None
+            if uri in plane.artifacts:
+                temp = plane.artifacts[uri]
+            f_name = entry[0]
+            product_type = entry[1]
+            fqn = f'{self._working_dir}/{f_name}'
+            plane.artifacts[uri] = get_artifact_metadata(
+                fqn, product_type, self._release_type, uri, temp)
+
+    def _do_prev(self, plane, obs_id):
+        self.generate_plots(obs_id)
+        self._store_smalls()
+        return len(self._previews)
+
+    def generate_plots(self, obs_id):
+        raise NotImplementedError
+
+    def _store_smalls(self):
+        for entry in self._previews.values():
+            data_put(self._cadc_client, self._working_dir, entry,
+                     self._archive, self._stream, mime_type=self._mime_type,
+                     metrics=self._observable.metrics)
+
+    def _delete_list_of_files(self):
+        if self._cadc_client is not None:
+            for entry in self._delete_list:
+                if os.path.exists(entry):
+                    self._logger.warning(f'Deleting {entry}')
+                    os.unlink(entry)
 
 
 class StorageName(object):
@@ -2521,10 +2607,3 @@ def find_missing(compare_this, to_this):
     :return: list of elements from to_this not in compare_this
     """
     return list(set(compare_this).difference(to_this))
-
-
-def delete_list_of_files(file_list):
-    for entry in file_list:
-        if os.path.exists(entry):
-            logging.warning(f'Deleting {entry}')
-            os.unlink(entry)
