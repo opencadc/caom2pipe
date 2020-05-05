@@ -71,7 +71,7 @@ import os
 import pytest
 import shutil
 
-no_matplotlib = False
+no_footprintfinder = False
 from caom2 import ValueCoord2D
 from caom2pipe import caom_composable as cc
 from caom2pipe import manage_composable as mc
@@ -79,15 +79,14 @@ from caom2pipe import manage_composable as mc
 import test_conf as tc
 
 try:
-    import matplotlib.pyplot as plt
-    x = plt.subplots(figsize=(3, 3))
-    no_matplotlib = False
+    import footprintfinder
+    no_footprintfinder = False
 except ImportError:
-    no_matplotlib = True
+    no_footprintfinder = True
 
 
-@pytest.mark.skipif(no_matplotlib,
-                    reason='matplotlib must be installed')
+@pytest.mark.skipif(no_footprintfinder,
+                    reason='footprintfinder must be installed')
 def test_exec_footprintfinder():
     test_obs_file = 'fpf_start_obs.xml'
     test_obs = mc.read_obs_from_file(os.path.join(

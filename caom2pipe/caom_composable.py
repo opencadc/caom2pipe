@@ -79,7 +79,8 @@ from caom2.diff import get_differences
 from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 
-__all__ = ['exec_footprintfinder', 'update_plane_provenance',
+__all__ = ['exec_footprintfinder', 'find_plane_and_artifact',
+           'update_plane_provenance',
            'update_observation_members', 'rename_parts',
            'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
@@ -373,6 +374,30 @@ def _handle_footprint_logs(log_file_directory, log_file):
     else:
         logging.debug('Removing footprint log file {}'.format(orig_log_fqn))
         os.unlink(orig_log_fqn)
+
+
+def find_plane_and_artifact(observation, product_id, uri):
+    """
+    Find the particular plane/artifact combination referenced by a product id
+    and URI.
+
+    :param observation: Observation in which to find the plane/artifact
+        combination
+    :param product_id: Plane lookup key
+    :param uri: Artifact lookup key
+    :return: Plane, Artifact instance that are referenced by the in-coming
+        parameters.
+    """
+    plane = None
+    artifact = None
+    if product_id in observation.planes.keys():
+        plane = observation.planes[product_id]
+        if uri in plane.artifacts.keys():
+            artifact = plane.artifacts[uri]
+        else:
+            # return all assigned a value, or all None
+            plane = None
+    return plane, artifact
 
 
 def is_composite(headers, keyword_prefix='IMCMB'):

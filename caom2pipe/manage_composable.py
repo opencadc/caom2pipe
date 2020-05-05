@@ -1222,12 +1222,8 @@ class PreviewVisitor(object):
         check_param(observation, Observation)
         count = 0
 
-        logging.error(f'{storage_name.product_id} {observation.planes.keys()}')
         if storage_name.product_id in observation.planes.keys():
             plane = observation.planes[storage_name.product_id]
-            logging.error(f'product id {storage_name.product_id} '
-                          f'{storage_name.file_uri} '
-                          f'{plane.artifacts.keys()}')
             if storage_name.file_uri in plane.artifacts.keys():
                 self._storage_name = storage_name
                 count += self._do_prev(plane, observation.observation_id)
