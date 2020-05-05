@@ -831,4 +831,4 @@ def test_visit(ad_put_mock):
     assert ad_put_mock.called, 'ad put mock not called'
     assert ad_put_mock.call_count == expected_call_count, \
         'ad put called wrong number of times'
-    assert False
+    # assert False

@@ -1301,7 +1301,7 @@ class PreviewVisitor(object):
 
     def _store_smalls(self):
         for entry in self._previews.values():
-            data_put(self._cadc_client, self._working_dir, entry,
+            data_put(self._cadc_client, self._working_dir, entry[0],
                      self._archive, self._stream, mime_type=self._mime_type,
                      metrics=self._observable.metrics)
 
