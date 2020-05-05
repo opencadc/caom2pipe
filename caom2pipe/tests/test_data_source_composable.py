@@ -69,6 +69,7 @@
 
 import glob
 import os
+import stat
 
 from mock import Mock
 
@@ -86,7 +87,9 @@ def test_list_dir_data_source():
     test_config.working_directory = '/test_files/1'
 
     if not os.path.exists(test_config.working_directory):
-        os.mkdir(test_config.working_directory, 0x777)
+        os.mkdir(test_config.working_directory)
+    os.chmod(test_config.working_directory,
+             stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
     for entry in ['TEST.fits.gz', 'TEST1.fits', 'TEST2.fits.fz', 'TEST3.hdf5']:
         if not os.path.exists(f'{test_config.working_directory}/{entry}'):

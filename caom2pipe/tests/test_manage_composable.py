@@ -105,7 +105,6 @@ def test_build_uri():
 
 
 def test_query_endpoint():
-
     with patch('requests.Session.get') as session_get_mock:
         test_result = mc.query_endpoint('https://localhost', timeout=25)
         assert test_result is not None, 'expected result'
@@ -765,14 +764,27 @@ def test_visit(ad_put_mock):
                                               **kwargs)
 
         def generate_plots(self, obs_id):
-            storage_name = tc.TestStorageName()
-            fqn = f'{self._working_dir}/{storage_name.prev}'
+            fqn = f'{self._working_dir}/{self._storage_name.prev}'
             with open(fqn, 'w') as f:
                 f.write('test content')
 
-            self.add_preview(storage_name.prev_uri, storage_name.prev,
+            self.add_preview(self._storage_name.prev_uri,
+                             self._storage_name.prev,
                              ProductType.THUMBNAIL)
             return 1
+
+    class VisitStorageName(tc.TestStorageName):
+
+        def __init__(self):
+            super(VisitStorageName, self).__init__()
+
+        @property
+        def product_id(self):
+            return test_product_id
+
+        @property
+        def file_uri(self):
+            return f'ad:VLASS/{test_file_name}'
 
     test_rejected = mc.Rejected(f'{tc.TEST_DATA_DIR}/rejected.yml')
     test_config = mc.Config()
@@ -793,8 +805,9 @@ def test_visit(ad_put_mock):
     assert len(obs.planes[test_product_id].artifacts) == 2, 'initial condition'
 
     try:
+        storage_name = VisitStorageName()
         test_subject = TestVisitor(**kwargs)
-        test_result = test_subject.visit(obs)
+        test_result = test_subject.visit(obs, storage_name)
     except Exception as e:
         import logging
         logging.error(e)
@@ -818,3 +831,4 @@ def test_visit(ad_put_mock):
     assert ad_put_mock.called, 'ad put mock not called'
     assert ad_put_mock.call_count == expected_call_count, \
         'ad put called wrong number of times'
+    assert False

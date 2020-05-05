@@ -1186,10 +1186,15 @@ class Config(object):
 class PreviewVisitor(object):
     """
     Common code for creating thumbnails and previews. Must be extended with
-    the code that does the actual generation.
+    the code that does the actual generation of thumbnail and preview
+    images.
+
+    This code takes care of adding artifacts to the Observation, placing the
+    files in CADC storage, and cleaning up things left behind on disk.
     """
 
     def __init__(self, archive, release_type, mime_type='image/jpg', **kwargs):
+        self._storage_name = None
         self._archive = archive
         self._release_type = release_type
         self._mime_type = mime_type
@@ -1213,19 +1218,37 @@ class PreviewVisitor(object):
         # and the 1th entry is the artifact type
         self._previews = {}
 
-    def visit(self, observation):
+    def visit(self, observation, storage_name):
         check_param(observation, Observation)
         count = 0
-        for plane in observation.planes.values():
-            for artifact in plane.artifacts.values():
-                if artifact.uri.endswith(self._science_file):
-                    count += self._do_prev(plane, observation.observation_id)
 
-            # add preview artifacts here, because cannot modify the OrderedDict
-            # collection while iterating through it
+        logging.error(f'{storage_name.product_id} {observation.planes.keys()}')
+        if storage_name.product_id in observation.planes.keys():
+            plane = observation.planes[storage_name.product_id]
+            logging.error(f'product id {storage_name.product_id} '
+                          f'{storage_name.file_uri} '
+                          f'{plane.artifacts.keys()}')
+            if storage_name.file_uri in plane.artifacts.keys():
+                self._storage_name = storage_name
+                count += self._do_prev(plane, observation.observation_id)
             self._augment_artifacts(plane)
 
-        self._delete_list_of_files()
+        # correct_plane = False
+        # for plane in observation.planes.values():
+        #     for artifact in plane.artifacts.values():
+        #         correct_plane = False
+        #         logging.error(f'uri {artifact.uri} file name '
+        #                       f'{self._science_file}')
+        #         if artifact.uri.endswith(self._science_file):
+        #             correct_plane = True
+        #             count += self._do_prev(plane, observation.observation_id)
+        #             break
+        #     # add preview artifacts here, because cannot modify the OrderedDict
+        #     # collection while iterating through it
+        #     if correct_plane:
+        #         self._augment_artifacts(plane)
+
+            self._delete_list_of_files()
         logging.info('Completed preview augmentation for {}.'.format(
             observation.observation_id))
         return {'artifacts': count}
@@ -1247,6 +1270,15 @@ class PreviewVisitor(object):
             plane.artifacts[uri] = get_artifact_metadata(
                 fqn, product_type, self._release_type, uri, temp)
 
+    def _delete_list_of_files(self):
+        # cadc_client will be None if executing a ScrapeModify task, so
+        # leave the files behind so the user can see them on disk.
+        if self._cadc_client is not None:
+            for entry in self._delete_list:
+                if os.path.exists(entry):
+                    self._logger.warning(f'Deleting {entry}')
+                    # os.unlink(entry)
+
     def _do_prev(self, plane, obs_id):
         self.generate_plots(obs_id)
         self._store_smalls()
@@ -1255,18 +1287,23 @@ class PreviewVisitor(object):
     def generate_plots(self, obs_id):
         raise NotImplementedError
 
+    @property
+    def science_file(self):
+        return self._science_file
+
+    @property
+    def storage_name(self):
+        return self._storage_name
+
+    @storage_name.setter
+    def storage_name(self, value):
+        self._storage_name = value
+
     def _store_smalls(self):
         for entry in self._previews.values():
             data_put(self._cadc_client, self._working_dir, entry,
                      self._archive, self._stream, mime_type=self._mime_type,
                      metrics=self._observable.metrics)
-
-    def _delete_list_of_files(self):
-        if self._cadc_client is not None:
-            for entry in self._delete_list:
-                if os.path.exists(entry):
-                    self._logger.warning(f'Deleting {entry}')
-                    os.unlink(entry)
 
 
 class StorageName(object):
