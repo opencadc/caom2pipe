@@ -1228,22 +1228,6 @@ class PreviewVisitor(object):
                 self._storage_name = storage_name
                 count += self._do_prev(plane, observation.observation_id)
             self._augment_artifacts(plane)
-
-        # correct_plane = False
-        # for plane in observation.planes.values():
-        #     for artifact in plane.artifacts.values():
-        #         correct_plane = False
-        #         logging.error(f'uri {artifact.uri} file name '
-        #                       f'{self._science_file}')
-        #         if artifact.uri.endswith(self._science_file):
-        #             correct_plane = True
-        #             count += self._do_prev(plane, observation.observation_id)
-        #             break
-        #     # add preview artifacts here, because cannot modify the OrderedDict
-        #     # collection while iterating through it
-        #     if correct_plane:
-        #         self._augment_artifacts(plane)
-
             self._delete_list_of_files()
         logging.info('Completed preview augmentation for {}.'.format(
             observation.observation_id))
@@ -1273,7 +1257,7 @@ class PreviewVisitor(object):
             for entry in self._delete_list:
                 if os.path.exists(entry):
                     self._logger.warning(f'Deleting {entry}')
-                    # os.unlink(entry)
+                    os.unlink(entry)
 
     def _do_prev(self, plane, obs_id):
         self.generate_plots(obs_id)
