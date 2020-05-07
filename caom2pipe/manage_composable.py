@@ -1193,7 +1193,7 @@ class PreviewVisitor(object):
     files in CADC storage, and cleaning up things left behind on disk.
     """
 
-    def __init__(self, archive, release_type, mime_type='image/jpg', **kwargs):
+    def __init__(self, archive, release_type, mime_type='image/jpeg', **kwargs):
         self._storage_name = None
         self._archive = archive
         self._release_type = release_type
