@@ -565,6 +565,8 @@ def undo_astropy_cdfix_call(chunk, time_delta):
     https://docs.astropy.org/en/stable/api/astropy.
     wc.Wcsprm.html#astropy.wcs.Wcsprm.cdfix
     """
-    if (time_delta == 0.0 and
+    if (time_delta == 0.0 and chunk.time is not None and
+            chunk.time.axis is not None and
+            chunk.time.axis.function is not None and
             chunk.time.axis.function.delta == 1.0):
         chunk.time.axis.function.delta = 0.0
