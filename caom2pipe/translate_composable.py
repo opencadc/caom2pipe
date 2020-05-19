@@ -3,7 +3,7 @@
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2019.                            (c) 2019.
+#  (c) 2020.                            (c) 2020.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -67,93 +67,44 @@
 # ***********************************************************************
 #
 
-import os
-import pytest
-import shutil
-
-no_footprintfinder = False
-from caom2 import ValueCoord2D
-from caom2pipe import caom_composable as cc
-from caom2pipe import manage_composable as mc
-
-import test_conf as tc
-
-try:
-    import footprintfinder
-    no_footprintfinder = False
-except ImportError:
-    no_footprintfinder = True
+from caom2 import TypedList, Chunk
+from caom2utils import FitsParser
 
 
-@pytest.mark.skipif(no_footprintfinder,
-                    reason='footprintfinder must be installed')
-def test_exec_footprintfinder():
-    test_obs_file = 'fpf_start_obs.xml'
-    test_obs = mc.read_obs_from_file(os.path.join(
-        tc.TEST_DATA_DIR, test_obs_file))
-    test_chunk = \
-        test_obs.planes['VLASS1.2.T07t14.J084202-123000.'
-                        'quicklook.v1'].artifacts[
-            'ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
-            'image.pbcor.tt0.subim.fits'].parts[
-            '0'].chunks.pop()
-    test_file_id = 'VLASS1.2.ql.T24t07.J065836+563000.10.2048.v1.I.iter1.' \
-                   'image.pbcor.tt0.subim'
-    test_file = os.path.join(tc.TEST_FILES_DIR, '{}.fits'.format(test_file_id))
-    if not os.path.exists(test_file):
-        shutil.copy(f'/usr/src/app/test_files/{test_file_id}.fits', test_file)
-    test_log_dir = os.path.join(tc.TEST_DATA_DIR, 'logs')
-    assert test_chunk is not None, 'chunk expected'
-    assert test_chunk.position is not None, 'position expected'
-    assert test_chunk.position.axis is not None, 'axis expected'
-    assert test_chunk.position.axis.bounds is None, 'bounds not expected'
-
-    cc.exec_footprintfinder(test_chunk, test_file, test_log_dir, test_file_id,
-                            '-t 10')
-    assert test_chunk is not None, 'chunk unchanged'
-    assert test_chunk.position is not None, 'position unchanged'
-    assert test_chunk.position.axis is not None, 'axis unchanged'
-    assert test_chunk.position.axis.bounds is not None, 'bounds expected'
-    assert len(test_chunk.position.axis.bounds.vertices) == 17, \
-        'wrong number of vertices'
-    assert test_chunk.position.axis.bounds.vertices[0] == \
-        ValueCoord2D(coord1=105.188421,
-                     coord2=55.98216), 'wrong first vertex'
-    assert test_chunk.position.axis.bounds.vertices[16] == \
-        ValueCoord2D(coord1=105.165491,
-                     coord2=56.050318), 'wrong last vertex'
-
-    if os.path.exists(test_file):
-        os.unlink(test_file)
+__all__ = ['add_headers_to_obs_by_blueprint']
 
 
-def test_reset():
-    test_obs_file = 'fpf_start_obs.xml'
-    test_obs = mc.read_obs_from_file(os.path.join(
-        tc.TEST_DATA_DIR, test_obs_file))
-    test_chunk = \
-        test_obs.planes['VLASS1.2.T07t14.J084202-123000.'
-                        'quicklook.v1'].artifacts[
-            'ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
-            'image.pbcor.tt0.subim.fits'].parts[
-            '0'].chunks.pop()
+def add_headers_to_obs_by_blueprint(obs, headers, blueprint, uri, product_id):
+    """
+    Common code that puts together knowledge of the blueprint and the
+    FitsParser to add information to an Observation.
 
-    assert test_chunk is not None, 'chunk expected'
-    assert test_chunk.position is not None, 'position expected'
-    assert test_chunk.position.axis is not None, 'axis expected'
-    assert test_chunk.position.axis.bounds is None, 'bounds not expected'
-    assert test_chunk.energy is not None, 'energy expected'
-    assert test_chunk.energy_axis is not None, 'energy axis expected'
+    :param obs Observation to be added to
+    :param headers astropy FITS headers with in-coming metadata
+    :param blueprint caom2utils.ObsBlueprint instance to map from the
+        metadata to the CAOM structure
+    :param uri Artifact URI to add to Observation instance
+    :param product_id Plane identifier, to know which plane to add
 
-    cc.reset_position(test_chunk)
-    assert test_chunk.position is None, 'position not expected'
-    assert test_chunk.position_axis_1 is None, 'axis 1 not expected'
-    assert test_chunk.position_axis_2 is None, 'axis 2 not expected'
+    """
+    parser = FitsParser(headers, blueprint, uri)
+    parser.augment_observation(obs, uri, product_id)
 
-    cc.reset_energy(test_chunk)
-    assert test_chunk.energy is None, 'energy not expected'
-    assert test_chunk.energy_axis is None, 'energy axis not expected'
-
-    cc.reset_observable(test_chunk)
-    assert test_chunk.observable is None, 'observable not expected'
-    assert test_chunk.observable_axis is None, 'observable axis not expected'
+    # re-home the chunk information to be consistent with accepted CAOM
+    # patterns of part/chunk relationship - i.e. part 0 never has chunks
+    # if the file being represented has extensions. This
+    # relationship gets missed when only using the headers[1:], so
+    # shift all the chunks up by one, and set the 0th to no chunks
+    for plane in obs.planes.values():
+        if plane.product_id != product_id:
+            continue
+        for artifact in plane.artifacts.values():
+            if artifact.uri == uri and len(artifact.parts) > 1:
+                count = len(artifact.parts)
+                ii = count
+                while ii > 1:
+                    part_ii_minus_1 = artifact.parts[str(ii-2)]
+                    part_ii = artifact.parts[str(ii-1)]
+                    part_ii.chunks[0] = part_ii_minus_1.chunks[0]
+                    ii -= 1
+                artifact.parts['0'].chunks = TypedList(Chunk, )

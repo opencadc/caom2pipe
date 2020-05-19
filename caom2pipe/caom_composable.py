@@ -70,23 +70,65 @@
 import logging
 import os
 
+from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
-from caom2 import ValueCoord2D, CompositeObservation, Algorithm
+from caom2 import ValueCoord2D, CompositeObservation, Algorithm, Artifact, Part
+from caom2 import Instrument, TypedOrderedDict
 from caom2.diff import get_differences
 
+from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 
-__all__ = ['exec_footprintfinder', 'update_plane_provenance',
-           'update_observation_members', 'reset_energy', 'reset_position',
+__all__ = ['exec_footprintfinder', 'find_plane_and_artifact',
+           'update_plane_provenance',
+           'update_observation_members', 'rename_parts',
+           'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
-           'compare']
+           'compare', 'copy_artifact', 'copy_chunk', 'copy_instrument',
+           'copy_part', 'undo_astropy_cdfix_call']
+
+
+def build_chunk_energy_range(chunk, filter_name, filter_md):
+    """
+    Set a range axis for chunk energy using central wavelength and FWHM.
+    Units are Angstroms. Axis is set to 4.
+
+    :param chunk: Chunk to add a CoordRange1D Axis to
+    :param filter_name: string to set to bandpassName
+    :param filter_md: dict with a 'cw' and 'fwhm' value
+    """
+    # If n_axis=1 (as I guess it will be for all but processes GRACES
+    # spectra now?) that means crpix=0.5 and the corresponding crval would
+    # central_wl - bandpass/2.0 (i.e. the minimum wavelength).   It is fine
+    # if you instead change crpix to 1.0.   I guess since the ‘range’ of
+    # one pixel is 0.5 to 1.5.
+
+    cw = ac.FilterMetadataCache.get_central_wavelength(filter_md)
+    fwhm = ac.FilterMetadataCache.get_fwhm(filter_md)
+    if cw is not None and fwhm is not None:
+        resolving_power = ac.FilterMetadataCache.get_resolving_power(filter_md)
+        axis = CoordAxis1D(axis=Axis(ctype='WAVE', cunit='A'))
+        ref_coord1 = RefCoord(0.5, cw - fwhm / 2.0)
+        ref_coord2 = RefCoord(1.5, cw + fwhm / 2.0)
+        axis.range = CoordRange1D(ref_coord1, ref_coord2)
+
+        energy = SpectralWCS(axis=axis,
+                             specsys='TOPOCENT',
+                             ssyssrc=None,
+                             ssysobs=None,
+                             bandpass_name=filter_name,
+                             resolving_power=resolving_power)
+        chunk.energy = energy
+        # PD - in general, do not set the energy_axis, unless the energy axis
+        # was really in the fits header
 
 
 def change_to_composite(observation, algorithm_name='composite',
-                        collection=None):
+                        collection=None, features=None):
     """For the case where a SimpleObservation needs to become a
     DerivedObservation."""
-    if collection is None or collection != 'CFHT':
+    if (collection is None or collection != 'CFHT' or
+            (features is not None and not features.supports_latest_caom)):
         return CompositeObservation(observation.collection,
                                     observation.observation_id,
                                     Algorithm(algorithm_name),
@@ -103,7 +145,7 @@ def change_to_composite(observation, algorithm_name='composite',
                                     observation.target_position)
     else:
         from caom2 import DerivedObservation
-        return DerivedObservation(observation.collection,
+        temp = DerivedObservation(observation.collection,
                                   observation.observation_id,
                                   Algorithm(algorithm_name),
                                   observation.sequence_number,
@@ -118,6 +160,8 @@ def change_to_composite(observation, algorithm_name='composite',
                                   observation.planes,
                                   observation.environment,
                                   observation.target_position)
+        temp.meta_producer = observation.meta_producer
+        return temp
 
 
 def compare(ex_fqn, act_fqn, entry):
@@ -138,6 +182,114 @@ def compare(ex_fqn, act_fqn, entry):
               f'instr {ex.instrument.name}\n{result_str}'
         return msg
     return None
+
+
+def copy_artifact(from_artifact, features=None):
+    """Make a copy of an artifact. This works around the CAOM2 constraint
+    'org.postgresql.util.PSQLException: ERROR: duplicate key value violates
+    unique constraint "artifact_pkey"', when trying to use the same artifact
+    information in different planes (e.g. when referring to the same
+    thumbnail and preview files).
+
+    :param from_artifact Artifact of which to make a shallow copy
+    :param features which version of CAOM to use
+    :return a copy of the from_artifact, with parts set to None
+    """
+    if features is not None and features.supports_latest_caom:
+        copy = Artifact(uri=from_artifact.uri,
+                        product_type=from_artifact.product_type,
+                        release_type=from_artifact.release_type,
+                        content_type=from_artifact.content_type,
+                        content_length=from_artifact.content_length,
+                        content_checksum=from_artifact.content_checksum,
+                        content_release=from_artifact.content_release,
+                        content_read_groups=from_artifact.content_read_groups,
+                        parts=None)
+    else:
+        copy = Artifact(uri=from_artifact.uri,
+                        product_type=from_artifact.product_type,
+                        release_type=from_artifact.release_type,
+                        content_type=from_artifact.content_type,
+                        content_length=from_artifact.content_length,
+                        content_checksum=from_artifact.content_checksum,
+                        parts=None)
+    return copy
+
+
+def copy_chunk(from_chunk, features=None):
+    """Make a copy of a Chunk. This works around the CAOM2 constraint
+    'org.postgresql.util.PSQLException: ERROR: duplicate key value violates
+    unique constraint "chunk_pkey"', when trying to use the same chunk
+    information in different parts (e.g. when referring to hdf5 files).
+
+    :param from_chunk Chunk of which to make a copy
+    :param features which version of CAOM to use
+    :return a copy of the from_chunk
+    """
+    if features is not None and features.supports_latest_caom:
+        copy = Chunk(product_type=from_chunk.product_type,
+                     naxis=from_chunk.naxis,
+                     position_axis_1=from_chunk.position_axis_1,
+                     position_axis_2=from_chunk.position_axis_2,
+                     position=from_chunk.position,
+                     energy_axis=from_chunk.energy_axis,
+                     energy=from_chunk.energy,
+                     time_axis=from_chunk.time_axis,
+                     time=from_chunk.time,
+                     custom_axis=from_chunk.custom_axis,
+                     custom=from_chunk.custom,
+                     polarization_axis=from_chunk.polarization_axis,
+                     polarization=from_chunk.polarization,
+                     observable_axis=from_chunk.observable_axis,
+                     observable=from_chunk.observable)
+        copy.meta_producer = from_chunk.meta_producer
+    else:
+        copy = Chunk(product_type=from_chunk.product_type,
+                     naxis=from_chunk.naxis,
+                     position_axis_1=from_chunk.position_axis_1,
+                     position_axis_2=from_chunk.position_axis_2,
+                     position=from_chunk.position,
+                     energy_axis=from_chunk.energy_axis,
+                     energy=from_chunk.energy,
+                     time_axis=from_chunk.time_axis,
+                     time=from_chunk.time,
+                     polarization_axis=from_chunk.polarization_axis,
+                     polarization=from_chunk.polarization,
+                     observable_axis=from_chunk.observable_axis,
+                     observable=from_chunk.observable)
+    return copy
+
+
+def copy_instrument(from_instrument, new_name):
+    """Make a copy of an Instrument. This is the only way to change an
+    Instrument name.
+
+    :param from_instrument Instrument of which to make a copy
+    :param new_name String for Instrument.name parameter
+    :return a copy of the from_instrument
+    """
+    copy = Instrument(name=new_name)
+    for entry in from_instrument.keywords:
+        copy.keywords.add(entry)
+    return copy
+
+
+def copy_part(from_part, features=None):
+    """Make a copy of a Part. This works around the CAOM2 constraint
+    'org.postgresql.util.PSQLException: ERROR: duplicate key value violates
+    unique constraint "part_pkey"', when trying to use the same part
+    information in different artifacts (e.g. when referring to hdf5 files).
+
+    :param from_part Part of which to make a shallow copy
+    :param features which version of CAOM to use
+    :return a copy of the from_part, with chunks set to None
+    """
+    copy = Part(name=from_part.name,
+                product_type=from_part.product_type,
+                chunks=None)
+    if features is not None and features.supports_latest_caom:
+        copy.meta_producer = from_part.meta_producer
+    return copy
 
 
 def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
@@ -224,7 +376,31 @@ def _handle_footprint_logs(log_file_directory, log_file):
         os.unlink(orig_log_fqn)
 
 
-def is_composite(headers):
+def find_plane_and_artifact(observation, product_id, uri):
+    """
+    Find the particular plane/artifact combination referenced by a product id
+    and URI.
+
+    :param observation: Observation in which to find the plane/artifact
+        combination
+    :param product_id: Plane lookup key
+    :param uri: Artifact lookup key
+    :return: Plane, Artifact instance that are referenced by the in-coming
+        parameters.
+    """
+    plane = None
+    artifact = None
+    if product_id in observation.planes.keys():
+        plane = observation.planes[product_id]
+        if uri in plane.artifacts.keys():
+            artifact = plane.artifacts[uri]
+        else:
+            # return all assigned a value, or all None
+            plane = None
+    return plane, artifact
+
+
+def is_composite(headers, keyword_prefix='IMCMB'):
     """All the logic to determine if a file name is part of a
     CompositeObservation, in one marvelous function."""
     result = False
@@ -232,10 +408,34 @@ def is_composite(headers):
     # look in the last header - IMCMB keywords are not in the zero'th header
     header = headers[-1]
     for ii in header:
-        if ii.startswith('IMCMB'):
+        if ii.startswith(keyword_prefix):
             result = True
             break
     return result
+
+
+def rename_parts(observation, headers):
+    """
+    By default, the values for part.name are extension numbers. Replace those
+    with the value of the EXTNAME keyword. The part.name is the key value in
+    the TypedOrderedDict, so this is done as a pop/push.
+
+    :param observation Observation instance with parts that may have the
+        wrong names
+    :param headers astropy FITS Header list
+    """
+    part_keys = [str(ii) for ii in range(1, headers[0].get('NEXTEND') + 1)]
+    for plane in observation.planes.values():
+        for artifact in plane.artifacts.values():
+            temp_parts = TypedOrderedDict(Part, )
+            for part_key in part_keys:
+                if part_key in artifact.parts:
+                    hdu_count = mc.to_int(part_key)
+                    temp = artifact.parts.pop(part_key)
+                    temp.name = headers[hdu_count].get('EXTNAME')
+                    temp_parts.add(temp)
+            for part in temp_parts.values():
+                artifact.parts.add(part)
 
 
 def update_plane_provenance(plane, headers, lookup, collection,
@@ -352,3 +552,21 @@ def reset_observable(chunk):
     """
     chunk.observable = None
     chunk.observable_axis = None
+
+
+def undo_astropy_cdfix_call(chunk, time_delta):
+    """
+    undo the effects of the astropy cdfix call on a
+    matrix, in fits2caom2.WcsParser, which sets the
+    diagonal element of the matrix to unity if all
+    keywords associated with a given axis were
+    omitted.
+    See:
+    https://docs.astropy.org/en/stable/api/astropy.
+    wc.Wcsprm.html#astropy.wcs.Wcsprm.cdfix
+    """
+    if (time_delta == 0.0 and chunk.time is not None and
+            chunk.time.axis is not None and
+            chunk.time.axis.function is not None and
+            chunk.time.axis.function.delta == 1.0):
+        chunk.time.axis.function.delta = 0.0

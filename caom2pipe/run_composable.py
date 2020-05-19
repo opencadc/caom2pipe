@@ -85,7 +85,7 @@ __all__ = ['TodoRunner', 'StateRunner', 'run_by_todo', 'run_by_state',
 
 class RunnerReport(object):
     """
-    This class contains metrics for reporting.
+    This class contains metrics for reporting on pipeline runs.
     """
     def __init__(self, location):
         self._location = os.path.basename(location)
@@ -95,6 +95,7 @@ class RunnerReport(object):
         self._retry_sum = 0
         self._errors_sum = 0
         self._success_sum = 0
+        self._rejection_sum = 0
 
     def add_entries(self, value):
         self._entries_sum += value
@@ -111,23 +112,27 @@ class RunnerReport(object):
     def add_successes(self, value):
         self._success_sum += value
 
+    def add_rejections(self, value):
+        self._rejection_sum += value
+
     def report(self):
         msg1 = f'Location: {self._location}'
         msg2 = f'Date: {datetime.isoformat(datetime.utcnow())}'
         execution_time = get_utc_now().timestamp() - self._start_time
         msg3 = f'Execution Time: {execution_time:.2f} s'
-        msg4 = f'   Number of Inputs: {self._entries_sum}'
-        msg5 = f'Number of Successes: {self._success_sum}'
-        msg6 = f' Number of Timeouts: {self._timeouts_sum}'
-        msg7 = f'  Number of Retries: {self._retry_sum}'
-        msg8 = f'   Number of Errors: {self._errors_sum}'
+        msg4 = f'    Number of Inputs: {self._entries_sum}'
+        msg5 = f' Number of Successes: {self._success_sum}'
+        msg6 = f'  Number of Timeouts: {self._timeouts_sum}'
+        msg7 = f'   Number of Retries: {self._retry_sum}'
+        msg8 = f'    Number of Errors: {self._errors_sum}'
+        msg9 = f'Number of Rejections: {self._rejection_sum}'
         max_length = max(len(msg1), len(msg2), len(msg3), len(msg4), len(msg5),
-                         len(msg6), len(msg7), len(msg8))
+                         len(msg6), len(msg7), len(msg8), len(msg9))
         msg_highlight = '*' * max_length
         msg = f'\n\n{msg_highlight}\n' \
               f'{msg1}\n{msg2}\n{msg3}\n{msg4}\n' \
               f'{msg5}\n{msg6}\n{msg7}\n{msg8}\n' \
-              f'{msg_highlight}\n\n'
+              f'{msg9}\n{msg_highlight}\n\n'
         return msg
 
 
@@ -169,8 +174,9 @@ class TodoRunner(object):
         self._logger.info('----------------------------------------')
 
     def _process_entry(self, entry):
-        storage_name = self._builder.build(entry)
+        storage_name = None
         try:
+            storage_name = self._builder.build(entry)
             if storage_name.is_valid():
                 result = self._organizer.do_one(storage_name)
             else:
@@ -180,6 +186,11 @@ class TodoRunner(object):
                                                 'Invalid name format.')
                 result = -1
         except Exception as e:
+            if storage_name is None:
+                # keep going through storage name build failures
+                self._logger.warning(f'Using a default StorageName instance '
+                                     f'for {entry}')
+                storage_name = mc.StorageName(obs_id=entry)
             self._organizer.capture_failure(storage_name,
                                             e=traceback.format_exc())
             self._logger.info(
@@ -209,6 +220,7 @@ class TodoRunner(object):
     def report(self):
         self._reporter.add_timeouts(self._organizer.timeouts)
         self._reporter.add_errors(self._config.count_retries())
+        self._reporter.add_rejections(self._organizer.rejected_count)
         msg = self._reporter.report()
         self._logger.info(msg)
         mc.write_to_file(self._config.report_fqn, msg)
@@ -287,7 +299,8 @@ class StateRunner(TodoRunner):
                 self._logger.info(
                     f'Processing from {prev_exec_time} to {exec_time}')
                 save_time = exec_time
-                entries = self._data_source.get_work(prev_exec_time, exec_time)
+                entries = self._data_source.get_time_box_work(
+                    prev_exec_time, exec_time)
                 num_entries = len(entries)
 
                 if num_entries > 0:
@@ -295,9 +308,6 @@ class StateRunner(TodoRunner):
                     self._organizer.complete_record_count = num_entries
                     self._organizer.success_count = 0
                     for entry in entries:
-                        self._logger.error(entry)
-                        self._logger.error(self._process_entry)
-                        self._logger.error(result)
                         entry_name = entry[0]
                         entry_time = ac.get_datetime(entry[1])
                         result |= self._process_entry(entry_name)
@@ -343,9 +353,22 @@ def get_utc_now():
 
 
 def run_by_todo(config=None, name_builder=None, chooser=None,
-                command_name=None, meta_visitors=[], data_visitors=[],
-                version=None):
-    """A default implementation for using the TodoRunner."""
+                command_name=None, meta_visitors=[], data_visitors=[]):
+    """A default implementation for using the TodoRunner.
+
+    :param config Config instance
+    :param name_builder NameBuilder extension that creates an instance of
+        a StorageName extension, from an entry from a DataSourceComposable
+        listing
+    :param command_name string that represents the specific pipeline
+        application name
+    :param meta_visitors list of modules with visit methods, that expect
+        the metadata of a work file to exist on disk
+    :param data_visitors list of modules with visit methods, that expect the
+        work file to exist on disk
+    :param chooser OrganizerChooser, if there's strange rules about file
+        naming.
+    """
     if config is None:
         config = mc.Config()
         config.get_executors()
@@ -362,9 +385,6 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser)
 
-    if version is not None:
-        logging.info(f'Pipeline version is {version}')
-
     runner = TodoRunner(config, organizer, name_builder, source)
     result = runner.run()
     result |= runner.run_retry()
@@ -375,7 +395,25 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
 def run_by_state(config=None, name_builder=None, command_name=None,
                  bookmark_name=None, meta_visitors=[], data_visitors=[],
                  end_time=None, chooser=None, source=None):
-    """A default implementation for using the StateRunner."""
+    """A default implementation for using the StateRunner.
+
+    :param config Config instance
+    :param name_builder NameBuilder extension that creates an instance of
+        a StorageName extension, from an entry from a DataSourceComposable
+        listing
+    :param command_name string that represents the specific pipeline
+        application name
+    :param bookmark_name string that represents the state.yml lookup value
+    :param meta_visitors list of modules with visit methods, that expect
+        the metadata of a work file to exist on disk
+    :param data_visitors list of modules with visit methods, that expect the
+        work file to exist on disk
+    :param end_time datetime for stopping a run, should be in UTC.
+    :param chooser OrganizerChooser, if there's strange rules about file
+        naming.
+    :param source DataSourceComposable extension that identifies work to be
+        done.
+    """
     if config is None:
         config = mc.Config()
         config.get_executors()

@@ -98,7 +98,7 @@ __all__ = ['convert_time', 'get_datetime', 'build_chunk_energy_bounds',
            'build_plane_time_sample', 'build_ra_dec_as_deg',
            'get_geocentric_location', 'get_location', 'get_timedelta_in_s',
            'make_headers_from_string', 'get_vo_table', 'read_fits_data',
-           'SVO_URL', 'FilterMetadataCache']
+           'read_fits_headers', 'SVO_URL', 'FilterMetadataCache']
 
 SVO_URL = 'http://svo2.cab.inta-csic.es/svo/theory/fps3/fps.php?ID='
 
@@ -148,21 +148,27 @@ def get_datetime(from_value):
     """
     result = None
     if from_value is not None:
-        try:
-            result = Time(from_value)
-        except ValueError:
-            # VLASS has a format astropy fails to understand '%H:%M:%S'
-            # CFHT 2019/11/26
-            # Gemini 2019-11-01 00:01:34.610517+00:00
-            if '+00:00' in from_value:
-                # because %z doesn't expect the ':' in the timezone field
-                from_value = from_value[:-6]
-            for fmt in ['%H:%M:%S', '%Y/%m/%d', '%Y-%m-%d %H:%M:%S.%f']:
-                try:
-                    result = Time(dt_datetime.strptime(from_value, fmt))
-                    break
-                except ValueError:
-                    pass
+        import numpy
+        # local import, in case the container is not provisioned with
+        # numpy
+        if isinstance(from_value, str):
+            try:
+                result = Time(from_value)
+            except ValueError:
+                # VLASS has a format astropy fails to understand '%H:%M:%S'
+                # CFHT 2019/11/26
+                # Gemini 2019-11-01 00:01:34.610517+00:00
+                if '+00:00' in from_value:
+                    # because %z doesn't expect the ':' in the timezone field
+                    from_value = from_value[:-6]
+                for fmt in ['%H:%M:%S', '%Y/%m/%d', '%Y-%m-%d %H:%M:%S.%f']:
+                    try:
+                        result = Time(dt_datetime.strptime(from_value, fmt))
+                        break
+                    except ValueError:
+                        pass
+        elif isinstance(from_value, numpy.int32):
+            result = Time(dt_datetime.fromtimestamp(from_value))
     if result is None:
         logging.error('Cannot parse datetime {}'.format(from_value))
     else:
@@ -319,6 +325,18 @@ def read_fits_data(fqn):
     return hdus
 
 
+def read_fits_headers(fqn):
+    """Read the headers from a fits file.
+    :param fqn a string representing the fully-qualified name of the fits
+        file.
+    :return fits file headers.
+    """
+    hdulist = fits.open(fqn, memmap=True, lazy_load_hdus=False)
+    hdulist.close()
+    headers = [h.header for h in hdulist]
+    return headers
+
+
 class FilterMetadataCache(object):
     """
     Cache the results of calls to the SVO filter service. As part of the
@@ -344,6 +362,20 @@ class FilterMetadataCache(object):
         # external connection, so the SVO query will fail, so don't try
         self._connected = connected
         self._logger = logging.getLogger()
+
+    def _get_cache_key(self, instrument, filter_name):
+        if isinstance(instrument, Enum):
+            inst_r = self._repair_instrument_name(instrument.value)
+        else:
+            inst_r = self._repair_instrument_name(instrument)
+        fn_r = self._repair_filter_name(filter_name, inst_r)
+        self._logger.debug(f'Looking for instrument {instrument}, '
+                           f'repaired instrument {inst_r}, filter '
+                           f'{filter_name} repaired filter {fn_r}.')
+        cache_key = f'{inst_r}.{fn_r}'
+        if inst_r in fn_r:
+            cache_key = fn_r
+        return cache_key
 
     def _repair_filter_name(self, coll_filter_name, instrument):
         result = self._repair_filter.get(coll_filter_name, coll_filter_name)
@@ -374,33 +406,40 @@ class FilterMetadataCache(object):
                   instrument.value is None)) and filter_name is None):
                 result = self._cache.get(self._default_key)
             else:
-
-                inst_r = self._repair_instrument_name(instrument)
-                fn_r = self._repair_filter_name(filter_name, inst_r)
-                self._logger.debug(f'Looking for instrument {instrument}, '
-                                   f'repaired instrument {inst_r}, filter '
-                                   f'{filter_name} repaired filter {fn_r}.')
-                result = self._cache.get(fn_r)
+                cache_key = self._get_cache_key(instrument, filter_name)
+                result = self._cache.get(cache_key)
                 if result is None:
-                    central_wl = None
-                    fwhm = None
                     # VERB=0 means return the smalled amount of filter metadata
-                    url = f'{SVO_URL}{self._telescope}/{inst_r}.{fn_r}&VERB=0'
+                    url = f'{SVO_URL}{self._telescope}/{cache_key}&VERB=0'
                     self._logger.info(f'Query for filter information: {url}')
                     vo_table, error_message = get_vo_table(url)
                     if vo_table is None:
                         self._logger.warning(
                             f'Unable to download SVO filter information '
                             f'from {url} because {error_message}')
+                        # identify missing SVO lookups as un-defined cache
+                        # values
+                        fwhm = -2
+                        central_wl = -2
                     else:
                         fwhm = vo_table.get_field_by_id('FWHM').value
                         central_wl = vo_table.get_field_by_id(
                             'WavelengthCen').value
                     result = {'cw': central_wl, 'fwhm': fwhm}
-                    self._cache[fn_r] = result
+                    self._cache[cache_key] = result
         else:
             # some recognizably wrong value
+            logging.warning(f'Not connected - using default energy values for '
+                            f'{instrument} and {filter_name}')
             result = {'cw': -0.1, 'fwhm': -0.1}
+        return result
+
+    def is_cached(self, instrument, filter_name):
+        cache_key = self._get_cache_key(instrument, filter_name)
+        temp = self._cache.get(cache_key)
+        result = True
+        if temp.get('cw') == -2 and temp.get('fwhm') == -2:
+            result = False
         return result
 
     @staticmethod
@@ -415,4 +454,13 @@ class FilterMetadataCache(object):
         result = None
         if energy is not None:
             result = energy.get('fwhm')
+        return result
+
+    @staticmethod
+    def get_resolving_power(energy):
+        cw = FilterMetadataCache.get_central_wavelength(energy)
+        fwhm = FilterMetadataCache.get_fwhm(energy)
+        result = None
+        if cw is not None and fwhm is not None:
+            result = cw / fwhm
         return result

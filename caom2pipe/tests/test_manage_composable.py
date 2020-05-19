@@ -105,7 +105,6 @@ def test_build_uri():
 
 
 def test_query_endpoint():
-
     with patch('requests.Session.get') as session_get_mock:
         test_result = mc.query_endpoint('https://localhost', timeout=25)
         assert test_result is not None, 'expected result'
@@ -151,6 +150,12 @@ def test_config_class():
         'wrong rejected file'
     assert test_config.rejected_fqn == f'{tc.TEST_DATA_DIR}/rejected.yml', \
         'wrong rejected fqn'
+    assert test_config.features.run_in_airflow is True, 'wrong runs in airflow'
+    assert test_config.features.supports_catalog is True, \
+        'wrong supports catalog'
+    test_config.features.supports_catalog = False
+    assert test_config.features.supports_catalog is False, \
+        'modified supports catalog'
 
 
 def test_exec_cmd():
@@ -281,14 +286,18 @@ def test_get_artifact_metadata():
 @patch('cadcdata.core.CadcDataClient')
 @patch('caom2pipe.manage_composable.Metrics')
 def test_data_put(mock_metrics, mock_client):
-    mc.data_put(mock_client, tc.TEST_DATA_DIR, 'TEST.fits', 'TEST', 'default',
+    if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
+        with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
+            f.write('test content')
+
+    mc.data_put(mock_client, tc.TEST_FILES_DIR, 'TEST.fits', 'TEST', 'default',
                 metrics=mock_metrics)
     mock_client.put_file.assert_called_with(
         'TEST', 'TEST.fits', archive_stream='default',
         md5_check=True, mime_encoding=None, mime_type=None), 'mock not called'
     assert mock_metrics.observe.called, 'mock not called'
     args, kwargs = mock_metrics.observe.call_args
-    assert args[2] == 0, 'wrong size'
+    assert args[2] == 12, 'wrong size'
     assert args[3] == 'put', 'wrong endpoint'
     assert args[4] == 'data', 'wrong service'
     assert args[5] == 'TEST.fits', 'wrong id'
@@ -742,3 +751,84 @@ def test_query_tap(caps_mock, base_mock, test_config):
     assert result is not None, 'expect a result'
     assert len(result) == 1, 'wrong amount of test data'
     assert result['count'] == 3212556, 'wrong test data'
+
+
+@patch('caom2pipe.manage_composable.data_put')
+def test_visit(ad_put_mock):
+
+    class TestVisitor(mc.PreviewVisitor):
+
+        def __init__(self, **kwargs):
+            super(TestVisitor, self).__init__(archive='VLASS',
+                                              release_type=ReleaseType.META,
+                                              **kwargs)
+
+        def generate_plots(self, obs_id):
+            fqn = f'{self._working_dir}/{self._storage_name.prev}'
+            with open(fqn, 'w') as f:
+                f.write('test content')
+
+            self.add_preview(self._storage_name.prev_uri,
+                             self._storage_name.prev,
+                             ProductType.THUMBNAIL)
+            return 1
+
+    class VisitStorageName(tc.TestStorageName):
+
+        def __init__(self):
+            super(VisitStorageName, self).__init__()
+
+        @property
+        def product_id(self):
+            return test_product_id
+
+        @property
+        def file_uri(self):
+            return f'ad:VLASS/{test_file_name}'
+
+    test_rejected = mc.Rejected(f'{tc.TEST_DATA_DIR}/rejected.yml')
+    test_config = mc.Config()
+    test_observable = mc.Observable(test_rejected, mc.Metrics(test_config))
+    cadc_client_mock = Mock()
+
+    test_product_id = 'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
+    test_file_name = 'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.' \
+                     'image.pbcor.tt0.subim.fits'
+
+    kwargs = {'working_directory': tc.TEST_FILES_DIR,
+              'cadc_client': cadc_client_mock,
+              'stream': 'stream',
+              'observable': test_observable,
+              'science_file': test_file_name}
+
+    obs = mc.read_obs_from_file(f'{tc.TEST_DATA_DIR}/fpf_start_obs.xml')
+    assert len(obs.planes[test_product_id].artifacts) == 2, 'initial condition'
+
+    try:
+        storage_name = VisitStorageName()
+        test_subject = TestVisitor(**kwargs)
+        test_result = test_subject.visit(obs, storage_name)
+    except Exception as e:
+        import logging
+        logging.error(e)
+        import traceback
+        logging.error(traceback.format_exc())
+        assert False, f'{str(e)}'
+
+    assert test_result is not None, f'expect a result'
+
+    check_number = 1
+    end_artifact_count = 3
+    expected_call_count = 1
+    assert test_result['artifacts'] == check_number, 'artifact not added'
+    assert len(obs.planes[test_product_id].artifacts) == \
+        end_artifact_count, f'new artifacts'
+
+    test_preview_uri = 'ad:TEST/test_obs_id_prev.jpg'
+    assert test_preview_uri in obs.planes[test_product_id].artifacts.keys(), \
+        'no preview'
+
+    assert ad_put_mock.called, 'ad put mock not called'
+    assert ad_put_mock.call_count == expected_call_count, \
+        'ad put called wrong number of times'
+    # assert False

@@ -67,93 +67,59 @@
 # ***********************************************************************
 #
 
+import glob
 import os
-import pytest
-import shutil
+import stat
 
-no_footprintfinder = False
-from caom2 import ValueCoord2D
-from caom2pipe import caom_composable as cc
+from mock import Mock
+
+from caom2pipe import data_source_composable as dsc
 from caom2pipe import manage_composable as mc
 
 import test_conf as tc
 
-try:
-    import footprintfinder
-    no_footprintfinder = False
-except ImportError:
-    no_footprintfinder = True
 
+def test_list_dir_data_source():
+    get_cwd_orig = os.getcwd
+    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+    test_config = mc.Config()
+    test_config.get_executors()
+    test_config.working_directory = '/test_files/1'
 
-@pytest.mark.skipif(no_footprintfinder,
-                    reason='footprintfinder must be installed')
-def test_exec_footprintfinder():
-    test_obs_file = 'fpf_start_obs.xml'
-    test_obs = mc.read_obs_from_file(os.path.join(
-        tc.TEST_DATA_DIR, test_obs_file))
-    test_chunk = \
-        test_obs.planes['VLASS1.2.T07t14.J084202-123000.'
-                        'quicklook.v1'].artifacts[
-            'ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
-            'image.pbcor.tt0.subim.fits'].parts[
-            '0'].chunks.pop()
-    test_file_id = 'VLASS1.2.ql.T24t07.J065836+563000.10.2048.v1.I.iter1.' \
-                   'image.pbcor.tt0.subim'
-    test_file = os.path.join(tc.TEST_FILES_DIR, '{}.fits'.format(test_file_id))
-    if not os.path.exists(test_file):
-        shutil.copy(f'/usr/src/app/test_files/{test_file_id}.fits', test_file)
-    test_log_dir = os.path.join(tc.TEST_DATA_DIR, 'logs')
-    assert test_chunk is not None, 'chunk expected'
-    assert test_chunk.position is not None, 'position expected'
-    assert test_chunk.position.axis is not None, 'axis expected'
-    assert test_chunk.position.axis.bounds is None, 'bounds not expected'
+    if not os.path.exists(test_config.working_directory):
+        os.mkdir(test_config.working_directory)
+    os.chmod(test_config.working_directory,
+             stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
 
-    cc.exec_footprintfinder(test_chunk, test_file, test_log_dir, test_file_id,
-                            '-t 10')
-    assert test_chunk is not None, 'chunk unchanged'
-    assert test_chunk.position is not None, 'position unchanged'
-    assert test_chunk.position.axis is not None, 'axis unchanged'
-    assert test_chunk.position.axis.bounds is not None, 'bounds expected'
-    assert len(test_chunk.position.axis.bounds.vertices) == 17, \
-        'wrong number of vertices'
-    assert test_chunk.position.axis.bounds.vertices[0] == \
-        ValueCoord2D(coord1=105.188421,
-                     coord2=55.98216), 'wrong first vertex'
-    assert test_chunk.position.axis.bounds.vertices[16] == \
-        ValueCoord2D(coord1=105.165491,
-                     coord2=56.050318), 'wrong last vertex'
+    for entry in ['TEST.fits.gz', 'TEST1.fits', 'TEST2.fits.fz', 'TEST3.hdf5']:
+        if not os.path.exists(f'{test_config.working_directory}/{entry}'):
+            with open(f'{test_config.working_directory}/{entry}', 'w') as f:
+                f.write('test content')
 
-    if os.path.exists(test_file):
-        os.unlink(test_file)
+    test_chooser = tc.TestChooser()
+    try:
+        test_subject = dsc.ListDirDataSource(test_config, test_chooser)
+        test_result = test_subject.get_work()
+        assert test_result is not None, 'expected a result'
+        assert len(test_result) == 4, 'wrong result'
+        assert 'TEST.fits.gz' in test_result, 'wrong gz extensions'
+        assert 'TEST1.fits.gz' in test_result, 'wrong no extension'
+        assert 'TEST2.fits.fz' in test_result, 'wrong fz extensions'
+        assert 'TEST3.hdf5' in test_result, 'wrong hdf5'
 
+        test_subject = dsc.ListDirDataSource(test_config, chooser=None)
+        test_result = test_subject.get_work()
+        assert test_result is not None, 'expected a result'
+        assert len(test_result) == 4, 'wrong result'
+        assert 'TEST.fits.gz' in test_result, 'wrong gz extensions'
+        assert 'TEST1.fits' in test_result, 'wrong no extension'
+        assert 'TEST2.fits.fz' in test_result, 'wrong fz extensions'
+        assert 'TEST3.hdf5' in test_result, 'wrong hdf5'
 
-def test_reset():
-    test_obs_file = 'fpf_start_obs.xml'
-    test_obs = mc.read_obs_from_file(os.path.join(
-        tc.TEST_DATA_DIR, test_obs_file))
-    test_chunk = \
-        test_obs.planes['VLASS1.2.T07t14.J084202-123000.'
-                        'quicklook.v1'].artifacts[
-            'ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
-            'image.pbcor.tt0.subim.fits'].parts[
-            '0'].chunks.pop()
+    finally:
+        os.getcwd = get_cwd_orig
 
-    assert test_chunk is not None, 'chunk expected'
-    assert test_chunk.position is not None, 'position expected'
-    assert test_chunk.position.axis is not None, 'axis expected'
-    assert test_chunk.position.axis.bounds is None, 'bounds not expected'
-    assert test_chunk.energy is not None, 'energy expected'
-    assert test_chunk.energy_axis is not None, 'energy axis expected'
-
-    cc.reset_position(test_chunk)
-    assert test_chunk.position is None, 'position not expected'
-    assert test_chunk.position_axis_1 is None, 'axis 1 not expected'
-    assert test_chunk.position_axis_2 is None, 'axis 2 not expected'
-
-    cc.reset_energy(test_chunk)
-    assert test_chunk.energy is None, 'energy not expected'
-    assert test_chunk.energy_axis is None, 'energy axis not expected'
-
-    cc.reset_observable(test_chunk)
-    assert test_chunk.observable is None, 'observable not expected'
-    assert test_chunk.observable_axis is None, 'observable axis not expected'
+        if os.path.exists(test_config.working_directory):
+            for entry in glob.glob(f'{test_config.working_directory}/*'):
+                os.unlink(entry)
+            os.rmdir(test_config.working_directory)

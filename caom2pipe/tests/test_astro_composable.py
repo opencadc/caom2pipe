@@ -182,7 +182,8 @@ def test_filter_md_cache(query_mock):
     assert ac.FilterMetadataCache.get_fwhm(test_result) == 414.98068085106, \
         'wrong fwhm'
     assert call_count == 1, 'wrong execution path'
-    assert 'unrepaired_fn' in test_subject._cache, 'cache broken'
+    assert 'unrepaired_inst.unrepaired_fn' in test_subject._cache, \
+        'cache broken'
 
     # cached, unrepaired
     test_result = test_subject.get_svo_filter(
@@ -207,6 +208,6 @@ def test_filter_md_cache(query_mock):
     test_result = test_subject.get_svo_filter('undefined', 'undefined')
     assert test_result is not None, 'expect result'
     assert ac.FilterMetadataCache.get_central_wavelength(
-        test_result) is None, 'wrong cw'
-    assert ac.FilterMetadataCache.get_fwhm(test_result) is None, \
+        test_result) == -2, 'wrong cw'
+    assert ac.FilterMetadataCache.get_fwhm(test_result) == -2, \
         'wrong fwhm'

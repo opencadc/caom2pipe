@@ -83,7 +83,7 @@ import test_conf as tc
 
 @patch('caom2pipe.manage_composable.query_tap_client')
 def test_storage_time_box_query(query_mock):
-    def _mock_query(arg1, arg2, arg3):
+    def _mock_query(arg1, arg2):
         return Table.read(
             'fileName,ingestDate\n'
             'NEOS_SCI_2015347000000_clean.fits,2019-10-23T16:27:19.000\n'

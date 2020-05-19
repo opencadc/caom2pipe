@@ -96,7 +96,7 @@ from astropy.table import Table
 from cadcutils import net, exceptions
 from cadcdata import CadcDataClient
 from cadctap import CadcTapClient
-from caom2 import ObservationWriter, ObservationReader, Artifact
+from caom2 import ObservationWriter, ObservationReader, Artifact, Observation
 from caom2 import ChecksumURI
 from caom2.obs_reader_writer import CAOM23_NAMESPACE
 from caom2.diff import get_differences
@@ -104,7 +104,8 @@ from caom2.diff import get_differences
 
 __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
-           'get_cadc_headers_client', 'get_cadc_meta', 'get_file_meta',
+           'get_cadc_headers_client', 'get_cadc_meta',
+           'get_cadc_meta_client', 'get_file_meta',
            'decompose_lineage', 'check_param', 'read_csv_file',
            'write_obs_to_file', 'read_obs_from_file',
            'Features', 'write_to_file',
@@ -342,12 +343,14 @@ class Rejected(object):
     BAD_DATA = 'bad_data'
     BAD_METADATA = 'bad_metadata'
     INVALID_FORMAT = 'is_valid_fails'
+    NO_INSTRUMENT = 'no_instrument'
     NO_PREVIEW = 'no_preview'
 
     # A map to the logging message string representing acknowledged rejections
     reasons = {BAD_DATA: 'Header missing END card',
                BAD_METADATA: 'Cannot build an observation',
                INVALID_FORMAT: 'Invalid observation ID',
+               NO_INSTRUMENT: 'Unknown value for instrument',
                NO_PREVIEW: '404 Client Error: Not Found for url'}
 
     def __init__(self, fqn):
@@ -561,6 +564,15 @@ class CaomName(object):
         """:return A string that conforms to the Observation URI
         specification from CAOM."""
         return 'caom:{}/{}'.format(collection, obs_id)
+
+    @staticmethod
+    def decompose_provenance_input(uri):
+        # looks like:
+        # caom:OMM/C170323_0151_CAL/C170323_0151_CAL
+        bits = uri.split('/')
+        obs_id = bits[1]
+        product_id = bits[2]
+        return obs_id, product_id
 
 
 class Config(object):
@@ -1171,6 +1183,109 @@ class Config(object):
             return None
 
 
+class PreviewVisitor(object):
+    """
+    Common code for creating thumbnails and previews. Must be extended with
+    the code that does the actual generation of thumbnail and preview
+    images.
+
+    This code takes care of adding artifacts to the Observation, placing the
+    files in CADC storage, and cleaning up things left behind on disk.
+    """
+
+    def __init__(self, archive, release_type, mime_type='image/jpeg', **kwargs):
+        self._storage_name = None
+        self._archive = archive
+        self._release_type = release_type
+        self._mime_type = mime_type
+        self._logger = logging.getLogger(__name__)
+        self._working_dir = kwargs.get('working_directory', './')
+        self._cadc_client = kwargs.get('cadc_client')
+        if self._cadc_client is None:
+            self._logger.warning(
+                'Visitor needs a cadc_client parameter to store previews.')
+        self._stream = kwargs.get('stream')
+        if self._stream is None:
+            raise CadcException('Visitor needs a stream parameter.')
+        self._observable = kwargs.get('observable')
+        if self._observable is None:
+            raise CadcException('Visitor needs a observable parameter.')
+        self._science_file = kwargs.get('science_file')
+        if self._science_file is None:
+            raise CadcException('Visitor needs a science_file parameter.')
+        self._delete_list = []
+        # keys are uris, values are lists, where the 0th entry is a file name,
+        # and the 1th entry is the artifact type
+        self._previews = {}
+
+    def visit(self, observation, storage_name):
+        check_param(observation, Observation)
+        count = 0
+
+        if storage_name.product_id in observation.planes.keys():
+            plane = observation.planes[storage_name.product_id]
+            if storage_name.file_uri in plane.artifacts.keys():
+                self._storage_name = storage_name
+                count += self._do_prev(plane, observation.observation_id)
+            self._augment_artifacts(plane)
+            self._delete_list_of_files()
+        logging.info('Completed preview augmentation for {}.'.format(
+            observation.observation_id))
+        return {'artifacts': count}
+
+    def add_preview(self, uri, f_name, product_type):
+        self._previews[uri] = [f_name, product_type]
+
+    def add_to_delete(self, fqn):
+        self._delete_list.append(fqn)
+
+    def _augment_artifacts(self, plane):
+        for uri, entry in self._previews.items():
+            temp = None
+            if uri in plane.artifacts:
+                temp = plane.artifacts[uri]
+            f_name = entry[0]
+            product_type = entry[1]
+            fqn = f'{self._working_dir}/{f_name}'
+            plane.artifacts[uri] = get_artifact_metadata(
+                fqn, product_type, self._release_type, uri, temp)
+
+    def _delete_list_of_files(self):
+        # cadc_client will be None if executing a ScrapeModify task, so
+        # leave the files behind so the user can see them on disk.
+        if self._cadc_client is not None:
+            for entry in self._delete_list:
+                if os.path.exists(entry):
+                    self._logger.warning(f'Deleting {entry}')
+                    os.unlink(entry)
+
+    def _do_prev(self, plane, obs_id):
+        self.generate_plots(obs_id)
+        self._store_smalls()
+        return len(self._previews)
+
+    def generate_plots(self, obs_id):
+        raise NotImplementedError
+
+    @property
+    def science_file(self):
+        return self._science_file
+
+    @property
+    def storage_name(self):
+        return self._storage_name
+
+    @storage_name.setter
+    def storage_name(self, value):
+        self._storage_name = value
+
+    def _store_smalls(self):
+        for entry in self._previews.values():
+            data_put(self._cadc_client, self._working_dir, entry[0],
+                     self._archive, self._stream, mime_type=self._mime_type,
+                     metrics=self._observable.metrics)
+
+
 class StorageName(object):
     """Naming rules for a collection:
     - support mixed-case file name storage
@@ -1519,7 +1634,7 @@ class Validator(object):
 def append_as_array(append_to, key, value):
     """Because I've written this more than once ... code to append to an
     existing array entry in a dict, if the key already exists. There may be
-    a more elegant way to do this, in which case, this function can be
+    a more elegant way to do this, in which case, the more elegant way can be
     implemented.
     :param append_to dict
     :param key may already exist in dict
@@ -1615,21 +1730,27 @@ def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
         try:
             output, outerr = child.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            logging.warning(f'Command {cmd_array[0]} timed out.')
-            # child process is not killed if the timeout expires, so the
+            logging.warning(f'Command {cmd_array} timed out.')
+            # child process is not killed if the timeout expires, so kill the
             # process and finish communication
             child.kill()
+            child.stdout.close()
+            child.stderr.close()
             output, outerr = child.communicate()
         if len(output) > 0:
             log_level_as(f'stdout {output.decode("utf-8")}')
         if len(outerr) > 0:
             logging.error(f'stderr {outerr.decode("utf-8")}')
-        if child.returncode != 0:
-            logging.debug(f'Command {cmd} failed.')
-            raise CadcException(f'Command {cmd} had '
-                                f'stdout{output.decode("utf-8")} stderr '
-                                f'{outerr.decode("utf-8")}')
+        if child.returncode != 0 and child.returncode != -9:
+            # not killed due to a timeout
+            logging.warning(f'Command {cmd} failed with {child.returncode}.')
+            raise CadcException(f'Command {cmd} ::\nreturncode '
+                                f'{child.returncode}, \nstdout '
+                                f'\'{output.decode("utf-8")}\' \nstderr '
+                                f'\'{outerr.decode("utf-8")}\'')
     except Exception as e:
+        if isinstance(e, CadcException):
+            raise e
         logging.warning(f'Error with command {cmd}:: {e}')
         raise CadcException(f'Could not execute cmd {cmd}. Exception {e}')
 
@@ -1812,6 +1933,17 @@ def get_cadc_meta(netrc_fqn, archive, fname):
     return client.get_file_info(archive, fname)
 
 
+def get_cadc_meta_client(client, archive, fname):
+    """
+    Gets contentType, contentLength and contentChecksum of a CADC artifact
+    :param client: CadcDataClient instance
+    :param archive: archive file has been stored to
+    :param fname: name of file in the archive
+    :return:
+    """
+    return client.get_file_info(archive, fname)
+
+
 def get_file_meta(fqn):
     """
     Gets contentType, contentLength and contentChecksum of an artifact on disk.
@@ -1827,7 +1959,7 @@ def get_file_meta(fqn):
         raise CadcException('Could not find {} in get_file_meta'.format(fqn))
     meta = {'size': get_file_size(fqn),
             'md5sum': md5(open(fqn, 'rb').read()).hexdigest()}
-    if fqn.endswith('.header') or fqn.endswith('.txt'):
+    if fqn.endswith('.header') or fqn.endswith('.txt') or fqn.endswith('.cat'):
         meta['type'] = 'text/plain'
     elif fqn.endswith('.csv'):
         meta['type'] = 'text/csv'
@@ -2054,6 +2186,40 @@ def get_artifact_metadata(fqn, product_type, release_type, uri=None,
         artifact.product_type = product_type
         artifact.content_type = local_meta['type']
         artifact.content_length = local_meta['size']
+        artifact.content_checksum = md5uri
+        return artifact
+
+
+def get_artifact_metadata_client(client, file_name, product_type, release_type,
+                                 archive, uri=None, artifact=None):
+    """
+    Build or update artifact content metadata using the CAOM2 objects, and
+    with access to a file at CADC.
+
+    :param client: CadcDataClient instance
+    :param file_name: The name of the file in CADC storage, for which an
+        Artifact is being created or updated.
+    :param product_type: which ProductType enumeration value
+    :param release_type: which ReleaseType enumeration value
+    :param archive: str narrows down CADC storage location
+    :param uri: mandatory if creating an Artifact, a URI of the form
+        scheme:ARCHIVE/file_name
+    :param artifact: use when updating an existing Artifact instance
+
+    :return: the created or updated Artifact instance, with the
+        content_* elements filled in.
+    """
+    meta = get_cadc_meta_client(client, archive, file_name)
+    md5uri = ChecksumURI('md5:{}'.format(meta.get('md5sum')))
+    if artifact is None:
+        if uri is None:
+            raise CadcException('Cannot build an Artifact without a URI.')
+        return Artifact(uri, product_type, release_type, meta.get('type'),
+                        meta.get('size'), md5uri)
+    else:
+        artifact.product_type = product_type
+        artifact.content_type = meta.get('type')
+        artifact.content_length = meta.get('size')
         artifact.content_checksum = md5uri
         return artifact
 

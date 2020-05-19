@@ -68,92 +68,41 @@
 #
 
 import os
-import pytest
-import shutil
 
-no_footprintfinder = False
-from caom2 import ValueCoord2D
-from caom2pipe import caom_composable as cc
+from mock import Mock
+
 from caom2pipe import manage_composable as mc
+from caom2pipe import name_builder_composable as nbc
 
 import test_conf as tc
 
-try:
-    import footprintfinder
-    no_footprintfinder = False
-except ImportError:
-    no_footprintfinder = True
+
+def test_builder():
+    get_cwd_orig = os.getcwd
+    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+    test_config = mc.Config()
+    test_config.get_executors()
+    try:
+        test_subject = nbc.Builder(test_config)
+        assert test_subject.todo_list is not None, 'expect a result'
+        assert len(test_subject.todo_list) == 0, 'wrong todo list result'
+        test_storage_name = tc.TestStorageName()
+        assert test_subject.build(test_storage_name) == test_storage_name, \
+            'build wrong result'
+    finally:
+        os.getcwd = get_cwd_orig
 
 
-@pytest.mark.skipif(no_footprintfinder,
-                    reason='footprintfinder must be installed')
-def test_exec_footprintfinder():
-    test_obs_file = 'fpf_start_obs.xml'
-    test_obs = mc.read_obs_from_file(os.path.join(
-        tc.TEST_DATA_DIR, test_obs_file))
-    test_chunk = \
-        test_obs.planes['VLASS1.2.T07t14.J084202-123000.'
-                        'quicklook.v1'].artifacts[
-            'ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
-            'image.pbcor.tt0.subim.fits'].parts[
-            '0'].chunks.pop()
-    test_file_id = 'VLASS1.2.ql.T24t07.J065836+563000.10.2048.v1.I.iter1.' \
-                   'image.pbcor.tt0.subim'
-    test_file = os.path.join(tc.TEST_FILES_DIR, '{}.fits'.format(test_file_id))
-    if not os.path.exists(test_file):
-        shutil.copy(f'/usr/src/app/test_files/{test_file_id}.fits', test_file)
-    test_log_dir = os.path.join(tc.TEST_DATA_DIR, 'logs')
-    assert test_chunk is not None, 'chunk expected'
-    assert test_chunk.position is not None, 'position expected'
-    assert test_chunk.position.axis is not None, 'axis expected'
-    assert test_chunk.position.axis.bounds is None, 'bounds not expected'
-
-    cc.exec_footprintfinder(test_chunk, test_file, test_log_dir, test_file_id,
-                            '-t 10')
-    assert test_chunk is not None, 'chunk unchanged'
-    assert test_chunk.position is not None, 'position unchanged'
-    assert test_chunk.position.axis is not None, 'axis unchanged'
-    assert test_chunk.position.axis.bounds is not None, 'bounds expected'
-    assert len(test_chunk.position.axis.bounds.vertices) == 17, \
-        'wrong number of vertices'
-    assert test_chunk.position.axis.bounds.vertices[0] == \
-        ValueCoord2D(coord1=105.188421,
-                     coord2=55.98216), 'wrong first vertex'
-    assert test_chunk.position.axis.bounds.vertices[16] == \
-        ValueCoord2D(coord1=105.165491,
-                     coord2=56.050318), 'wrong last vertex'
-
-    if os.path.exists(test_file):
-        os.unlink(test_file)
+def test_storage_name_builder():
+    test_subject = nbc.StorageNameBuilder()
+    test_storage_name = tc.TestStorageName()
+    assert test_subject.build(test_storage_name) == test_storage_name, \
+        'build wrong result'
 
 
-def test_reset():
-    test_obs_file = 'fpf_start_obs.xml'
-    test_obs = mc.read_obs_from_file(os.path.join(
-        tc.TEST_DATA_DIR, test_obs_file))
-    test_chunk = \
-        test_obs.planes['VLASS1.2.T07t14.J084202-123000.'
-                        'quicklook.v1'].artifacts[
-            'ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
-            'image.pbcor.tt0.subim.fits'].parts[
-            '0'].chunks.pop()
-
-    assert test_chunk is not None, 'chunk expected'
-    assert test_chunk.position is not None, 'position expected'
-    assert test_chunk.position.axis is not None, 'axis expected'
-    assert test_chunk.position.axis.bounds is None, 'bounds not expected'
-    assert test_chunk.energy is not None, 'energy expected'
-    assert test_chunk.energy_axis is not None, 'energy axis expected'
-
-    cc.reset_position(test_chunk)
-    assert test_chunk.position is None, 'position not expected'
-    assert test_chunk.position_axis_1 is None, 'axis 1 not expected'
-    assert test_chunk.position_axis_2 is None, 'axis 2 not expected'
-
-    cc.reset_energy(test_chunk)
-    assert test_chunk.energy is None, 'energy not expected'
-    assert test_chunk.energy_axis is None, 'energy axis not expected'
-
-    cc.reset_observable(test_chunk)
-    assert test_chunk.observable is None, 'observable not expected'
-    assert test_chunk.observable_axis is None, 'observable axis not expected'
+def test_storage_name_instance_builder():
+    test_subject = nbc.StorageNameInstanceBuilder('TEST_COLLECTION')
+    test_result = test_subject.build('test_storage_name.fits')
+    assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
+    assert test_result.collection == 'TEST_COLLECTION', 'wrong collection'
+    assert test_result.fname_on_disk == 'test_storage_name.fits', 'wrong fname'

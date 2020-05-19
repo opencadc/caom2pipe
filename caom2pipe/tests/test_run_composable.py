@@ -94,7 +94,7 @@ TEST_SOURCE = '{}/test_command/test_command.py'.format(
 
 @patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local_direct')
 def test_run_todo_list_dir_data_source(fits2caom2_mock, test_config):
-    test_config.working_directory = TEST_DIR
+    test_config.working_directory = tc.TEST_FILES_DIR
     test_config.use_local_files = True
     test_config.task_types = [mc.TaskType.SCRAPE]
 
@@ -117,6 +117,9 @@ def test_run_todo_list_dir_data_source_invalid_fname(test_config):
         os.unlink(test_config.failure_fqn)
     if os.path.exists(test_config.retry_fqn):
         os.unlink(test_config.retry_fqn)
+    if not os.path.exists(f'{TEST_DIR}/abc.fits.gz'):
+        with open(f'{TEST_DIR}/abc.fits.gz', 'w') as f:
+            f.write('abc')
 
     class TestStorageName(mc.StorageName):
         def __init__(self, entry):
@@ -205,7 +208,7 @@ def test_run_state(fits2caom2_mock, data_mock, repo_mock, tap_mock,
     data_mock.return_value.get_file_info.return_value = {'name':
                                                          'test_file.fits'}
     repo_mock.return_value.read.side_effect = Mock(return_value=None)
-    tap_mock.side_effect = _mock_query
+    tap_mock.side_effect = _mock_get_work
     CadcTapClient.__init__ = Mock(return_value=None)
 
     test_end_time = datetime.fromtimestamp(1579740838)
@@ -307,7 +310,8 @@ def test_run_todo_retry(do_one_mock, test_config):
 
 @patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
 @patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.__init__')
-@patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.get_work')
+@patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.'
+       'get_time_box_work')
 def test_run_state_retry(get_work_mock, init_mock, do_one_mock, test_config):
     _write_state(rc.get_utc_now().timestamp())
     retry_success_fqn, retry_failure_fqn, retry_retry_fqn = \

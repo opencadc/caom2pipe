@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<caom2:Observation xmlns:caom2="http://www.opencadc.org/caom2/xml/v2.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="caom2:SimpleObservation" caom2:id="da302aa9-d1dd-4de0-be78-e1c8b55fb662">
-  <caom2:collection>test_collection</caom2:collection>
+<caom2:Observation xmlns:caom2="http://www.opencadc.org/caom2/xml/v2.4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="caom2:SimpleObservation" caom2:id="54a72cc1-8b9d-406b-b645-cd496cf78b75">
+  <caom2:collection>OMM</caom2:collection>
   <caom2:observationID>test_obs_id</caom2:observationID>
   <caom2:algorithm>
-    <caom2:name>exposure</caom2:name>
+    <caom2:name>test</caom2:name>
   </caom2:algorithm>
 </caom2:Observation>

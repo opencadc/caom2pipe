@@ -115,6 +115,7 @@ class StorageTimeBoxQuery(Work):
         self._preview_suffix = preview_suffix
         subject = mc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
+        self._logger = logging.getLogger(__name__)
 
     def todo(self, prev_exec_date, exec_date):
         """
@@ -133,7 +134,7 @@ class StorageTimeBoxQuery(Work):
                 f"AND ingestDate <= '{exec_date}' " \
                 "ORDER BY ingestDate ASC "
         self._logger.debug(query)
-        return mc.query_tap_client(query, self._client, self._config.tap_id)
+        return mc.query_tap_client(query, self._client)
 
     def initialize(self):
         """Do nothing."""

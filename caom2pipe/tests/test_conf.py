@@ -68,5 +68,31 @@
 #
 import os
 
+from caom2pipe import execute_composable as ec
+from caom2pipe import manage_composable as mc
+
+
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_DATA_DIR = os.path.join(THIS_DIR, 'data')
+TEST_FILES_DIR = '/test_files'
+
+
+class TestStorageName(mc.StorageName):
+    def __init__(self, obs_id=None, file_name=None, fname_on_disk=None):
+        super(TestStorageName, self).__init__(
+            'test_obs_id', 'TEST', '*', 'test_file.fits.gz')
+        self.url = 'https://test_url/'
+
+    def is_valid(self):
+        return True
+
+
+class TestChooser(ec.OrganizeChooser):
+    def __init(self):
+        super(TestChooser, self).__init__()
+
+    def needs_delete(self, observation):
+        return True
+
+    def use_compressed(self, ignore):
+        return True
