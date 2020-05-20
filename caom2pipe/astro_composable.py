@@ -438,7 +438,7 @@ class FilterMetadataCache(object):
         cache_key = self._get_cache_key(instrument, filter_name)
         temp = self._cache.get(cache_key)
         result = True
-        if temp.get('cw') == -2 and temp.get('fwhm') == -2:
+        if temp is None or (temp.get('cw') == -2 and temp.get('fwhm') == -2):
             result = False
         return result
 
