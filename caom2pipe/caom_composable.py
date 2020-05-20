@@ -79,8 +79,8 @@ from caom2.diff import get_differences
 from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 
-__all__ = ['exec_footprintfinder', 'find_plane_and_artifact',
-           'update_plane_provenance',
+__all__ = ['build_chunk_energy_range', 'exec_footprintfinder',
+           'find_plane_and_artifact', 'update_plane_provenance',
            'update_observation_members', 'rename_parts',
            'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
