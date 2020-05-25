@@ -2390,10 +2390,11 @@ def make_seconds(from_time):
         index = len(from_time)
 
     # OMM 2019/07/16 03:15:46
+    # CADC Data Client Thu, 14 May 2020 20:29:02 GMT
     for fmt in [ISO_8601_FORMAT, '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S.%f',
                 '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S',
                 '%Y-%m-%d', '%Y-%m-%dHST%H:%M:%S', '%a %b %d %H:%M:%S HST %Y',
-                '%Y/%m/%d %H:%M:%S']:
+                '%Y/%m/%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT']:
         try:
             seconds_since_epoch = datetime.strptime(
                 from_time[:index], fmt).timestamp()

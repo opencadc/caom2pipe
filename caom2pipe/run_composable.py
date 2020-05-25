@@ -437,3 +437,28 @@ def run_by_state(config=None, name_builder=None, command_name=None,
     result |= runner.run_retry()
     runner.report()
     return result
+
+
+def run_single(config, storage_name, command_name, meta_visitors,
+               data_visitors, chooser=None):
+    """Process a single entry by StorageName detail.
+
+    :param config mc.Config
+    :param storage_name instance of StorageName for the collection
+    :param command_name extension of fits2caom2 for the collection
+    :param meta_visitors List of metadata visit methods.
+    :param data_visitors List of data visit methods.
+    :param chooser OrganizeChooser instance for detailed CaomExecute
+        descendant choices
+    """
+    # TODO - this does not follow the current implementation pattern -
+    # maybe there's a rethink required
+    # missing the metrics and the reporting
+    #
+    logging.debug(f'Begin run_single {config.work_fqn}')
+    organizer = ec.OrganizeExecutesWithDoOne(
+        config, command_name, meta_visitors, data_visitors, chooser)
+    organizer.complete_record_count = 1
+    result = organizer.do_one(storage_name)
+    logging.debug(f'run_single result is {result}')
+    return result
