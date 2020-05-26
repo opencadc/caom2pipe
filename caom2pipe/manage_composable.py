@@ -619,6 +619,8 @@ class Config(object):
         self._rejected_directory = None
         # the fully qualified name for the file
         self.rejected_fqn = None
+        self.slack_channel = None
+        self.slack_token = None
         self._progress_file_name = None
         self.progress_fqn = None
         self._interval = None
@@ -865,6 +867,22 @@ class Config(object):
                 self._log_file_directory, self._rejected_file_name)
 
     @property
+    def slack_channel(self):
+        return self._slack_channel
+
+    @slack_channel.setter
+    def slack_channel(self, value):
+        self._slack_channel = value
+
+    @property
+    def slack_token(self):
+        return self._slack_token
+
+    @slack_token.setter
+    def slack_token(self, value):
+        self._slack_token = value
+
+    @property
     def progress_file_name(self):
         """the filename where pipeline progress is written, this will be created
         in log_file_directory. Useful when using timestamp windows for
@@ -993,6 +1011,8 @@ class Config(object):
                f'  retry_failures:: {self.retry_failures}\n' \
                f'  retry_file_name:: {self.retry_file_name}\n' \
                f'  retry_fqn:: {self.retry_fqn}\n' \
+               f'  slack_channel:: {self.slack_channel}\n' \
+               f'  slack_token:: secret\n' \
                f'  source_host:: {self.source_host}\n' \
                f'  state_fqn:: {self.state_fqn}\n' \
                f'  stream:: {self.stream}\n' \
@@ -1083,6 +1103,8 @@ class Config(object):
             self.observe_execution = config.get('observe_execution', False)
             self.observable_directory = config.get(
                 'observable_directory', None)
+            self.slack_channel = config.get('slack_channel', None)
+            self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
             self._report_fqn = f'{self.log_file_directory}/' \
                                f'{os.path.basename(self.working_directory)}' \
