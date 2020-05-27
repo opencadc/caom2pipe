@@ -188,8 +188,9 @@ class TodoRunner(object):
         except Exception as e:
             if storage_name is None:
                 # keep going through storage name build failures
-                self._logger.warning(f'Using a default StorageName instance '
-                                     f'for {entry}')
+                self._logger.warning(f'StorageName construction failed. Using '
+                                     f'a default instance for {entry}, for '
+                                     f'logging only.')
                 storage_name = mc.StorageName(obs_id=entry)
             self._organizer.capture_failure(storage_name,
                                             e=traceback.format_exc())
