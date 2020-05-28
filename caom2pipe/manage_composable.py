@@ -115,7 +115,8 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'increment_time', 'ISO_8601_FORMAT', 'http_get', 'Rejected',
            'record_progress', 'Work', 'look_pull_and_put',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
-           'repo_update', 'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
+           'repo_update', 'reverse_lookup',
+           'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
            'Validator', 'Cache', 'CaomName', 'StorageName', 'append_as_array',
            'to_float', 'to_int', 'to_str', 'load_module',
            'compare_observations']
@@ -618,6 +619,8 @@ class Config(object):
         self._rejected_directory = None
         # the fully qualified name for the file
         self.rejected_fqn = None
+        self.slack_channel = None
+        self.slack_token = None
         self._progress_file_name = None
         self.progress_fqn = None
         self._interval = None
@@ -864,6 +867,22 @@ class Config(object):
                 self._log_file_directory, self._rejected_file_name)
 
     @property
+    def slack_channel(self):
+        return self._slack_channel
+
+    @slack_channel.setter
+    def slack_channel(self, value):
+        self._slack_channel = value
+
+    @property
+    def slack_token(self):
+        return self._slack_token
+
+    @slack_token.setter
+    def slack_token(self, value):
+        self._slack_token = value
+
+    @property
     def progress_file_name(self):
         """the filename where pipeline progress is written, this will be created
         in log_file_directory. Useful when using timestamp windows for
@@ -992,6 +1011,8 @@ class Config(object):
                f'  retry_failures:: {self.retry_failures}\n' \
                f'  retry_file_name:: {self.retry_file_name}\n' \
                f'  retry_fqn:: {self.retry_fqn}\n' \
+               f'  slack_channel:: {self.slack_channel}\n' \
+               f'  slack_token:: secret\n' \
                f'  source_host:: {self.source_host}\n' \
                f'  state_fqn:: {self.state_fqn}\n' \
                f'  stream:: {self.stream}\n' \
@@ -1082,6 +1103,8 @@ class Config(object):
             self.observe_execution = config.get('observe_execution', False)
             self.observable_directory = config.get(
                 'observable_directory', None)
+            self.slack_channel = config.get('slack_channel', None)
+            self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
             self._report_fqn = f'{self.log_file_directory}/' \
                                f'{os.path.basename(self.working_directory)}' \
@@ -1221,7 +1244,6 @@ class PreviewVisitor(object):
     def visit(self, observation, storage_name):
         check_param(observation, Observation)
         count = 0
-
         if storage_name.product_id in observation.planes.keys():
             plane = observation.planes[storage_name.product_id]
             if storage_name.file_uri in plane.artifacts.keys():
@@ -1240,6 +1262,7 @@ class PreviewVisitor(object):
         self._delete_list.append(fqn)
 
     def _augment_artifacts(self, plane):
+        """Add/update the artifact metadata in the plane."""
         for uri, entry in self._previews.items():
             temp = None
             if uri in plane.artifacts:
@@ -1251,6 +1274,7 @@ class PreviewVisitor(object):
                 fqn, product_type, self._release_type, uri, temp)
 
     def _delete_list_of_files(self):
+        """Clean up files on disk after."""
         # cadc_client will be None if executing a ScrapeModify task, so
         # leave the files behind so the user can see them on disk.
         if self._cadc_client is not None:
@@ -1280,10 +1304,12 @@ class PreviewVisitor(object):
         self._storage_name = value
 
     def _store_smalls(self):
-        for entry in self._previews.values():
-            data_put(self._cadc_client, self._working_dir, entry[0],
-                     self._archive, self._stream, mime_type=self._mime_type,
-                     metrics=self._observable.metrics)
+        if self._cadc_client is not None:
+            for entry in self._previews.values():
+                data_put(self._cadc_client, self._working_dir, entry[0],
+                         self._archive, self._stream,
+                         mime_type=self._mime_type,
+                         metrics=self._observable.metrics)
 
 
 class StorageName(object):
@@ -2386,10 +2412,11 @@ def make_seconds(from_time):
         index = len(from_time)
 
     # OMM 2019/07/16 03:15:46
+    # CADC Data Client Thu, 14 May 2020 20:29:02 GMT
     for fmt in [ISO_8601_FORMAT, '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S.%f',
                 '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S',
                 '%Y-%m-%d', '%Y-%m-%dHST%H:%M:%S', '%a %b %d %H:%M:%S HST %Y',
-                '%Y/%m/%d %H:%M:%S']:
+                '%Y/%m/%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT']:
         try:
             seconds_since_epoch = datetime.strptime(
                 from_time[:index], fmt).timestamp()
@@ -2615,6 +2642,20 @@ def repo_update(client, observation, metrics):
     end = current()
     metrics.observe(start, end, sizeof(observation), 'update', 'caom2',
                     observation.observation_id)
+
+
+def reverse_lookup(value_to_find, in_dict):
+    """
+    Use a generator expression to do a reverse-lookup in a dictionary.
+    :param value_to_find value
+    :param in_dict dictionary that might have a key for the value
+    """
+    exp = (key for key, value in in_dict.items() if value == value_to_find)
+    result = None
+    for entry in exp:
+        result = entry
+        break
+    return result
 
 
 def find_missing(compare_this, to_this):

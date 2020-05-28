@@ -79,8 +79,8 @@ from caom2.diff import get_differences
 from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 
-__all__ = ['exec_footprintfinder', 'find_plane_and_artifact',
-           'update_plane_provenance',
+__all__ = ['build_chunk_energy_range', 'exec_footprintfinder',
+           'find_plane_and_artifact', 'update_plane_provenance',
            'update_observation_members', 'rename_parts',
            'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
@@ -309,7 +309,7 @@ def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
     :param params specific footprintfinder parameters by collection - default
         forces full-chip, regardless of illumination
     """
-    logging.debug('Begin _update_position')
+    logging.debug(f'Begin _update_position for {obs_id}')
     mc.check_param(chunk, Chunk)
 
     # local import because footprintfinder depends on matplotlib being
@@ -318,16 +318,15 @@ def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
 
     if (chunk.position is not None
             and chunk.position.axis is not None):
-        logging.debug('position exists, calculate footprints for {}.'.format(
-            science_fqn))
+        logging.debug(
+            f'position exists, calculate footprints for {science_fqn}.')
         full_area, footprint_xc, footprint_yc, ra_bary, dec_bary, \
             footprintstring, stc = footprintfinder.main(
-                '-r {} {}'.format(params, science_fqn))
-        logging.debug('footprintfinder result: full area {} '
-                      'footprint xc {} footprint yc {} ra bary {} '
-                      'dec_bary {} footprintstring {} stc {}'.format(
-                          full_area, footprint_xc, footprint_yc, ra_bary,
-                          dec_bary, footprintstring, stc))
+                f'-r {params} {science_fqn}')
+        logging.debug(f'footprintfinder result: full area {full_area} '
+                      f'footprint xc {footprint_xc} footprint yc '
+                      f'{footprint_yc} ra bary {ra_bary} dec_bary {dec_bary} '
+                      f'footprintstring {footprintstring} stc {stc}')
         bounds = CoordPolygon2D()
         coords = None
         fp_results = stc.split('Polygon FK5')
@@ -339,8 +338,7 @@ def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
                 coords = fp_results[1].split()
 
         if coords is None:
-            raise mc.CadcException(
-                'Do not recognize footprint {}'.format(stc))
+            raise mc.CadcException(F'Do not recognize footprint {stc}')
 
         index = 0
         while index < len(coords):
@@ -351,8 +349,9 @@ def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
             logging.debug('Adding vertex\n{}'.format(vertex))
         chunk.position.axis.bounds = bounds
 
-        return_file = '{}_footprint.txt'.format(obs_id)
-        return_string_file = '{}_footprint_returnstring.txt'.format(obs_id)
+        prefix = os.path.basename(science_fqn).replace('.fits', '')
+        return_file = f'{prefix}_footprint.txt'
+        return_string_file = f'{prefix}_footprint_returnstring.txt'
         _handle_footprint_logs(log_file_directory, return_file)
         _handle_footprint_logs(log_file_directory, return_string_file)
 
