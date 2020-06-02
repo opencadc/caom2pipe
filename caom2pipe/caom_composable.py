@@ -79,13 +79,23 @@ from caom2.diff import get_differences
 from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 
-__all__ = ['build_chunk_energy_range', 'exec_footprintfinder',
+__all__ = ['build_artifact_uri',
+           'build_chunk_energy_range', 'exec_footprintfinder',
            'find_plane_and_artifact', 'update_plane_provenance',
            'update_observation_members', 'rename_parts',
            'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
            'compare', 'copy_artifact', 'copy_chunk', 'copy_instrument',
            'copy_part', 'undo_astropy_cdfix_call']
+
+
+def build_artifact_uri(file_name, collection, scheme='ad'):
+    """
+    Common code to create the string that represents a URI for lookup by
+    CADC services.
+    :return: str representation of a URI
+    """
+    return f'{scheme}:{collection}/{file_name}'
 
 
 def build_chunk_energy_range(chunk, filter_name, filter_md):
@@ -465,7 +475,7 @@ def update_plane_provenance(plane, headers, lookup, collection,
                     plane_uri = PlaneURI.get_plane_uri(
                         obs_member_uri, prov_prod_id)
                     plane_inputs.add(plane_uri)
-                    logging.debug('Adding PlaneURI {}'.format(plane_uri))
+                    logging.debug(f'Adding PlaneURI {plane_uri}')
 
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
@@ -502,7 +512,7 @@ def update_plane_provenance_single(plane, headers, lookup, collection, repair,
                     plane_uri = PlaneURI.get_plane_uri(
                         obs_member_uri, entry[1])
                     plane_inputs.add(plane_uri)
-                    logging.debug('Adding PlaneURI {}'.format(plane_uri))
+                    logging.debug(f'Adding PlaneURI {plane_uri}')
                 # because all the content gets processed with one
                 # access to the keyword value, stop after one round
                 break
