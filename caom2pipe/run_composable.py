@@ -174,6 +174,7 @@ class TodoRunner(object):
         self._logger.info('----------------------------------------')
 
     def _process_entry(self, entry):
+        self._logger.debug(f'Begin _process_entry for {entry}.')
         storage_name = None
         try:
             storage_name = self._builder.build(entry)
@@ -200,6 +201,7 @@ class TodoRunner(object):
             # keep processing the rest of the entries, so don't throw
             # this or any other exception at this point
             result = -1
+        self._logger.debug(f'End _process_entry.')
         return result
 
     def _run_todo_list(self):
