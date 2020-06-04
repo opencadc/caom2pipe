@@ -278,7 +278,10 @@ class StateRunner(TodoRunner):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
 
         state = mc.State(self._config.state_fqn)
-        start_time = state.get_bookmark(self._bookmark_name)
+        if self._data_source.start_time_ts is None:
+            start_time = state.get_bookmark(self._bookmark_name)
+        else:
+            start_time = self._data_source.start_time_ts
 
         # make sure prev_exec_time is type datetime
         prev_exec_time = mc.increment_time(start_time, 0)

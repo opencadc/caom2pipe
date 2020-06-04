@@ -93,6 +93,8 @@ class DataSource(object):
 
     def __init__(self, config=None):
         self._config = config
+        # if this value is used, it should be a timestamp - i.e. a float
+        self._start_time_ts = None
         self._logger = logging.getLogger(__name__)
 
     def get_work(self):
@@ -100,6 +102,10 @@ class DataSource(object):
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         return []
+
+    @property
+    def start_time_ts(self):
+        return self._start_time_ts
 
 
 class ListDirDataSource(DataSource):
