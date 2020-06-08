@@ -70,6 +70,8 @@
 import logging
 import os
 
+from datetime import datetime
+
 from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
 from caom2 import ValueCoord2D, CompositeObservation, Algorithm, Artifact, Part
@@ -139,7 +141,7 @@ def change_to_composite(observation, algorithm_name='composite',
     DerivedObservation."""
     if (collection is None or collection != 'CFHT' or
             (features is not None and not features.supports_latest_caom)):
-        return CompositeObservation(observation.collection,
+        temp = CompositeObservation(observation.collection,
                                     observation.observation_id,
                                     Algorithm(algorithm_name),
                                     observation.sequence_number,
@@ -171,7 +173,9 @@ def change_to_composite(observation, algorithm_name='composite',
                                   observation.environment,
                                   observation.target_position)
         temp.meta_producer = observation.meta_producer
-        return temp
+    temp.last_modified = datetime.utcnow()
+    temp._id = observation._id
+    return temp
 
 
 def compare(ex_fqn, act_fqn, entry):
