@@ -269,7 +269,7 @@ class StateRunner(TodoRunner):
         super(StateRunner, self).__init__(config, organizer, builder,
                                           data_source)
         self._bookmark_name = bookmark_name
-        self._end_time = datetime.utcnow() if max_ts is None else max_ts
+        self._end_time = get_utc_now() if max_ts is None else max_ts
         self._logger = logging.getLogger(__name__)
 
     def run(self):
@@ -321,7 +321,7 @@ class StateRunner(TodoRunner):
                     self._finish_run()
 
                 cumulative += num_entries
-                cumulative_correct += self._organizer._success_count
+                cumulative_correct += self._organizer.success_count
                 mc.record_progress(self._config, self._organizer.command_name,
                                    num_entries, cumulative, start_time)
                 state.save_state(self._bookmark_name, save_time)
