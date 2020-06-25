@@ -273,6 +273,12 @@ class StateRunner(TodoRunner):
         self._logger = logging.getLogger(__name__)
 
     def run(self):
+        """
+        Uses an iteratable with a two-item list:
+            0 - key - input parameter to a NameBuilder implementation
+            1 - timestamp - for tracking progress
+        :return: 0 for success, -1 for failure
+        """
         self._logger.debug(f'Begin run state for {self._bookmark_name}')
         if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
