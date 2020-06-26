@@ -362,7 +362,7 @@ class StateRunner(TodoRunner):
 def _set_logging(config):
     formatter = logging.Formatter(
         '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s')
-    for handler in logging.getLogger(__name__).handlers:
+    for handler in logging.getLogger().handlers:
         handler.setLevel(config.logging_level)
         handler.setFormatter(formatter)
 
