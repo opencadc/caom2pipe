@@ -633,6 +633,10 @@ class Config(object):
         self._features = Features()
 
     @property
+    def is_connected(self):
+        return TaskType.SCRAPE not in self._task_types
+
+    @property
     def working_directory(self):
         """the root directory for all executor operations"""
         return self._working_directory
