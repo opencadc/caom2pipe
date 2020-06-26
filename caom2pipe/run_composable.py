@@ -359,6 +359,14 @@ class StateRunner(TodoRunner):
         return result
 
 
+def _set_logging(config):
+    formatter = logging.Formatter(
+        '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s')
+    for handler in logging.getLogger(__name__).handlers:
+        handler.setLevel(config.logging_level)
+        handler.setFormatter(formatter)
+
+
 def get_utc_now():
     """So that utcnow can be mocked."""
     return datetime.utcnow()
@@ -384,6 +392,7 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
     if config is None:
         config = mc.Config()
         config.get_executors()
+    _set_logging(config)
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
@@ -429,6 +438,7 @@ def run_by_state(config=None, name_builder=None, command_name=None,
     if config is None:
         config = mc.Config()
         config.get_executors()
+    _set_logging(config)
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
