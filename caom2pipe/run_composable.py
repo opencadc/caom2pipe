@@ -273,6 +273,12 @@ class StateRunner(TodoRunner):
         self._logger = logging.getLogger(__name__)
 
     def run(self):
+        """
+        Uses an iteratable with a two-item list:
+            0 - key - input parameter to a NameBuilder implementation
+            1 - timestamp - for tracking progress
+        :return: 0 for success, -1 for failure
+        """
         self._logger.debug(f'Begin run state for {self._bookmark_name}')
         if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
@@ -353,6 +359,14 @@ class StateRunner(TodoRunner):
         return result
 
 
+def _set_logging(config):
+    formatter = logging.Formatter(
+        '%(asctime)s:%(levelname)s:%(name)-36s:%(lineno)d:%(message)s')
+    for handler in logging.getLogger().handlers:
+        handler.setLevel(config.logging_level)
+        handler.setFormatter(formatter)
+
+
 def get_utc_now():
     """So that utcnow can be mocked."""
     return datetime.utcnow()
@@ -378,6 +392,7 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
     if config is None:
         config = mc.Config()
         config.get_executors()
+    _set_logging(config)
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
@@ -423,6 +438,7 @@ def run_by_state(config=None, name_builder=None, command_name=None,
     if config is None:
         config = mc.Config()
         config.get_executors()
+    _set_logging(config)
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(

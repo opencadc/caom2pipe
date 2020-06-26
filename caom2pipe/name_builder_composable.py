@@ -71,7 +71,8 @@ from deprecated import deprecated
 
 from caom2pipe import manage_composable as mc
 
-__all__ = ['StorageNameBuilder', 'Builder']
+__all__ = ['FileNameBuilder', 'StorageNameInstanceBuilder',
+           'StorageNameBuilder', 'Builder']
 
 
 @deprecated
@@ -129,3 +130,17 @@ class StorageNameInstanceBuilder(StorageNameBuilder):
         return mc.StorageName(obs_id=mc.StorageName.remove_extensions(entry),
                               collection=self._collection,
                               fname_on_disk=entry)
+
+
+class FileNameBuilder(StorageNameBuilder):
+    """
+    A class that assumes constructing the StorageName instance requires a
+    single parameter: a str 'file_name'
+    """
+
+    def __init__(self, storage_name):
+        super(FileNameBuilder, self).__init__()
+        self._storage_name = storage_name
+
+    def build(self, entry):
+        return self._storage_name(file_name=entry)

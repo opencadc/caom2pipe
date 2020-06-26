@@ -633,6 +633,10 @@ class Config(object):
         self._features = Features()
 
     @property
+    def is_connected(self):
+        return TaskType.SCRAPE not in self._task_types
+
+    @property
     def working_directory(self):
         """the root directory for all executor operations"""
         return self._working_directory
@@ -1255,8 +1259,8 @@ class PreviewVisitor(object):
             observation.observation_id))
         return {'artifacts': count}
 
-    def add_preview(self, uri, f_name, product_type):
-        self._previews[uri] = [f_name, product_type]
+    def add_preview(self, uri, f_name, product_type, mime_type='image/jpeg'):
+        self._previews[uri] = [f_name, product_type, mime_type]
 
     def add_to_delete(self, fqn):
         self._delete_list.append(fqn)
@@ -1308,7 +1312,7 @@ class PreviewVisitor(object):
             for entry in self._previews.values():
                 data_put(self._cadc_client, self._working_dir, entry[0],
                          self._archive, self._stream,
-                         mime_type=self._mime_type,
+                         mime_type=entry[2],
                          metrics=self._observable.metrics)
 
 
