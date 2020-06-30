@@ -1313,79 +1313,40 @@ class StoreMultipleClient(CaomExecute):
         self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
-class Scrape(CaomExecute):
-    """Defines the pipeline step for Collection creation of a CAOM model
-    observation. The file containing the metadata is located on disk.
-    No record is written to a web service."""
-
-    def __init__(self, config, storage_name, command_name, observable):
-        super(Scrape, self).__init__(
-            config, mc.TaskType.SCRAPE, storage_name, command_name,
-            cred_param='', cadc_data_client=None, caom_repo_client=None,
-            meta_visitors=None, observable=observable)
-        self._define_local_dirs(storage_name)
-        self.fname = storage_name.fname_on_disk
-        if self.fname is None:
-            self.fname = storage_name.file_name
-
-    def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
-        self.logger.debug('the steps:')
-
-        self.logger.debug('generate the xml from the file on disk')
-        self._fits2caom2_cmd_local(connected=False)
-
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
-
-
 class ScrapeDirect(CaomExecute):
     """Defines the pipeline step for Collection creation of a CAOM model
     observation. The file containing the metadata is located on disk.
     No record is written to a web service."""
 
-    def __init__(self, config, storage_name, command_name, observable):
+    def __init__(self, config, storage_name, command_name, observable,
+                 meta_visitors):
         super(ScrapeDirect, self).__init__(
             config, mc.TaskType.SCRAPE, storage_name, command_name,
             cred_param='', cadc_data_client=None, caom_repo_client=None,
-            meta_visitors=None, observable=observable)
+            meta_visitors=meta_visitors, observable=observable)
         self._define_local_dirs(storage_name)
         self.fname = storage_name.fname_on_disk
         if self.fname is None:
             self.fname = storage_name.file_name
+        self.logger = logging.getLogger(__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self.logger.debug(f'Begin execute')
         self.logger.debug('the steps:')
 
         self.logger.debug('generate the xml from the file on disk')
         self._fits2caom2_cmd_local_direct(connected=False)
 
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
+        self.logger.debug('get observation for the existing model from disk')
+        observation = self._read_model()
 
+        self.logger.error('the metadata visitors')
+        self._visit_meta(observation)
 
-class ScrapeUpdate(CaomExecute):
-    """Defines the pipeline step for Collection creation of a CAOM model
-    observation. The file containing the metadata is located on disk.
-    No record is written to a web service."""
+        self.logger.debug('write the updated xml to disk for debugging')
+        self._write_model(observation)
 
-    def __init__(self, config, storage_name, command_name, observable):
-        super(ScrapeUpdate, self).__init__(
-            config, mc.TaskType.SCRAPE, storage_name, command_name,
-            cred_param='', cadc_data_client=None, caom_repo_client=None,
-            meta_visitors=None, observable=observable)
-        self._define_local_dirs(storage_name)
-        self.fname = storage_name.fname_on_disk
-        if self.fname is None:
-            self.fname = storage_name.file_name
-
-    def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
-        self.logger.debug('the steps:')
-
-        self.logger.debug('generate the xml from the file on disk')
-        self._fits2caom2_cmd_in_out_local_client(connected=False)
-
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
+        self.logger.debug(f'End execute')
 
 
 class ScrapeUpdateDirect(CaomExecute):
@@ -1393,24 +1354,35 @@ class ScrapeUpdateDirect(CaomExecute):
     observation. The file containing the metadata is located on disk.
     No record is written to a web service."""
 
-    def __init__(self, config, storage_name, command_name, observable):
+    def __init__(self, config, storage_name, command_name, observable,
+                 meta_visitors):
         super(ScrapeUpdateDirect, self).__init__(
             config, mc.TaskType.SCRAPE, storage_name, command_name,
             cred_param='', cadc_data_client=None, caom_repo_client=None,
-            meta_visitors=None, observable=observable)
+            meta_visitors=meta_visitors, observable=observable)
         self._define_local_dirs(storage_name)
         self.fname = storage_name.fname_on_disk
         if self.fname is None:
             self.fname = storage_name.file_name
+        self.logger = logging.getLogger(__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self.logger.debug(f'Begin execute')
         self.logger.debug('the steps:')
 
         self.logger.debug('generate the xml from the file on disk')
         self._fits2caom2_cmd_in_out_local_direct(connected=False)
 
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
+        self.logger.debug('get observation for the existing model from disk')
+        observation = self._read_model()
+
+        self.logger.debug('the metadata visitors')
+        self._visit_meta(observation)
+
+        self.logger.debug('write the updated xml to disk for debugging')
+        self._write_model(observation)
+
+        self.logger.debug(f'End execute')
 
 
 class DataScrape(DataClient):
@@ -1663,8 +1635,9 @@ class OrganizeExecutes(object):
                     if os.path.exists(model_fqn):
                         if self.config.use_local_files:
                             executors.append(
-                                ScrapeUpdate(self.config, storage_name,
-                                             command_name, self.observable))
+                                ScrapeUpdateDirect(
+                                    self.config, storage_name, command_name,
+                                    self.observable, meta_visitors))
                         else:
                             raise mc.CadcException(
                                 'use_local_files must be True with '
@@ -1672,8 +1645,9 @@ class OrganizeExecutes(object):
                     else:
                         if self.config.use_local_files:
                             executors.append(
-                                Scrape(self.config, storage_name, command_name,
-                                       self.observable))
+                                ScrapeDirect(
+                                    self.config, storage_name, command_name,
+                                    self.observable, meta_visitors))
                         else:
                             raise mc.CadcException(
                                 'use_local_files must be True with '
@@ -1746,8 +1720,8 @@ class OrganizeExecutes(object):
                 elif task_type == mc.TaskType.MODIFY:
                     if self.config.use_local_files:
                         if (executors is not None and len(executors) > 0 and
-                                (isinstance(executors[0], Scrape) or
-                                 isinstance(executors[0], ScrapeUpdate))):
+                                (isinstance(executors[0], ScrapeDirect) or
+                                 isinstance(executors[0], ScrapeUpdateDirect))):
                             executors.append(
                                 DataScrape(self.config,
                                            storage_name,
@@ -2069,9 +2043,9 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                 if exists:
                     if self.config.use_local_files:
                         executors.append(
-                            ScrapeUpdateDirect(self.config, storage_name,
-                                               self._command_name,
-                                               self.observable))
+                            ScrapeUpdateDirect(
+                                self.config, storage_name, self._command_name,
+                                self.observable, self._meta_visitors))
                     else:
                         raise mc.CadcException(
                             'use_local_files must be True with '
@@ -2080,7 +2054,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                     if self.config.use_local_files:
                         executors.append(ScrapeDirect(
                             self.config, storage_name, self._command_name,
-                            self.observable))
+                            self.observable, self._meta_visitors))
                     else:
                         raise mc.CadcException(
                             'use_local_files must be True with '
