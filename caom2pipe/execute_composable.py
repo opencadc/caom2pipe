@@ -114,6 +114,7 @@ import traceback
 from argparse import ArgumentParser
 from astropy.io import fits
 from datetime import datetime
+from deprecated import deprecated
 from shutil import move
 
 from cadcdata import CadcDataClient
@@ -197,6 +198,8 @@ class CaomExecute(object):
             self.namespace = obs_reader_writer.CAOM24_NAMESPACE
         else:
             self.namespace = obs_reader_writer.CAOM23_NAMESPACE
+        self._storage_name = storage_name
+        self._fqn = os.path.join(self.working_dir, self.fname)
 
     def _cleanup(self):
         """Remove a directory and all its contents."""
@@ -411,10 +414,6 @@ class CaomExecute(object):
         """Read an observation into memory from an XML file on disk."""
         return mc.read_obs_from_file(self.model_fqn)
 
-    def _write_model(self, observation):
-        """Write an observation to disk from memory, represented in XML."""
-        mc.write_obs_to_file(observation, self.model_fqn, self.namespace)
-
     def _visit_meta(self, observation):
         """Execute metadata-only visitors on an Observation in
         memory."""
@@ -430,6 +429,10 @@ class CaomExecute(object):
                     visitor.visit(observation, **kwargs)
                 except Exception as e:
                     raise mc.CadcException(e)
+
+    def _write_model(self, observation):
+        """Write an observation to disk from memory, represented in XML."""
+        mc.write_obs_to_file(observation, self.model_fqn, self.namespace)
 
     @staticmethod
     def _specify_external_urls_param(external_urls):
@@ -1072,6 +1075,7 @@ class ClientVisit(CaomExecute):
         self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
+@deprecated
 class DataClient(CaomExecute):
     """Defines the pipeline step for all the operations that
     require access to the file on disk, not just the header data. """
@@ -1124,6 +1128,68 @@ class DataClient(CaomExecute):
                   'stream': self.stream,
                   'observable': self.observable}
         for visitor in self.data_visitors:
+            try:
+                self.logger.debug(f'Visit for {visitor}')
+                visitor.visit(observation, **kwargs)
+            except Exception as e:
+                raise mc.CadcException(e)
+
+
+class DataVisit(CaomExecute):
+    """Defines the pipeline step for all the operations that
+    require access to the file on disk. The data must be retrieved
+    from a separate source.
+
+    :param transferrer: instance of transfer_composable.Transfer
+    """
+
+    def __init__(self, config, storage_name, cadc_data_client,
+                 caom_repo_client, data_visitors,
+                 observable, transferrer):
+        super(DataVisit, self).__init__(
+            config, task_type=mc.TaskType.MODIFY, storage_name=storage_name,
+            command_name=None, cred_param=None,
+            cadc_data_client=cadc_data_client,
+            caom_repo_client=caom_repo_client, meta_visitors=None,
+            observable=observable)
+        self._data_visitors = data_visitors
+        self._log_file_directory = config.log_file_directory
+        self._transferrer = transferrer
+        self._logger = logging.getLogger(__name__)
+
+    def execute(self, context):
+        self._logger.debug('Begin execute')
+
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
+
+        self.logger.debug('get the input file')
+        self._transferrer.get(self._storage_name.source_name, self._fqn)
+
+        self.logger.debug('get the observation for the existing model')
+        observation = self._repo_cmd_read_client()
+
+        self.logger.debug('execute the data visitors')
+        self._visit_data(observation)
+
+        self.logger.debug('store the updated xml')
+        self._repo_cmd_update_client(observation)
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
+
+        self._logger.debug('End execute.')
+
+    def _visit_data(self, observation):
+        """Execute the visitors that require access to the full data content
+        of a file."""
+        kwargs = {'working_directory': self.working_dir,
+                  'science_file': self.fname,
+                  'log_file_directory': self._log_file_directory,
+                  'cadc_client': self.cadc_data_client,
+                  'stream': self.stream,
+                  'observable': self.observable}
+        for visitor in self._data_visitors:
             try:
                 self.logger.debug(f'Visit for {visitor}')
                 visitor.visit(observation, **kwargs)
@@ -1968,7 +2034,7 @@ class OrganizeExecutes(object):
 class OrganizeExecutesWithDoOne(OrganizeExecutes):
 
     def __init__(self, config, command_name, meta_visitors, data_visitors,
-                 chooser=None):
+                 chooser=None, transferrer=None):
         """
 
         :param config:
@@ -1981,6 +2047,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
         self._command_name = command_name
         self._meta_visitors = meta_visitors
         self._data_visitors = data_visitors
+        self._transferrer = None
         self._log_h = None
         self._logger = logging.getLogger(__name__)
 
@@ -2150,11 +2217,10 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                                     cadc_data_client, caom_repo_client,
                                     self._data_visitors, self.observable))
                     else:
-                        executors.append(DataClient(
-                            self.config, storage_name, self._command_name,
-                            cred_param, cadc_data_client, caom_repo_client,
-                            self._data_visitors, mc.TaskType.MODIFY,
-                            self.observable))
+                        executors.append(DataVisit(
+                            self.config, storage_name, cadc_data_client,
+                            caom_repo_client, self._data_visitors,
+                            self.observable, self._transferrer))
                 else:
                     self._logger.info(f'Skipping the MODIFY task for '
                                       f'{storage_name.file_name}.')

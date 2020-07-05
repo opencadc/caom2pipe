@@ -630,6 +630,7 @@ class Config(object):
         self._cache_file_name = None
         # the fully qualified name for the file
         self.cache_fqn = None
+        self._data_source = None
         self._features = Features()
 
     @property
@@ -657,6 +658,15 @@ class Config(object):
         if self._working_directory is not None:
             self.work_fqn = os.path.join(
                 self._working_directory, self._work_file)
+
+    @property
+    def data_source(self):
+        """Root URI for data retrieval"""
+        return self._data_source
+
+    @data_source.setter
+    def data_source(self, value):
+        self._data_source = value
 
     @property
     def netrc_file(self):
@@ -993,6 +1003,7 @@ class Config(object):
                f'  archive:: {self.archive}\n' \
                f'  cache_fqn:: {self.cache_fqn}\n' \
                f'  collection:: {self.collection}\n' \
+               f'  data_source:: {self.data_source}\n' \
                f'  failure_fqn:: {self.failure_fqn}\n' \
                f'  failure_log_file_name:: {self.failure_log_file_name}\n' \
                f'  features:: {self.features}\n' \
@@ -1072,6 +1083,7 @@ class Config(object):
                                                 os.getcwd())
             self.work_file = config.get('todo_file_name', 'todo.txt')
             self.netrc_file = config.get('netrc_filename', 'test_netrc')
+            self.data_source = config.get('data_source', None)
             self.resource_id = config.get('resource_id',
                                           'ivo://cadc.nrc.ca/sc2repo')
             self.tap_id = config.get('tap_id', 'ivo://cadc.nrc.ca/sc2tap')
@@ -1363,6 +1375,7 @@ class StorageName(object):
         self._mime_encoding = mime_encoding
         self._mime_type = mime_type
         self._compression = compression
+        self._source_name = None
         self._logger = logging.getLogger(__name__)
 
     def __str__(self):
@@ -1471,6 +1484,18 @@ class StorageName(object):
         """The value provided to the --lineage parameter for
         fits2caom2 extensions."""
         return '{}/{}'.format(self.product_id, self.file_uri)
+
+    @property
+    def source_name(self):
+        """The fully-qualified representation of the file, as represented
+        at the source. Sufficient for retrieval, probably includes a scheme."""
+        if self._source_name is None:
+            self._source_name = self.file_uri
+        return self._source_name
+
+    @source_name.setter
+    def source_name(self, value):
+        self._source_name = value
 
     @property
     def external_urls(self):
@@ -2420,7 +2445,8 @@ def make_seconds(from_time):
     for fmt in [ISO_8601_FORMAT, '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S.%f',
                 '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S',
                 '%Y-%m-%d', '%Y-%m-%dHST%H:%M:%S', '%a %b %d %H:%M:%S HST %Y',
-                '%Y/%m/%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT']:
+                '%Y/%m/%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT',
+                '%Y-%m-%dT%H:%M']:
         try:
             seconds_since_epoch = datetime.strptime(
                 from_time[:index], fmt).timestamp()

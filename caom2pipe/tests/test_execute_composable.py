@@ -84,6 +84,7 @@ from cadcdata import CadcDataClient
 
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
+from caom2pipe import transfer_composable
 import test_run_methods
 import test_conf as tc
 
@@ -418,31 +419,12 @@ def test_scrape(test_config):
         os.remove(tc.TestStorageName().model_file_name)
     netrc = os.path.join(tc.TEST_DATA_DIR, 'test_netrc')
     assert os.path.exists(netrc)
-
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.logging_level = 'INFO'
-    exec_cmd_orig = mc.exec_cmd
-    mc.exec_cmd = Mock()
-    test_source = '{}/command_name/command_name.py'.format(
-        distutils.sysconfig.get_python_lib())
-
-    try:
-        test_executor = ec.Scrape(
-            test_config, tc.TestStorageName(), 'command_name', observable=None)
-        test_executor.execute(None)
-        assert mc.exec_cmd.called
-        mc.exec_cmd.assert_called_with(
-            'command_name --verbose --not_connected  '
-            '--observation OMM test_obs_id --out {}/test_obs_id.fits.xml '
-            '--plugin {} '
-            '--module {} '
-            '--local {}/test_file.fits.gz '
-            '--lineage test_obs_id/ad:TEST/test_obs_id.fits.gz'.format(
-                tc.TEST_DATA_DIR, test_source, test_source, tc.TEST_DATA_DIR),
-            logging.info)
-
-    finally:
-        mc.exec_cmd = exec_cmd_orig
+    test_executor = ec.ScrapeDirect(
+        test_config, tc.TestStorageName(), __name__, observable=None,
+        meta_visitors=[])
+    test_executor.execute(None)
 
 
 def test_data_scrape_execute(test_config):
@@ -501,7 +483,7 @@ def test_organize_executes_client(test_config):
         executors = test_oe.choose(test_obs_id, 'command_name', [], [])
         assert executors is not None
         assert len(executors) == 1
-        assert isinstance(executors[0], ec.ScrapeUpdate)
+        assert isinstance(executors[0], ec.ScrapeUpdateDirect)
 
         test_config.task_types = [mc.TaskType.STORE,
                                   mc.TaskType.INGEST,
@@ -550,7 +532,7 @@ def test_organize_executes_client(test_config):
         executors = test_oe.choose(test_obs_id, 'command_name', [], [])
         assert executors is not None
         assert len(executors) == 2
-        assert isinstance(executors[0], ec.ScrapeUpdate)
+        assert isinstance(executors[0], ec.ScrapeUpdateDirect)
         assert isinstance(executors[1], ec.DataScrape)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
@@ -1130,7 +1112,7 @@ def test_organize_executes_client_do_one(test_config):
         assert executors is not None
         assert len(executors) == 2
         assert isinstance(executors[0], ec.MetaCreateDirect)
-        assert isinstance(executors[1], ec.DataClient)
+        assert isinstance(executors[1], ec.DataVisit)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
 
@@ -1216,6 +1198,41 @@ def test_organize_executes_client_do_one(test_config):
         ec.CaomExecute.repo_cmd_get_client = repo_cmd_orig
 
 
+@patch('caom2pipe.manage_composable.data_get')
+def test_data_visit(get_mock, test_config):
+    get_mock.side_effect = Mock(autospec=True)
+    test_data_client = Mock(autospec=True)
+    test_repo_client = Mock(autospec=True)
+    dv_mock = Mock(autospec=True)
+    test_data_visitors = [dv_mock]
+    test_observable = Mock(autospec=True)
+    test_sn = mc.StorageName(obs_id='test_obs_id', collection='TEST',
+                             collection_pattern='T[\\w+-]+')
+    test_transferrer = transfer_composable.CadcTransfer(test_config)
+    test_subject = ec.DataVisit(test_config, test_sn, test_data_client,
+                                test_repo_client, test_data_visitors,
+                                test_observable,
+                                test_transferrer)
+    test_subject.execute(None)
+    assert get_mock.called, 'should be called'
+    args, kwargs = get_mock.call_args
+    assert args[1] == f'{tc.THIS_DIR}/test_obs_id', 'wrong directory'
+    assert args[2] == 'test_obs_id.fits', 'wrong file name'
+    assert args[3] == 'TEST', 'wrong archive'
+    test_repo_client.read.assert_called_with('OMM', 'test_obs_id'), \
+        'wrong values'
+    assert test_repo_client.update.called, 'expect an execution'
+    # TODO - why is the log file directory NOT the working directory?
+    dv_mock.visit.assert_called_with(
+        test_repo_client.read.return_value,
+        working_directory=f'{tc.THIS_DIR}/test_obs_id',
+        science_file='test_obs_id.fits',
+        log_file_directory=tc.TEST_DATA_DIR,
+        cadc_client=test_data_client,
+        stream='TEST',
+        observable=test_observable), 'wrong call values'
+
+
 def _communicate():
     return ['return status', None]
 
@@ -1267,3 +1284,25 @@ def _test_map_todo():
 
 def _get_file_info():
     return {'fname': 'test_file.fits'}
+
+
+def to_caom2():
+    """Called from ScrapeDirect"""
+    assert sys.argv is not None, 'expect sys.argv to be set'
+    assert sys.argv == ['test_execute_composable', '--verbose',
+                        '--not_connected', '--caom_namespace',
+                        'http://www.opencadc.org/caom2/xml/v2.4',
+                        '--observation', 'OMM', 'test_obs_id',
+                        '--local',
+                        '/usr/src/app/caom2pipe/caom2pipe/tests/data/'
+                        'test_file.fits.gz',
+                        '--out',
+                        '/usr/src/app/caom2pipe/caom2pipe/tests/data/'
+                        'test_obs_id.fits.xml', '--plugin',
+                        '/usr/local/lib/python3.8/site-packages/'
+                        'test_execute_composable/test_execute_composable.py',
+                        '--module',
+                        '/usr/local/lib/python3.8/site-packages/'
+                        'test_execute_composable/test_execute_composable.py',
+                        '--lineage',
+                        'test_obs_id/ad:TEST/test_obs_id.fits.gz']
