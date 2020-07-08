@@ -88,7 +88,9 @@ __all__ = ['build_artifact_uri',
            'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
            'compare', 'copy_artifact', 'copy_chunk', 'copy_instrument',
-           'copy_part', 'undo_astropy_cdfix_call']
+           'copy_part', 'undo_astropy_cdfix_call',
+           'update_observation_members_filtered',
+           'update_plane_provenance_list']
 
 
 def build_artifact_uri(file_name, collection, scheme='ad'):
@@ -119,7 +121,7 @@ def build_chunk_energy_range(chunk, filter_name, filter_md):
     fwhm = ac.FilterMetadataCache.get_fwhm(filter_md)
     if cw is not None and fwhm is not None:
         resolving_power = ac.FilterMetadataCache.get_resolving_power(filter_md)
-        axis = CoordAxis1D(axis=Axis(ctype='WAVE', cunit='A'))
+        axis = CoordAxis1D(axis=Axis(ctype='WAVE', cunit='Angstrom'))
         ref_coord1 = RefCoord(0.5, cw - fwhm / 2.0)
         ref_coord2 = RefCoord(1.5, cw + fwhm / 2.0)
         axis.range = CoordRange1D(ref_coord1, ref_coord2)
@@ -451,11 +453,10 @@ def rename_parts(observation, headers):
                 artifact.parts.add(part)
 
 
-def update_plane_provenance(plane, headers, lookup, collection,
-                            repair, obs_id):
-    """Add inputs to Planes, based on a particular keyword prefix.
+def _update_plane_provenance(headers, lookup, collection, repair, obs_id,
+                             plane_inputs):
+    """Add inputs to a collection, based on a particular keyword prefix.
 
-    :param plane Plane instance to add inputs to
     :param headers FITS keyword headers that have lookup values.
     :param lookup The keyword pattern to find in the FITS header keywords for
         input files.
@@ -463,9 +464,9 @@ def update_plane_provenance(plane, headers, lookup, collection,
     :param repair The function to fix input values, to ensure they match
         input observation ID values.
     :param obs_id String value for logging only.
+    :param plane_inputs TypedSet(PlaneURI,) to which new PlaneURI instances are
+        added
     """
-    plane_inputs = TypedSet(PlaneURI,)
-
     for header in headers:
         for keyword in header:
             if keyword.startswith(lookup):
@@ -481,6 +482,44 @@ def update_plane_provenance(plane, headers, lookup, collection,
                     plane_inputs.add(plane_uri)
                     logging.debug(f'Adding PlaneURI {plane_uri}')
 
+
+def update_plane_provenance(plane, headers, lookup, collection,
+                            repair, obs_id):
+    """Add inputs to Planes, based on a particular keyword prefix.
+
+    :param plane Plane instance to add inputs to
+    :param headers FITS keyword headers that have lookup values.
+    :param lookup The keyword pattern to find in the FITS header keywords for
+        input files.
+    :param collection The collection name for URI construction
+    :param repair The function to fix input values, to ensure they match
+        input observation ID values.
+    :param obs_id String value for logging only.
+    """
+    plane_inputs = TypedSet(PlaneURI,)
+    _update_plane_provenance(
+        headers, lookup, collection, repair, obs_id, plane_inputs)
+    mc.update_typed_set(plane.provenance.inputs, plane_inputs)
+
+
+def update_plane_provenance_list(plane, headers, lookups, collection,
+                                 repair, obs_id):
+    """Add inputs to Planes, based on a particular keyword prefix.
+
+    :param plane Plane instance to add inputs to
+    :param headers FITS keyword headers that have lookup values.
+    :param lookups a list of keyword patterns to find in the FITS header
+        keywords for input files.
+    :param collection The collection name for URI construction
+    :param repair The function to fix input values, to ensure they match
+        input observation ID values.
+    :param obs_id String value for logging only.
+    """
+    plane_inputs = TypedSet(PlaneURI,)
+
+    for entry in lookups:
+        _update_plane_provenance(
+            headers, entry, collection, repair, obs_id, plane_inputs)
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
@@ -537,6 +576,29 @@ def update_observation_members(observation):
                 members_inputs.add(inpt.get_observation_uri())
                 logging.debug('Adding Observation URI {}'.format(
                     inpt.get_observation_uri()))
+    mc.update_typed_set(observation.members, members_inputs)
+
+
+def update_observation_members_filtered(observation, filter_fn):
+    """Add members to Observation from all its Planes, depending
+    on the return of the filter_fn.
+
+    :param observation Observation instance to add members to
+    :param filter_fn returns True if a plane input should also be an
+        Observation member
+    """
+
+    inputs = []
+    members_inputs = TypedSet(ObservationURI,)
+    for plane in observation.planes.values():
+        if (plane.provenance is not None and
+                plane.provenance.inputs is not None):
+            inputs = filter(filter_fn, plane.provenance.inputs)
+
+    for entry in inputs:
+        members_inputs.add(entry.get_observation_uri())
+        logging.debug('Adding Observation URI {}'.format(
+            entry.get_observation_uri()))
     mc.update_typed_set(observation.members, members_inputs)
 
 

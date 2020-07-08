@@ -2062,7 +2062,7 @@ def decompose_uri(uri):
         logging.debug('URI {} caused error {}. Expected '
                       'scheme:ARCHIVE/FILE_NAME'.format(
                         uri, e))
-        raise CadcException('Expected product_id/ad:ARCHIVE/FILE_NAME')
+        raise CadcException('Expected scheme:ARCHIVE/FILE_NAME')
 
 
 def check_param(param, param_type):
