@@ -70,6 +70,9 @@
 import logging
 import os
 
+from datetime import datetime
+from pytz import timezone
+
 from cadctap import CadcTapClient
 from caom2pipe import manage_composable as mc
 
@@ -208,12 +211,18 @@ class QueryTimeBoxDataSource(DataSource):
         :param exec_time datetime end of the timestamp chunk
         :return: a list of file names in the CADC storage system
         """
-        self._logger.debug(f'Begin get_work in {self.__class__.__name__}.')
+        # container timezone is UTC, ad timezone is Pacific
+        db_fmt = '%Y-%m-%d %H:%M:%S.%f'
+        prev_exec_time_pz = datetime.strftime(
+            prev_exec_time.astimezone(timezone('US/Pacific')), db_fmt)
+        exec_time_pz = datetime.strftime(
+            exec_time.astimezone(timezone('US/Pacific')), db_fmt)
+        self._logger.debug(f'Begin get_work.')
         query = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
                 f"archiveName = '{self._config.archive}' " \
                 f"AND fileName not like '%{self._preview_suffix}' " \
-                f"AND ingestDate > '{prev_exec_time}' " \
-                f"AND ingestDate <= '{exec_time}' " \
+                f"AND ingestDate > '{prev_exec_time_pz}' " \
+                f"AND ingestDate <= '{exec_time_pz}' " \
                 "ORDER BY ingestDate ASC "
         self._logger.debug(query)
         return mc.query_tap_client(query, self._client)
