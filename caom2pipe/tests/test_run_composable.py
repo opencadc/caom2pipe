@@ -92,7 +92,8 @@ TEST_SOURCE = '{}/test_command/test_command.py'.format(
     distutils.sysconfig.get_python_lib())
 
 
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local_direct')
+@patch('caom2pipe.execute_composable.CaomExecute.'
+       '_fits2caom2_cmd_in_out_local_direct')
 def test_run_todo_list_dir_data_source(fits2caom2_mock, test_config):
     test_config.working_directory = tc.TEST_FILES_DIR
     test_config.use_local_files = True
@@ -309,17 +310,16 @@ def test_run_todo_retry(do_one_mock, test_config):
 
 
 @patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
-@patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.__init__')
+@patch('caom2pipe.data_source_composable.CadcTapClient')
 @patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.'
        'get_time_box_work')
-def test_run_state_retry(get_work_mock, init_mock, do_one_mock, test_config):
+def test_run_state_retry(get_work_mock, tap_mock, do_one_mock, test_config):
     _write_state(rc.get_utc_now().timestamp())
     retry_success_fqn, retry_failure_fqn, retry_retry_fqn = \
         _clean_up_log_files(test_config)
     global call_count
     call_count = 0
     get_work_mock.side_effect = _mock_get_work
-    init_mock.return_value = None
     do_one_mock.side_effect = _mock_do_one
 
     test_config.log_to_file = True
@@ -337,7 +337,7 @@ def test_run_state_retry(get_work_mock, init_mock, do_one_mock, test_config):
                      retry_retry_fqn)
     assert do_one_mock.called, 'expect do_one call'
     assert do_one_mock.call_count == 2, 'wrong number of calls'
-    assert init_mock.called, 'init should be called'
+    assert tap_mock.called, 'init should be called'
 
 
 def _clean_up_log_files(test_config):

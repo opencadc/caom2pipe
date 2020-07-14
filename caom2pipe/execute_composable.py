@@ -1313,6 +1313,56 @@ class StoreMultipleClient(CaomExecute):
         self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
+class Scrape(CaomExecute):
+    """Defines the pipeline step for Collection creation of a CAOM model
+    observation. The file containing the metadata is located on disk.
+    No record is written to a web service."""
+
+    def __init__(self, config, storage_name, command_name, observable):
+        super(Scrape, self).__init__(
+            config, mc.TaskType.SCRAPE, storage_name, command_name,
+            cred_param='', cadc_data_client=None, caom_repo_client=None,
+            meta_visitors=None, observable=observable)
+        self._define_local_dirs(storage_name)
+        self.fname = storage_name.fname_on_disk
+        if self.fname is None:
+            self.fname = storage_name.file_name
+
+    def execute(self, context):
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self.logger.debug('the steps:')
+
+        self.logger.debug('generate the xml from the file on disk')
+        self._fits2caom2_cmd_local(connected=False)
+
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
+
+
+class ScrapeUpdate(CaomExecute):
+    """Defines the pipeline step for Collection creation of a CAOM model
+    observation. The file containing the metadata is located on disk.
+    No record is written to a web service."""
+
+    def __init__(self, config, storage_name, command_name, observable):
+        super(ScrapeUpdate, self).__init__(
+            config, mc.TaskType.SCRAPE, storage_name, command_name,
+            cred_param='', cadc_data_client=None, caom_repo_client=None,
+            meta_visitors=None, observable=observable)
+        self._define_local_dirs(storage_name)
+        self.fname = storage_name.fname_on_disk
+        if self.fname is None:
+            self.fname = storage_name.file_name
+
+    def execute(self, context):
+        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self.logger.debug('the steps:')
+
+        self.logger.debug('generate the xml from the file on disk')
+        self._fits2caom2_cmd_in_out_local_client(connected=False)
+
+        self.logger.debug(f'End execute for {self.__class__.__name__}')
+
+
 class ScrapeDirect(CaomExecute):
     """Defines the pipeline step for Collection creation of a CAOM model
     observation. The file containing the metadata is located on disk.
@@ -1635,9 +1685,8 @@ class OrganizeExecutes(object):
                     if os.path.exists(model_fqn):
                         if self.config.use_local_files:
                             executors.append(
-                                ScrapeUpdateDirect(
-                                    self.config, storage_name, command_name,
-                                    self.observable, meta_visitors))
+                                ScrapeUpdate(self.config, storage_name,
+                                             command_name, self.observable))
                         else:
                             raise mc.CadcException(
                                 'use_local_files must be True with '
@@ -1645,9 +1694,8 @@ class OrganizeExecutes(object):
                     else:
                         if self.config.use_local_files:
                             executors.append(
-                                ScrapeDirect(
-                                    self.config, storage_name, command_name,
-                                    self.observable, meta_visitors))
+                                Scrape(self.config, storage_name, command_name,
+                                       self.observable))
                         else:
                             raise mc.CadcException(
                                 'use_local_files must be True with '

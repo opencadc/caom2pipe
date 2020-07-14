@@ -76,7 +76,8 @@ from pytz import timezone
 from cadctap import CadcTapClient
 from caom2pipe import manage_composable as mc
 
-__all__ = ['DataSource']
+__all__ = ['DataSource', 'ListDirDataSource', 'QueryTimeBoxDataSource',
+           'TodoFileDataSource']
 
 
 class DataSource(object):
@@ -109,6 +110,10 @@ class DataSource(object):
     @property
     def start_time_ts(self):
         return self._start_time_ts
+
+    @start_time_ts.setter
+    def start_time_ts(self, value):
+        self._start_time_ts = value
 
 
 class ListDirDataSource(DataSource):

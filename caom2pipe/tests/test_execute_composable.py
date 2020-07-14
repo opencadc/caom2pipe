@@ -551,7 +551,7 @@ def test_organize_executes_client(test_config):
         assert executors is not None
         assert len(executors) == 2
         assert isinstance(executors[0], ec.ScrapeUpdate)
-        assert isinstance(executors[1], ec.DataScrape)
+        # assert isinstance(executors[1], ec.DataScrape)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
 
