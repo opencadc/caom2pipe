@@ -2221,6 +2221,7 @@ def get_artifact_metadata(fqn, product_type, release_type, uri=None,
         artifact.content_type = local_meta['type']
         artifact.content_length = local_meta['size']
         artifact.content_checksum = md5uri
+        artifact.release_type = release_type
         return artifact
 
 
