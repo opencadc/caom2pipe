@@ -1220,7 +1220,7 @@ class PreviewVisitor(object):
     files in CADC storage, and cleaning up things left behind on disk.
     """
 
-    def __init__(self, archive, release_type, mime_type='image/jpeg', **kwargs):
+    def __init__(self, archive, release_type=None, mime_type='image/jpeg', **kwargs):
         self._storage_name = None
         self._archive = archive
         self._release_type = release_type
@@ -1259,8 +1259,9 @@ class PreviewVisitor(object):
             observation.observation_id))
         return {'artifacts': count}
 
-    def add_preview(self, uri, f_name, product_type, mime_type='image/jpeg'):
-        self._previews[uri] = [f_name, product_type, mime_type]
+    def add_preview(self, uri, f_name, product_type, release_type=None,
+                    mime_type='image/jpeg'):
+        self._previews[uri] = [f_name, product_type, mime_type, release_type]
 
     def add_to_delete(self, fqn):
         self._delete_list.append(fqn)
@@ -1273,9 +1274,12 @@ class PreviewVisitor(object):
                 temp = plane.artifacts[uri]
             f_name = entry[0]
             product_type = entry[1]
+            release_type = self._release_type
+            if self._release_type is None:
+                release_type = entry[3]
             fqn = f'{self._working_dir}/{f_name}'
             plane.artifacts[uri] = get_artifact_metadata(
-                fqn, product_type, self._release_type, uri, temp)
+                fqn, product_type, release_type, uri, temp)
 
     def _delete_list_of_files(self):
         """Clean up files on disk after."""
