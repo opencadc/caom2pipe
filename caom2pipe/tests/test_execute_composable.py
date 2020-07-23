@@ -114,6 +114,7 @@ def test_meta_create_client_execute(test_config):
     mc.exec_cmd = Mock()
     repo_client_mock = Mock()
     test_observer = Mock()
+    read_obs_orig = mc.read_obs_from_file
     mc.read_obs_from_file = Mock()
     mc.read_obs_from_file.return_value = _read_obs(None)
 
@@ -138,6 +139,7 @@ def test_meta_create_client_execute(test_config):
         assert test_observer.metrics.observe.called, 'observe not called'
     finally:
         mc.exec_cmd = exec_cmd_orig
+        mc.read_obs_from_file = read_obs_orig
 
 
 def test_meta_update_client_execute(test_config):
@@ -884,6 +886,7 @@ def test_local_meta_create_client_remote_storage_execute(test_config):
     test_cred = None
     exec_cmd_orig = mc.exec_cmd
     mc.exec_cmd = Mock()
+    read_obs_orig = mc.read_obs_from_file
     mc.read_obs_from_file = Mock()
     mc.read_obs_from_file.return_value = _read_obs(None)
     test_source = '{}/{}/{}.py'.format(distutils.sysconfig.get_python_lib(),
@@ -915,6 +918,7 @@ def test_local_meta_create_client_remote_storage_execute(test_config):
         os.listdir = os_listdir_orig
         os.rmdir = os_rmdir_orig
         mc.exec_cmd = exec_cmd_orig
+        mc.read_obs_from_file = read_obs_orig
 
 
 @patch('sys.exit', Mock(side_effect=MyExitError))
@@ -931,6 +935,7 @@ def test_local_meta_update_client_remote_storage_execute(test_config):
     test_cred = None
     exec_cmd_orig = mc.exec_cmd
     mc.exec_cmd = Mock()
+    read_obs_orig = mc.read_obs_from_file
     mc.read_obs_from_file = Mock()
     mc.read_obs_from_file.return_value = _read_obs(None)
     test_source = '{}/{}/{}.py'.format(distutils.sysconfig.get_python_lib(),
@@ -963,6 +968,7 @@ def test_local_meta_update_client_remote_storage_execute(test_config):
         os.listdir = os_listdir_orig
         os.rmdir = os_rmdir_orig
         mc.exec_cmd = exec_cmd_orig
+        mc.read_obs_from_file = read_obs_orig
 
 
 def test_omm_name_dots():
