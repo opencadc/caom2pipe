@@ -119,7 +119,7 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
            'Validator', 'Cache', 'CaomName', 'StorageName', 'append_as_array',
            'to_float', 'to_int', 'to_str', 'load_module',
-           'compare_observations']
+           'compare_observations', 'convert_to_days']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -2257,6 +2257,16 @@ def get_artifact_metadata_client(client, file_name, product_type, release_type,
         artifact.content_length = meta.get('size')
         artifact.content_checksum = md5uri
         return artifact
+
+
+def convert_to_days(exposure_time):
+    """
+    Converts from seconds to days.
+
+    :param exposure_time:
+    :return:
+    """
+    return exposure_time / (24.0 * 3600.0)
 
 
 def current():
