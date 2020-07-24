@@ -753,6 +753,79 @@ class MetaDeleteCreateDirect(CaomExecute):
         self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
+class MetaUpdateObservationDirect(CaomExecute):
+    """
+    Defines the pipeline step for Collection ingestion of metadata into CAOM.
+    This requires access to only header information.
+
+    This pipeline step will handle the 1 observation ID to n file names
+    relationship when executing fits2caom2, based only on existing
+    metadata from a CAOM2 record.
+    """
+
+    def __init__(self, config, storage_name, command_name, cred_param,
+                 cadc_data_client, caom_repo_client,
+                 observation, meta_visitors, observable):
+        super(MetaUpdateObservationDirect, self).__init__(
+            config, mc.TaskType.INGEST_OBS, storage_name, command_name,
+            cred_param, cadc_data_client, caom_repo_client, meta_visitors,
+            observable)
+        self.observation = observation
+        # set the pre-conditions, as none of this is known, until
+        # the observation is figured out
+        self.fname = None
+        self.lineage = None
+        self.external_urls_param = ''
+        self.logger = logging.getLogger(__name__)
+
+    def execute(self, context):
+        self.logger.debug(f'Begin execute.')
+        self.logger.debug('the steps:')
+
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
+
+        self.logger.debug('set up parameters for to_caom2 call')
+        self._set_parameters()
+
+        self.logger.debug('write the observation to disk for next step')
+        self._write_model(self.observation)
+
+        self.logger.debug('update an existing observation')
+        self._fits2caom2_cmd_in_out_direct()
+
+        self.logger.debug('read the xml into memory from the file')
+        self.observation = self._read_model()
+
+        self.logger.debug('the metadata visitors')
+        self._visit_meta(self.observation)
+
+        self.logger.debug('update the observation')
+        self._repo_cmd_update_client(self.observation)
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
+
+        self.logger.debug(f'End execute.')
+
+    def _set_parameters(self):
+        temp = {}
+        # make a dict of product ids and artifact uris
+        for plane in self.observation.planes.values():
+            for artifact in plane.artifacts.values():
+                if 'fits' in artifact.uri:
+                    mc.append_as_array(temp, plane.product_id, artifact.uri)
+
+        lineage = ''
+        for product_id, value in temp.items():
+            for entry in value:
+                scheme, archive, file_name = mc.decompose_uri(entry)
+                result = mc.get_lineage(archive, product_id, file_name)
+                lineage = f'{lineage} {result}'
+
+        self.lineage = lineage
+
+
 class LocalMetaCreateClient(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
@@ -2179,6 +2252,24 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                                     cadc_data_client, caom_repo_client,
                                     observation, self._meta_visitors,
                                     self.observable))
+            elif task_type == mc.TaskType.INGEST_OBS:
+                observation = CaomExecute.repo_cmd_get_client(
+                    caom_repo_client, self.config.collection,
+                    storage_name.obs_id, self.observable.metrics)
+                if observation is None:
+                    raise mc.CadcException(
+                        f'"INGEST_OBS" is an update-only task type for '
+                        f'{storage_name.obs_id}.')
+                else:
+                    if self.config.use_local_files:
+                        raise NotImplementedError
+                    else:
+                        executors.append(
+                            MetaUpdateObservationDirect(
+                                self.config, storage_name, self._command_name,
+                                cred_param, cadc_data_client, caom_repo_client,
+                                observation, self._meta_visitors,
+                                self.observable))
             elif task_type == mc.TaskType.MODIFY:
                 if storage_name.is_feasible:
                     if self.config.use_local_files:

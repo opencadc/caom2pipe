@@ -114,6 +114,7 @@ def test_meta_create_client_execute(test_config):
     mc.exec_cmd = Mock()
     repo_client_mock = Mock()
     test_observer = Mock()
+    read_obs_orig = mc.read_obs_from_file
     mc.read_obs_from_file = Mock()
     mc.read_obs_from_file.return_value = _read_obs(None)
 
@@ -138,6 +139,7 @@ def test_meta_create_client_execute(test_config):
         assert test_observer.metrics.observe.called, 'observe not called'
     finally:
         mc.exec_cmd = exec_cmd_orig
+        mc.read_obs_from_file = read_obs_orig
 
 
 def test_meta_update_client_execute(test_config):
@@ -884,6 +886,7 @@ def test_local_meta_create_client_remote_storage_execute(test_config):
     test_cred = None
     exec_cmd_orig = mc.exec_cmd
     mc.exec_cmd = Mock()
+    read_obs_orig = mc.read_obs_from_file
     mc.read_obs_from_file = Mock()
     mc.read_obs_from_file.return_value = _read_obs(None)
     test_source = '{}/{}/{}.py'.format(distutils.sysconfig.get_python_lib(),
@@ -915,6 +918,7 @@ def test_local_meta_create_client_remote_storage_execute(test_config):
         os.listdir = os_listdir_orig
         os.rmdir = os_rmdir_orig
         mc.exec_cmd = exec_cmd_orig
+        mc.read_obs_from_file = read_obs_orig
 
 
 @patch('sys.exit', Mock(side_effect=MyExitError))
@@ -931,6 +935,7 @@ def test_local_meta_update_client_remote_storage_execute(test_config):
     test_cred = None
     exec_cmd_orig = mc.exec_cmd
     mc.exec_cmd = Mock()
+    read_obs_orig = mc.read_obs_from_file
     mc.read_obs_from_file = Mock()
     mc.read_obs_from_file.return_value = _read_obs(None)
     test_source = '{}/{}/{}.py'.format(distutils.sysconfig.get_python_lib(),
@@ -963,6 +968,7 @@ def test_local_meta_update_client_remote_storage_execute(test_config):
         os.listdir = os_listdir_orig
         os.rmdir = os_rmdir_orig
         mc.exec_cmd = exec_cmd_orig
+        mc.read_obs_from_file = read_obs_orig
 
 
 def test_omm_name_dots():
@@ -1010,6 +1016,25 @@ def test_pull_client(test_config):
 
         assert not data_client_mock.put_file.called, 'put call done'
         assert not ec.CaomExecute._cleanup.called, 'cleanup call executed'
+
+
+def test_meta_update_observation_direct(test_config):
+    test_cred_param = '--cert /usr/src/app/cadcproxy.pem'
+    data_client_mock = Mock()
+    repo_client_mock = Mock()
+    test_sn = tc.TestStorageName()
+    test_observation = mc.read_obs_from_file(
+        f'{tc.TEST_DATA_DIR}/fpf_start_obs.xml')
+    try:
+        test_observable = mc.Observable(
+            mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config))
+        test_executor = ec.MetaUpdateObservationDirect(
+            test_config, test_sn, TEST_APP, test_cred_param, data_client_mock,
+            repo_client_mock, test_observation, [], observable=test_observable)
+        test_executor.execute(None)
+        assert repo_client_mock.update.called, 'repo update called'
+    finally:
+        pass
 
 
 @patch('sys.exit', Mock(side_effect=MyExitError))
@@ -1210,6 +1235,26 @@ def test_organize_executes_client_do_one(test_config):
             f'{tc.THIS_DIR}/logs/retries.txt', 'wrong retry'
         assert test_oe.failure_fqn == \
             f'{tc.THIS_DIR}/logs/failure_log.txt', 'wrong failure'
+        assert test_oe.todo_fqn == f'{tc.THIS_DIR}/todo.txt', 'wrong todo'
+
+        test_config.task_types = [mc.TaskType.INGEST_OBS]
+        test_config.use_local_files = False
+        ec.CaomExecute.repo_cmd_get_client = Mock(
+            return_value=_read_obs(test_obs_id))
+        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [])
+        executors = test_oe.choose(test_obs_id)
+        assert executors is not None
+        assert len(executors) == 1
+        assert isinstance(executors[0], ec.MetaUpdateObservationDirect)
+        assert CadcDataClient.__init__.called, 'mock not called'
+        assert CAOM2RepoClient.__init__.called, 'mock not called'
+        assert executors[0].url == 'https://test_url/', 'url'
+        assert executors[0].fname is None, 'file name'
+        assert executors[0].stream == 'TEST', 'stream'
+        assert executors[0].lineage is None, 'lineage'
+        assert executors[0].external_urls_param == '', 'external_url_params'
+        assert executors[0].working_dir == f'{tc.THIS_DIR}/test_obs_id', \
+            'working_dir'
         assert test_oe.todo_fqn == f'{tc.THIS_DIR}/todo.txt', 'wrong todo'
     finally:
         mc.exec_cmd_orig = exec_cmd_orig
