@@ -1252,7 +1252,7 @@ def test_organize_executes_client_do_one(test_config):
         assert executors[0].fname is None, 'file name'
         assert executors[0].stream == 'TEST', 'stream'
         assert executors[0].lineage is None, 'lineage'
-        assert executors[0].external_urls_param is None, 'external_url_params'
+        assert executors[0].external_urls_param == '', 'external_url_params'
         assert executors[0].working_dir == f'{tc.THIS_DIR}/test_obs_id', \
             'working_dir'
         assert test_oe.todo_fqn == f'{tc.THIS_DIR}/todo.txt', 'wrong todo'

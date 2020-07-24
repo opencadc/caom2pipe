@@ -817,10 +817,11 @@ class MetaUpdateObservationDirect(CaomExecute):
                     mc.append_as_array(temp, plane.product_id, artifact.uri)
 
         lineage = ''
-        for key, value in temp.items():
+        for product_id, value in temp.items():
             for entry in value:
                 scheme, archive, file_name = mc.decompose_uri(entry)
-                lineage = f'{lineage} {key}/{file_name}'
+                result = mc.get_lineage(archive, product_id, file_name)
+                lineage = f'{lineage} {result}'
 
         self.lineage = lineage
 
