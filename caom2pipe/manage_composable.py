@@ -247,6 +247,8 @@ class TaskType(Enum):
     REMOTE = 'remote'
     # retrieve file via HTTP to local temp storage, store to ad
     PULL = 'pull'
+    # update a CAOM instance using CAOM metadata as input and knowledge
+    INGEST_OBS = 'ingest_obs'
 
 
 class State(object):
