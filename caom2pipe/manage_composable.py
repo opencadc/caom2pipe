@@ -113,13 +113,13 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'get_cadc_headers', 'get_lineage', 'get_artifact_metadata',
            'data_put', 'data_get', 'build_uri', 'make_seconds', 'make_time',
            'increment_time', 'ISO_8601_FORMAT', 'http_get', 'Rejected',
-           'record_progress', 'Work', 'look_pull_and_put',
+           'record_progress', 'look_pull_and_put',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'reverse_lookup',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
            'Validator', 'Cache', 'CaomName', 'StorageName', 'append_as_array',
            'to_float', 'to_int', 'to_str', 'load_module',
-           'compare_observations']
+           'compare_observations', 'convert_to_days']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -238,15 +238,13 @@ class Features(object):
 class TaskType(Enum):
     """The possible steps in a Collection pipeline. A short-hand, user-facing
     way to identify the work to be done by a pipeline."""
-    STORE = 'store'  # store a local file to ad
-    SCRAPE = 'scrape'  # local CAOM instance creation, no network required
-    INGEST = 'ingest'  # create a CAOM instance from metadata only
-    MODIFY = 'modify'  # modify a CAOM instance from data
-    VISIT = 'visit'    # visit an observation
-    # remote file storage, create CAOM instance via local metadata
-    REMOTE = 'remote'
-    # retrieve file via HTTP to local temp storage, store to ad
-    PULL = 'pull'
+    STORE = 'store'    # store a file to CADC
+    SCRAPE = 'scrape'  # create/update a CAOM instance with no network
+    INGEST = 'ingest'  # create/update a CAOM instance from metadata only
+    MODIFY = 'modify'  # data access observation visitors
+    VISIT = 'visit'    # metadata access observation visitors
+    # update a CAOM instance using CAOM metadata as input and knowledge
+    INGEST_OBS = 'ingest_obs'
 
 
 class State(object):
@@ -304,36 +302,6 @@ class State(object):
             self.bookmarks[key]['last_record'] = value
             logging.debug(f'Saving bookmarked last record {value} {self.fqn}')
             write_as_yaml(self.content, self.fqn)
-
-
-@deprecated
-class Work(object):
-    """"Abstract-like class that defines the operations used to chunk work when
-    controlling execution by State."""
-
-    def __init__(self, max_ts_s):
-        """
-        Ctor
-        :param max_ts_s: the maximum timestamp in seconds, for work that
-        is chunked by time-boxes.
-        """
-        self._max_ts_s = max_ts_s
-
-    @property
-    def max_ts_s(self):
-        # State execution is currently chunked only by time-boxing, so
-        # set the maximum time-box ending for the work to be done.
-        return self._max_ts_s
-
-    def initialize(self):
-        """Anything necessary to make todo work."""
-        raise NotImplementedError
-
-    def todo(self, prev_exec_date, exec_date):
-        """Returns a list of entries for processing by Execute.
-        :param prev_exec_date when chunking by time-boxes, the start time
-        :param exec_date when chunking by time-boxes, the end time"""
-        raise NotImplementedError
 
 
 class Rejected(object):
@@ -596,7 +564,7 @@ class Config(object):
         self._log_file_directory = None
         self._stream = None
         self._storage_host = None
-        self._task_types = None
+        self._task_types = []
         self._success_log_file_name = None
         # the fully qualified name for the file
         self.success_fqn = None
@@ -1093,8 +1061,7 @@ class Config(object):
             self.log_file_directory = config.get('log_file_directory',
                                                  self.working_directory)
             self.stream = config.get('stream', 'raw')
-            self.task_types = self._obtain_task_types(
-                config, [TaskType.SCRAPE])
+            self.task_types = self._obtain_task_types(config, [])
             self.collection = config.get('collection', 'TEST')
             self.archive = config.get('archive', self.collection)
             self.success_log_file_name = config.get('success_log_file_name',
@@ -1232,7 +1199,7 @@ class PreviewVisitor(object):
     files in CADC storage, and cleaning up things left behind on disk.
     """
 
-    def __init__(self, archive, release_type, mime_type='image/jpeg', **kwargs):
+    def __init__(self, archive, release_type=None, mime_type='image/jpeg', **kwargs):
         self._storage_name = None
         self._archive = archive
         self._release_type = release_type
@@ -1271,8 +1238,9 @@ class PreviewVisitor(object):
             observation.observation_id))
         return {'artifacts': count}
 
-    def add_preview(self, uri, f_name, product_type, mime_type='image/jpeg'):
-        self._previews[uri] = [f_name, product_type, mime_type]
+    def add_preview(self, uri, f_name, product_type, release_type=None,
+                    mime_type='image/jpeg'):
+        self._previews[uri] = [f_name, product_type, mime_type, release_type]
 
     def add_to_delete(self, fqn):
         self._delete_list.append(fqn)
@@ -1285,9 +1253,12 @@ class PreviewVisitor(object):
                 temp = plane.artifacts[uri]
             f_name = entry[0]
             product_type = entry[1]
+            release_type = self._release_type
+            if self._release_type is None:
+                release_type = entry[3]
             fqn = f'{self._working_dir}/{f_name}'
             plane.artifacts[uri] = get_artifact_metadata(
-                fqn, product_type, self._release_type, uri, temp)
+                fqn, product_type, release_type, uri, temp)
 
     def _delete_list_of_files(self):
         """Clean up files on disk after."""
@@ -2051,13 +2022,12 @@ def get_version(entry):
 def create_dir(dir_name):
     """Create the working area if it does not already exist."""
     try:
-        os.makedirs(dir_name, exist_ok=True)
-        if not os.path.exists(dir_name):
-            raise CadcException(
-                'Could not mkdir {}'.format(dir_name))
-        if not os.access(dir_name, os.W_OK | os.X_OK):
-            raise CadcException(
-                '{} is not writeable.'.format(dir_name))
+        if os.path.exists(dir_name):
+            logging.error(os.path.exists(dir_name))
+            if not os.access(dir_name, os.W_OK | os.X_OK):
+                raise CadcException(f'{dir_name} is not writeable.')
+        else:
+            os.makedirs(dir_name, mode=0o775)
     except FileExistsError as e:
         raise CadcException(f'{dir_name} already exists as a file.')
 
@@ -2242,6 +2212,7 @@ def get_artifact_metadata(fqn, product_type, release_type, uri=None,
         artifact.content_type = local_meta['type']
         artifact.content_length = local_meta['size']
         artifact.content_checksum = md5uri
+        artifact.release_type = release_type
         return artifact
 
 
@@ -2277,6 +2248,16 @@ def get_artifact_metadata_client(client, file_name, product_type, release_type,
         artifact.content_length = meta.get('size')
         artifact.content_checksum = md5uri
         return artifact
+
+
+def convert_to_days(exposure_time):
+    """
+    Converts from seconds to days.
+
+    :param exposure_time:
+    :return:
+    """
+    return exposure_time / (24.0 * 3600.0)
 
 
 def current():

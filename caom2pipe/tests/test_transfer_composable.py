@@ -67,6 +67,8 @@
 # ***********************************************************************
 #
 
+import os
+import pytest
 from mock import patch, Mock
 
 from caom2pipe import manage_composable as mc
@@ -93,7 +95,67 @@ def test_cadc_transfer(data_get_mock):
     assert args[3] == 'TEST', 'wrong archive name'
 
 
-@patch('')
+@patch('vos.Client.copy')
 def test_vo_transfer(get_mock):
     get_mock.side_effect = Mock(autospec=True)
-    assert False
+    test_config = mc.Config()
+    test_config.working_directory = test_conf.TEST_DATA_DIR
+    test_config.proxy_file_name = 'proxy.pem'
+    test_subject = tc.VoTransfer(test_config)
+    assert test_subject is not None, 'expect a result'
+    test_source = 'vault:goliaths/test_file.fits'
+    test_dest = '/tmp/test_file.fits'
+    test_subject.get(test_source, test_dest)
+    assert get_mock.called, 'should have been called'
+    args, kwargs = get_mock.call_args
+    assert args[0] == test_source, 'wrong source'
+    assert args[1] == test_dest, 'wrong source'
+
+
+@patch('caom2pipe.manage_composable.http_get')
+def test_http_transfer(get_mock):
+    test_source = 'http://localhost/test_file.fits'
+    test_destination = '/tmp/test_file.fits'
+    if not os.path.exists(test_destination):
+        with open(test_destination, 'w') as f:
+            f.write('test content')
+    get_mock.side_effect = Mock(autospec=True)
+    test_config = mc.Config()
+    test_config.working_directory = test_conf.TEST_DATA_DIR
+    test_config.netrc_file = 'test_netrc'
+    test_config.rejected_fqn = '/tmp/rejected.yml'
+    test_observable = mc.Observable(
+        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config))
+    test_subject = tc.HttpTransfer(test_observable)
+    assert test_subject is not None, 'expect a result'
+    with pytest.raises(mc.CadcException):
+        test_subject.get(test_source, test_destination)
+        assert get_mock.called, 'should have been called'
+        args, kwargs = get_mock.call_args
+        assert args[1] == test_source, 'wrong source name'
+        assert args[2] == test_destination, 'wrong dest name'
+
+
+@patch('caom2pipe.manage_composable.ftp_get_timeout')
+def test_ftp_transfer(data_get_mock):
+    test_source = 'ftp://localhost/test_file.fits'
+    test_destination = '/tmp/test_file.fits'
+    if not os.path.exists(test_destination):
+        with open(test_destination, 'w') as f:
+            f.write('test content')
+    data_get_mock.side_effect = Mock(autospec=True)
+    test_config = mc.Config()
+    test_config.working_directory = test_conf.TEST_DATA_DIR
+    test_config.netrc_file = 'test_netrc'
+    test_config.rejected_fqn = '/tmp/rejected.yml'
+    test_observable = mc.Observable(
+        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config))
+    test_subject = tc.FtpTransfer('localhost', test_observable)
+    assert test_subject is not None, 'expect a result'
+    with pytest.raises(mc.CadcException):
+        test_subject.get(test_source, test_destination)
+        assert data_get_mock.called, 'should have been called'
+        args, kwargs = data_get_mock.call_args
+        assert args[1] == 'localhost', 'wrong dir name'
+        assert args[2] == test_source, 'wrong source name'
+        assert args[3] == test_destination, 'wrong dest name'

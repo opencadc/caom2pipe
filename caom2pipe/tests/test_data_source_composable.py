@@ -69,9 +69,13 @@
 
 import glob
 import os
+import pytest
 import stat
 
-from mock import Mock
+from astropy.table import Table
+from cadctap import CadcTapClient
+from datetime import datetime, timedelta
+from mock import Mock, patch
 
 from caom2pipe import data_source_composable as dsc
 from caom2pipe import manage_composable as mc
@@ -123,3 +127,38 @@ def test_list_dir_data_source():
             for entry in glob.glob(f'{test_config.working_directory}/*'):
                 os.unlink(entry)
             os.rmdir(test_config.working_directory)
+
+
+# TODO - add TodoFileDataSource test
+
+# TODO - replace with QueryTimeBoxDataSource testing
+@pytest.mark.skip('')
+@patch('caom2pipe.manage_composable.query_tap_client')
+def test_storage_time_box_query(query_mock):
+    def _mock_query(arg1, arg2):
+        return Table.read(
+            'fileName,ingestDate\n'
+            'NEOS_SCI_2015347000000_clean.fits,2019-10-23T16:27:19.000\n'
+            'NEOS_SCI_2015347000000.fits,2019-10-23T16:27:27.000\n'
+            'NEOS_SCI_2015347002200_clean.fits,2019-10-23T16:27:33.000\n'.split('\n'),
+            format='csv')
+
+    query_mock.side_effect = _mock_query
+    getcwd_orig = os.getcwd
+    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+    test_config = mc.Config()
+    test_config.get_executors()
+    CadcTapClient.__init__ = Mock(return_value=None)
+    utc_now = datetime.utcnow()
+    prev_exec_date = utc_now - timedelta(seconds=3600)
+    exec_date = utc_now - timedelta(seconds=1800)
+    try:
+        test_subject = wc.StorageTimeBoxQuery(utc_now,
+                                              test_config)
+        test_result = test_subject.todo(prev_exec_date, exec_date)
+        assert test_result is not None, 'expect result'
+        assert len(test_result) == 3, 'wrong number of results'
+        assert test_result[0][0] == 'NEOS_SCI_2015347000000_clean.fits', \
+            'wrong results'
+    finally:
+        os.getcwd = getcwd_orig

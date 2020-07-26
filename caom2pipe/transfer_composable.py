@@ -87,10 +87,11 @@ class Transfer(object):
 
     def get(self, source, dest_fqn):
         """
+        This no-op implementation is used when use_local_files = True.
         :param source:
         :param dest_fqn: str - file-system based fully-qualified name
         """
-        raise NotImplementedError
+        pass
 
     def check(self, dest_fqn):
         """
@@ -131,11 +132,11 @@ class CadcTransfer(Transfer):
 
 class VoTransfer(Transfer):
     """
-    Uses the CadcDataClient to manage transfers from CADC to local disk.
+    Uses the vos Client to manage transfers from CADC to local disk.
     """
 
     def __init__(self, config):
-        from cadcvos import vos
+        import vos
         super(VoTransfer, self).__init__()
         if not os.path.exists(config.proxy_fqn):
             raise mc.CadcException('Require a certificate for vos access.')
@@ -145,3 +146,88 @@ class VoTransfer(Transfer):
 
     def get(self, source, dest_fqn):
         self._client.copy(source, dest_fqn, send_md5=True)
+
+
+class FitsTransfer(Transfer):
+    """
+    Abstract class to provide FITS transfer checking.
+    """
+
+    def __init__(self, observable):
+        self._observable = observable
+        self._logger = logging.getLogger(__name__)
+
+    def get(self, source, dest_fqn):
+        raise NotImplementedError
+
+    def check(self, dest_fqn):
+        from astropy.io import fits
+        try:
+            hdulist = fits.open(dest_fqn, memmap=True, lazy_load_hdus=False)
+            hdulist.verify('warn')
+            for h in hdulist:
+                h.verify('warn')
+            hdulist.close()
+        except (fits.VerifyError, OSError) as e:
+            self._observable.rejected.record(mc.Rejected.BAD_DATA,
+                                             os.path.basename(dest_fqn))
+            os.unlink(dest_fqn)
+            raise mc.CadcException(
+                f'astropy verify error {dest_fqn} when reading {e}')
+        # a second check that fails for some NEOSSat cases - if this works,
+        # the file might have been correctly retrieved
+        try:
+            # ignore the return value - if the file is corrupted, the getdata
+            # fails, which is the only interesting behaviour here
+            fits.getdata(dest_fqn, ext=0)
+        except TypeError as e:
+            self._observable.rejected.record(mc.Rejected.BAD_DATA,
+                                             os.path.basename(dest_fqn))
+            os.unlink(dest_fqn)
+            raise mc.CadcException(
+                f'astropy getdata error {dest_fqn} when reading {e}')
+
+
+class HttpTransfer(FitsTransfer):
+    """
+    Uses HTTP to manage transfers from external sites to local disk.
+    """
+
+    def __init__(self, observable):
+        self._observable = observable
+        self._logger = logging.getLogger(__name__)
+
+    def get(self, source, dest_fqn):
+        """
+        :param source: HTTP URL
+        :param dest_fqn: fully-qualified string that represents file name
+        :return:
+        """
+        self._logger.debug(f'Retrieve {source}')
+        mc.http_get(source, dest_fqn)
+        if '.fits' in dest_fqn:
+            self.check(dest_fqn)
+        self._logger.debug(f'Successfully retrieved {source}')
+
+
+class FtpTransfer(FitsTransfer):
+    """
+    Uses FTP to manage transfers from external sites to local disk.
+    """
+
+    def __init__(self, ftp_host, observable):
+        self._ftp_host = ftp_host
+        self._observable = observable
+        self._logger = logging.getLogger(__name__)
+
+    def get(self, source, dest_fqn):
+        """
+        :param source: FTP URL
+        :param dest_fqn: fully-qualified string that represents file name
+        :return:
+        """
+        self._logger.debug(f'Retrieve {source}')
+        mc.ftp_get_timeout(self._ftp_host, source, dest_fqn)
+        if '.fits' in dest_fqn:
+            self.check(dest_fqn)
+        self._logger.debug(f'Successfully retrieved {source}')

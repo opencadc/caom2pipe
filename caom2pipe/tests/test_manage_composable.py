@@ -759,9 +759,7 @@ def test_visit(ad_put_mock):
     class TestVisitor(mc.PreviewVisitor):
 
         def __init__(self, **kwargs):
-            super(TestVisitor, self).__init__(archive='VLASS',
-                                              release_type=ReleaseType.META,
-                                              **kwargs)
+            super(TestVisitor, self).__init__(archive='VLASS', **kwargs)
 
         def generate_plots(self, obs_id):
             fqn = f'{self._working_dir}/{self._storage_name.prev}'
@@ -770,7 +768,7 @@ def test_visit(ad_put_mock):
 
             self.add_preview(self._storage_name.prev_uri,
                              self._storage_name.prev,
-                             ProductType.THUMBNAIL)
+                             ProductType.THUMBNAIL, ReleaseType.META)
             return 1
 
     class VisitStorageName(tc.TestStorageName):

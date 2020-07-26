@@ -275,7 +275,7 @@ class StateRunner(TodoRunner):
 
     def run(self):
         """
-        Uses an iteratable with a two-item list:
+        Uses an iterable with a two-item list:
             0 - key - input parameter to a NameBuilder implementation
             1 - timestamp - for tracking progress
         :return: 0 for success, -1 for failure
