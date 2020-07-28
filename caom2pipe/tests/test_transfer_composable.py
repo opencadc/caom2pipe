@@ -77,8 +77,10 @@ from caom2pipe import transfer_composable as tc
 import test_conf
 
 
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.manage_composable.data_get')
-def test_cadc_transfer(data_get_mock):
+def test_cadc_transfer(data_get_mock, caps_mock):
+    caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     data_get_mock.side_effect = Mock(autospec=True)
     test_config = mc.Config()
     test_config.working_directory = test_conf.TEST_DATA_DIR
@@ -95,8 +97,10 @@ def test_cadc_transfer(data_get_mock):
     assert args[3] == 'TEST', 'wrong archive name'
 
 
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('vos.Client.copy')
-def test_vo_transfer(get_mock):
+def test_vo_transfer(get_mock, caps_mock):
+    caps_mock.return_value = 'https://sc2.canfar.net/sc2tap'
     get_mock.side_effect = Mock(autospec=True)
     test_config = mc.Config()
     test_config.working_directory = test_conf.TEST_DATA_DIR

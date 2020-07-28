@@ -932,7 +932,7 @@ class DataVisit(CaomExecute):
                 raise mc.CadcException(e)
 
 
-class LocalDataVisit(CaomExecute):
+class LocalDataVisit(DataVisit):
     """Defines the pipeline step for all the operations that
     require access to the file on disk. This class assumes it has access to
     the files on disk - i.e. there is not need to retrieve the files from
@@ -940,38 +940,37 @@ class LocalDataVisit(CaomExecute):
     entries with the service.
     """
 
-    def __init__(self, config, storage_name, command_name, cred_param,
+    def __init__(self, config, storage_name, cred_param,
                  cadc_data_client, caom_repo_client, data_visitors,
                  observable):
         super(LocalDataVisit, self).__init__(
-            config, task_type=mc.TaskType.MODIFY,
-            storage_name=storage_name, command_name=command_name,
-            cred_param=cred_param, cadc_data_client=cadc_data_client,
-            caom_repo_client=caom_repo_client, meta_visitors=[],
-            observable=observable)
+            config, storage_name=storage_name, cred_param=cred_param,
+            cadc_data_client=cadc_data_client,
+            caom_repo_client=caom_repo_client, data_visitors=data_visitors,
+            task_type=mc.TaskType.MODIFY, observable=observable,
+            transferrer=tc.Transfer())
         self._define_local_dirs(storage_name)
         self.fname = storage_name.fname_on_disk
-        self.log_file_directory = config.log_file_directory
-        self.data_visitors = data_visitors
         self.prev_fname = storage_name.prev
         self.thumb_fname = storage_name.thumb
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self._logger.debug(f'Begin execute')
 
-        self.logger.debug('get the observation for the existing model')
+        self._logger.debug('get the observation for the existing model')
         observation = self._repo_cmd_read_client()
 
-        self.logger.debug('execute the data visitors')
+        self._logger.debug('execute the data visitors')
         self._visit_data(observation)
 
-        self.logger.debug('store the updated xml')
+        self._logger.debug('store the updated xml')
         self._repo_cmd_update_client(observation)
 
-        self.logger.debug('write the updated xml to disk for debugging')
+        self._logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
 
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
+        self._logger.debug(f'End execute')
 
 
 class DataScrape(DataVisit):
@@ -1581,8 +1580,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                         else:
                             executors.append(
                                 LocalDataVisit(
-                                    self.config, storage_name,
-                                    self._command_name, cred_param,
+                                    self.config, storage_name, cred_param,
                                     cadc_data_client, caom_repo_client,
                                     self._data_visitors, self.observable))
                     else:

@@ -73,7 +73,6 @@ import os
 import pytest
 import sys
 
-from datetime import datetime
 from unittest.mock import Mock, patch
 
 from astropy.io import fits
@@ -85,7 +84,6 @@ from cadcdata import CadcDataClient
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable
-import test_run_methods
 import test_conf as tc
 
 TEST_APP = 'collection2caom2'
@@ -276,9 +274,8 @@ def test_data_local_execute(test_config):
 
     # run the test
     test_executor = ec.LocalDataVisit(
-        test_config, tc.TestStorageName(), TEST_APP,
-        test_cred, data_client_mock, repo_client_mock, test_data_visitors,
-        observable=test_observer)
+        test_config, tc.TestStorageName(), test_cred, data_client_mock,
+        repo_client_mock, test_data_visitors, observable=test_observer)
     test_executor.execute(None)
 
     # check that things worked as expected - no cleanup
