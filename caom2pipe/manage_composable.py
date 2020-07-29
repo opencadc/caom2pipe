@@ -2057,19 +2057,22 @@ def decompose_lineage(lineage):
 
 
 def decompose_uri(uri):
-    """Returns a product id and an artifact uri from the command line."""
+    """
+    Returns a scheme, path (maybe an archive), and a file name from the
+    command line.
+    """
     try:
         temp = uri.split(':', 1)
         scheme = temp[0]
         temp1 = temp[1].split('/')
-        archive = temp1[0]
-        file_name = temp1[1]
-        return scheme, archive, file_name
+        path = temp1[:-1]
+        file_name = temp1[-1]
+        return scheme, path, file_name
     except Exception as e:
         logging.debug('URI {} caused error {}. Expected '
-                      'scheme:ARCHIVE/FILE_NAME'.format(
+                      'scheme:path/FILE_NAME'.format(
                         uri, e))
-        raise CadcException('Expected scheme:ARCHIVE/FILE_NAME')
+        raise CadcException('Expected scheme:path/FILE_NAME')
 
 
 def check_param(param, param_type):
