@@ -86,4 +86,5 @@ def test_cleanup():
     result = test_subject.visit(test_obs, **kwargs)
     assert result is not None, 'expect a result'
     assert result.get('artifacts') == 1, 'wrong number of artifacts affected'
+    assert result.get('planes') == 0, 'wrong number of planes affected'
     assert len(test_obs.planes[test_product_id].artifacts) == 1, 'no deletion'

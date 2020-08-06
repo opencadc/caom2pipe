@@ -86,25 +86,39 @@ class ArtifactCleanupVisitor(object):
 
     def visit(self, observation, **kwargs):
         mc.check_param(observation, Observation)
-        count = 0
+        plane_count = 0
+        artifact_count = 0
+        plane_temp = []
         for plane in observation.planes.values():
-            temp = []
+            artifact_temp = []
             for artifact in plane.artifacts.values():
                 if self.check_for_delete(artifact.uri, **kwargs):
-                    temp.append(artifact.uri)
+                    artifact_temp.append(artifact.uri)
 
-            delete_list = list(set(temp))
-            for entry in delete_list:
+            artifact_delete_list = list(set(artifact_temp))
+            for entry in artifact_delete_list:
                 self._logger.warning(
                     f'Removing artifact {entry} from observation '
                     f'{observation.observation_id}, plane {plane.product_id}.')
-                count += 1
+                artifact_count += 1
                 observation.planes[plane.product_id].artifacts.pop(entry)
 
+            if len(plane.artifacts) == 0:
+                plane_temp.append(plane.product_id)
+
+        plane_delete_list = list(set(plane_temp))
+        for entry in plane_delete_list:
+            self._logger.warning(f'Removing plane {entry} from observation '
+                                 f'{observation.observation_id}.')
+            plane_count += 1
+            observation.planes.pop(entry)
+
         self._logger.info(f'Completed artifact cleanup augmentation for '
-                          f'{observation.observation_id}. Removed {count} '
-                          f'artifacts from the observation.')
-        return {'artifacts': count}
+                          f'{observation.observation_id}. Removed '
+                          f'{artifact_count} artifacts, {plane_count} planes '
+                          f'from the observation.')
+        return {'artifacts': artifact_count,
+                'planes': plane_count}
 
     def check_for_delete(self, uri, **kwargs):
         """
