@@ -6,9 +6,6 @@ from caom2utils import fits2caom2
 
 
 def to_caom2():
-    import logging
-    import sys
-    logging.error(sys.argv)
     xml_fqn = '/usr/src/app/caom2pipe/caom2pipe/tests/test_obs_id/' \
               'test_obs_id.fits.xml'
     args = fits2caom2.get_gen_proc_arg_parser().parse_args()

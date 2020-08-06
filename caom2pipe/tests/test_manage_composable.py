@@ -187,6 +187,24 @@ def test_decompose_lineage():
         mc.decompose_lineage('')
 
 
+def test_decompose_uri():
+    test_uri = 'ad:STARS/galaxies.fits.gz'
+    scheme, path, f_name = mc.decompose_uri(test_uri)
+    assert scheme == 'ad', 'expected ad'
+    assert path == 'STARS', 'expected STARS'
+    assert f_name == 'galaxies.fits.gz', f'wrong f_name {f_name}'
+
+    test_uri = 'vos:ngvs/merge/NGVS-2-4.m.z.Mg002.weight.fits.fz'
+    scheme, path, f_name = mc.decompose_uri(test_uri)
+    assert scheme == 'vos', 'expected vos'
+    assert path == 'ngvs/merge', 'expected ngvs/merge'
+    assert f_name == 'NGVS-2-4.m.z.Mg002.weight.fits.fz', \
+        f'wrong f_name {f_name}'
+
+    with pytest.raises(mc.CadcException):
+        mc.decompose_uri('')
+
+
 def test_read_csv_file():
     # bad read
     with pytest.raises(mc.CadcException):

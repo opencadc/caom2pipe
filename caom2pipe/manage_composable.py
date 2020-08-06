@@ -2064,9 +2064,9 @@ def decompose_uri(uri):
     try:
         temp = uri.split(':', 1)
         scheme = temp[0]
-        temp1 = temp[1].split('/')
-        path = temp1[:-1]
-        file_name = temp1[-1]
+        temp1 = temp[1].rsplit('/', 1)
+        path = temp1[0]
+        file_name = temp1[1]
         return scheme, path, file_name
     except Exception as e:
         logging.debug('URI {} caused error {}. Expected '

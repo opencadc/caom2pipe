@@ -809,19 +809,17 @@ class MetaUpdateObservationDirect(CaomExecute):
         self.logger.debug(f'End execute.')
 
     def _set_parameters(self):
-        temp = {}
+        lineage = ''
         # make a dict of product ids and artifact uris
         for plane in self.observation.planes.values():
             for artifact in plane.artifacts.values():
                 if 'fits' in artifact.uri:
-                    mc.append_as_array(temp, plane.product_id, artifact.uri)
-
-        lineage = ''
-        for product_id, value in temp.items():
-            for entry in value:
-                scheme, archive, file_name = mc.decompose_uri(entry)
-                result = mc.get_lineage(archive, product_id, file_name)
-                lineage = f'{lineage} {result}'
+                    logging.error(f'uri {artifact.uri}')
+                    scheme, archive, file_name = mc.decompose_uri(artifact.uri)
+                    logging.error(f'scheme {scheme} archive {type(archive)} file_name {file_name}')
+                    result = mc.get_lineage(
+                        archive, plane.product_id, file_name)
+                    lineage = f'{lineage} {result}'
 
         self.lineage = lineage
 
