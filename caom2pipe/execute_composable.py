@@ -1190,6 +1190,7 @@ class DataClient(CaomExecute):
                   'science_file': self.fname,
                   'log_file_directory': self.log_file_directory,
                   'cadc_client': self.cadc_data_client,
+                  'caom_repo_client': self.caom_repo_client,
                   'stream': self.stream,
                   'observable': self.observable}
         for visitor in self.data_visitors:
