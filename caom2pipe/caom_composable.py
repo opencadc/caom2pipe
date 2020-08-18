@@ -75,7 +75,8 @@ from datetime import datetime
 from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
 from caom2 import ValueCoord2D, CompositeObservation, Algorithm, Artifact, Part
-from caom2 import Instrument, TypedOrderedDict, SimpleObservation
+from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
+from caom2 import TemporalWCS, CoordFunction1D
 from caom2.diff import get_differences
 
 from caom2pipe import astro_composable as ac
@@ -83,7 +84,7 @@ from caom2pipe import manage_composable as mc
 
 __all__ = ['append_plane_provenance', 'append_plane_provenance_single',
            'build_artifact_uri', 'build_chunk_energy_range',
-           'change_to_simple', 'exec_footprintfinder',
+           'build_chunk_time', 'change_to_simple', 'exec_footprintfinder',
            'find_plane_and_artifact', 'get_differences',
            'get_obs_id_from_cadc', 'update_plane_provenance',
            'update_observation_members', 'rename_parts',
@@ -213,6 +214,38 @@ def build_chunk_energy_range(chunk, filter_name, filter_md):
         chunk.energy = energy
         # PD - in general, do not set the energy_axis, unless the energy axis
         # was really in the fits header
+
+
+def build_chunk_time(chunk, header, name):
+    """
+
+    :param chunk: CAOM2 Chunk instance for which to set time.
+    :param header: FITS header with the keywords for value extraction.
+    :param name: str  for logging information only.
+    :return:
+    """
+    logging.debug(f'Begin build_chunk_time for {name}.')
+    # DB 02-07-20
+    # time metadata comes from MJD_OBS and EXPTIME, it's not
+    # an axis requiring cutout support
+    exp_time = header.get('EXPTIME')
+    mjd_obs = header.get('MJD-OBS')
+    if exp_time is None or mjd_obs is None:
+        chunk.time = None
+    else:
+        if chunk.time is None:
+            coord_error = CoordError(syser=1e-07, rnder=1e-07)
+            time_axis = CoordAxis1D(axis=Axis('TIME', 'd'), error=coord_error)
+            chunk.time = TemporalWCS(axis=time_axis,
+                                     timesys='UTC')
+        ref_coord = RefCoord(pix=0.5, val=mjd_obs)
+        chunk.time.axis.function = CoordFunction1D(
+            naxis=1,
+            delta=mc.convert_to_days(exp_time),
+            ref_coord=ref_coord)
+        chunk.time.exposure = exp_time
+        chunk.time.resolution = mc.convert_to_days(exp_time)
+    logging.debug(f'End build_chunk_time.')
 
 
 def change_to_composite(observation, algorithm_name='composite',

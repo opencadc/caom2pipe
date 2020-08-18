@@ -514,7 +514,7 @@ class Cache(object):
             self._cache = read_as_yaml(self._fqn)
         except Exception as e:
             raise CadcException(
-                f'Cache {self._fqn} read failure {e}. Stopping pipeline.')
+                f'Cache file {self._fqn} read failure {e}. Stopping pipeline.')
 
     def add_to(self, key, values):
         """Add to or update the content of the cache. This is an over-write
@@ -2438,10 +2438,12 @@ def make_seconds(from_time):
 
     # OMM 2019/07/16 03:15:46
     # CADC Data Client Thu, 14 May 2020 20:29:02 GMT
+    # NGVS Wed Mar 24 2010 16:10:36
     for fmt in [ISO_8601_FORMAT, '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S.%f',
                 '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S',
                 '%Y-%m-%d', '%Y-%m-%dHST%H:%M:%S', '%a %b %d %H:%M:%S HST %Y',
-                '%Y/%m/%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT']:
+                '%Y/%m/%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT',
+                '%a %b %d %Y %H:%M:%S']:
         try:
             seconds_since_epoch = datetime.strptime(
                 from_time[:index], fmt).timestamp()
