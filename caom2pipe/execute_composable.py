@@ -809,19 +809,15 @@ class MetaUpdateObservationDirect(CaomExecute):
         self.logger.debug(f'End execute.')
 
     def _set_parameters(self):
-        temp = {}
+        lineage = ''
         # make a dict of product ids and artifact uris
         for plane in self.observation.planes.values():
             for artifact in plane.artifacts.values():
                 if 'fits' in artifact.uri:
-                    mc.append_as_array(temp, plane.product_id, artifact.uri)
-
-        lineage = ''
-        for product_id, value in temp.items():
-            for entry in value:
-                scheme, archive, file_name = mc.decompose_uri(entry)
-                result = mc.get_lineage(archive, product_id, file_name)
-                lineage = f'{lineage} {result}'
+                    scheme, archive, file_name = mc.decompose_uri(artifact.uri)
+                    result = mc.get_lineage(
+                        archive, plane.product_id, file_name)
+                    lineage = f'{lineage} {result}'
 
         self.lineage = lineage
 
@@ -1194,6 +1190,7 @@ class DataClient(CaomExecute):
                   'science_file': self.fname,
                   'log_file_directory': self.log_file_directory,
                   'cadc_client': self.cadc_data_client,
+                  'caom_repo_client': self.caom_repo_client,
                   'stream': self.stream,
                   'observable': self.observable}
         for visitor in self.data_visitors:

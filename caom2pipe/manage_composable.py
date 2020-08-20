@@ -514,7 +514,7 @@ class Cache(object):
             self._cache = read_as_yaml(self._fqn)
         except Exception as e:
             raise CadcException(
-                f'Cache {self._fqn} read failure {e}. Stopping pipeline.')
+                f'Cache file {self._fqn} read failure {e}. Stopping pipeline.')
 
     def add_to(self, key, values):
         """Add to or update the content of the cache. This is an over-write
@@ -1703,9 +1703,10 @@ def to_float(value):
     """Cast to float, without throwing an exception."""
     result = None
     if value is not None:
-        if isinstance(value, float) or isinstance(value, int):
+        if isinstance(value, float): #  or isinstance(value, int):
             result = value
-        elif isinstance(value, str) and len(value.strip()) > 0:
+        elif ((isinstance(value, str) and len(value.strip()) > 0) or
+              (isinstance(value, int))):
             result = float(value)
     return result
 
@@ -2056,19 +2057,22 @@ def decompose_lineage(lineage):
 
 
 def decompose_uri(uri):
-    """Returns a product id and an artifact uri from the command line."""
+    """
+    Returns a scheme, path (maybe an archive), and a file name from the
+    command line.
+    """
     try:
         temp = uri.split(':', 1)
         scheme = temp[0]
-        temp1 = temp[1].split('/')
-        archive = temp1[0]
+        temp1 = temp[1].rsplit('/', 1)
+        path = temp1[0]
         file_name = temp1[1]
-        return scheme, archive, file_name
+        return scheme, path, file_name
     except Exception as e:
         logging.debug('URI {} caused error {}. Expected '
-                      'scheme:ARCHIVE/FILE_NAME'.format(
+                      'scheme:path/FILE_NAME'.format(
                         uri, e))
-        raise CadcException('Expected scheme:ARCHIVE/FILE_NAME')
+        raise CadcException('Expected scheme:path/FILE_NAME')
 
 
 def check_param(param, param_type):
@@ -2434,10 +2438,12 @@ def make_seconds(from_time):
 
     # OMM 2019/07/16 03:15:46
     # CADC Data Client Thu, 14 May 2020 20:29:02 GMT
+    # NGVS Wed Mar 24 2010 16:10:36
     for fmt in [ISO_8601_FORMAT, '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S.%f',
                 '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S',
                 '%Y-%m-%d', '%Y-%m-%dHST%H:%M:%S', '%a %b %d %H:%M:%S HST %Y',
-                '%Y/%m/%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT']:
+                '%Y/%m/%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT',
+                '%a %b %d %Y %H:%M:%S']:
         try:
             seconds_since_epoch = datetime.strptime(
                 from_time[:index], fmt).timestamp()
