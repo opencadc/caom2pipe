@@ -816,7 +816,7 @@ class MetaUpdateObservationDirect(CaomExecute):
                 if 'fits' in artifact.uri:
                     scheme, archive, file_name = mc.decompose_uri(artifact.uri)
                     result = mc.get_lineage(
-                        archive, plane.product_id, file_name)
+                        archive, plane.product_id, file_name, scheme)
                     lineage = f'{lineage} {result}'
 
         self.lineage = lineage
