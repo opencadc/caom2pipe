@@ -506,6 +506,9 @@ class CaomName(object):
 
     def __init__(self, uri):
         self.uri = uri
+        ignore_scheme, ignore_path, file_name = decompose_uri(self.uri)
+        self._file_name = file_name
+        self._file_id = StorageName.remove_extensions(file_name)
 
     @property
     def file_id(self):
@@ -515,18 +518,18 @@ class CaomName(object):
         name portion of the URI with all file type and compression type
         extensions removed.
         """
-        return StorageName.remove_extensions(self.uri.split('/')[1])
+        return self._file_id
 
     @property
     def file_name(self):
         """:return The file name extracted from an Artifact URI."""
-        return self.uri.split('/')[1]
+        return self._file_name
 
     @property
     def uncomp_file_name(self):
         """:return The file name extracted from an Artifact URI, without
         the compression extension."""
-        return self.file_name.replace('.gz', '')
+        return self._file_name.replace('.gz', '')
 
     @staticmethod
     def make_obs_uri_from_obs_id(collection, obs_id):
@@ -2045,19 +2048,21 @@ def decompose_lineage(lineage):
 
 
 def decompose_uri(uri):
-    """Returns a product id and an artifact uri from the command line."""
+    """
+    Returns a scheme, path (maybe an archive), and a file name from the
+    command line.
+    """
     try:
         temp = uri.split(':', 1)
         scheme = temp[0]
-        temp1 = temp[1].split('/')
-        archive = temp1[0]
+        temp1 = temp[1].rsplit('/', 1)
+        path = temp1[0]
         file_name = temp1[1]
-        return scheme, archive, file_name
+        return scheme, path, file_name
     except Exception as e:
-        logging.debug('URI {} caused error {}. Expected '
-                      'scheme:ARCHIVE/FILE_NAME'.format(
-                        uri, e))
-        raise CadcException('Expected scheme:ARCHIVE/FILE_NAME')
+        logging.debug(f'URI {uri} caused error {e}. Expected '
+                      f'scheme:path/FILE_NAME')
+        raise CadcException('Expected scheme:path/FILE_NAME')
 
 
 def check_param(param, param_type):
