@@ -1211,6 +1211,42 @@ class Config(object):
             logging.error(e)
             return None
 
+    @staticmethod
+    def write_to_file(config):
+        """Avoid specifying types when writing a config.yml file."""
+        config_fqn = os.path.join(os.getcwd(), 'config.yml')
+        with open(config_fqn, 'w') as f:
+            for entry in dir(config):
+                try:
+                    attribute = getattr(config, entry)
+                except TypeError:
+                    pass
+                if entry.startswith('_') or callable(attribute):
+                    continue
+                elif entry == 'features':
+                    f.write('features:\n')
+                    for feature in dir(attribute):
+                        try:
+                            feature_attribute = getattr(attribute, feature)
+                        except TypeError:
+                            pass
+                        if feature.startswith('_') or callable(feature_attribute):
+                            continue
+                        f.write(f'  {feature}: {feature_attribute}\n')
+                elif entry == 'task_types':
+                    f.write('task_types:\n')
+                    for task in attribute:
+                        f.write(f'  - {task.name.lower()}\n')
+                elif entry == 'logging_level':
+                    lookup = {logging.DEBUG: 'DEBUG',
+                              logging.INFO: 'INFO',
+                              logging.WARNING: 'WARNING',
+                              logging.ERROR: 'ERROR'}
+                    temp = lookup.get(attribute)
+                    f.write(f'{entry}: {temp}\n')
+                elif attribute is not None:
+                    f.write(f'{entry}: {attribute}\n')
+
 
 class PreviewVisitor(object):
     """
