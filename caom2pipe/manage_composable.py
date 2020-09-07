@@ -98,7 +98,7 @@ from cadcdata import CadcDataClient
 from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact, Observation
 from caom2 import ChecksumURI
-from caom2.obs_reader_writer import CAOM23_NAMESPACE
+from caom2.obs_reader_writer import CAOM24_NAMESPACE
 from caom2.diff import get_differences
 
 
@@ -2147,7 +2147,7 @@ def record_progress(config, application, count, cumulative, start_time):
                 datetime.now(), application, count, start_time, cumulative))
 
 
-def write_obs_to_file(obs, fqn, namespace=CAOM23_NAMESPACE):
+def write_obs_to_file(obs, fqn, namespace=CAOM24_NAMESPACE):
     """Common code to write a CAOM Observation to a file."""
     ow = ObservationWriter(namespace=namespace)
     ow.write(obs, fqn)
