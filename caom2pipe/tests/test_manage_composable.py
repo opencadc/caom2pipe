@@ -857,12 +857,19 @@ def test_config_write():
     try:
         test_config = mc.Config()
         test_config.get_executors()
-        assert mc.TaskType.SCRAPE in test_config.task_types, 'starting'
-        test_config.task_types = [mc.TaskType.VISIT, mc.TaskType.MODIFY]
+        scrape_found = False
+        if mc.TaskType.SCRAPE in test_config.task_types:
+            test_config.task_types = [mc.TaskType.VISIT, mc.TaskType.MODIFY]
+            scrape_found = True
+        else:
+            test_config.task_types = [mc.TaskType.SCRAPE]
         mc.Config.write_to_file(test_config)
         second_config = mc.Config()
         second_config.get_executors()
-        assert mc.TaskType.VISIT in test_config.task_types, 'visit end'
-        assert mc.TaskType.MODIFY in test_config.task_types, 'modify end'
+        if scrape_found:
+            assert mc.TaskType.VISIT in test_config.task_types, 'visit end'
+            assert mc.TaskType.MODIFY in test_config.task_types, 'modify end'
+        else:
+            assert mc.TaskType.SCRAPE in test_config.task_types, 'scrape end'
     finally:
         os.getcwd = get_cwd_orig

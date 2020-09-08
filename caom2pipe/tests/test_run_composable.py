@@ -92,9 +92,12 @@ TEST_SOURCE = '{}/test_command/test_command.py'.format(
     distutils.sysconfig.get_python_lib())
 
 
-@patch('caom2pipe.execute_composable.CaomExecute.'
-       '_fits2caom2_cmd_in_out_local_direct')
-def test_run_todo_list_dir_data_source(fits2caom2_mock, test_config):
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local_direct')
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out_local_direct')
+@patch('caom2pipe.manage_composable.read_obs_from_file')
+def test_run_todo_list_dir_data_source(read_obs_mock, fits2caom2_in_out_mock,
+                                       fits2caom2_mock, test_config):
+    read_obs_mock.side_effect = _mock_read
     test_config.working_directory = tc.TEST_FILES_DIR
     test_config.use_local_files = True
     test_config.task_types = [mc.TaskType.SCRAPE]
@@ -105,7 +108,10 @@ def test_run_todo_list_dir_data_source(fits2caom2_mock, test_config):
                                  command_name=TEST_COMMAND)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
-    assert fits2caom2_mock.called, 'expect fits2caom2 call'
+    if fits2caom2_mock.called:
+        assert not fits2caom2_in_out_mock.called, 'expect no in/out call'
+    else:
+        assert fits2caom2_in_out_mock.called, 'expect fits2caom2 in/out call'
 
 
 def test_run_todo_list_dir_data_source_invalid_fname(test_config):
@@ -425,3 +431,8 @@ def _mock_write():
     mc.write_obs_to_file(
         SimpleObservation(collection='test_collection', observation_id='ghi',
                           algorithm=Algorithm(str('test'))), fqn)
+
+
+def _mock_read(ignore_fqn):
+    return SimpleObservation(collection='test_collection', observation_id='ghi',
+                             algorithm=Algorithm(str('test')))

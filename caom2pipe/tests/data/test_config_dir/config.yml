@@ -38,8 +38,7 @@ success_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/success_log.txt
 success_log_file_name: success_log.txt
 tap_id: ivo://cadc.nrc.ca/sc2tap
 task_types:
-  - visit
-  - modify
+  - scrape
 use_local_files: False
 work_file: todo.txt
 work_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/todo.txt
