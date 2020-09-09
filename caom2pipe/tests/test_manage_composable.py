@@ -848,3 +848,28 @@ def test_visit(ad_put_mock):
     assert ad_put_mock.call_count == expected_call_count, \
         'ad put called wrong number of times'
     # assert False
+
+
+def test_config_write():
+    get_cwd_orig = os.getcwd
+    test_dir = f'{tc.TEST_DATA_DIR}/test_config_dir'
+    os.getcwd = Mock(return_value=test_dir)
+    try:
+        test_config = mc.Config()
+        test_config.get_executors()
+        scrape_found = False
+        if mc.TaskType.SCRAPE in test_config.task_types:
+            test_config.task_types = [mc.TaskType.VISIT, mc.TaskType.MODIFY]
+            scrape_found = True
+        else:
+            test_config.task_types = [mc.TaskType.SCRAPE]
+        mc.Config.write_to_file(test_config)
+        second_config = mc.Config()
+        second_config.get_executors()
+        if scrape_found:
+            assert mc.TaskType.VISIT in test_config.task_types, 'visit end'
+            assert mc.TaskType.MODIFY in test_config.task_types, 'modify end'
+        else:
+            assert mc.TaskType.SCRAPE in test_config.task_types, 'scrape end'
+    finally:
+        os.getcwd = get_cwd_orig

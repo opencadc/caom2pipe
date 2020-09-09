@@ -74,9 +74,9 @@ from datetime import datetime
 
 from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
-from caom2 import ValueCoord2D, CompositeObservation, Algorithm, Artifact, Part
+from caom2 import ValueCoord2D, Algorithm, Artifact, Part, TemporalWCS
 from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
-from caom2 import TemporalWCS, CoordFunction1D
+from caom2 import CoordFunction1D, DerivedObservation
 from caom2.diff import get_differences
 
 from caom2pipe import astro_composable as ac
@@ -252,40 +252,22 @@ def change_to_composite(observation, algorithm_name='composite',
                         collection=None, features=None):
     """For the case where a SimpleObservation needs to become a
     DerivedObservation."""
-    if (collection is None or collection != 'CFHT' or
-            (features is not None and not features.supports_latest_caom)):
-        temp = CompositeObservation(observation.collection,
-                                    observation.observation_id,
-                                    Algorithm(algorithm_name),
-                                    observation.sequence_number,
-                                    observation.intent,
-                                    observation.type,
-                                    observation.proposal,
-                                    observation.telescope,
-                                    observation.instrument,
-                                    observation.target,
-                                    observation.meta_release,
-                                    observation.planes,
-                                    observation.environment,
-                                    observation.target_position)
-    else:
-        from caom2 import DerivedObservation
-        temp = DerivedObservation(observation.collection,
-                                  observation.observation_id,
-                                  Algorithm(algorithm_name),
-                                  observation.sequence_number,
-                                  observation.intent,
-                                  observation.type,
-                                  observation.proposal,
-                                  observation.telescope,
-                                  observation.instrument,
-                                  observation.target,
-                                  observation.meta_release,
-                                  observation.meta_read_groups,
-                                  observation.planes,
-                                  observation.environment,
-                                  observation.target_position)
-        temp.meta_producer = observation.meta_producer
+    temp = DerivedObservation(observation.collection,
+                              observation.observation_id,
+                              Algorithm(algorithm_name),
+                              observation.sequence_number,
+                              observation.intent,
+                              observation.type,
+                              observation.proposal,
+                              observation.telescope,
+                              observation.instrument,
+                              observation.target,
+                              observation.meta_release,
+                              observation.meta_read_groups,
+                              observation.planes,
+                              observation.environment,
+                              observation.target_position)
+    temp.meta_producer = observation.meta_producer
     temp.last_modified = datetime.utcnow()
     temp._id = observation._id
     return temp
