@@ -118,7 +118,6 @@ from shutil import move
 
 from cadcdata import CadcDataClient
 from cadcutils.exceptions import NotFoundException
-from caom2 import obs_reader_writer
 from caom2repo import CAOM2RepoClient
 from caom2pipe import manage_composable as mc
 
@@ -193,10 +192,6 @@ class CaomExecute(object):
         self.observable = observable
         self.mime_encoding = storage_name.mime_encoding
         self.mime_type = storage_name.mime_type
-        if config.features.supports_latest_caom:
-            self.namespace = obs_reader_writer.CAOM24_NAMESPACE
-        else:
-            self.namespace = obs_reader_writer.CAOM23_NAMESPACE
 
     def _cleanup(self):
         """Remove a directory and all its contents."""
@@ -279,10 +274,10 @@ class CaomExecute(object):
             conn = f'--not_connected'
         local_fqn = os.path.join(self.working_dir, self.fname)
         sys.argv = (f'{self.command_name} {self.logging_level_param} {conn} '
-                    f'{self.cred_param} --caom_namespace {self.namespace} '
-                    f'--observation {self.collection} {self.obs_id} --local'
-                    f' {local_fqn} --out {self.model_fqn} --plugin {plugin} '
-                    f'--module {plugin} --lineage {self.lineage}').split()
+                    f'{self.cred_param} --observation {self.collection} '
+                    f'{self.obs_id} --local {local_fqn} --out '
+                    f'{self.model_fqn} --plugin {plugin} --module {plugin} '
+                    f'--lineage {self.lineage}').split()
         command.to_caom2()
 
     def _fits2caom2_cmd_direct(self):
@@ -291,11 +286,10 @@ class CaomExecute(object):
         # so far, the plugin is also the module :)
         command = mc.load_module(plugin, 'to_caom2')
         sys.argv = (f'{self.command_name} {self.logging_level_param} '
-                    f'{self.cred_param}  --caom_namespace {self.namespace} '
-                    f'--observation {self.collection} {self.obs_id} --out '
-                    f'{self.model_fqn} {self.external_urls_param} --plugin '
-                    f'{plugin} --module {plugin} --lineage '
-                    f'{self.lineage}').split()
+                    f'{self.cred_param} --observation {self.collection} '
+                    f'{self.obs_id} --out {self.model_fqn} '
+                    f'{self.external_urls_param} --plugin {plugin} --module '
+                    f'{plugin} --lineage {self.lineage}').split()
         command.to_caom2()
 
     def _fits2caom2_cmd_in_out_client(self):
@@ -316,10 +310,10 @@ class CaomExecute(object):
         # so far, the plugin is also the module :)
         command = mc.load_module(plugin, 'to_caom2')
         sys.argv = (f'{self.command_name} {self.logging_level_param} '
-                    f'{self.cred_param}  --caom_namespace {self.namespace} '
-                    f'--in {self.model_fqn} --out {self.model_fqn} '
-                    f'{self.external_urls_param} --plugin {plugin} --module '
-                    f'{plugin} --lineage {self.lineage}').split()
+                    f'{self.cred_param} --in {self.model_fqn} --out '
+                    f'{self.model_fqn} {self.external_urls_param} --plugin '
+                    f'{plugin} --module {plugin} --lineage '
+                    f'{self.lineage}').split()
         command.to_caom2()
 
     def _fits2caom2_cmd_in_out_local_client(self, connected=True):
@@ -346,9 +340,9 @@ class CaomExecute(object):
         if not connected:
             conn = f'--not_connected'
         sys.argv = (f'{self.command_name} {self.logging_level_param} {conn} '
-                    f'{self.cred_param}  --caom_namespace {self.namespace} '
-                    f'--in {self.model_fqn} --out {self.model_fqn} --local '
-                    f'{local_fqn} --plugin {plugin} --module {plugin} --lineage '
+                    f'{self.cred_param} --in {self.model_fqn} --out '
+                    f'{self.model_fqn} --local ' f'{local_fqn} --plugin '
+                    f'{plugin} --module {plugin} --lineage '
                     f'{self.lineage}').split()
         command.to_caom2()
 
@@ -413,7 +407,7 @@ class CaomExecute(object):
 
     def _write_model(self, observation):
         """Write an observation to disk from memory, represented in XML."""
-        mc.write_obs_to_file(observation, self.model_fqn, self.namespace)
+        mc.write_obs_to_file(observation, self.model_fqn)
 
     def _visit_meta(self, observation):
         """Execute metadata-only visitors on an Observation in
