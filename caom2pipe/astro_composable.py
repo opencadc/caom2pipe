@@ -163,7 +163,7 @@ def get_datetime(from_value):
                     # because %z doesn't expect the ':' in the timezone field
                     from_value = from_value[:-6]
                 for fmt in ['%H:%M:%S', '%Y/%m/%d', '%Y-%m-%d %H:%M:%S.%f',
-                            '%d/%m/%y']:
+                            '%d/%m/%y', '%d/%m/%y %H:%M:%S']:
                     try:
                         result = Time(dt_datetime.strptime(from_value, fmt))
                         break
