@@ -280,10 +280,10 @@ class CaomExecute(object):
             conn = f'--not_connected'
         local_fqn = os.path.join(self.working_dir, self.fname)
         sys.argv = (f'{self.command_name} {self.logging_level_param} {conn} '
-                    f'{self.cred_param} --caom_namespace {self.namespace} '
-                    f'--observation {self.collection} {self.obs_id} --local'
-                    f' {local_fqn} --out {self.model_fqn} --plugin {plugin} '
-                    f'--module {plugin} --lineage {self.lineage}').split()
+                    f'{self.cred_param} --observation {self.collection} '
+                    f'{self.obs_id} --local {local_fqn} --out '
+                    f'{self.model_fqn} --plugin {plugin} --module {plugin} '
+                    f'--lineage {self.lineage}').split()
         command.to_caom2()
 
     def _fits2caom2_cmd_direct(self):
@@ -292,11 +292,10 @@ class CaomExecute(object):
         # so far, the plugin is also the module :)
         command = mc.load_module(plugin, 'to_caom2')
         sys.argv = (f'{self.command_name} {self.logging_level_param} '
-                    f'{self.cred_param}  --caom_namespace {self.namespace} '
-                    f'--observation {self.collection} {self.obs_id} --out '
-                    f'{self.model_fqn} {self.external_urls_param} --plugin '
-                    f'{plugin} --module {plugin} --lineage '
-                    f'{self.lineage}').split()
+                    f'{self.cred_param} --observation {self.collection} '
+                    f'{self.obs_id} --out {self.model_fqn} '
+                    f'{self.external_urls_param} --plugin {plugin} --module '
+                    f'{plugin} --lineage {self.lineage}').split()
         command.to_caom2()
 
     def _fits2caom2_cmd_in_out_client(self):
@@ -317,10 +316,10 @@ class CaomExecute(object):
         # so far, the plugin is also the module :)
         command = mc.load_module(plugin, 'to_caom2')
         sys.argv = (f'{self.command_name} {self.logging_level_param} '
-                    f'{self.cred_param}  --caom_namespace {self.namespace} '
-                    f'--in {self.model_fqn} --out {self.model_fqn} '
-                    f'{self.external_urls_param} --plugin {plugin} --module '
-                    f'{plugin} --lineage {self.lineage}').split()
+                    f'{self.cred_param} --in {self.model_fqn} --out '
+                    f'{self.model_fqn} {self.external_urls_param} --plugin '
+                    f'{plugin} --module {plugin} --lineage '
+                    f'{self.lineage}').split()
         command.to_caom2()
 
     def _fits2caom2_cmd_in_out_local_client(self, connected=True):
@@ -347,9 +346,9 @@ class CaomExecute(object):
         if not connected:
             conn = f'--not_connected'
         sys.argv = (f'{self.command_name} {self.logging_level_param} {conn} '
-                    f'{self.cred_param}  --caom_namespace {self.namespace} '
-                    f'--in {self.model_fqn} --out {self.model_fqn} --local '
-                    f'{local_fqn} --plugin {plugin} --module {plugin} --lineage '
+                    f'{self.cred_param} --in {self.model_fqn} --out '
+                    f'{self.model_fqn} --local ' f'{local_fqn} --plugin '
+                    f'{plugin} --module {plugin} --lineage '
                     f'{self.lineage}').split()
         command.to_caom2()
 
@@ -480,8 +479,11 @@ class MetaCreateDirect(CaomExecute):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
-        self.logger.debug('Find the file name as stored.')
-        self._cadc_data_info_file_name_client()
+        # TODO - what breaks when this isn't here? But it can't be here,
+        # because not all files are stored at CADC
+        #
+        # self.logger.debug('Find the file name as stored.')
+        # self._cadc_data_info_file_name_client()
 
         self.logger.debug('create the work space, if it does not exist')
         self._create_dir()
@@ -524,8 +526,11 @@ class MetaUpdateDirect(CaomExecute):
         self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
-        self.logger.debug('Find the file name as stored.')
-        self._cadc_data_info_file_name_client()
+        # TODO - what breaks when this isn't here? But it can't be here,
+        # because not all files are stored at CADC
+        #
+        # self.logger.debug('Find the file name as stored.')
+        # self._cadc_data_info_file_name_client()
 
         self.logger.debug('create the work space, if it does not exist')
         self._create_dir()
@@ -577,8 +582,11 @@ class MetaDeleteCreateDirect(CaomExecute):
         self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
-        self.logger.debug('Find the file name as stored.')
-        self._cadc_data_info_file_name_client()
+        # TODO - what breaks when this isn't here? But it can't be here,
+        # because not all files are stored at CADC
+        #
+        # self.logger.debug('Find the file name as stored.')
+        # self._cadc_data_info_file_name_client()
 
         self.logger.debug('create the work space, if it does not exist')
         self._create_dir()
@@ -699,10 +707,12 @@ class LocalMetaCreateDirect(CaomExecute):
     def execute(self, context):
         self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
-
-        self.logger.debug('Find the file name as stored.')
-        self._cadc_data_info_file_name_client()
-
+        # TODO - what breaks when this isn't here? But it can't be here,
+        # because not all files are stored at CADC
+        #
+        # self.logger.debug('Find the file name as stored.')
+        # self._cadc_data_info_file_name_client()
+        #
         self.logger.debug('the observation does not exist, so go '
                           'straight to generating the xml, as the main_app '
                           'will retrieve the headers')
@@ -745,8 +755,11 @@ class LocalMetaDeleteCreateDirect(CaomExecute):
         self.logger.debug(f'Begin execute for {self.__class__.__name__}')
         self.logger.debug('the steps:')
 
-        self.logger.debug('Find the file name as stored.')
-        self._cadc_data_info_file_name_client()
+        # TODO - what breaks when this isn't here? But it can't be here,
+        # because not all files are stored at CADC
+        #
+        # self.logger.debug('Find the file name as stored.')
+        # self._cadc_data_info_file_name_client()
 
         self.logger.debug('write the observation to disk for next step')
         self._write_model(self.observation)
@@ -793,8 +806,11 @@ class LocalMetaUpdateDirect(CaomExecute):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
-        self.logger.debug('Find the file name as stored.')
-        self._cadc_data_info_file_name_client()
+        # # TODO - what breaks when this isn't here? But it can't be here,
+        # # because not all files are stored at CADC
+        #
+        # self.logger.debug('Find the file name as stored.')
+        # self._cadc_data_info_file_name_client()
 
         self.logger.debug('write the observation to disk for next step')
         self._write_model(self.observation)

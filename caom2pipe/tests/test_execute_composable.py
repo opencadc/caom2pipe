@@ -766,10 +766,8 @@ def to_caom2():
     """Called from ScrapeDirect"""
     assert sys.argv is not None, 'expect sys.argv to be set'
     assert sys.argv == ['test_execute_composable', '--verbose',
-                        '--not_connected', '--caom_namespace',
-                        'http://www.opencadc.org/caom2/xml/v2.4',
-                        '--observation', 'OMM', 'test_obs_id',
-                        '--local',
+                        '--not_connected', '--observation', 'OMM',
+                        'test_obs_id', '--local',
                         '/usr/src/app/caom2pipe/caom2pipe/tests/data/'
                         'test_file.fits.gz',
                         '--out',
