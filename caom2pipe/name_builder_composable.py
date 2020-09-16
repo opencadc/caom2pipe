@@ -129,7 +129,8 @@ class StorageNameInstanceBuilder(StorageNameBuilder):
     def build(self, entry):
         return mc.StorageName(obs_id=mc.StorageName.remove_extensions(entry),
                               collection=self._collection,
-                              fname_on_disk=entry)
+                              fname_on_disk=entry,
+                              entry=entry)
 
 
 class FileNameBuilder(StorageNameBuilder):
@@ -143,4 +144,4 @@ class FileNameBuilder(StorageNameBuilder):
         self._storage_name = storage_name
 
     def build(self, entry):
-        return self._storage_name(file_name=entry)
+        return self._storage_name(file_name=entry, entry=entry)

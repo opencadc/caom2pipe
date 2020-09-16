@@ -1318,7 +1318,7 @@ class StorageName(object):
     def __init__(self, obs_id=None, collection=None, collection_pattern='.*',
                  fname_on_disk=None, scheme='ad', archive=None, url=None,
                  mime_encoding=None, mime_type='application/fits',
-                 compression='.gz'):
+                 compression='.gz', entry=None):
         """
 
         :param obs_id: string value for Observation.observationID
@@ -1335,6 +1335,8 @@ class StorageName(object):
             'collection'
         :param url: if the metadata/data is externally available via http,
             the url for retrieval
+        :param entry: string - the value as obtained from the DataSource,
+            unchanged for use in the retries.txt file.
         """
         self.obs_id = obs_id
         self.collection = collection
@@ -1350,6 +1352,7 @@ class StorageName(object):
         self._mime_type = mime_type
         self._compression = compression
         self._source_name = None
+        self._entry = entry
         self._logger = logging.getLogger(__name__)
 
     def __str__(self):
@@ -1357,6 +1360,10 @@ class StorageName(object):
                f'fname_on_disk {self.fname_on_disk}, ' \
                f'file_name {self.file_name}, ' \
                f'lineage {self.lineage}'
+
+    @property
+    def entry(self):
+        return self._entry
 
     @property
     def file_uri(self):

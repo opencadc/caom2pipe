@@ -1266,12 +1266,16 @@ class OrganizeExecutes(object):
         if reason == mc.Rejected.NO_REASON:
             if self.config.log_to_file:
                 with open(self.retry_fqn, 'a') as retry:
-                    if self.config.use_local_files:
-                        retry.write(f'{storage_name.fname_on_disk}\n')
-                    elif self.config.features.use_file_names:
-                        retry.write(f'{storage_name.file_name}\n')
+                    if (hasattr(storage_name, '_entry') and
+                            storage_name.entry is not None):
+                        retry.write(f'{storage_name.entry}\n')
                     else:
-                        retry.write(f'{storage_name.obs_id}\n')
+                        if self.config.use_local_files:
+                            retry.write(f'{storage_name.fname_on_disk}\n')
+                        elif self.config.features.use_file_names:
+                            retry.write(f'{storage_name.file_name}\n')
+                        else:
+                            retry.write(f'{storage_name.obs_id}\n')
         else:
             self.observable.rejected.record(reason, storage_name.obs_id)
             self._rejected_count += 1
