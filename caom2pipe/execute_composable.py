@@ -115,7 +115,6 @@ from datetime import datetime
 from shutil import move
 
 from cadcdata import CadcDataClient
-from cadcutils.exceptions import NotFoundException
 from caom2repo import CAOM2RepoClient
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
