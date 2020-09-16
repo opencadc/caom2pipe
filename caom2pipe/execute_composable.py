@@ -225,44 +225,6 @@ class CaomExecute(object):
         return os.path.join(
             packages, f'{self.command_name}/{self.command_name}.py')
 
-    def _fits2caom2_cmd_local(self, connected=True):
-        """Execute fits2caom with a --local parameter."""
-        fqn = os.path.join(self.working_dir, self.fname)
-        plugin = self._find_fits2caom2_plugin()
-        conn = ''
-        if not connected:
-            conn = f'--not_connected'
-        # so far, the plugin is also the module :)
-        cmd = f'{self.command_name} {self.logging_level_param} {conn} ' \
-              f'{self.cred_param} --observation {self.collection} ' \
-              f'{self.obs_id} --out {self.model_fqn} --plugin {plugin} ' \
-              f'--module {plugin} --local {fqn} --lineage {self.lineage}'
-        mc.exec_cmd(cmd, self.log_level_as)
-
-    def _fits2caom2_cmd_client(self):
-        """Execute fits2caom with a --cert parameter."""
-        plugin = self._find_fits2caom2_plugin()
-        # so far, the plugin is also the module :)
-        cmd = f'{self.command_name} {self.logging_level_param} ' \
-              f'{self.cred_param} --observation {self.collection} ' \
-              f'{self.obs_id} --out {self.model_fqn} ' \
-              f'{self.external_urls_param} --plugin {plugin} --module ' \
-              f'{plugin} --lineage {self.lineage}'
-        mc.exec_cmd(cmd, self.log_level_as)
-
-    def _fits2caom2_cmd_client_local(self):
-        """
-        Execute fits2caom with a --cert parameter and a --local parameter.
-        """
-        plugin = self._find_fits2caom2_plugin()
-        # so far, the plugin is also the module :)
-        local_fqn = os.path.join(self.working_dir, self.fname)
-        cmd = f'{self.command_name} {self.logging_level_param} ' \
-              f'{self.cred_param} --observation {self.collection} {self.obs_id} ' \
-              f'--local {local_fqn} --out {self.model_fqn} --plugin {plugin} ' \
-              f'--module {plugin} --lineage {self.lineage}'
-        mc.exec_cmd(cmd, self.log_level_as)
-
     def _fits2caom2_cmd_local_direct(self, connected=True):
         """
         Execute fits2caom with a --cert parameter and a --local parameter.
@@ -293,17 +255,6 @@ class CaomExecute(object):
                     f'{plugin} --lineage {self.lineage}').split()
         command.to_caom2()
 
-    def _fits2caom2_cmd_in_out_client(self):
-        """Execute fits2caom with a --in, a --external_url and a --cert
-        parameter."""
-        plugin = self._find_fits2caom2_plugin()
-        # so far, the plugin is also the module :)
-        cmd = f'{self.command_name} {self.logging_level_param} ' \
-              f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} ' \
-              f'{self.external_urls_param} --plugin {plugin} --module {plugin} ' \
-              f'--lineage {self.lineage}'
-        mc.exec_cmd(cmd, self.log_level_as)
-
     def _fits2caom2_cmd_in_out_direct(self):
         """Execute fits2caom with a --in, a --external_url and a --cert
         parameter."""
@@ -316,20 +267,6 @@ class CaomExecute(object):
                     f'{plugin} --module {plugin} --lineage '
                     f'{self.lineage}').split()
         command.to_caom2()
-
-    def _fits2caom2_cmd_in_out_local_client(self, connected=True):
-        """Execute fits2caom with a --in, --local and a --cert parameter."""
-        plugin = self._find_fits2caom2_plugin()
-        # so far, the plugin is also the module :)
-        local_fqn = os.path.join(self.working_dir, self.fname)
-        conn = ''
-        if not connected:
-            conn = f'--not_connected'
-        cmd = f'{self.command_name} {self.logging_level_param} {conn} ' \
-              f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} ' \
-              f'--local {local_fqn} --plugin {plugin} --module {plugin} ' \
-              f'--lineage {self.lineage}'
-        mc.exec_cmd(cmd, self.log_level_as)
 
     def _fits2caom2_cmd_in_out_local_direct(self, connected=True):
         """Execute fits2caom with a --in, --local and a --cert parameter."""
@@ -373,34 +310,6 @@ class CaomExecute(object):
         mc.data_put(self.cadc_data_client, self.working_dir,
                     self.fname, self.archive, self.stream, self.mime_type,
                     self.mime_encoding, metrics=self.observable.metrics)
-
-    def _cadc_data_get_client(self):
-        """Retrieve an archive file, even if it already exists. This might
-        ensure that the latest version of the file is retrieved from
-        storage."""
-        mc.data_get(self.cadc_data_client, self.working_dir,
-                    self.fname, self.archive, self.observable.metrics)
-
-    def _cadc_data_info_file_name_client(self):
-        """Execute CadcDataClient.get_file_info with the client instance from
-        this class."""
-        if self.fname is None:
-            logging.warning(f'self.fname is None for {self.obs_id}.')
-        else:
-            try:
-                # this handles the case where the file name as stored in ad
-                # is not the same as the file name given for processing. This
-                # can occur most often when the file is named in list of work
-                # to be done without compression but stored with compression,
-                # or vice versa.
-                file_info = self.cadc_data_client.get_file_info(
-                    self.archive, self.fname)
-                self.fname = file_info['name']
-            except NotFoundException as e:
-                # for Gemini, it's possible the metadata exists at CADC, but
-                # the file does not, when it's proprietary, so continue
-                # processing
-                logging.warning(f'{self.fname} does not exist at CADC.')
 
     def _read_model(self):
         """Read an observation into memory from an XML file on disk."""

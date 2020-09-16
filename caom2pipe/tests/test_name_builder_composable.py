@@ -67,30 +67,9 @@
 # ***********************************************************************
 #
 
-import os
-
-from mock import Mock
-
-from caom2pipe import manage_composable as mc
 from caom2pipe import name_builder_composable as nbc
 
 import test_conf as tc
-
-
-def test_builder():
-    get_cwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
-    test_config = mc.Config()
-    test_config.get_executors()
-    try:
-        test_subject = nbc.Builder(test_config)
-        assert test_subject.todo_list is not None, 'expect a result'
-        assert len(test_subject.todo_list) == 0, 'wrong todo list result'
-        test_storage_name = tc.TestStorageName()
-        assert test_subject.build(test_storage_name) == test_storage_name, \
-            'build wrong result'
-    finally:
-        os.getcwd = get_cwd_orig
 
 
 def test_storage_name_builder():
