@@ -116,7 +116,6 @@ from shutil import move
 
 from cadcdata import CadcDataClient
 from cadcutils.exceptions import NotFoundException
-from caom2 import obs_reader_writer
 from caom2repo import CAOM2RepoClient
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
@@ -190,10 +189,6 @@ class CaomExecute(object):
         self.observable = observable
         self.mime_encoding = storage_name.mime_encoding
         self.mime_type = storage_name.mime_type
-        if config.features.supports_latest_caom:
-            self.namespace = obs_reader_writer.CAOM24_NAMESPACE
-        else:
-            self.namespace = obs_reader_writer.CAOM23_NAMESPACE
         self._storage_name = storage_name
         self._fqn = os.path.join(self.working_dir, self.fname)
         self.log_file_directory = None
@@ -429,7 +424,7 @@ class CaomExecute(object):
 
     def _write_model(self, observation):
         """Write an observation to disk from memory, represented in XML."""
-        mc.write_obs_to_file(observation, self.model_fqn, self.namespace)
+        mc.write_obs_to_file(observation, self.model_fqn)
 
     @staticmethod
     def _specify_external_urls_param(external_urls):
@@ -639,7 +634,7 @@ class MetaUpdateObservationDirect(CaomExecute):
         self.fname = None
         self.lineage = None
         self.external_urls_param = ''
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
         self.logger.debug(f'Begin execute.')
@@ -669,22 +664,18 @@ class MetaUpdateObservationDirect(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug(f'End execute.')
+        self.logger.debug(f'End execute')
 
     def _set_parameters(self):
-        temp = {}
+        lineage = ''
         # make a dict of product ids and artifact uris
         for plane in self.observation.planes.values():
             for artifact in plane.artifacts.values():
                 if 'fits' in artifact.uri:
-                    mc.append_as_array(temp, plane.product_id, artifact.uri)
-
-        lineage = ''
-        for product_id, value in temp.items():
-            for entry in value:
-                scheme, archive, file_name = mc.decompose_uri(entry)
-                result = mc.get_lineage(archive, product_id, file_name)
-                lineage = f'{lineage} {result}'
+                    scheme, archive, file_name = mc.decompose_uri(artifact.uri)
+                    result = mc.get_lineage(
+                        archive, plane.product_id, file_name, scheme)
+                    lineage = f'{lineage} {result}'
 
         self.lineage = lineage
 
@@ -834,8 +825,7 @@ class LocalMetaUpdateDirect(CaomExecute):
         self.logger.debug('End execute')
 
 
-# TODO rename MetaVisit
-class ClientVisit(CaomExecute):
+class MetaVisit(CaomExecute):
     """Defines the pipeline step for Collection augmentation by a visitor
      of metadata into CAOM. This assumes a record already exists in CAOM,
      and the update DOES NOT require access to either the header or the data.
@@ -848,7 +838,7 @@ class ClientVisit(CaomExecute):
     def __init__(self, config, storage_name, cred_param,
                  cadc_data_client, caom_repo_client, meta_visitors,
                  observable):
-        super(ClientVisit, self).__init__(
+        super(MetaVisit, self).__init__(
             config, mc.TaskType.VISIT, storage_name, command_name=None,
             cred_param=cred_param, cadc_data_client=cadc_data_client,
             caom_repo_client=caom_repo_client,
@@ -938,6 +928,7 @@ class DataVisit(CaomExecute):
                   'science_file': self.fname,
                   'log_file_directory': self._log_file_directory,
                   'cadc_client': self.cadc_data_client,
+                  'caom_repo_client': self.caom_repo_client,
                   'stream': self.stream,
                   'observable': self.observable}
         for visitor in self._data_visitors:
@@ -1613,7 +1604,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                     self._logger.info(f'Skipping the MODIFY task for '
                                       f'{storage_name.file_name}.')
             elif task_type == mc.TaskType.VISIT:
-                executors.append(ClientVisit(
+                executors.append(MetaVisit(
                     self.config, storage_name, cred_param,
                     cadc_data_client, caom_repo_client, self._meta_visitors,
                     self.observable))

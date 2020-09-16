@@ -79,7 +79,6 @@ import sys
 import yaml
 
 from datetime import datetime
-from deprecated import deprecated
 from enum import Enum
 from ftplib import FTP
 from ftputil import FTPHost
@@ -98,7 +97,6 @@ from cadcdata import CadcDataClient
 from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact, Observation
 from caom2 import ChecksumURI
-from caom2.obs_reader_writer import CAOM23_NAMESPACE
 from caom2.diff import get_differences
 
 
@@ -480,7 +478,7 @@ class Cache(object):
             self._cache = read_as_yaml(self._fqn)
         except Exception as e:
             raise CadcException(
-                f'Cache {self._fqn} read failure {e}. Stopping pipeline.')
+                f'Cache file {self._fqn} read failure {e}. Stopping pipeline.')
 
     def add_to(self, key, values):
         """Add to or update the content of the cache. This is an over-write
@@ -1191,6 +1189,42 @@ class Config(object):
             logging.error(e)
             return None
 
+    @staticmethod
+    def write_to_file(config):
+        """Avoid specifying types when writing a config.yml file."""
+        config_fqn = os.path.join(os.getcwd(), 'config.yml')
+        with open(config_fqn, 'w') as f:
+            for entry in dir(config):
+                try:
+                    attribute = getattr(config, entry)
+                except TypeError:
+                    pass
+                if entry.startswith('_') or callable(attribute):
+                    continue
+                elif entry == 'features':
+                    f.write('features:\n')
+                    for feature in dir(attribute):
+                        try:
+                            feature_attribute = getattr(attribute, feature)
+                        except TypeError:
+                            pass
+                        if feature.startswith('_') or callable(feature_attribute):
+                            continue
+                        f.write(f'  {feature}: {feature_attribute}\n')
+                elif entry == 'task_types':
+                    f.write('task_types:\n')
+                    for task in attribute:
+                        f.write(f'  - {task.name.lower()}\n')
+                elif entry == 'logging_level':
+                    lookup = {logging.DEBUG: 'DEBUG',
+                              logging.INFO: 'INFO',
+                              logging.WARNING: 'WARNING',
+                              logging.ERROR: 'ERROR'}
+                    temp = lookup.get(attribute)
+                    f.write(f'{entry}: {temp}\n')
+                elif attribute is not None:
+                    f.write(f'{entry}: {attribute}\n')
+
 
 class PreviewVisitor(object):
     """
@@ -1703,9 +1737,10 @@ def to_float(value):
     """Cast to float, without throwing an exception."""
     result = None
     if value is not None:
-        if isinstance(value, float) or isinstance(value, int):
+        if isinstance(value, float): #  or isinstance(value, int):
             result = value
-        elif isinstance(value, str) and len(value.strip()) > 0:
+        elif ((isinstance(value, str) and len(value.strip()) > 0) or
+              (isinstance(value, int))):
             result = float(value)
     return result
 
@@ -2108,9 +2143,9 @@ def record_progress(config, application, count, cumulative, start_time):
                 datetime.now(), application, count, start_time, cumulative))
 
 
-def write_obs_to_file(obs, fqn, namespace=CAOM23_NAMESPACE):
+def write_obs_to_file(obs, fqn):
     """Common code to write a CAOM Observation to a file."""
-    ow = ObservationWriter(namespace=namespace)
+    ow = ObservationWriter()
     ow.write(obs, fqn)
 
 
@@ -2435,11 +2470,12 @@ def make_seconds(from_time):
 
     # OMM 2019/07/16 03:15:46
     # CADC Data Client Thu, 14 May 2020 20:29:02 GMT
+    # NGVS Wed Mar 24 2010 16:10:36
     for fmt in [ISO_8601_FORMAT, '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S.%f',
                 '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S',
                 '%Y-%m-%d', '%Y-%m-%dHST%H:%M:%S', '%a %b %d %H:%M:%S HST %Y',
                 '%Y/%m/%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT',
-                '%Y-%m-%dT%H:%M']:
+                '%Y-%m-%dT%H:%M', '%a %b %d %Y %H:%M:%S']:
         try:
             seconds_since_epoch = datetime.strptime(
                 from_time[:index], fmt).timestamp()

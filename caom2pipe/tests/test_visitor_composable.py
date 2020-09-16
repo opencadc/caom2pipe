@@ -3,7 +3,7 @@
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2019.                            (c) 2019.
+#  (c) 2020.                            (c) 2020.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,80 +62,29 @@
 #  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 #                                       <http://www.gnu.org/licenses/>.
 #
-#  $Revision: 4 $
+#  : 4 $
 #
 # ***********************************************************************
 #
 
 from caom2pipe import manage_composable as mc
+from caom2pipe import visitor_composable as vc
 
-__all__ = ['FileNameBuilder', 'ObsIDBuilder', 'StorageNameInstanceBuilder',
-           'StorageNameBuilder']
-
-
-class StorageNameBuilder(object):
-    """
-    The mechanisms for translating a list of work into a collection-specific
-    name (otherwise known as which class instantiates the extension of the
-    manage_composable.StorageName class) are:
-    - this class directly
-    - a builder class provided by the collection implementation. This allows
-        for a delay in StorageName construction to when processing on an
-        entry is about to begin, for the case where StorageName construction
-        is more expensive execution-time or storage-wise
-    - the collection class directly. This choice is usually masked behind
-        a specialization of the data_source_composable.get_work class.
-    """
-    def __init__(self):
-        pass
-
-    def build(self, entry):
-        """
-        The default implementation assumes the entry is already in the form
-        of a StorageName instance, and does nothing.
-
-        :param entry: StorageName instance
-        :return: entry the same StorageName instance
-        """
-        return entry
+import test_conf
 
 
-class StorageNameInstanceBuilder(StorageNameBuilder):
-
-    def __init__(self, collection):
-        super(StorageNameInstanceBuilder, self).__init__()
-        self._collection = collection
-
-    def build(self, entry):
-        return mc.StorageName(obs_id=mc.StorageName.remove_extensions(entry),
-                              collection=self._collection,
-                              fname_on_disk=entry,
-                              entry=entry)
-
-
-class FileNameBuilder(StorageNameBuilder):
-    """
-    A class that assumes constructing the StorageName instance requires a
-    single parameter: a str 'file_name'
-    """
-
-    def __init__(self, storage_name):
-        super(FileNameBuilder, self).__init__()
-        self._storage_name = storage_name
-
-    def build(self, entry):
-        return self._storage_name(file_name=entry, entry=entry)
-
-
-class ObsIDBuilder(StorageNameBuilder):
-    """
-    A class that assumes constructing the StorageName instance requires a
-    single parameter: a str 'obs_id'
-    """
-
-    def __init__(self, storage_name):
-        super(ObsIDBuilder, self).__init__()
-        self._storage_name = storage_name
-
-    def build(self, entry):
-        return self._storage_name(obs_id=entry, entry=entry)
+def test_cleanup():
+    test_subject = vc.ArtifactCleanupVisitor(archive='VLASS')
+    assert test_subject is not None, 'expect construction'
+    test_obs = mc.read_obs_from_file(
+        f'{test_conf.TEST_DATA_DIR}/fpf_start_obs.xml')
+    test_product_id = 'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
+    assert len(test_obs.planes[test_product_id].artifacts) == 2, 'initial'
+    test_f_name = 'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.' \
+                  'image.pbcor.tt0.subim.fits'
+    kwargs = {'url': test_f_name}
+    result = test_subject.visit(test_obs, **kwargs)
+    assert result is not None, 'expect a result'
+    assert result.get('artifacts') == 1, 'wrong number of artifacts affected'
+    assert result.get('planes') == 0, 'wrong number of planes affected'
+    assert len(test_obs.planes[test_product_id].artifacts) == 1, 'no deletion'

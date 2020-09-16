@@ -215,12 +215,12 @@ def test_client_visit(test_config):
     test_observer = Mock()
 
     with patch('caom2pipe.manage_composable.write_obs_to_file') as write_mock:
-        test_executor = ec.ClientVisit(test_config,
-                                       tc.TestStorageName(), test_cred,
-                                       data_client_mock,
-                                       repo_client_mock,
-                                       meta_visitors=None,
-                                       observable=test_observer)
+        test_executor = ec.MetaVisit(test_config,
+                                     tc.TestStorageName(), test_cred,
+                                     data_client_mock,
+                                     repo_client_mock,
+                                     meta_visitors=None,
+                                     observable=test_observer)
 
         test_executor.execute(None)
         repo_client_mock.read.assert_called_with('OMM', 'test_obs_id'), \
@@ -428,7 +428,7 @@ def test_organize_executes_client_visit(test_config):
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 1
-    assert isinstance(executors[0], ec.ClientVisit)
+    assert isinstance(executors[0], ec.MetaVisit)
     assert CadcDataClient.__init__.called, 'mock not called'
     assert CAOM2RepoClient.__init__.called, 'mock not called'
 
@@ -699,14 +699,12 @@ def test_data_visit(get_mock, test_config):
         'wrong values'
     assert test_repo_client.update.called, 'expect an execution'
     # TODO - why is the log file directory NOT the working directory?
-    dv_mock.visit.assert_called_with(
-        test_repo_client.read.return_value,
-        working_directory=f'{tc.THIS_DIR}/test_obs_id',
-        science_file='test_obs_id.fits',
-        log_file_directory=tc.TEST_DATA_DIR,
-        cadc_client=test_data_client,
-        stream='TEST',
-        observable=test_observable), 'wrong call values'
+
+    args, kwargs = dv_mock.visit.call_args
+    assert kwargs.get('working_directory') == f'{tc.THIS_DIR}/test_obs_id'
+    assert kwargs.get('science_file') == 'test_obs_id.fits'
+    assert kwargs.get('log_file_directory') == tc.TEST_DATA_DIR
+    assert kwargs.get('stream') == 'TEST'
 
 
 def _communicate():

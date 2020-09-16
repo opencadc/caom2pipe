@@ -1,5 +1,4 @@
-# this supports execution of
-# test_execute_composable.py
+# this supports execution of test_execute_composable.py
 
 
 from caom2utils import fits2caom2

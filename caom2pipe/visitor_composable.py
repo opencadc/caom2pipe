@@ -3,7 +3,7 @@
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2019.                            (c) 2019.
+#  (c) 2020.                            (c) 2020.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,80 +62,77 @@
 #  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 #                                       <http://www.gnu.org/licenses/>.
 #
-#  $Revision: 4 $
+#  : 4 $
 #
 # ***********************************************************************
 #
 
+import logging
+
+from caom2 import Observation
 from caom2pipe import manage_composable as mc
 
-__all__ = ['FileNameBuilder', 'ObsIDBuilder', 'StorageNameInstanceBuilder',
-           'StorageNameBuilder']
 
-
-class StorageNameBuilder(object):
+class ArtifactCleanupVisitor(object):
     """
-    The mechanisms for translating a list of work into a collection-specific
-    name (otherwise known as which class instantiates the extension of the
-    manage_composable.StorageName class) are:
-    - this class directly
-    - a builder class provided by the collection implementation. This allows
-        for a delay in StorageName construction to when processing on an
-        entry is about to begin, for the case where StorageName construction
-        is more expensive execution-time or storage-wise
-    - the collection class directly. This choice is usually masked behind
-        a specialization of the data_source_composable.get_work class.
+    Common code for removing artifacts from an Observation. Over-ride
+    'check_for_delete' method, if the characteristics of the deletion change.
     """
-    def __init__(self):
-        pass
 
-    def build(self, entry):
+    def __init__(self, archive, scheme='ad'):
+        self._archive = archive
+        self._scheme = scheme
+        self._logger = logging.getLogger(__name__)
+
+    def visit(self, observation, **kwargs):
+        mc.check_param(observation, Observation)
+        plane_count = 0
+        artifact_count = 0
+        plane_temp = []
+        for plane in observation.planes.values():
+            artifact_temp = []
+            for artifact in plane.artifacts.values():
+                if self.check_for_delete(artifact.uri, **kwargs):
+                    artifact_temp.append(artifact.uri)
+
+            artifact_delete_list = list(set(artifact_temp))
+            for entry in artifact_delete_list:
+                self._logger.warning(
+                    f'Removing artifact {entry} from observation '
+                    f'{observation.observation_id}, plane {plane.product_id}.')
+                artifact_count += 1
+                observation.planes[plane.product_id].artifacts.pop(entry)
+
+            if len(plane.artifacts) == 0:
+                plane_temp.append(plane.product_id)
+
+        plane_delete_list = list(set(plane_temp))
+        for entry in plane_delete_list:
+            self._logger.warning(f'Removing plane {entry} from observation '
+                                 f'{observation.observation_id}.')
+            plane_count += 1
+            observation.planes.pop(entry)
+
+        self._logger.info(f'Completed artifact cleanup augmentation for '
+                          f'{observation.observation_id}. Removed '
+                          f'{artifact_count} artifacts, {plane_count} planes '
+                          f'from the observation.')
+        return {'artifacts': artifact_count,
+                'planes': plane_count}
+
+    def check_for_delete(self, uri, **kwargs):
         """
-        The default implementation assumes the entry is already in the form
-        of a StorageName instance, and does nothing.
+        Return True if an artifact should be deleted from an Observation in
+        a collection.
 
-        :param entry: StorageName instance
-        :return: entry the same StorageName instance
+        :param uri:
+        :param kwargs: Assume the 'url' entry in kwargs is actually a file
+            name for the default implementation.
+        :return:
         """
-        return entry
-
-
-class StorageNameInstanceBuilder(StorageNameBuilder):
-
-    def __init__(self, collection):
-        super(StorageNameInstanceBuilder, self).__init__()
-        self._collection = collection
-
-    def build(self, entry):
-        return mc.StorageName(obs_id=mc.StorageName.remove_extensions(entry),
-                              collection=self._collection,
-                              fname_on_disk=entry,
-                              entry=entry)
-
-
-class FileNameBuilder(StorageNameBuilder):
-    """
-    A class that assumes constructing the StorageName instance requires a
-    single parameter: a str 'file_name'
-    """
-
-    def __init__(self, storage_name):
-        super(FileNameBuilder, self).__init__()
-        self._storage_name = storage_name
-
-    def build(self, entry):
-        return self._storage_name(file_name=entry, entry=entry)
-
-
-class ObsIDBuilder(StorageNameBuilder):
-    """
-    A class that assumes constructing the StorageName instance requires a
-    single parameter: a str 'obs_id'
-    """
-
-    def __init__(self, storage_name):
-        super(ObsIDBuilder, self).__init__()
-        self._storage_name = storage_name
-
-    def build(self, entry):
-        return self._storage_name(obs_id=entry, entry=entry)
+        url = kwargs.get('url')
+        if url is None:
+            raise mc.CadcException('Must have a "url" parameter for '
+                                   'ArtifactCleanupVisitor.')
+        candidate_uri = mc.build_uri(self._archive, url)
+        return candidate_uri == uri

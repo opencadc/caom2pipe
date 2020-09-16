@@ -74,16 +74,19 @@ from datetime import datetime
 
 from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
-from caom2 import ValueCoord2D, CompositeObservation, Algorithm, Artifact, Part
-from caom2 import Instrument, TypedOrderedDict
+from caom2 import ValueCoord2D, Algorithm, Artifact, Part, TemporalWCS
+from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
+from caom2 import CoordFunction1D, DerivedObservation
 from caom2.diff import get_differences
 
 from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 
-__all__ = ['build_artifact_uri',
-           'build_chunk_energy_range', 'exec_footprintfinder',
-           'find_plane_and_artifact', 'update_plane_provenance',
+__all__ = ['append_plane_provenance', 'append_plane_provenance_single',
+           'build_artifact_uri', 'build_chunk_energy_range',
+           'build_chunk_time', 'change_to_simple', 'exec_footprintfinder',
+           'find_plane_and_artifact', 'get_differences',
+           'get_obs_id_from_cadc', 'update_plane_provenance',
            'update_observation_members', 'rename_parts',
            'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
@@ -91,6 +94,82 @@ __all__ = ['build_artifact_uri',
            'copy_part', 'undo_astropy_cdfix_call',
            'update_observation_members_filtered',
            'update_plane_provenance_list']
+
+
+def append_plane_provenance(plane, headers, lookup, collection,
+                            repair, obs_id):
+    """Append inputs to Planes, based on a particular keyword prefix.
+    This function is NOT for removing inputs that have been previously added.
+
+    :param plane Plane instance to add inputs to
+    :param headers FITS keyword headers that have lookup values.
+    :param lookup The keyword pattern to find in the FITS header keywords for
+        input files.
+    :param collection The collection name for URI construction
+    :param repair The function to fix input values, to ensure they match
+        input observation ID values.
+    :param obs_id String value for logging only.
+    """
+    plane_inputs = TypedSet(PlaneURI,)
+    _update_plane_provenance(
+        headers, lookup, collection, repair, obs_id, plane_inputs)
+    plane.provenance.inputs.update(plane_inputs)
+
+
+def append_plane_provenance_single(plane, headers, lookup, collection, repair,
+                                   obs_id):
+    """AAppend inputs to Planes, based on a particular keyword prefix. This
+    differs from update_plane_provenance because all the values are in a
+    single keyword, such as COMMENT or HISTORY. It differs from
+    update_plane_provenance_single in that it does NOT replace existing
+    inputs with the list that is created here.
+
+    :param plane Plane instance to add inputs to
+    :param headers FITS keyword headers that have lookup values.
+    :param lookup The keyword pattern to find in the FITS header keywords for
+        input files.
+    :param collection The collection name for URI construction
+    :param repair The function to fix input values, to ensure they match
+        input observation ID values.
+    :param obs_id String value for logging only.
+    """
+    plane_inputs = TypedSet(PlaneURI,)
+    _find_plane_provenance_single(plane_inputs, headers, lookup, collection,
+                                  repair, obs_id)
+    plane.provenance.inputs.update(plane_inputs)
+
+
+def _find_plane_provenance_single(plane_inputs, headers, lookup, collection,
+                                  repair, obs_id):
+    """
+    :param plane_inputs TypedSet instance to add inputs to
+    :param headers FITS keyword headers that have lookup values.
+    :param lookup The keyword pattern to find in the FITS header keywords for
+        input files.
+    :param collection The collection name for URI construction
+    :param repair The function to fix input values, to ensure they match
+        input observation ID values.
+    :param obs_id String value for logging only.
+    """
+    for header in headers:
+        for keyword in header:
+            if keyword.startswith(lookup):
+                value = header.get(keyword)
+                prov_ids = repair(value, obs_id)
+                for entry in prov_ids:
+                    # 0 - observation
+                    # 1 - plane
+                    obs_member_uri_str = \
+                        mc.CaomName.make_obs_uri_from_obs_id(
+                            collection, entry[0])
+                    obs_member_uri = ObservationURI(obs_member_uri_str)
+                    plane_uri = PlaneURI.get_plane_uri(
+                        obs_member_uri, entry[1])
+                    plane_inputs.add(plane_uri)
+                    logging.debug(f'Adding PlaneURI {plane_uri}')
+                # because all the content gets processed with one
+                # access to the keyword value, stop after one round
+                break
 
 
 def build_artifact_uri(file_name, collection, scheme='ad'):
@@ -137,44 +216,81 @@ def build_chunk_energy_range(chunk, filter_name, filter_md):
         # was really in the fits header
 
 
+def build_chunk_time(chunk, header, name):
+    """
+
+    :param chunk: CAOM2 Chunk instance for which to set time.
+    :param header: FITS header with the keywords for value extraction.
+    :param name: str  for logging information only.
+    :return:
+    """
+    logging.debug(f'Begin build_chunk_time for {name}.')
+    # DB 02-07-20
+    # time metadata comes from MJD_OBS and EXPTIME, it's not
+    # an axis requiring cutout support
+    exp_time = header.get('EXPTIME')
+    mjd_obs = header.get('MJD-OBS')
+    if exp_time is None or mjd_obs is None:
+        chunk.time = None
+    else:
+        if chunk.time is None:
+            coord_error = CoordError(syser=1e-07, rnder=1e-07)
+            time_axis = CoordAxis1D(axis=Axis('TIME', 'd'), error=coord_error)
+            chunk.time = TemporalWCS(axis=time_axis,
+                                     timesys='UTC')
+        ref_coord = RefCoord(pix=0.5, val=mjd_obs)
+        chunk.time.axis.function = CoordFunction1D(
+            naxis=1,
+            delta=mc.convert_to_days(exp_time),
+            ref_coord=ref_coord)
+        chunk.time.exposure = exp_time
+        chunk.time.resolution = mc.convert_to_days(exp_time)
+    logging.debug(f'End build_chunk_time.')
+
+
 def change_to_composite(observation, algorithm_name='composite',
                         collection=None, features=None):
     """For the case where a SimpleObservation needs to become a
     DerivedObservation."""
-    if (collection is None or collection != 'CFHT' or
-            (features is not None and not features.supports_latest_caom)):
-        temp = CompositeObservation(observation.collection,
-                                    observation.observation_id,
-                                    Algorithm(algorithm_name),
-                                    observation.sequence_number,
-                                    observation.intent,
-                                    observation.type,
-                                    observation.proposal,
-                                    observation.telescope,
-                                    observation.instrument,
-                                    observation.target,
-                                    observation.meta_release,
-                                    observation.planes,
-                                    observation.environment,
-                                    observation.target_position)
-    else:
-        from caom2 import DerivedObservation
-        temp = DerivedObservation(observation.collection,
-                                  observation.observation_id,
-                                  Algorithm(algorithm_name),
-                                  observation.sequence_number,
-                                  observation.intent,
-                                  observation.type,
-                                  observation.proposal,
-                                  observation.telescope,
-                                  observation.instrument,
-                                  observation.target,
-                                  observation.meta_release,
-                                  observation.meta_read_groups,
-                                  observation.planes,
-                                  observation.environment,
-                                  observation.target_position)
-        temp.meta_producer = observation.meta_producer
+    temp = DerivedObservation(observation.collection,
+                              observation.observation_id,
+                              Algorithm(algorithm_name),
+                              observation.sequence_number,
+                              observation.intent,
+                              observation.type,
+                              observation.proposal,
+                              observation.telescope,
+                              observation.instrument,
+                              observation.target,
+                              observation.meta_release,
+                              observation.meta_read_groups,
+                              observation.planes,
+                              observation.environment,
+                              observation.target_position)
+    temp.meta_producer = observation.meta_producer
+    temp.last_modified = datetime.utcnow()
+    temp._id = observation._id
+    return temp
+
+
+def change_to_simple(observation):
+    """For the case where a DerivedObservation needs to become a
+    SimpleObservation."""
+    temp = SimpleObservation(observation.collection,
+                             observation.observation_id,
+                             Algorithm('exposure'),
+                             observation.sequence_number,
+                             observation.intent,
+                             observation.type,
+                             observation.proposal,
+                             observation.telescope,
+                             observation.instrument,
+                             observation.target,
+                             observation.meta_release,
+                             observation.meta_read_groups,
+                             observation.planes,
+                             observation.environment,
+                             observation.target_position)
     temp.last_modified = datetime.utcnow()
     temp._id = observation._id
     return temp
@@ -415,6 +531,32 @@ def find_plane_and_artifact(observation, product_id, uri):
     return plane, artifact
 
 
+def get_obs_id_from_cadc(artifact_uri, tap_client):
+    """
+    Query CAOM using TAP for the observation ID, given a file ID.
+
+    :param artifact_uri: URI a Artifact URI that may or may not
+        exist in CAOM
+    :param tap_client: CadcTapClient - used to execute the query
+    :return: string representing an observation ID, or None, if no
+        entry is found.
+    """
+    logging.debug(f'Begin get_obs_id_from_cadc for {artifact_uri}')
+    query_string = f"""
+    SELECT DISTINCT O.observationID 
+    FROM caom2.Observation AS O
+    JOIN caom2.Plane AS P on P.obsID = O.obsID
+    JOIN caom2.Artifact AS A on A.planeID = P.planeID
+    WHERE A.uri = '{artifact_uri}'
+    """
+    table = mc.query_tap_client(query_string, tap_client)
+    result = None
+    if len(table) >= 1:
+        result = table[0]['observationID']
+    logging.debug(f'End get_obs_id_from_cadc {result}')
+    return result
+
+
 def is_composite(headers, keyword_prefix='IMCMB'):
     """All the logic to determine if a file name is part of a
     CompositeObservation, in one marvelous function."""
@@ -525,7 +667,7 @@ def update_plane_provenance_list(plane, headers, lookups, collection,
 
 def update_plane_provenance_single(plane, headers, lookup, collection, repair,
                                    obs_id):
-    """Add inputs to Planes, based on a particular keyword prefix. This
+    """Replace inputs in Planes, based on a particular keyword prefix. This
     differs from update_plane_provenance because all the values are in a
     single keyword, such as COMMENT or HISTORY.
 
@@ -539,27 +681,8 @@ def update_plane_provenance_single(plane, headers, lookup, collection, repair,
     :param obs_id String value for logging only.
     """
     plane_inputs = TypedSet(PlaneURI,)
-
-    for header in headers:
-        for keyword in header:
-            if keyword.startswith(lookup):
-                value = header.get(keyword)
-                prov_ids = repair(value, obs_id)
-                for entry in prov_ids:
-                    # 0 - observation
-                    # 1 - plane
-                    obs_member_uri_str = \
-                        mc.CaomName.make_obs_uri_from_obs_id(
-                            collection, entry[0])
-                    obs_member_uri = ObservationURI(obs_member_uri_str)
-                    plane_uri = PlaneURI.get_plane_uri(
-                        obs_member_uri, entry[1])
-                    plane_inputs.add(plane_uri)
-                    logging.debug(f'Adding PlaneURI {plane_uri}')
-                # because all the content gets processed with one
-                # access to the keyword value, stop after one round
-                break
-
+    _find_plane_provenance_single(plane_inputs, headers, lookup, collection,
+                                  repair, obs_id)
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
