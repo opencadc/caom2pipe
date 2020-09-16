@@ -79,7 +79,6 @@ import sys
 import yaml
 
 from datetime import datetime
-from deprecated import deprecated
 from enum import Enum
 from ftplib import FTP
 from ftputil import FTPHost
@@ -112,7 +111,7 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'get_cadc_headers', 'get_lineage', 'get_artifact_metadata',
            'data_put', 'data_get', 'build_uri', 'make_seconds', 'make_time',
            'increment_time', 'ISO_8601_FORMAT', 'http_get', 'Rejected',
-           'record_progress', 'Work', 'look_pull_and_put',
+           'record_progress', 'look_pull_and_put',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'reverse_lookup',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
@@ -237,15 +236,11 @@ class Features(object):
 class TaskType(Enum):
     """The possible steps in a Collection pipeline. A short-hand, user-facing
     way to identify the work to be done by a pipeline."""
-    STORE = 'store'  # store a local file to ad
-    SCRAPE = 'scrape'  # local CAOM instance creation, no network required
-    INGEST = 'ingest'  # create a CAOM instance from metadata only
-    MODIFY = 'modify'  # modify a CAOM instance from data
-    VISIT = 'visit'    # visit an observation
-    # remote file storage, create CAOM instance via local metadata
-    REMOTE = 'remote'
-    # retrieve file via HTTP to local temp storage, store to ad
-    PULL = 'pull'
+    STORE = 'store'    # store a file to CADC
+    SCRAPE = 'scrape'  # create/update a CAOM instance with no network
+    INGEST = 'ingest'  # create/update a CAOM instance from metadata only
+    MODIFY = 'modify'  # data access observation visitors
+    VISIT = 'visit'    # metadata access observation visitors
     # update a CAOM instance using CAOM metadata as input and knowledge
     INGEST_OBS = 'ingest_obs'
 
@@ -305,36 +300,6 @@ class State(object):
             self.bookmarks[key]['last_record'] = value
             logging.debug(f'Saving bookmarked last record {value} {self.fqn}')
             write_as_yaml(self.content, self.fqn)
-
-
-@deprecated
-class Work(object):
-    """"Abstract-like class that defines the operations used to chunk work when
-    controlling execution by State."""
-
-    def __init__(self, max_ts_s):
-        """
-        Ctor
-        :param max_ts_s: the maximum timestamp in seconds, for work that
-        is chunked by time-boxes.
-        """
-        self._max_ts_s = max_ts_s
-
-    @property
-    def max_ts_s(self):
-        # State execution is currently chunked only by time-boxing, so
-        # set the maximum time-box ending for the work to be done.
-        return self._max_ts_s
-
-    def initialize(self):
-        """Anything necessary to make todo work."""
-        raise NotImplementedError
-
-    def todo(self, prev_exec_date, exec_date):
-        """Returns a list of entries for processing by Execute.
-        :param prev_exec_date when chunking by time-boxes, the start time
-        :param exec_date when chunking by time-boxes, the end time"""
-        raise NotImplementedError
 
 
 class Rejected(object):
@@ -539,6 +504,9 @@ class CaomName(object):
 
     def __init__(self, uri):
         self.uri = uri
+        ignore_scheme, ignore_path, file_name = decompose_uri(self.uri)
+        self._file_name = file_name
+        self._file_id = StorageName.remove_extensions(file_name)
 
     @property
     def file_id(self):
@@ -548,18 +516,18 @@ class CaomName(object):
         name portion of the URI with all file type and compression type
         extensions removed.
         """
-        return StorageName.remove_extensions(self.uri.split('/')[1])
+        return self._file_id
 
     @property
     def file_name(self):
         """:return The file name extracted from an Artifact URI."""
-        return self.uri.split('/')[1]
+        return self._file_name
 
     @property
     def uncomp_file_name(self):
         """:return The file name extracted from an Artifact URI, without
         the compression extension."""
-        return self.file_name.replace('.gz', '')
+        return self._file_name.replace('.gz', '')
 
     @staticmethod
     def make_obs_uri_from_obs_id(collection, obs_id):
@@ -597,7 +565,7 @@ class Config(object):
         self._log_file_directory = None
         self._stream = None
         self._storage_host = None
-        self._task_types = None
+        self._task_types = []
         self._success_log_file_name = None
         # the fully qualified name for the file
         self.success_fqn = None
@@ -631,6 +599,7 @@ class Config(object):
         self._cache_file_name = None
         # the fully qualified name for the file
         self.cache_fqn = None
+        self._data_source = None
         self._features = Features()
 
     @property
@@ -658,6 +627,15 @@ class Config(object):
         if self._working_directory is not None:
             self.work_fqn = os.path.join(
                 self._working_directory, self._work_file)
+
+    @property
+    def data_source(self):
+        """Root URI for data retrieval"""
+        return self._data_source
+
+    @data_source.setter
+    def data_source(self, value):
+        self._data_source = value
 
     @property
     def netrc_file(self):
@@ -994,6 +972,7 @@ class Config(object):
                f'  archive:: {self.archive}\n' \
                f'  cache_fqn:: {self.cache_fqn}\n' \
                f'  collection:: {self.collection}\n' \
+               f'  data_source:: {self.data_source}\n' \
                f'  failure_fqn:: {self.failure_fqn}\n' \
                f'  failure_log_file_name:: {self.failure_log_file_name}\n' \
                f'  features:: {self.features}\n' \
@@ -1072,7 +1051,8 @@ class Config(object):
             self.working_directory = config.get('working_directory',
                                                 os.getcwd())
             self.work_file = config.get('todo_file_name', 'todo.txt')
-            self.netrc_file = config.get('netrc_filename', None)
+            self.netrc_file = config.get('netrc_filename', 'test_netrc')
+            self.data_source = config.get('data_source', None)
             self.resource_id = config.get('resource_id',
                                           'ivo://cadc.nrc.ca/sc2repo')
             self.tap_id = config.get('tap_id', 'ivo://cadc.nrc.ca/sc2tap')
@@ -1082,8 +1062,7 @@ class Config(object):
             self.log_file_directory = config.get('log_file_directory',
                                                  self.working_directory)
             self.stream = config.get('stream', 'raw')
-            self.task_types = self._obtain_task_types(
-                config, [TaskType.SCRAPE])
+            self.task_types = self._obtain_task_types(config, [])
             self.collection = config.get('collection', 'TEST')
             self.archive = config.get('archive', self.collection)
             self.success_log_file_name = config.get('success_log_file_name',
@@ -1373,7 +1352,7 @@ class StorageName(object):
     def __init__(self, obs_id=None, collection=None, collection_pattern='.*',
                  fname_on_disk=None, scheme='ad', archive=None, url=None,
                  mime_encoding=None, mime_type='application/fits',
-                 compression='.gz'):
+                 compression='.gz', entry=None):
         """
 
         :param obs_id: string value for Observation.observationID
@@ -1390,6 +1369,8 @@ class StorageName(object):
             'collection'
         :param url: if the metadata/data is externally available via http,
             the url for retrieval
+        :param entry: string - the value as obtained from the DataSource,
+            unchanged for use in the retries.txt file.
         """
         self.obs_id = obs_id
         self.collection = collection
@@ -1404,6 +1385,8 @@ class StorageName(object):
         self._mime_encoding = mime_encoding
         self._mime_type = mime_type
         self._compression = compression
+        self._source_name = None
+        self._entry = entry
         self._logger = logging.getLogger(__name__)
 
     def __str__(self):
@@ -1411,6 +1394,10 @@ class StorageName(object):
                f'fname_on_disk {self.fname_on_disk}, ' \
                f'file_name {self.file_name}, ' \
                f'lineage {self.lineage}'
+
+    @property
+    def entry(self):
+        return self._entry
 
     @property
     def file_uri(self):
@@ -1512,6 +1499,18 @@ class StorageName(object):
         """The value provided to the --lineage parameter for
         fits2caom2 extensions."""
         return '{}/{}'.format(self.product_id, self.file_uri)
+
+    @property
+    def source_name(self):
+        """The fully-qualified representation of the file, as represented
+        at the source. Sufficient for retrieval, probably includes a scheme."""
+        if self._source_name is None:
+            self._source_name = self.file_uri
+        return self._source_name
+
+    @source_name.setter
+    def source_name(self, value):
+        self._source_name = value
 
     @property
     def external_urls(self):
@@ -2068,13 +2067,12 @@ def get_version(entry):
 def create_dir(dir_name):
     """Create the working area if it does not already exist."""
     try:
-        os.makedirs(dir_name, exist_ok=True)
-        if not os.path.exists(dir_name):
-            raise CadcException(
-                'Could not mkdir {}'.format(dir_name))
-        if not os.access(dir_name, os.W_OK | os.X_OK):
-            raise CadcException(
-                '{} is not writeable.'.format(dir_name))
+        if os.path.exists(dir_name):
+            logging.error(os.path.exists(dir_name))
+            if not os.access(dir_name, os.W_OK | os.X_OK):
+                raise CadcException(f'{dir_name} is not writeable.')
+        else:
+            os.makedirs(dir_name, mode=0o775)
     except FileExistsError as e:
         raise CadcException(f'{dir_name} already exists as a file.')
 
@@ -2104,9 +2102,8 @@ def decompose_uri(uri):
         file_name = temp1[1]
         return scheme, path, file_name
     except Exception as e:
-        logging.debug('URI {} caused error {}. Expected '
-                      'scheme:path/FILE_NAME'.format(
-                        uri, e))
+        logging.debug(f'URI {uri} caused error {e}. Expected '
+                      f'scheme:path/FILE_NAME')
         raise CadcException('Expected scheme:path/FILE_NAME')
 
 
@@ -2478,7 +2475,7 @@ def make_seconds(from_time):
                 '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S',
                 '%Y-%m-%d', '%Y-%m-%dHST%H:%M:%S', '%a %b %d %H:%M:%S HST %Y',
                 '%Y/%m/%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT',
-                '%a %b %d %Y %H:%M:%S']:
+                '%Y-%m-%dT%H:%M', '%a %b %d %Y %H:%M:%S']:
         try:
             seconds_since_epoch = datetime.strptime(
                 from_time[:index], fmt).timestamp()

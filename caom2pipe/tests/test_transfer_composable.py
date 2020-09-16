@@ -3,7 +3,7 @@
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2019.                            (c) 2019.
+#  (c) 2020.                            (c) 2020.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -62,103 +62,104 @@
 #  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 #                                       <http://www.gnu.org/licenses/>.
 #
-#  $Revision: 4 $
+#  : 4 $
 #
 # ***********************************************************************
 #
 
-import glob
 import os
 import pytest
-import stat
+from mock import patch, Mock
 
-from astropy.table import Table
-from cadctap import CadcTapClient
-from datetime import datetime, timedelta
-from mock import Mock, patch
-
-from caom2pipe import data_source_composable as dsc
 from caom2pipe import manage_composable as mc
+from caom2pipe import transfer_composable as tc
 
-import test_conf as tc
+import test_conf
 
 
-def test_list_dir_data_source():
-    get_cwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+@patch('caom2pipe.manage_composable.data_get')
+def test_cadc_transfer(data_get_mock, caps_mock):
+    caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
+    data_get_mock.side_effect = Mock(autospec=True)
     test_config = mc.Config()
-    test_config.get_executors()
-    test_config.working_directory = '/test_files/1'
-
-    if not os.path.exists(test_config.working_directory):
-        os.mkdir(test_config.working_directory)
-    os.chmod(test_config.working_directory,
-             stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-
-    for entry in ['TEST.fits.gz', 'TEST1.fits', 'TEST2.fits.fz', 'TEST3.hdf5']:
-        if not os.path.exists(f'{test_config.working_directory}/{entry}'):
-            with open(f'{test_config.working_directory}/{entry}', 'w') as f:
-                f.write('test content')
-
-    test_chooser = tc.TestChooser()
-    try:
-        test_subject = dsc.ListDirDataSource(test_config, test_chooser)
-        test_result = test_subject.get_work()
-        assert test_result is not None, 'expected a result'
-        assert len(test_result) == 4, 'wrong result'
-        assert 'TEST.fits.gz' in test_result, 'wrong gz extensions'
-        assert 'TEST1.fits.gz' in test_result, 'wrong no extension'
-        assert 'TEST2.fits.fz' in test_result, 'wrong fz extensions'
-        assert 'TEST3.hdf5' in test_result, 'wrong hdf5'
-
-        test_subject = dsc.ListDirDataSource(test_config, chooser=None)
-        test_result = test_subject.get_work()
-        assert test_result is not None, 'expected a result'
-        assert len(test_result) == 4, 'wrong result'
-        assert 'TEST.fits.gz' in test_result, 'wrong gz extensions'
-        assert 'TEST1.fits' in test_result, 'wrong no extension'
-        assert 'TEST2.fits.fz' in test_result, 'wrong fz extensions'
-        assert 'TEST3.hdf5' in test_result, 'wrong hdf5'
-
-    finally:
-        os.getcwd = get_cwd_orig
-
-        if os.path.exists(test_config.working_directory):
-            for entry in glob.glob(f'{test_config.working_directory}/*'):
-                os.unlink(entry)
-            os.rmdir(test_config.working_directory)
+    test_config.working_directory = test_conf.TEST_DATA_DIR
+    test_config.netrc_file = 'test_netrc'
+    test_subject = tc.CadcTransfer(test_config)
+    assert test_subject is not None, 'expect a result'
+    test_source = 'ad:TEST/test_file.fits'
+    test_destination = '/tmp/test_file.fits'
+    test_subject.get(test_source, test_destination)
+    assert data_get_mock.called, 'should have been called'
+    args, kwargs = data_get_mock.call_args
+    assert args[1] == '/tmp', 'wrong dir name'
+    assert args[2] == 'test_file.fits', 'wrong file name'
+    assert args[3] == 'TEST', 'wrong archive name'
 
 
-# TODO - add TodoFileDataSource test
-
-# TODO - replace with QueryTimeBoxDataSource testing
-@pytest.mark.skip('')
-@patch('caom2pipe.manage_composable.query_tap_client')
-def test_storage_time_box_query(query_mock):
-    def _mock_query(arg1, arg2):
-        return Table.read(
-            'fileName,ingestDate\n'
-            'NEOS_SCI_2015347000000_clean.fits,2019-10-23T16:27:19.000\n'
-            'NEOS_SCI_2015347000000.fits,2019-10-23T16:27:27.000\n'
-            'NEOS_SCI_2015347002200_clean.fits,2019-10-23T16:27:33.000\n'.split('\n'),
-            format='csv')
-
-    query_mock.side_effect = _mock_query
-    getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+@patch('vos.Client.copy')
+def test_vo_transfer(get_mock, caps_mock):
+    caps_mock.return_value = 'https://sc2.canfar.net/sc2tap'
+    get_mock.side_effect = Mock(autospec=True)
     test_config = mc.Config()
-    test_config.get_executors()
-    CadcTapClient.__init__ = Mock(return_value=None)
-    utc_now = datetime.utcnow()
-    prev_exec_date = utc_now - timedelta(seconds=3600)
-    exec_date = utc_now - timedelta(seconds=1800)
-    try:
-        test_subject = wc.StorageTimeBoxQuery(utc_now,
-                                              test_config)
-        test_result = test_subject.todo(prev_exec_date, exec_date)
-        assert test_result is not None, 'expect result'
-        assert len(test_result) == 3, 'wrong number of results'
-        assert test_result[0][0] == 'NEOS_SCI_2015347000000_clean.fits', \
-            'wrong results'
-    finally:
-        os.getcwd = getcwd_orig
+    test_config.working_directory = test_conf.TEST_DATA_DIR
+    test_config.proxy_file_name = 'proxy.pem'
+    test_subject = tc.VoTransfer(test_config)
+    assert test_subject is not None, 'expect a result'
+    test_source = 'vault:goliaths/test_file.fits'
+    test_dest = '/tmp/test_file.fits'
+    test_subject.get(test_source, test_dest)
+    assert get_mock.called, 'should have been called'
+    args, kwargs = get_mock.call_args
+    assert args[0] == test_source, 'wrong source'
+    assert args[1] == test_dest, 'wrong source'
+
+
+@patch('caom2pipe.manage_composable.http_get')
+def test_http_transfer(get_mock):
+    test_source = 'http://localhost/test_file.fits'
+    test_destination = '/tmp/test_file.fits'
+    if not os.path.exists(test_destination):
+        with open(test_destination, 'w') as f:
+            f.write('test content')
+    get_mock.side_effect = Mock(autospec=True)
+    test_config = mc.Config()
+    test_config.working_directory = test_conf.TEST_DATA_DIR
+    test_config.netrc_file = 'test_netrc'
+    test_config.rejected_fqn = '/tmp/rejected.yml'
+    test_observable = mc.Observable(
+        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config))
+    test_subject = tc.HttpTransfer(test_observable)
+    assert test_subject is not None, 'expect a result'
+    with pytest.raises(mc.CadcException):
+        test_subject.get(test_source, test_destination)
+        assert get_mock.called, 'should have been called'
+        args, kwargs = get_mock.call_args
+        assert args[1] == test_source, 'wrong source name'
+        assert args[2] == test_destination, 'wrong dest name'
+
+
+@patch('caom2pipe.manage_composable.ftp_get_timeout')
+def test_ftp_transfer(data_get_mock):
+    test_source = 'ftp://localhost/test_file.fits'
+    test_destination = '/tmp/test_file.fits'
+    if not os.path.exists(test_destination):
+        with open(test_destination, 'w') as f:
+            f.write('test content')
+    data_get_mock.side_effect = Mock(autospec=True)
+    test_config = mc.Config()
+    test_config.working_directory = test_conf.TEST_DATA_DIR
+    test_config.netrc_file = 'test_netrc'
+    test_config.rejected_fqn = '/tmp/rejected.yml'
+    test_observable = mc.Observable(
+        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config))
+    test_subject = tc.FtpTransfer('localhost', test_observable)
+    assert test_subject is not None, 'expect a result'
+    with pytest.raises(mc.CadcException):
+        test_subject.get(test_source, test_destination)
+        assert data_get_mock.called, 'should have been called'
+        args, kwargs = data_get_mock.call_args
+        assert args[1] == 'localhost', 'wrong dir name'
+        assert args[2] == test_source, 'wrong source name'
+        assert args[3] == test_destination, 'wrong dest name'

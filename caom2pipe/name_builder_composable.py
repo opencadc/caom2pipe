@@ -67,30 +67,10 @@
 # ***********************************************************************
 #
 
-from deprecated import deprecated
-
 from caom2pipe import manage_composable as mc
 
 __all__ = ['FileNameBuilder', 'ObsIDBuilder', 'StorageNameInstanceBuilder',
-           'StorageNameBuilder', 'Builder']
-
-
-@deprecated
-class Builder(object):
-    def __init__(self, config):
-        self._config = config
-        self._todo_list = []
-
-    @property
-    def todo_list(self):
-        return self._todo_list
-
-    @todo_list.setter
-    def todo_list(self, to_list):
-        self._todo_list = to_list
-
-    def build(self, entry):
-        return entry
+           'StorageNameBuilder']
 
 
 class StorageNameBuilder(object):
@@ -129,7 +109,8 @@ class StorageNameInstanceBuilder(StorageNameBuilder):
     def build(self, entry):
         return mc.StorageName(obs_id=mc.StorageName.remove_extensions(entry),
                               collection=self._collection,
-                              fname_on_disk=entry)
+                              fname_on_disk=entry,
+                              entry=entry)
 
 
 class FileNameBuilder(StorageNameBuilder):
@@ -143,7 +124,7 @@ class FileNameBuilder(StorageNameBuilder):
         self._storage_name = storage_name
 
     def build(self, entry):
-        return self._storage_name(file_name=entry)
+        return self._storage_name(file_name=entry, entry=entry)
 
 
 class ObsIDBuilder(StorageNameBuilder):
@@ -157,4 +138,4 @@ class ObsIDBuilder(StorageNameBuilder):
         self._storage_name = storage_name
 
     def build(self, entry):
-        return self._storage_name(obs_id=entry)
+        return self._storage_name(obs_id=entry, entry=entry)
