@@ -1051,7 +1051,7 @@ class Config(object):
             self.working_directory = config.get('working_directory',
                                                 os.getcwd())
             self.work_file = config.get('todo_file_name', 'todo.txt')
-            self.netrc_file = config.get('netrc_filename', 'test_netrc')
+            self.netrc_file = config.get('netrc_filename', None)
             self.data_source = config.get('data_source', None)
             self.resource_id = config.get('resource_id',
                                           'ivo://cadc.nrc.ca/sc2repo')
