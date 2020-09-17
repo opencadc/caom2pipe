@@ -70,6 +70,7 @@
 import logging
 import os
 
+from cadcdata import CadcDataClient
 from caom2pipe import manage_composable as mc
 
 
@@ -116,7 +117,6 @@ class CadcTransfer(Transfer):
 
     def __init__(self, config):
         super(CadcTransfer, self).__init__()
-        from cadcdata import CadcDataClient
         subject = mc.define_subject(config)
         self._client = CadcDataClient(subject)
         self._logger = logging.getLogger(self.__class__.__name__)

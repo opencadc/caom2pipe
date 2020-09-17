@@ -410,7 +410,10 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
             source = data_source_composable.TodoFileDataSource(config)
 
     if transferrer is None:
-        transferrer = transfer_composable.CadcTransfer(config)
+        if config.use_local_files:
+            transferrer = transfer_composable.Transfer()
+        else:
+            transferrer = transfer_composable.CadcTransfer(config)
 
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser,
@@ -463,7 +466,10 @@ def run_by_state(config=None, name_builder=None, command_name=None,
         end_time = get_utc_now()
 
     if transferrer is None:
-        transferrer = transfer_composable.CadcTransfer(config)
+        if config.use_local_files:
+            transferrer = transfer_composable.Transfer()
+        else:
+            transferrer = transfer_composable.CadcTransfer(config)
 
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser,
