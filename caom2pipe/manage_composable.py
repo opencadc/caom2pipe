@@ -985,7 +985,8 @@ class Config(object):
                f'  observe_execution:: {self.observe_execution}\n' \
                f'  progress_file_name:: {self.progress_file_name}\n' \
                f'  progress_fqn:: {self.progress_fqn}\n' \
-               f'  proxy_file:: {self.proxy_fqn}\n' \
+               f'  proxy_file_name:: {self.proxy_file_name}\n' \
+               f'  proxy_fqn:: {self.proxy_fqn}\n' \
                f'  rejected_directory:: {self.rejected_directory}\n' \
                f'  rejected_file_name:: {self.rejected_file_name}\n' \
                f'  rejected_fqn:: {self.rejected_fqn}\n' \
@@ -1212,9 +1213,10 @@ class Config(object):
                             continue
                         f.write(f'  {feature}: {feature_attribute}\n')
                 elif entry == 'task_types':
-                    f.write('task_types:\n')
-                    for task in attribute:
-                        f.write(f'  - {task.name.lower()}\n')
+                    if len(attribute) > 0:
+                        f.write('task_types:\n')
+                        for task in attribute:
+                            f.write(f'  - {task.name.lower()}\n')
                 elif entry == 'logging_level':
                     lookup = {logging.DEBUG: 'DEBUG',
                               logging.INFO: 'INFO',
