@@ -1330,6 +1330,9 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
         self._meta_visitors = meta_visitors
         self._data_visitors = data_visitors
         self._transferrer = transferrer
+        if transferrer is not None:
+            # use the same Observable everywhere
+            self._transferrer.observable = self.observable
         self._log_h = None
         self._logger = logging.getLogger(__name__)
 

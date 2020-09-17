@@ -84,6 +84,15 @@ class Transfer(object):
 
     def __init__(self):
         self._client = None
+        self._observable = None
+
+    @property
+    def observable(self):
+        return self._observable
+
+    @observable.setter
+    def observable(self, value):
+        self._observable = value
 
     def get(self, source, dest_fqn):
         """
@@ -110,8 +119,7 @@ class CadcTransfer(Transfer):
         from cadcdata import CadcDataClient
         subject = mc.define_subject(config)
         self._client = CadcDataClient(subject)
-        self._metrics = None
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get(self, source, dest_fqn):
         """
@@ -121,7 +129,8 @@ class CadcTransfer(Transfer):
         working_dir = os.path.dirname(dest_fqn)
         f_name = os.path.basename(dest_fqn)
         scheme_ignore, archive, f_name_ignore = mc.decompose_uri(source)
-        mc.data_get(self._client, working_dir, f_name, archive, self._metrics)
+        mc.data_get(self._client, working_dir, f_name, archive,
+                    self._observable.metrics)
 
     def check(self, dest_fqn):
         """Assumes fits files at this time. Returns true because the
@@ -141,8 +150,7 @@ class VoTransfer(Transfer):
         if not os.path.exists(config.proxy_fqn):
             raise mc.CadcException('Require a certificate for vos access.')
         self._client = vos.Client(vospace_certfile=config.proxy_fqn)
-        self._metrics = None
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get(self, source, dest_fqn):
         self._client.copy(source, dest_fqn, send_md5=True)
@@ -153,9 +161,9 @@ class FitsTransfer(Transfer):
     Abstract class to provide FITS transfer checking.
     """
 
-    def __init__(self, observable):
-        self._observable = observable
-        self._logger = logging.getLogger(__name__)
+    def __init__(self):
+        self._observable = None
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get(self, source, dest_fqn):
         raise NotImplementedError
@@ -193,9 +201,9 @@ class HttpTransfer(FitsTransfer):
     Uses HTTP to manage transfers from external sites to local disk.
     """
 
-    def __init__(self, observable):
-        self._observable = observable
-        self._logger = logging.getLogger(__name__)
+    def __init__(self):
+        self._observable = None
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get(self, source, dest_fqn):
         """
@@ -215,10 +223,10 @@ class FtpTransfer(FitsTransfer):
     Uses FTP to manage transfers from external sites to local disk.
     """
 
-    def __init__(self, ftp_host, observable):
+    def __init__(self, ftp_host):
         self._ftp_host = ftp_host
-        self._observable = observable
-        self._logger = logging.getLogger(__name__)
+        self._observable = None
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get(self, source, dest_fqn):
         """

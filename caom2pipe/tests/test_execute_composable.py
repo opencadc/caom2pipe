@@ -684,6 +684,7 @@ def test_data_visit(get_mock, test_config):
                              collection_pattern='T[\\w+-]+')
     test_cred_param = ''
     test_transferrer = transfer_composable.CadcTransfer(test_config)
+    test_transferrer.observable = test_observable
     test_subject = ec.DataVisit(test_config, test_sn,
                                 test_cred_param, test_data_client,
                                 test_repo_client, test_data_visitors,
