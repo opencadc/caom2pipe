@@ -719,7 +719,7 @@ def test_define_subject():
         test_config = mc.Config()
         test_config.get_executors()
         test_config.proxy_fqn = None
-        assert test_config.netrc_file is not None, 'netrc branch pre-condition'
+        test_config.netrc_file = 'test_netrc'
         test_netrc_fqn = os.path.join(test_config.working_directory,
                                       test_config.netrc_file)
         if not os.path.exists(test_netrc_fqn):

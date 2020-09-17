@@ -93,8 +93,8 @@ TEST_SOURCE = '{}/test_command/test_command.py'.format(
     distutils.sysconfig.get_python_lib())
 
 
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local_direct')
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out_local_direct')
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local')
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out_local')
 @patch('caom2pipe.manage_composable.read_obs_from_file')
 def test_run_todo_list_dir_data_source(read_obs_mock, fits2caom2_in_out_mock,
                                        fits2caom2_mock, test_config):
@@ -209,7 +209,7 @@ def test_run_todo_file_data_source(repo_get_mock, repo_mock, caps_mock,
 @patch('caom2pipe.manage_composable.query_tap_client')
 @patch('caom2pipe.execute_composable.CAOM2RepoClient')
 @patch('caom2pipe.execute_composable.CadcDataClient')
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_direct')
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd')
 def test_run_state(fits2caom2_mock, data_mock, repo_mock, tap_mock,
                    test_config):
     fits2caom2_mock.side_effect = _mock_write

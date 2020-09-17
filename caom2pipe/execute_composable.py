@@ -224,7 +224,7 @@ class CaomExecute(object):
         return os.path.join(
             packages, f'{self.command_name}/{self.command_name}.py')
 
-    def _fits2caom2_cmd_local_direct(self, connected=True):
+    def _fits2caom2_cmd_local(self, connected=True):
         """
         Execute fits2caom with a --cert parameter and a --local parameter.
         """
@@ -242,7 +242,7 @@ class CaomExecute(object):
                     f'--lineage {self.lineage}').split()
         command.to_caom2()
 
-    def _fits2caom2_cmd_direct(self):
+    def _fits2caom2_cmd(self):
         """Execute fits2caom with a --cert parameter."""
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
@@ -254,7 +254,7 @@ class CaomExecute(object):
                     f'{plugin} --lineage {self.lineage}').split()
         command.to_caom2()
 
-    def _fits2caom2_cmd_in_out_direct(self):
+    def _fits2caom2_cmd_in_out(self):
         """Execute fits2caom with a --in, a --external_url and a --cert
         parameter."""
         plugin = self._find_fits2caom2_plugin()
@@ -267,7 +267,7 @@ class CaomExecute(object):
                     f'{self.lineage}').split()
         command.to_caom2()
 
-    def _fits2caom2_cmd_in_out_local_direct(self, connected=True):
+    def _fits2caom2_cmd_in_out_local(self, connected=True):
         """Execute fits2caom with a --in, --local and a --cert parameter."""
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
@@ -363,7 +363,7 @@ class CaomExecute(object):
                            metrics)
 
 
-class MetaCreateDirect(CaomExecute):
+class MetaCreate(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
 
@@ -372,7 +372,7 @@ class MetaCreateDirect(CaomExecute):
     def __init__(self, config, storage_name, command_name,
                  cred_param, cadc_data_client, caom_repo_client,
                  meta_visitors, observable):
-        super(MetaCreateDirect, self).__init__(
+        super(MetaCreate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name,
             cred_param, cadc_data_client, caom_repo_client, meta_visitors,
             observable)
@@ -394,7 +394,7 @@ class MetaCreateDirect(CaomExecute):
         self.logger.debug('the observation does not exist, so go '
                           'straight to generating the xml, as the main_app '
                           'will retrieve the headers')
-        self._fits2caom2_cmd_direct()
+        self._fits2caom2_cmd()
 
         self.logger.debug('read the xml into memory from the file')
         observation = self._read_model()
@@ -411,7 +411,7 @@ class MetaCreateDirect(CaomExecute):
         self.logger.debug('End execute')
 
 
-class MetaUpdateDirect(CaomExecute):
+class MetaUpdate(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
 
@@ -420,7 +420,7 @@ class MetaUpdateDirect(CaomExecute):
     def __init__(self, config, storage_name, command_name, cred_param,
                  cadc_data_client, caom_repo_client, observation,
                  meta_visitors, observable):
-        super(MetaUpdateDirect, self).__init__(
+        super(MetaUpdate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
             cadc_data_client, caom_repo_client, meta_visitors, observable)
         self.observation = observation
@@ -443,7 +443,7 @@ class MetaUpdateDirect(CaomExecute):
 
         self.logger.debug('generate the xml, as the main_app will retrieve '
                           'the headers')
-        self._fits2caom2_cmd_in_out_direct()
+        self._fits2caom2_cmd_in_out()
 
         self.logger.debug('read the xml from disk')
         self.observation = self._read_model()
@@ -463,7 +463,7 @@ class MetaUpdateDirect(CaomExecute):
         self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
-class MetaDeleteCreateDirect(CaomExecute):
+class MetaDeleteCreate(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
 
@@ -475,7 +475,7 @@ class MetaDeleteCreateDirect(CaomExecute):
     def __init__(self, config, storage_name, command_name,
                  cred_param, cadc_data_client, caom_repo_client,
                  observation, meta_visitors, observable):
-        super(MetaDeleteCreateDirect, self).__init__(
+        super(MetaDeleteCreate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name,
             cred_param, cadc_data_client, caom_repo_client, meta_visitors,
             observable)
@@ -499,7 +499,7 @@ class MetaDeleteCreateDirect(CaomExecute):
 
         self.logger.debug('make a new observation from an existing '
                           'observation')
-        self._fits2caom2_cmd_in_out_direct()
+        self._fits2caom2_cmd_in_out()
 
         self.logger.debug('read the xml into memory from the file')
         self.observation = self._read_model()
@@ -519,7 +519,7 @@ class MetaDeleteCreateDirect(CaomExecute):
         self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
-class MetaUpdateObservationDirect(CaomExecute):
+class MetaUpdateObservation(CaomExecute):
     """
     Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
@@ -532,7 +532,7 @@ class MetaUpdateObservationDirect(CaomExecute):
     def __init__(self, config, storage_name, command_name, cred_param,
                  cadc_data_client, caom_repo_client,
                  observation, meta_visitors, observable):
-        super(MetaUpdateObservationDirect, self).__init__(
+        super(MetaUpdateObservation, self).__init__(
             config, mc.TaskType.INGEST_OBS, storage_name, command_name,
             cred_param, cadc_data_client, caom_repo_client, meta_visitors,
             observable)
@@ -558,7 +558,7 @@ class MetaUpdateObservationDirect(CaomExecute):
         self._write_model(self.observation)
 
         self.logger.debug('update an existing observation')
-        self._fits2caom2_cmd_in_out_direct()
+        self._fits2caom2_cmd_in_out()
 
         self.logger.debug('read the xml into memory from the file')
         self.observation = self._read_model()
@@ -588,7 +588,7 @@ class MetaUpdateObservationDirect(CaomExecute):
         self.lineage = lineage
 
 
-class LocalMetaCreateDirect(CaomExecute):
+class LocalMetaCreate(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
 
@@ -597,7 +597,7 @@ class LocalMetaCreateDirect(CaomExecute):
     def __init__(self, config, storage_name, command_name, cred_param,
                  cadc_data_client, caom_repo_client, meta_visitors,
                  observable):
-        super(LocalMetaCreateDirect, self).__init__(
+        super(LocalMetaCreate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
             cadc_data_client, caom_repo_client, meta_visitors, observable)
         self._define_local_dirs(storage_name)
@@ -615,7 +615,7 @@ class LocalMetaCreateDirect(CaomExecute):
         self.logger.debug('the observation does not exist, so go '
                           'straight to generating the xml, as the main_app '
                           'will retrieve the headers')
-        self._fits2caom2_cmd_local_direct()
+        self._fits2caom2_cmd_local()
 
         self.logger.debug('read the xml from disk')
         observation = self._read_model()
@@ -632,7 +632,7 @@ class LocalMetaCreateDirect(CaomExecute):
         self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
-class LocalMetaDeleteCreateDirect(CaomExecute):
+class LocalMetaDeleteCreate(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
 
@@ -644,7 +644,7 @@ class LocalMetaDeleteCreateDirect(CaomExecute):
     def __init__(self, config, storage_name, command_name, cred_param,
                  cadc_data_client, caom_repo_client, observation,
                  meta_visitors, observable):
-        super(LocalMetaDeleteCreateDirect, self).__init__(
+        super(LocalMetaDeleteCreate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
             cadc_data_client, caom_repo_client, meta_visitors, observable)
         self._define_local_dirs(storage_name)
@@ -665,7 +665,7 @@ class LocalMetaDeleteCreateDirect(CaomExecute):
 
         self.logger.debug('make a new observation from an existing '
                           'observation')
-        self._fits2caom2_cmd_in_out_local_direct()
+        self._fits2caom2_cmd_in_out_local()
 
         self.logger.debug('read the xml from disk')
         observation = self._read_model()
@@ -685,7 +685,7 @@ class LocalMetaDeleteCreateDirect(CaomExecute):
         self.logger.debug(f'End execute for {self.__class__.__name__}')
 
 
-class LocalMetaUpdateDirect(CaomExecute):
+class LocalMetaUpdate(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
 
@@ -694,7 +694,7 @@ class LocalMetaUpdateDirect(CaomExecute):
     def __init__(self, config, storage_name, command_name, cred_param,
                  cadc_data_client, caom_repo_client, observation,
                  meta_visitors, observable):
-        super(LocalMetaUpdateDirect, self).__init__(
+        super(LocalMetaUpdate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
             cadc_data_client, caom_repo_client, meta_visitors, observable)
         self._define_local_dirs(storage_name)
@@ -716,7 +716,7 @@ class LocalMetaUpdateDirect(CaomExecute):
 
         self.logger.debug('generate the xml, as the main_app will retrieve '
                           'the headers')
-        self._fits2caom2_cmd_in_out_local_direct()
+        self._fits2caom2_cmd_in_out_local()
 
         self.logger.debug('read the xml from disk')
         self.observation = self._read_model()
@@ -981,7 +981,7 @@ class Scrape(CaomExecute):
         self.logger.debug('the steps:')
 
         self.logger.debug('generate the xml from the file on disk')
-        self._fits2caom2_cmd_local_direct(connected=False)
+        self._fits2caom2_cmd_local(connected=False)
 
         self.logger.debug('get observation for the existing model from disk')
         observation = self._read_model()
@@ -1017,7 +1017,7 @@ class ScrapeUpdate(CaomExecute):
         self.logger.debug('the steps:')
 
         self.logger.debug('generate the xml from the file on disk')
-        self._fits2caom2_cmd_in_out_local_direct(connected=False)
+        self._fits2caom2_cmd_in_out_local(connected=False)
 
         self.logger.debug('get observation for the existing model from disk')
         observation = self._read_model()
@@ -1424,13 +1424,13 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                 if observation is None:
                     if self.config.use_local_files:
                         executors.append(
-                            LocalMetaCreateDirect(
+                            LocalMetaCreate(
                                 self.config, storage_name, self._command_name,
                                 cred_param, cadc_data_client,
                                 caom_repo_client, self._meta_visitors,
                                 self.observable))
                     else:
-                        executors.append(MetaCreateDirect(
+                        executors.append(MetaCreate(
                             self.config, storage_name, self._command_name,
                             cred_param, cadc_data_client, caom_repo_client,
                             self._meta_visitors, self.observable))
@@ -1439,7 +1439,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                         if (self.chooser is not None and
                                 self.chooser.needs_delete(observation)):
                             executors.append(
-                                LocalMetaDeleteCreateDirect(
+                                LocalMetaDeleteCreate(
                                     self.config, storage_name,
                                     self._command_name,
                                     cred_param, cadc_data_client,
@@ -1447,7 +1447,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                                     self._meta_visitors, self.observable))
                         else:
                             executors.append(
-                                LocalMetaUpdateDirect(
+                                LocalMetaUpdate(
                                     self.config, storage_name,
                                     self._command_name,
                                     cred_param, cadc_data_client,
@@ -1457,7 +1457,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                         if (self.chooser is not None and
                                 self.chooser.needs_delete(observation)):
                             executors.append(
-                                MetaDeleteCreateDirect(
+                                MetaDeleteCreate(
                                     self.config, storage_name,
                                     self._command_name,
                                     cred_param, cadc_data_client,
@@ -1465,7 +1465,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                                     self._meta_visitors, self.observable))
                         else:
                             executors.append(
-                                MetaUpdateDirect(
+                                MetaUpdate(
                                     self.config, storage_name,
                                     self._command_name, cred_param,
                                     cadc_data_client, caom_repo_client,
@@ -1484,7 +1484,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                         raise NotImplementedError
                     else:
                         executors.append(
-                            MetaUpdateObservationDirect(
+                            MetaUpdateObservation(
                                 self.config, storage_name, self._command_name,
                                 cred_param, cadc_data_client, caom_repo_client,
                                 observation, self._meta_visitors,

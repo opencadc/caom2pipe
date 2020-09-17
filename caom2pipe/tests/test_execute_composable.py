@@ -115,7 +115,7 @@ def test_meta_create_client_execute(test_config):
     mc.read_obs_from_file = Mock()
     mc.read_obs_from_file.return_value = _read_obs(None)
 
-    test_executor = ec.MetaCreateDirect(
+    test_executor = ec.MetaCreate(
         test_config, tc.TestStorageName(), TEST_APP, test_cred,
         data_client_mock, repo_client_mock, meta_visitors=None,
         observable=test_observer)
@@ -134,7 +134,7 @@ def test_meta_update_client_execute(test_config):
     data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
     repo_client_mock = Mock()
     test_observer = Mock()
-    test_executor = ec.MetaUpdateDirect(
+    test_executor = ec.MetaUpdate(
         test_config, tc.TestStorageName(), TEST_APP, test_cred,
         data_client_mock, repo_client_mock, _read_obs(None),
         meta_visitors=None, observable=test_observer)
@@ -149,7 +149,7 @@ def test_meta_delete_create_client_execute(test_config):
     data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
     repo_client_mock = Mock()
     test_observer = Mock()
-    test_executor = ec.MetaDeleteCreateDirect(
+    test_executor = ec.MetaDeleteCreate(
         test_config, tc.TestStorageName(), TEST_APP, test_cred,
         data_client_mock, repo_client_mock, _read_obs(None), None,
         observable=test_observer)
@@ -166,7 +166,7 @@ def test_local_meta_create_client_execute(test_config):
     repo_client_mock = Mock()
     test_observer = Mock()
 
-    test_executor = ec.LocalMetaCreateDirect(
+    test_executor = ec.LocalMetaCreate(
         test_config, tc.TestStorageName(), TEST_APP, test_cred,
         data_client_mock, repo_client_mock, meta_visitors=None,
         observable=test_observer)
@@ -183,7 +183,7 @@ def test_local_meta_update_client_execute(test_config):
     data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
     repo_client_mock = Mock()
     test_observer = Mock()
-    test_executor = ec.LocalMetaUpdateDirect(
+    test_executor = ec.LocalMetaUpdate(
         test_config, tc.TestStorageName(), TEST_APP, test_cred,
         data_client_mock, repo_client_mock, _read_obs(None),
         meta_visitors=None, observable=test_observer)
@@ -198,7 +198,7 @@ def test_local_meta_delete_create_client_execute(test_config):
     data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
     repo_client_mock = Mock()
     test_observer = Mock()
-    test_executor = ec.LocalMetaDeleteCreateDirect(
+    test_executor = ec.LocalMetaDeleteCreate(
         test_config, tc.TestStorageName(), TEST_APP, test_cred,
         data_client_mock, repo_client_mock, meta_visitors=None,
         observation=_read_obs(None), observable=test_observer)
@@ -372,7 +372,7 @@ def test_organize_executes_chooser(test_config):
         assert executors is not None
         assert len(executors) == 1
         assert isinstance(executors[0],
-                          ec.LocalMetaDeleteCreateDirect)
+                          ec.LocalMetaDeleteCreate)
         assert executors[0].fname == 'test_obs_id.fits', 'file name'
         assert executors[0].stream == 'TEST', 'stream'
         assert executors[0].working_dir == tc.THIS_DIR, 'working_dir'
@@ -385,7 +385,7 @@ def test_organize_executes_chooser(test_config):
         assert executors is not None
         assert len(executors) == 1
         assert isinstance(executors[0],
-                          ec.MetaDeleteCreateDirect)
+                          ec.MetaDeleteCreate)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
     finally:
@@ -409,7 +409,7 @@ def test_organize_executes_client_existing(test_config):
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
-        assert isinstance(executors[0], ec.MetaUpdateDirect)
+        assert isinstance(executors[0], ec.MetaUpdate)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
     finally:
@@ -498,7 +498,7 @@ def test_meta_update_observation_direct(test_config):
     try:
         test_observable = mc.Observable(
             mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config))
-        test_executor = ec.MetaUpdateObservationDirect(
+        test_executor = ec.MetaUpdateObservation(
             test_config, test_sn, TEST_APP, test_cred_param, data_client_mock,
             repo_client_mock, test_observation, [], observable=test_observable)
         test_executor.execute(None)
@@ -590,7 +590,7 @@ def test_organize_executes_client_do_one(test_config):
         assert isinstance(executors[0], ec.Store), \
             type(executors[0])
         assert isinstance(executors[1],
-                          ec.LocalMetaCreateDirect)
+                          ec.LocalMetaCreate)
         assert isinstance(executors[2], ec.LocalDataVisit)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
@@ -603,7 +603,7 @@ def test_organize_executes_client_do_one(test_config):
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 2
-        assert isinstance(executors[0], ec.MetaCreateDirect)
+        assert isinstance(executors[0], ec.MetaCreate)
         assert isinstance(executors[1], ec.DataVisit)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
@@ -617,7 +617,7 @@ def test_organize_executes_client_do_one(test_config):
         assert executors is not None
         assert len(executors) == 2
         assert isinstance(
-            executors[0], ec.LocalMetaCreateDirect)
+            executors[0], ec.LocalMetaCreate)
         assert isinstance(executors[1], ec.LocalDataVisit)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
@@ -644,7 +644,7 @@ def test_organize_executes_client_do_one(test_config):
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
-        assert isinstance(executors[0], ec.MetaDeleteCreateDirect)
+        assert isinstance(executors[0], ec.MetaDeleteCreate)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
 
@@ -656,7 +656,7 @@ def test_organize_executes_client_do_one(test_config):
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
-        assert isinstance(executors[0], ec.MetaUpdateObservationDirect)
+        assert isinstance(executors[0], ec.MetaUpdateObservation)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
         assert executors[0].url == 'https://test_url/', 'url'
