@@ -376,7 +376,7 @@ class MetaCreate(CaomExecute):
             config, mc.TaskType.INGEST, storage_name, command_name,
             cred_param, cadc_data_client, caom_repo_client, meta_visitors,
             observable)
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
         self.logger.debug('Begin execute')
@@ -424,9 +424,10 @@ class MetaUpdate(CaomExecute):
             config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
             cadc_data_client, caom_repo_client, meta_visitors, observable)
         self.observation = observation
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
         # TODO - what breaks when this isn't here? But it can't be here,
@@ -460,7 +461,7 @@ class MetaUpdate(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
+        self.logger.debug('End execute')
 
 
 class MetaDeleteCreate(CaomExecute):
@@ -480,9 +481,10 @@ class MetaDeleteCreate(CaomExecute):
             cred_param, cadc_data_client, caom_repo_client, meta_visitors,
             observable)
         self.observation = observation
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
         # TODO - what breaks when this isn't here? But it can't be here,
@@ -516,7 +518,7 @@ class MetaDeleteCreate(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
+        self.logger.debug('End execute')
 
 
 class MetaUpdateObservation(CaomExecute):
@@ -602,9 +604,10 @@ class LocalMetaCreate(CaomExecute):
             cadc_data_client, caom_repo_client, meta_visitors, observable)
         self._define_local_dirs(storage_name)
         self.fname = storage_name.fname_on_disk
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
         # TODO - what breaks when this isn't here? But it can't be here,
         # because not all files are stored at CADC
@@ -629,7 +632,7 @@ class LocalMetaCreate(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
 
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
+        self.logger.debug('End execute')
 
 
 class LocalMetaDeleteCreate(CaomExecute):
@@ -649,9 +652,10 @@ class LocalMetaDeleteCreate(CaomExecute):
             cadc_data_client, caom_repo_client, meta_visitors, observable)
         self._define_local_dirs(storage_name)
         self.observation = observation
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
         # TODO - what breaks when this isn't here? But it can't be here,
@@ -682,7 +686,7 @@ class LocalMetaDeleteCreate(CaomExecute):
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
 
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
+        self.logger.debug('End execute')
 
 
 class LocalMetaUpdate(CaomExecute):
@@ -699,7 +703,7 @@ class LocalMetaUpdate(CaomExecute):
             cadc_data_client, caom_repo_client, meta_visitors, observable)
         self._define_local_dirs(storage_name)
         self.observation = observation
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
         self.logger.debug('Begin execute')
@@ -752,9 +756,10 @@ class MetaVisit(CaomExecute):
             caom_repo_client=caom_repo_client,
             meta_visitors=meta_visitors, observable=observable)
         self.fname = None
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
         self.logger.debug('create the work space, if it does not exist')
@@ -779,7 +784,7 @@ class MetaVisit(CaomExecute):
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
+        self.logger.debug('End execute')
 
 
 class DataVisit(CaomExecute):
@@ -906,9 +911,10 @@ class DataScrape(DataVisit):
         self.log_file_directory = config.log_file_directory
         self.prev_fname = storage_name.prev
         self.thumb_fname = storage_name.thumb
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute for {self.__class__.__name__}')
+        self.logger.debug(f'Begin execute')
 
         self.logger.debug('get observation for the existing model from disk')
         observation = self._read_model()
@@ -919,7 +925,7 @@ class DataScrape(DataVisit):
         self.logger.debug('output the updated xml')
         self._write_model(observation)
 
-        self.logger.debug(f'End execute for {self.__class__.__name__}')
+        self.logger.debug(f'End execute')
 
 
 class Store(CaomExecute):
