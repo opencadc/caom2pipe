@@ -89,8 +89,8 @@ STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')
 TEST_BOOKMARK = 'test_bookmark'
 TEST_COMMAND = 'test_command'
 TEST_DIR = f'{tc.TEST_DATA_DIR}/run_composable'
-TEST_SOURCE = '{}/test_command/test_command.py'.format(
-    distutils.sysconfig.get_python_lib())
+TEST_SOURCE = f'{distutils.sysconfig.get_python_lib()}/test_command/' \
+              f'test_command.py'
 
 
 @patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local')

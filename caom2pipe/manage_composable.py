@@ -333,7 +333,7 @@ class Rejected(object):
             try:
                 self.content = read_as_yaml(fqn)
             except yaml.constructor.ConstructorError:
-                logging.error('ConstructorError reading {}'.format(self.fqn))
+                logging.error(f'ConstructorError reading {self.fqn}')
                 self.content = {}
         else:
             dir_name = os.path.dirname(fqn)
@@ -434,10 +434,10 @@ class Metrics(object):
             create_dir(self.observable_dir)
             now = datetime.utcnow().timestamp()
             for service in self.history.keys():
-                fqn = '{}/{}.{}.yml'.format(self.observable_dir, now, service)
+                fqn = f'{self.observable_dir}/{now}.{service}.yml'
                 write_as_yaml(self.history[service], fqn)
 
-            fqn = '{}/{}.fail.yml'.format(self.observable_dir, now)
+            fqn = f'{self.observable_dir}/{now}.fail.yml'
             # if os.path.exists(fqn):
             #     temp = read_as_yaml(fqn)
             write_as_yaml(self.failures, fqn)
@@ -533,7 +533,7 @@ class CaomName(object):
     def make_obs_uri_from_obs_id(collection, obs_id):
         """:return A string that conforms to the Observation URI
         specification from CAOM."""
-        return 'caom:{}/{}'.format(collection, obs_id)
+        return f'caom:{collection}/{obs_id}'
 
     @staticmethod
     def decompose_provenance_input(uri):
@@ -1095,8 +1095,7 @@ class Config(object):
                                f'{os.path.basename(self.working_directory)}' \
                                f'_report.txt'
         except KeyError as e:
-            raise CadcException(
-                'Error in config file {}'.format(e))
+            raise CadcException(f'Error in config file {e}')
 
         logger = logging.getLogger()
         logger.setLevel(self.logging_level)
@@ -1108,8 +1107,7 @@ class Config(object):
         config_fqn = os.path.join(os.getcwd(), 'config.yml')
         config = self.load_config(config_fqn)
         if config is None:
-            raise CadcException(
-                'Could not find the file {}'.format(config_fqn))
+            raise CadcException(f'Could not find the file {config_fqn}')
         return config
 
     def count_retries(self):
@@ -1134,8 +1132,8 @@ class Config(object):
                 self.retry_failures and self.log_to_file):
             meta = get_file_meta(self.retry_fqn)
             if meta['size'] == 0:
-                logging.info('Checked the retry file {}. There are no logged '
-                             'failures.'.format(self.retry_fqn))
+                logging.info(f'Checked the retry file {self.retry_fqn}. There '
+                             f'are no logged failures.')
                 result = False
         else:
             result = False
@@ -1155,14 +1153,13 @@ class Config(object):
 
         :param count the current retry iteration
         """
-        self.work_file = '{}'.format(self.retry_file_name)
+        self.work_file = self.retry_file_name
         self.work_fqn = self.retry_fqn
         if '_' in os.path.basename(self.log_file_directory):
             temp = self.log_file_directory.rsplit('_', 1)[0]
-            self.log_file_directory = '{}_{}'.format(temp, count)
+            self.log_file_directory = f'{temp}_{count}'
         else:
-            self.log_file_directory = '{}_{}'.format(
-                self.log_file_directory, count)
+            self.log_file_directory = f'{self.log_file_directory}_{count}'
         # reset the location of the log file names
         self.success_log_file_name = self.success_log_file_name
         self.failure_log_file_name = self.failure_log_file_name
@@ -1181,7 +1178,7 @@ class Config(object):
             file.
         """
         try:
-            logging.debug('Begin load_config from {}.'.format(config_fqn))
+            logging.debug(f'Begin load_config from {config_fqn}.')
             with open(config_fqn) as f:
                 data_map = yaml.safe_load(f)
                 logging.debug('End load_config.')
@@ -1273,8 +1270,8 @@ class PreviewVisitor(object):
                 count += self._do_prev(plane, observation.observation_id)
             self._augment_artifacts(plane)
             self._delete_list_of_files()
-        logging.info('Completed preview augmentation for {}.'.format(
-            observation.observation_id))
+        logging.info(f'Completed preview augmentation for '
+                     f'{observation.observation_id}.')
         return {'artifacts': count}
 
     def add_preview(self, uri, f_name, product_type, release_type=None,
@@ -1404,34 +1401,34 @@ class StorageName(object):
     @property
     def file_uri(self):
         """The ad URI for the file. Assumes compression."""
-        return '{}:{}/{}{}'.format(
-            self.scheme, self.archive, self.file_name, self._compression)
+        return f'{self.scheme}:{self.archive}/{self.file_name}' \
+               f'{self._compression}'
 
     @property
     def file_name(self):
         """The file name."""
-        return '{}.fits'.format(self.obs_id)
+        return f'{self.obs_id}.fits'
 
     @property
     def compressed_file_name(self):
         """The compressed file name - adds the .gz extension."""
-        return '{}.fits{}'.format(self.obs_id, self._compression)
+        return f'{self.obs_id}.fits{self._compression}'
 
     @property
     def model_file_name(self):
         """The file name used on local disk that holds the CAOM2 Observation
         XML."""
-        return '{}.fits.xml'.format(self.obs_id)
+        return f'{self.obs_id}.fits.xml'
 
     @property
     def prev(self):
         """The preview file name for the file."""
-        return '{}_prev.jpg'.format(self.obs_id)
+        return f'{self.obs_id}_prev.jpg'
 
     @property
     def thumb(self):
         """The thumbnail file name for the file."""
-        return '{}_prev_256.jpg'.format(self.obs_id)
+        return f'{self.obs_id}_prev_256.jpg'
 
     @property
     def prev_uri(self):
@@ -1455,7 +1452,7 @@ class StorageName(object):
     @property
     def log_file(self):
         """The log file name used when running any of the 'execute' steps."""
-        return '{}.log'.format(self.obs_id)
+        return f'{self.obs_id}.log'
 
     @property
     def product_id(self):
@@ -1500,7 +1497,7 @@ class StorageName(object):
     def lineage(self):
         """The value provided to the --lineage parameter for
         fits2caom2 extensions."""
-        return '{}/{}'.format(self.product_id, self.file_uri)
+        return f'{self.product_id}/{self.file_uri}'
 
     @property
     def source_name(self):
@@ -1540,7 +1537,7 @@ class StorageName(object):
 
     def _get_uri(self, fname):
         """The ad URI for a file, without consideration for compression."""
-        return '{}:{}/{}'.format(self.scheme, self.archive, fname)
+        return f'{self.scheme}:{self.archive}/{fname}'
 
     @staticmethod
     def remove_extensions(name):
@@ -1776,9 +1773,8 @@ def define_subject(config):
         else:
             logging.warning(f'Cannot find netrc file {netrc_fqn}')
     else:
-        logging.warning(
-            'Proxy certificate is {}, netrc file is {}.'.format(
-                config.proxy_fqn, config.netrc_file))
+        logging.warning(f'Proxy certificate is {config.proxy_fqn}, netrc file '
+                        f'is {config.netrc_file}.')
         raise CadcException(
             'No credentials provided (proxy certificate or netrc file). '
             'Cannot create an anonymous subject.')
@@ -1841,14 +1837,13 @@ def exec_cmd_info(cmd):
         output, outerr = subprocess.Popen(cmd_array, stdout=subprocess.PIPE,
                                           stderr=subprocess.PIPE).communicate()
         if outerr is not None and len(outerr) > 0 and outerr[0] is not None:
-            raise CadcException('Command {} had stderr {}'.format(
-                cmd, outerr.decode('utf-8')))
+            raise CadcException(
+                f'Command {cmd} had stderr {outerr.decode("utf-8")}')
         if output is not None and len(output) > 0:
             return output.decode('utf-8')
     except Exception as e:
-        logging.debug('Error with command {}:: {}'.format(cmd, e))
-        raise CadcException('Could not execute cmd {}.'
-                            'Exception {}'.format(cmd, e))
+        logging.debug(f'Error with command {cmd}:: {e}')
+        raise CadcException(f'Could not execute cmd {cmd}. Exception {e}')
 
 
 def exec_cmd_redirect(cmd, fqn):
@@ -1870,15 +1865,13 @@ def exec_cmd_redirect(cmd, fqn):
                 stderr=subprocess.PIPE).communicate()
             if (outerr is not None and len(outerr) > 0 and
                     outerr[0] is not None):
-                logging.debug('Command {} had stderr {}'.format(
-                    cmd, outerr.decode('utf-8')))
+                logging.debug(
+                    f'Command {cmd} had stderr {outerr.decode("utf-8")}')
                 raise CadcException(
-                    'Command {} had outerr {}'.format(
-                        cmd, outerr.decode('utf-8')))
+                    f'Command {cmd} had outerr {outerr.decode("utf-8")}')
     except Exception as e:
-        logging.debug('Error with command {}:: {}'.format(cmd, e))
-        raise CadcException('Could not execute cmd {}.'
-                            'Exception {}'.format(cmd, e))
+        logging.debug(f'Error with command {cmd}:: {e}')
+        raise CadcException(f'Could not execute cmd {cmd}.Exception {e}')
 
 
 def ftp_get(ftp_host_name, source_fqn, dest_fqn):
@@ -1899,17 +1892,15 @@ def ftp_get(ftp_host_name, source_fqn, dest_fqn):
             ftp_host.close()
             dest_meta = get_file_meta(dest_fqn)
             if source_stats.st_size == dest_meta.get('size'):
-                logging.info('Downloaded {} from {}'.format(
-                    source_fqn, ftp_host_name))
+                logging.info(f'Downloaded {source_fqn} from {ftp_host_name}')
             else:
                 os.unlink(dest_fqn)
-                raise CadcException(
-                    'File size error when transferring {} from {}'.format(
-                        source_fqn, ftp_host_name))
+                raise CadcException(f'File size error when transferring '
+                                    f'{source_fqn} from {ftp_host_name}')
     except Exception as e:
         logging.error(e)
-        raise CadcException('Could not transfer {} from {}'.format(
-            source_fqn, ftp_host_name))
+        raise CadcException(
+            f'Could not transfer {source_fqn} from {ftp_host_name}')
 
 
 def ftp_get_timeout(ftp_host_name, source_fqn, dest_fqn, timeout=20):
@@ -1934,17 +1925,15 @@ def ftp_get_timeout(ftp_host_name, source_fqn, dest_fqn, timeout=20):
             ftp_host.quit()
             dest_meta = get_file_meta(dest_fqn)
             if source_size == dest_meta.get('size'):
-                logging.info('Downloaded {} from {}'.format(
-                    source_fqn, ftp_host_name))
+                logging.info(f'Downloaded {source_fqn} from {ftp_host_name}')
             else:
                 os.unlink(dest_fqn)
-                raise CadcException(
-                    'File size error when transferring {} from {}'.format(
-                        source_fqn, ftp_host_name))
+                raise CadcException(f'File size error when transferring '
+                                    f'{source_fqn} from {ftp_host_name}')
     except Exception as e:
         logging.error(e)
-        raise CadcException('Could not transfer {} from {}'.format(
-            source_fqn, ftp_host_name))
+        raise CadcException(f'Could not transfer {source_fqn} from '
+                            f'{ftp_host_name}')
 
 
 def get_cadc_headers(uri):
@@ -2029,7 +2018,7 @@ def get_file_meta(fqn):
     :return:
     """
     if fqn is None or not os.path.exists(fqn):
-        raise CadcException('Could not find {} in get_file_meta'.format(fqn))
+        raise CadcException(f'Could not find {fqn} in get_file_meta')
     meta = {'size': get_file_size(fqn),
             'md5sum': md5(open(fqn, 'rb').read()).hexdigest()}
     if fqn.endswith('.header') or fqn.endswith('.txt') or fqn.endswith('.cat'):
@@ -2085,9 +2074,8 @@ def decompose_lineage(lineage):
         result = lineage.split('/', 1)
         return result[0], result[1]
     except Exception as e:
-        logging.debug('Lineage {} caused error {}. Expected '
-                      'product_id/ad:ARCHIVE/FILE_NAME'.format(
-                        lineage, e))
+        logging.debug(f'Lineage {lineage} caused error {e}. Expected '
+                      f'product_id/ad:ARCHIVE/FILE_NAME')
         raise CadcException('Expected product_id/ad:ARCHIVE/FILE_NAME')
 
 
@@ -2114,8 +2102,7 @@ def check_param(param, param_type):
     expected type.
     """
     if param is None or not isinstance(param, param_type):
-        raise CadcException(
-            'Parameter {} failed check for {}'.format(param, param_type))
+        raise CadcException(f'Parameter {param} failed check for {param_type}')
 
 
 def read_csv_file(fqn):
@@ -2132,7 +2119,7 @@ def read_csv_file(fqn):
                     continue
                 results.append(row)
     except Exception as e:
-        logging.error('Could not read from csv file {}'.format(fqn))
+        logging.error(f'Could not read from csv file {fqn}')
         raise CadcException(e)
     return results
 
@@ -2140,9 +2127,8 @@ def read_csv_file(fqn):
 def record_progress(config, application, count, cumulative, start_time):
     """Common code to write the number of entries processed to a file."""
     with open(config.progress_fqn, 'a') as progress:
-        progress.write(
-            '{} {} current:: {} since {}:: {}\n'.format(
-                datetime.now(), application, count, start_time, cumulative))
+        progress.write(f'{datetime.now()} {application} current:: {count} '
+                       f'since {start_time}:: {cumulative}\n')
 
 
 def write_obs_to_file(obs, fqn):
@@ -2154,7 +2140,7 @@ def write_obs_to_file(obs, fqn):
 def read_obs_from_file(fqn):
     """Common code to read a CAOM Observation from a file."""
     if not os.path.exists(fqn):
-        raise CadcException('Could not find {}'.format(fqn))
+        raise CadcException(f'Could not find {fqn}')
     reader = ObservationReader(False)
     return reader.read(fqn)
 
@@ -2164,7 +2150,7 @@ def read_from_file(fqn):
     mock.
     """
     if not os.path.exists(fqn):
-        raise CadcException('Could not find {}'.format(fqn))
+        raise CadcException(f'Could not find {fqn}')
     with open(fqn, 'r') as f:
         return f.readlines()
 
@@ -2177,8 +2163,8 @@ def write_to_file(fqn, content):
         with open(fqn, 'w') as f:
             f.write(content)
     except Exception:
-        logging.error('Could not write file {}'.format(fqn))
-        raise CadcException('Could not write file {}'.format(fqn))
+        logging.error(f'Could not write file {fqn}')
+        raise CadcException(f'Could not write file {fqn}')
 
 
 def update_typed_set(typed_set, new_set):
@@ -2229,7 +2215,7 @@ def get_lineage(archive, product_id, file_name, scheme='ad'):
     :return str understood by the caom2gen application, lineage parameter
         value
     """
-    return '{}/{}:{}/{}'.format(product_id, scheme, archive, file_name)
+    return f'{product_id}/{scheme}:{archive}/{file_name}'
 
 
 def get_artifact_metadata(fqn, product_type, release_type, uri=None,
@@ -2250,7 +2236,7 @@ def get_artifact_metadata(fqn, product_type, release_type, uri=None,
         content_* elements filled in.
     """
     local_meta = get_file_meta(fqn)
-    md5uri = ChecksumURI('md5:{}'.format(local_meta['md5sum']))
+    md5uri = ChecksumURI(f'md5:{local_meta["md5sum"]}')
     if artifact is None:
         if uri is None:
             raise CadcException('Cannot build an Artifact without a URI.')
@@ -2285,7 +2271,7 @@ def get_artifact_metadata_client(client, file_name, product_type, release_type,
         content_* elements filled in.
     """
     meta = get_cadc_meta_client(client, archive, file_name)
-    md5uri = ChecksumURI('md5:{}'.format(meta.get('md5sum')))
+    md5uri = ChecksumURI(f'md5:{meta.get("md5sum")}')
     if artifact is None:
         if uri is None:
             raise CadcException('Cannot build an Artifact without a URI.')
@@ -2347,7 +2333,7 @@ def data_put(client, working_directory, file_name, archive, stream='raw',
         file_size = os.stat(file_name).st_size
     except Exception as e:
         metrics.observe_failure('get', 'data', file_name)
-        raise CadcException('Failed to store data with {}'.format(e))
+        raise CadcException(f'Failed to store data with {e}')
     finally:
         os.chdir(cwd)
     end = current()
@@ -2370,12 +2356,10 @@ def data_get(client, working_directory, file_name, archive, metrics):
     try:
         client.get_file(archive, file_name, destination=fqn)
         if not os.path.exists(fqn):
-            raise CadcException(
-                'ad retrieve failed. {} does not exist.'.format(fqn))
+            raise CadcException(f'ad retrieve failed. {fqn} does not exist.')
     except Exception as e:
         metrics.observe_failure('get', 'data', file_name)
-        raise CadcException('Did not retrieve {} because {}'.format(
-            fqn, e))
+        raise CadcException(f'Did not retrieve {fqn} because {e}')
     end = current()
     file_size = os.stat(fqn).st_size
     metrics.observe(start, end, file_size, 'get', 'data', file_name)
@@ -2383,7 +2367,7 @@ def data_get(client, working_directory, file_name, archive, metrics):
 
 def build_uri(archive, file_name, scheme='ad'):
     """One location to keep the syntax for an Artifact URI."""
-    return '{}:{}/{}'.format(scheme, archive, file_name)
+    return f'{scheme}:{archive}/{file_name}'
 
 
 def query_endpoint(url, timeout=20):
@@ -2404,13 +2388,13 @@ def query_endpoint(url, timeout=20):
         response.raise_for_status()
         return response
     except Exception as e:
-        raise CadcException('Endpoint {} failure {}'.format(url, str(e)))
+        raise CadcException(f'Endpoint {url} failure {str(e)}')
 
 
 def read_as_yaml(fqn):
     """Read and return YAML content of 'fqn'."""
     try:
-        logging.debug('Begin read_as_yaml for {}.'.format(fqn))
+        logging.debug(f'Begin read_as_yaml for {fqn}.')
         with open(fqn) as f:
             data_map = yaml.safe_load(f)
             logging.debug('End read_as_yaml.')
@@ -2423,7 +2407,7 @@ def read_as_yaml(fqn):
 def write_as_yaml(content, fqn):
     """Write 'content' to 'fqn' as YAML."""
     try:
-        logging.debug('Begin write_as_yaml for {}.'.format(fqn))
+        logging.debug(f'Begin write_as_yaml for {fqn}.')
         with open(fqn, 'w') as f:
             yaml.dump(content, f, default_flow_style=False)
             logging.debug('End write_as_yaml.')
@@ -2451,7 +2435,7 @@ def load_module(module, command_name):
             raise CadcException(f'Could not find command {command_name} in '
                                 f'module {module}.')
     except ImportError as e:
-        logging.debug('Looking for {!r} in {!r}'.format(mname, pname))
+        logging.debug(f'Looking for {mname} in {pname}')
         raise e
     return result
 
@@ -2485,8 +2469,8 @@ def make_seconds(from_time):
                 # the format '%b %d %H:%M' results in a timestamp based on
                 # 1900, so need to set it to 'this' year
                 year = datetime.utcnow().year
-                dt = '{} {}'.format(from_time[:index], year)
-                dt_format = '{} %Y'.format(fmt)
+                dt = f'{from_time[:index]} {year}'
+                dt_format = f'{fmt} %Y'
                 seconds_since_epoch = datetime.strptime(
                     dt, dt_format).timestamp()
             if (fmt == '%Y-%m-%dHST%H:%M:%S' or
@@ -2499,7 +2483,7 @@ def make_seconds(from_time):
         except ValueError:
             seconds_since_epoch = None
     if seconds_since_epoch is None:
-        raise CadcException('Could not make seconds from {}'.format(from_time))
+        raise CadcException(f'Could not make seconds from {from_time}')
     return seconds_since_epoch
 
 
@@ -2535,7 +2519,7 @@ def increment_time(this_ts, by_interval, unit='%M'):
     if unit == '%M':
         factor = 60
     else:
-        raise NotImplementedError('Unexpected unit {}'.format(unit))
+        raise NotImplementedError(f'Unexpected unit {unit}')
     interval = by_interval * factor
     temp = time_s + interval
     return datetime.fromtimestamp(temp)
@@ -2558,23 +2542,20 @@ def http_get(url, local_fqn):
             if length is not None:
                 file_meta = get_file_meta(local_fqn)
                 if file_meta['size'] != length:
-                    raise CadcException(
-                        'Could not retrieve {} from {}. File size '
-                        'error.'.format(local_fqn, url))
+                    raise CadcException(f'Could not retrieve {local_fqn} from '
+                                        f'{url}. File size error.')
             checksum = r.headers.get('Content-Checksum')
             if checksum is not None:
                 file_meta = get_file_meta(local_fqn)
                 if file_meta['md5sum'] != checksum:
-                    raise CadcException(
-                        'Could not retrieve {} from {}. File checksum '
-                        'error.'.format(local_fqn, url))
+                    raise CadcException(f'Could not retrieve {local_fqn} from '
+                                        f'{url}. File checksum error.')
         if not os.path.exists(local_fqn):
             raise CadcException(
-                'Retrieve failed. {} does not exist.'.format(local_fqn))
+                f'Retrieve failed. {local_fqn} does not exist.')
     except exceptions.HttpException as e:
         raise CadcException(
-            'Could not retrieve {} from {}. Failed with {}'.format(
-                local_fqn, url, e))
+            f'Could not retrieve {local_fqn} from {url}. Failed with {e}')
 
 
 def look_pull_and_put(f_name, working_dir, url, archive, stream, mime_type,
@@ -2601,17 +2582,16 @@ def look_pull_and_put(f_name, working_dir, url, archive, stream, mime_type,
     try:
         meta = cadc_client.get_file_info(archive, f_name)
         if checksum is not None and meta['md5sum'] != checksum:
-            logging.debug('Different checksums: CADC {} Source {}'.format(
-                meta['md5sum'], checksum))
+            logging.debug(f'Different checksums: CADC {meta["md5sum"]} '
+                          f'Source {checksum}')
             retrieve = True
         else:
-            logging.info('{} already exists at CADC/{}'.format(
-                f_name, archive))
+            logging.info(f'{f_name} already exists at CADC/{archive}')
     except exceptions.NotFoundException:
         retrieve = True
 
     if retrieve:
-        logging.info('Retrieving {} for {}'.format(f_name, archive))
+        logging.info(f'Retrieving {f_name} for {archive}')
         fqn = os.path.join(working_dir, f_name)
         http_get(url, fqn)
         data_put(cadc_client, working_dir, f_name, archive, stream,
@@ -2625,8 +2605,8 @@ def query_tap(query_string, proxy_fqn, resource_id):
     :param resource_id which tap service to query
     :returns an astropy votable instance."""
 
-    logging.debug('query_tap: execute query {} against {}'.format(
-        query_string, resource_id))
+    logging.debug(
+        f'query_tap: execute query {query_string} against {resource_id}')
     subject = net.Subject(certificate=proxy_fqn)
     tap_client = CadcTapClient(subject, resource_id=resource_id)
     buffer = io.StringIO()
@@ -2654,9 +2634,8 @@ def repo_create(client, observation, metrics):
         client.create(observation)
     except Exception as e:
         metrics.observe_failure('create', 'caom2', observation.observation_id)
-        raise CadcException(
-            'Could not create an observation record for {}. '
-            '{}'.format(observation.observation_id, e))
+        raise CadcException(f'Could not create an observation record for '
+                            f'{observation.observation_id}. {e}')
     end = current()
     metrics.observe(start, end, sizeof(observation), 'create', 'caom2',
                     observation.observation_id)
@@ -2669,8 +2648,7 @@ def repo_delete(client, collection, obs_id, metrics):
     except Exception as e:
         metrics.observe_failure('delete', 'caom2', obs_id)
         raise CadcException(
-            'Could not delete the observation record for {}. '
-            '{}'.format(obs_id, e))
+            f'Could not delete the observation record for {obs_id}. {e}')
     end = current()
     metrics.observe(start, end, 0, 'delete', 'caom2', obs_id)
 
@@ -2684,7 +2662,7 @@ def repo_get(client, collection, obs_id, metrics):
     except Exception:
         metrics.observe_failure('read', 'caom2', obs_id)
         raise CadcException(
-            'Could not retrieve an observation record for {}.'.format(obs_id))
+            f'Could not retrieve an observation record for {obs_id}.')
     end = current()
     metrics.observe(
         start, end, sizeof(observation), 'read', 'caom2', obs_id)
@@ -2697,9 +2675,8 @@ def repo_update(client, observation, metrics):
         client.update(observation)
     except Exception as e:
         metrics.observe_failure('update', 'caom2', observation.observation_id)
-        raise CadcException(
-            'Could not update an observation record for {}. '
-            '{}'.format(observation.observation_id, e))
+        raise CadcException(f'Could not update an observation record for '
+                            f'{observation.observation_id}. {e}')
     end = current()
     metrics.observe(start, end, sizeof(observation), 'update', 'caom2',
                     observation.observation_id)

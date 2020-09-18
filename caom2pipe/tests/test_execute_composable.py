@@ -170,8 +170,6 @@ def test_local_meta_create_client_execute(test_config):
         test_config, tc.TestStorageName(), TEST_APP, test_cred,
         data_client_mock, repo_client_mock, meta_visitors=None,
         observable=test_observer)
-    test_source = '{}/{}/{}.py'.format(distutils.sysconfig.get_python_lib(),
-                                       TEST_APP, TEST_APP)
     test_executor.execute(None)
     assert repo_client_mock.create.called, 'create call missed'
     assert test_observer.metrics.observe.called, 'observe not called'
@@ -483,7 +481,7 @@ def test_caom_name():
 
 def test_omm_name_dots():
     TEST_NAME = 'C121121_J024345.57-021326.4_K_SCIRED'
-    TEST_URI = 'ad:OMM/{}.fits.gz'.format(TEST_NAME)
+    TEST_URI = f'ad:OMM/{TEST_NAME}.fits.gz'
     test_file_id = mc.CaomName(TEST_URI).file_id
     assert TEST_NAME == test_file_id, 'dots messing with things'
 
