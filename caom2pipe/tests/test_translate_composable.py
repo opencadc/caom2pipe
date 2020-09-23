@@ -62,53 +62,47 @@
 #  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 #                                       <http://www.gnu.org/licenses/>.
 #
-#  $Revision: 4 $
+#  : 4 $
 #
 # ***********************************************************************
 #
 
-from caom2 import TypedList, Chunk
-from caom2utils import FitsParser
+from mock import patch
+
+from caom2utils import ObsBlueprint, get_cadc_headers
+from caom2pipe import manage_composable as mc
+from caom2pipe import translate_composable as tc
+
+import test_conf
 
 
-__all__ = ['add_headers_to_obs_by_blueprint']
-
-
-def add_headers_to_obs_by_blueprint(obs, headers, blueprint, uri, product_id):
-    """
-    Common code that puts together knowledge of the blueprint and the
-    FitsParser to add information to an Observation.
-
-    :param obs Observation to be added to
-    :param headers astropy FITS headers with in-coming metadata
-    :param blueprint caom2utils.ObsBlueprint instance to map from the
-        metadata to the CAOM structure
-    :param uri Artifact URI to add to Observation instance
-    :param product_id Plane identifier, to know which plane to add
-
-    """
-    parser = FitsParser(headers, blueprint, uri)
-    parser.augment_observation(obs, uri, product_id)
-
-    # re-home the chunk information to be consistent with accepted CAOM
-    # patterns of part/chunk relationship - i.e. part 0 never has chunks
-    # if the file being represented has extensions. This
-    # relationship gets missed when only using the headers[1:], so
-    # shift all the chunks up by one, and set the 0th to no chunks
-    for plane in obs.planes.values():
-        if plane.product_id != product_id:
-            continue
-        for artifact in plane.artifacts.values():
-            if artifact.uri == uri and len(artifact.parts) > 1:
-                first_index = None
-                prev_chunks = None
-                for key, value in artifact.parts.items():
-                    if first_index is None:
-                        first_index = key
-                        prev_chunks = value.chunks
-                        continue
-                    else:
-                        temp = value.chunks
-                        value.chunks = prev_chunks
-                        prev_chunks = temp
-                artifact.parts['0'].chunks = TypedList(Chunk, )
+@patch('caom2utils.fits2caom2.FitsParser.augment_observation')
+def test_add_headers_to_obs_by_blueprint(parser_mock):
+    test_blueprint = ObsBlueprint()
+    test_fqn = f'{test_conf.TEST_DATA_DIR}/translate_test/after_aug.xml'
+    test_obs = mc.read_obs_from_file(test_fqn)
+    test_product_id = '2515996g'
+    test_uri = 'ad:CFHT/2515996g.fits'
+    assert len(test_obs.planes) == 1, 'wrong number of planes'
+    assert len(test_obs.planes[test_product_id].artifacts) == 1, \
+        'wrong number of artifacts'
+    assert len(test_obs.planes[test_product_id].artifacts[test_uri].
+               parts) == 5, 'wrong number of parts'
+    assert len(test_obs.planes[test_product_id].artifacts[test_uri].
+               parts['0'].chunks) == 1, 'wrong number of chunks'
+    assert test_obs.planes[test_product_id].artifacts[test_uri].parts['0']. \
+        chunks[0].naxis == 3, 'track initial value'
+    assert test_obs.planes[test_product_id].artifacts[test_uri]. \
+        parts['IMAGE DATA'].chunks[0].naxis is None, 'track initial value'
+    tc.add_headers_to_obs_by_blueprint(test_obs, [], test_blueprint,
+                                       test_uri, test_product_id)
+    assert len(test_obs.planes[test_product_id].artifacts[test_uri].
+               parts) == 5, 'wrong number of parts'
+    assert len(test_obs.planes[test_product_id].artifacts[test_uri].
+               parts['0'].chunks) == 0, 'wrong number of chunks'
+    assert len(test_obs.planes[test_product_id].artifacts[test_uri].
+               parts['1'].chunks) == 1, 'wrong number of chunks'
+    assert len(test_obs.planes[test_product_id].artifacts[test_uri].
+               parts['IMAGE DATA'].chunks) == 1, 'wrong number of chunks'
+    assert test_obs.planes[test_product_id].artifacts[test_uri].\
+               parts['IMAGE DATA'].chunks[0].naxis == 3, 'track initial value'

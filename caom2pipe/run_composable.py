@@ -320,6 +320,7 @@ class StateRunner(TodoRunner):
                     self._logger.info(f'Processing {num_entries} entries.')
                     self._organizer.complete_record_count = num_entries
                     self._organizer.success_count = 0
+                    self._organizer.set_log_location()
                     for entry in entries:
                         entry_name = entry[0]
                         entry_time = ac.get_datetime(entry[1])
@@ -362,7 +363,7 @@ class StateRunner(TodoRunner):
 
 def _set_logging(config):
     formatter = logging.Formatter(
-        '%(asctime)s:%(levelname)s:%(name)-36s:%(lineno)d:%(message)s')
+        '%(asctime)s:%(levelname)-8s:%(name)-36s:%(lineno)-4d:%(message)s')
     for handler in logging.getLogger().handlers:
         handler.setLevel(config.logging_level)
         handler.setFormatter(formatter)
