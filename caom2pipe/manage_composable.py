@@ -434,12 +434,10 @@ class Metrics(object):
             create_dir(self.observable_dir)
             now = datetime.utcnow().timestamp()
             for service in self.history.keys():
-                fqn = f'{self.observable_dir}/{now}.{service}.yml'
+                fqn = os.path.join(self.observable_dir, f'{now}.{service}.yml')
                 write_as_yaml(self.history[service], fqn)
 
-            fqn = f'{self.observable_dir}/{now}.fail.yml'
-            # if os.path.exists(fqn):
-            #     temp = read_as_yaml(fqn)
+            fqn = os.path.join(self.observable_dir, f'{now}.fail.yml')
             write_as_yaml(self.failures, fqn)
 
 
@@ -1091,9 +1089,9 @@ class Config(object):
             self.slack_channel = config.get('slack_channel', None)
             self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
-            self._report_fqn = f'{self.log_file_directory}/' \
-                               f'{os.path.basename(self.working_directory)}' \
-                               f'_report.txt'
+            self._report_fqn = os.path.join(
+                self.log_file_directory,
+                f'{os.path.basename(self.working_directory)}_report.txt')
         except KeyError as e:
             raise CadcException(f'Error in config file {e}')
 
@@ -1292,7 +1290,7 @@ class PreviewVisitor(object):
             release_type = self._release_type
             if self._release_type is None:
                 release_type = entry[3]
-            fqn = f'{self._working_dir}/{f_name}'
+            fqn = os.path.join(self._working_dir, f_name)
             plane.artifacts[uri] = get_artifact_metadata(
                 fqn, product_type, release_type, uri, temp)
 

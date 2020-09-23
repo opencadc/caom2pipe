@@ -382,12 +382,6 @@ class MetaCreate(CaomExecute):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
-        # TODO - what breaks when this isn't here? But it can't be here,
-        # because not all files are stored at CADC
-        #
-        # self.logger.debug('Find the file name as stored.')
-        # self._cadc_data_info_file_name_client()
-
         self.logger.debug('create the work space, if it does not exist')
         self._create_dir()
 
@@ -429,12 +423,6 @@ class MetaUpdate(CaomExecute):
     def execute(self, context):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
-
-        # TODO - what breaks when this isn't here? But it can't be here,
-        # because not all files are stored at CADC
-        #
-        # self.logger.debug('Find the file name as stored.')
-        # self._cadc_data_info_file_name_client()
 
         self.logger.debug('create the work space, if it does not exist')
         self._create_dir()
@@ -486,12 +474,6 @@ class MetaDeleteCreate(CaomExecute):
     def execute(self, context):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
-
-        # TODO - what breaks when this isn't here? But it can't be here,
-        # because not all files are stored at CADC
-        #
-        # self.logger.debug('Find the file name as stored.')
-        # self._cadc_data_info_file_name_client()
 
         self.logger.debug('create the work space, if it does not exist')
         self._create_dir()
@@ -609,12 +591,7 @@ class LocalMetaCreate(CaomExecute):
     def execute(self, context):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
-        # TODO - what breaks when this isn't here? But it can't be here,
-        # because not all files are stored at CADC
-        #
-        # self.logger.debug('Find the file name as stored.')
-        # self._cadc_data_info_file_name_client()
-        #
+
         self.logger.debug('the observation does not exist, so go '
                           'straight to generating the xml, as the main_app '
                           'will retrieve the headers')
@@ -657,12 +634,6 @@ class LocalMetaDeleteCreate(CaomExecute):
     def execute(self, context):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
-
-        # TODO - what breaks when this isn't here? But it can't be here,
-        # because not all files are stored at CADC
-        #
-        # self.logger.debug('Find the file name as stored.')
-        # self._cadc_data_info_file_name_client()
 
         self.logger.debug('write the observation to disk for next step')
         self._write_model(self.observation)
@@ -708,12 +679,6 @@ class LocalMetaUpdate(CaomExecute):
     def execute(self, context):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
-
-        # # TODO - what breaks when this isn't here? But it can't be here,
-        # # because not all files are stored at CADC
-        #
-        # self.logger.debug('Find the file name as stored.')
-        # self._cadc_data_info_file_name_client()
 
         self.logger.debug('write the observation to disk for next step')
         self._write_model(self.observation)
@@ -764,10 +729,6 @@ class MetaVisit(CaomExecute):
 
         self.logger.debug('create the work space, if it does not exist')
         self._create_dir()
-
-        # TODO - run a test to see if this is necessary
-        # self.logger.debug('Find the file name as stored.')
-        # self._find_file_name_storage_client()
 
         self.logger.debug('retrieve the existing observation, if it exists')
         observation = self._repo_cmd_read_client()
@@ -1129,21 +1090,6 @@ class OrganizeExecutes(object):
     def timeouts(self):
         return self._timeout
 
-    def choose(self, storage_name):
-        """The logic that decides which descendants of CaomExecute to
-        instantiate. This is based on the content of the config.yml file
-        for an application.
-        :storage_name StorageName extension that handles the naming rules for
-            a file in ad.
-        :command_name Extension of fits2caom2 (or fits2caom2) that is executed
-            for blueprint handling.
-        :meta_visitors List of methods that implement the
-            visit(observation, **kwargs) signature that require metadata
-            access.
-        :data_visitors List of methods that implement the
-            visit(observation, **kwargs) signature that require data access."""
-        pass
-
     def capture_failure(self, storage_name, e):
         """Log an error message to the failure file.
 
@@ -1373,14 +1319,8 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
         instantiate. This is based on the content of the config.yml file
         for an application.
         :storage_name StorageName extension that handles the naming rules for
-            a file in ad.
-        :command_name Extension of fits2caom2 (or fits2caom2) that is executed
-            for blueprint handling.
-        :meta_visitors List of methods that implement the
-            visit(observation, **kwargs) signature that require metadata
-            access.
-        :data_visitors List of methods that implement the
-            visit(observation, **kwargs) signature that require data access."""
+            a file.
+        """
         executors = []
         if mc.TaskType.SCRAPE in self.task_types:
             cred_param = None
