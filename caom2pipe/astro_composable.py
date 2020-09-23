@@ -117,9 +117,8 @@ def convert_time(start_time, exposure):
     time."""
     logging.debug('Begin convert_time.')
     if start_time is not None and exposure is not None:
-        logging.debug(
-            'Use date {} and exposure {} to convert time.'.format(start_time,
-                                                                  exposure))
+        logging.debug(f'Use date {start_time} and exposure {exposure} to '
+                      f'convert time.')
         if type(start_time) is float:
             t_start = Time(start_time, format='mjd')
         else:
@@ -130,8 +129,8 @@ def convert_time(start_time, exposure):
         t_end.format = 'mjd'
         mjd_start = t_start.value
         mjd_end = t_end.value
-        logging.debug('End convert_time mjd start {} mjd end {} .'.format(
-            mjd_start, mjd_end))
+        logging.debug(
+            f'End convert_time mjd start {mjd_start} mjd end {mjd_end}.')
         return mjd_start, mjd_end
     return None, None
 
@@ -172,7 +171,7 @@ def get_datetime(from_value):
         elif isinstance(from_value, numpy.int32) or isinstance(from_value, float):
             result = Time(dt_datetime.fromtimestamp(from_value))
     if result is None:
-        logging.error('Cannot parse datetime {}'.format(from_value))
+        logging.error(f'Cannot parse datetime {from_value}')
     else:
         result.format = 'mjd'
     return result

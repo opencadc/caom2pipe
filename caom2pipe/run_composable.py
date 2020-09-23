@@ -78,6 +78,7 @@ from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
 from caom2pipe import name_builder_composable
 from caom2pipe import data_source_composable
+from caom2pipe import transfer_composable
 
 __all__ = ['TodoRunner', 'StateRunner', 'run_by_todo', 'run_by_state',
            'get_utc_now']
@@ -374,7 +375,8 @@ def get_utc_now():
 
 
 def run_by_todo(config=None, name_builder=None, chooser=None,
-                command_name=None, meta_visitors=[], data_visitors=[]):
+                command_name=None, source=None, meta_visitors=[],
+                data_visitors=[], transferrer=None):
     """A default implementation for using the TodoRunner.
 
     :param config Config instance
@@ -383,12 +385,15 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
         listing
     :param command_name string that represents the specific pipeline
         application name
+    :param source DataSource implementation, if there's a special data source
     :param meta_visitors list of modules with visit methods, that expect
         the metadata of a work file to exist on disk
     :param data_visitors list of modules with visit methods, that expect the
         work file to exist on disk
     :param chooser OrganizerChooser, if there's strange rules about file
         naming.
+    :param transferrer Transfer extension that identifies how to retrieve
+        data from a source.
     """
     if config is None:
         config = mc.Config()
@@ -399,13 +404,21 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
             config.collection)
 
-    if config.use_local_files:
-        source = data_source_composable.ListDirDataSource(config, chooser)
-    else:
-        source = data_source_composable.TodoFileDataSource(config)
+    if source is None:
+        if config.use_local_files:
+            source = data_source_composable.ListDirDataSource(config, chooser)
+        else:
+            source = data_source_composable.TodoFileDataSource(config)
+
+    if transferrer is None:
+        if config.use_local_files:
+            transferrer = transfer_composable.Transfer()
+        else:
+            transferrer = transfer_composable.CadcTransfer(config)
 
     organizer = ec.OrganizeExecutesWithDoOne(
-        config, command_name, meta_visitors, data_visitors, chooser)
+        config, command_name, meta_visitors, data_visitors, chooser,
+        transferrer)
 
     runner = TodoRunner(config, organizer, name_builder, source)
     result = runner.run()
@@ -416,7 +429,7 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
 
 def run_by_state(config=None, name_builder=None, command_name=None,
                  bookmark_name=None, meta_visitors=[], data_visitors=[],
-                 end_time=None, chooser=None, source=None):
+                 end_time=None, chooser=None, source=None, transferrer=None):
     """A default implementation for using the StateRunner.
 
     :param config Config instance
@@ -435,6 +448,8 @@ def run_by_state(config=None, name_builder=None, command_name=None,
         naming.
     :param source DataSourceComposable extension that identifies work to be
         done.
+    :param transferrer Transfer extension that identifies how to retrieve
+        data from a source.
     """
     if config is None:
         config = mc.Config()
@@ -451,8 +466,15 @@ def run_by_state(config=None, name_builder=None, command_name=None,
     if end_time is None:
         end_time = get_utc_now()
 
+    if transferrer is None:
+        if config.use_local_files:
+            transferrer = transfer_composable.Transfer()
+        else:
+            transferrer = transfer_composable.CadcTransfer(config)
+
     organizer = ec.OrganizeExecutesWithDoOne(
-        config, command_name, meta_visitors, data_visitors, chooser)
+        config, command_name, meta_visitors, data_visitors, chooser,
+        transferrer)
 
     runner = StateRunner(config, organizer, name_builder, source,
                          bookmark_name, end_time)

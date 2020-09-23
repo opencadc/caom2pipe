@@ -478,7 +478,7 @@ def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
                                   mc.to_float(coords[index + 1]))
             bounds.vertices.append(vertex)
             index += 2
-            logging.debug('Adding vertex\n{}'.format(vertex))
+            logging.debug(f'Adding vertex\n{vertex}')
         chunk.position.axis.bounds = bounds
 
         prefix = os.path.basename(science_fqn).replace('.fits', '')
@@ -500,10 +500,10 @@ def _handle_footprint_logs(log_file_directory, log_file):
         if os.path.exists(orig_log_fqn):
             log_fqn = os.path.join(log_file_directory, log_file)
             os.rename(orig_log_fqn, log_fqn)
-            logging.debug('Moving footprint log file from {} to {}'.format(
-                orig_log_fqn, log_fqn))
+            logging.debug(f'Moving footprint log file from {orig_log_fqn} '
+                          f'to {log_fqn}')
     else:
-        logging.debug('Removing footprint log file {}'.format(orig_log_fqn))
+        logging.debug(f'Removing footprint log file {orig_log_fqn}')
         os.unlink(orig_log_fqn)
 
 
@@ -697,8 +697,8 @@ def update_observation_members(observation):
                 plane.provenance.inputs is not None):
             for inpt in plane.provenance.inputs:
                 members_inputs.add(inpt.get_observation_uri())
-                logging.debug('Adding Observation URI {}'.format(
-                    inpt.get_observation_uri()))
+                logging.debug(
+                    f'Adding Observation URI {inpt.get_observation_uri()}')
     mc.update_typed_set(observation.members, members_inputs)
 
 
@@ -720,8 +720,7 @@ def update_observation_members_filtered(observation, filter_fn):
 
     for entry in inputs:
         members_inputs.add(entry.get_observation_uri())
-        logging.debug('Adding Observation URI {}'.format(
-            entry.get_observation_uri()))
+        logging.debug(f'Adding Observation URI {entry.get_observation_uri()}')
     mc.update_typed_set(observation.members, members_inputs)
 
 
