@@ -68,6 +68,7 @@
 #
 
 import distutils
+import glob
 import os
 
 from astropy.table import Table
@@ -211,50 +212,124 @@ def test_run_todo_file_data_source(repo_get_mock, repo_mock, caps_mock,
 @patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_direct')
 def test_run_state(fits2caom2_mock, data_mock, repo_mock, tap_mock,
                    test_config):
-    fits2caom2_mock.side_effect = _mock_write
-    data_mock.return_value.get_file_info.return_value = {'name':
-                                                         'test_file.fits'}
-    repo_mock.return_value.read.side_effect = Mock(return_value=None)
-    tap_mock.side_effect = _mock_get_work
-    CadcTapClient.__init__ = Mock(return_value=None)
+    tap_client_orig = CadcTapClient.__init__
+    try:
+        fits2caom2_mock.side_effect = _mock_write
+        data_mock.return_value.get_file_info.return_value = {'name':
+                                                             'test_file.fits'}
+        repo_mock.return_value.read.side_effect = Mock(return_value=None)
+        tap_mock.side_effect = _mock_get_work
+        CadcTapClient.__init__ = Mock(return_value=None)
 
-    test_end_time = datetime.fromtimestamp(1579740838)
-    start_time = test_end_time - timedelta(seconds=900)
-    _write_state(start_time)
+        test_end_time = datetime.fromtimestamp(1579740838)
+        start_time = test_end_time - timedelta(seconds=900)
+        _write_state(start_time)
 
-    test_config.task_types = [mc.TaskType.INGEST]
-    test_config.state_fqn = STATE_FILE
-    test_config.interval = 10
-    if os.path.exists(test_config.progress_fqn):
-        os.unlink(test_config.progress_fqn)
+        test_config.task_types = [mc.TaskType.INGEST]
+        test_config.state_fqn = STATE_FILE
+        test_config.interval = 10
+        if os.path.exists(test_config.progress_fqn):
+            os.unlink(test_config.progress_fqn)
+        if os.path.exists(test_config.success_fqn):
+            os.unlink(test_config.success_fqn)
 
-    test_chooser = ec.OrganizeChooser()
-    test_result = rc.run_by_state(config=test_config,
-                                  chooser=test_chooser,
-                                  command_name=TEST_COMMAND,
-                                  bookmark_name=TEST_BOOKMARK,
-                                  end_time=test_end_time)
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert fits2caom2_mock.called, 'expect fits2caom2 call'
-    fits2caom2_mock.assert_called_once_with()
+        test_chooser = ec.OrganizeChooser()
+        test_result = rc.run_by_state(config=test_config,
+                                      chooser=test_chooser,
+                                      command_name=TEST_COMMAND,
+                                      bookmark_name=TEST_BOOKMARK,
+                                      end_time=test_end_time)
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+        assert fits2caom2_mock.called, 'expect fits2caom2 call'
+        fits2caom2_mock.assert_called_once_with()
 
-    test_state = mc.State(STATE_FILE)
-    assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time, 'wrong time'
-    assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+        test_state = mc.State(STATE_FILE)
+        assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time, \
+            'wrong time'
+        assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+        assert not os.path.exists(test_config.success_fqn), \
+            'log_to_file set to false, no success file'
 
-    # test that runner does nothing when times haven't changed
-    start_time = test_end_time
-    _write_state(start_time)
-    fits2caom2_mock.reset_mock()
-    test_result = rc.run_by_state(config=test_config,
-                                  chooser=test_chooser,
-                                  command_name=TEST_COMMAND,
-                                  bookmark_name=TEST_BOOKMARK,
-                                  end_time=test_end_time)
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert not fits2caom2_mock.called, 'expect no fits2caom2 call'
+        # test that runner does nothing when times haven't changed
+        start_time = test_end_time
+        _write_state(start_time)
+        fits2caom2_mock.reset_mock()
+        test_result = rc.run_by_state(config=test_config,
+                                      chooser=test_chooser,
+                                      command_name=TEST_COMMAND,
+                                      bookmark_name=TEST_BOOKMARK,
+                                      end_time=test_end_time)
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+        assert not fits2caom2_mock.called, 'expect no fits2caom2 call'
+    finally:
+        CadcTapClient.__init__ = tap_client_orig
+
+
+@patch('caom2pipe.manage_composable.repo_create')
+@patch('caom2pipe.manage_composable.read_obs_from_file')
+@patch('caom2pipe.manage_composable.query_tap_client')
+@patch('caom2pipe.execute_composable.CAOM2RepoClient')
+@patch('caom2pipe.execute_composable.CadcDataClient')
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_direct')
+def test_run_state_log_to_file_true(fits2caom2_mock, data_mock, repo_mock,
+                                    tap_mock, read_obs_mock, repo_create_mock,
+                                    test_config):
+    # this test is about making sure the summary .txt files are copied
+    # as expected when there is more than one time-box
+    tap_client_orig = CadcTapClient.__init__
+    pattern = None
+    try:
+        read_obs_mock.return_value = _mock_read
+        fits2caom2_mock.side_effect = _mock_write
+        data_mock.return_value.get_file_info.return_value = {'name':
+                                                             'test_file.fits'}
+        repo_mock.return_value.read.side_effect = Mock(return_value=None)
+        tap_mock.side_effect = _mock_get_work
+        CadcTapClient.__init__ = Mock(return_value=None)
+
+        test_end_time = datetime.fromtimestamp(1579740838)
+        start_time = test_end_time - timedelta(seconds=900)
+        _write_state(start_time)
+
+        test_config.task_types = [mc.TaskType.INGEST]
+        test_config.log_to_file = True
+        test_config.state_fqn = STATE_FILE
+        test_config.interval = 10
+        pattern = f'{test_config.success_fqn.split(".")[0]}*'
+
+        if os.path.exists(test_config.progress_fqn):
+            os.unlink(test_config.progress_fqn)
+
+        # preconditions for the success file: - one file named pattern.txt
+        #
+        original_success_files = glob.glob(pattern)
+        for entry in original_success_files:
+            os.unlink(entry)
+        if not os.path.exists(test_config.success_fqn):
+            with open(test_config.success_fqn, 'w') as f:
+                f.write('test content\n')
+
+        test_chooser = ec.OrganizeChooser()
+        test_result = rc.run_by_state(config=test_config,
+                                      chooser=test_chooser,
+                                      command_name=TEST_COMMAND,
+                                      bookmark_name=TEST_BOOKMARK,
+                                      end_time=test_end_time)
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+
+        assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+        file_count = glob.glob(pattern)
+        assert len(file_count) == 2, 'wrong number of success files'
+        assert repo_create_mock.called, 'expect repo_create call'
+    finally:
+        CadcTapClient.__init__ = tap_client_orig
+        if pattern is not None:
+            original_success_files = glob.glob(pattern)
+            for entry in original_success_files:
+                os.unlink(entry)
 
 
 @patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
