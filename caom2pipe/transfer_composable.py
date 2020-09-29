@@ -115,11 +115,18 @@ class CadcTransfer(Transfer):
     Uses the CadcDataClient to manage transfers from CADC to local disk.
     """
 
-    def __init__(self, config):
+    def __init__(self):
         super(CadcTransfer, self).__init__()
-        subject = mc.define_subject(config)
-        self._client = CadcDataClient(subject)
+        self._cadc_client = None
         self._logger = logging.getLogger(self.__class__.__name__)
+
+    @property
+    def cadc_client(self):
+        return self._cadc_client
+
+    @cadc_client.setter
+    def cadc_client(self, value):
+        self._cadc_client = value
 
     def get(self, source, dest_fqn):
         """
@@ -129,7 +136,7 @@ class CadcTransfer(Transfer):
         working_dir = os.path.dirname(dest_fqn)
         f_name = os.path.basename(dest_fqn)
         scheme_ignore, archive, f_name_ignore = mc.decompose_uri(source)
-        mc.data_get(self._client, working_dir, f_name, archive,
+        mc.data_get(self._cadc_client, working_dir, f_name, archive,
                     self._observable.metrics)
 
     def check(self, dest_fqn):

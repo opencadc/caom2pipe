@@ -82,15 +82,14 @@ import test_conf
 def test_cadc_transfer(data_get_mock, caps_mock):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     data_get_mock.side_effect = Mock(autospec=True)
-    test_config = mc.Config()
-    test_config.working_directory = test_conf.TEST_DATA_DIR
-    test_config.netrc_file = 'test_netrc'
-    test_subject = tc.CadcTransfer(test_config)
+    test_subject = tc.CadcTransfer()
     assert test_subject is not None, 'expect a result'
+    test_config = mc.Config()
     test_config.rejected_fqn = '/tmp/rejected.yml'
     test_observable = mc.Observable(
         mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config))
     test_subject.observable = test_observable
+    test_subject.cadc_client = Mock()
     test_source = 'ad:TEST/test_file.fits'
     test_destination = '/tmp/test_file.fits'
     test_subject.get(test_source, test_destination)

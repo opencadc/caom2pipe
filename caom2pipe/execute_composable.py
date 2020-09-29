@@ -760,7 +760,7 @@ class DataVisit(CaomExecute):
     def __init__(self, config, storage_name, cred_param,
                  cadc_data_client,
                  caom_repo_client, data_visitors, task_type,
-                 observable, transferrer):
+                 observable, transferrer=tc.CadcTransfer()):
         super(DataVisit, self).__init__(
             config, task_type=task_type, storage_name=storage_name,
             command_name=None, cred_param=cred_param,
@@ -770,6 +770,9 @@ class DataVisit(CaomExecute):
         self._data_visitors = data_visitors
         self._log_file_directory = config.log_file_directory
         self._transferrer = transferrer
+        self._transferrer.observable = observable
+        if isinstance(self._transferrer, tc.CadcTransfer):
+            self._transferrer.cadc_client = cadc_data_client
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
@@ -1460,7 +1463,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                             self.config, storage_name, cred_param,
                             cadc_data_client, caom_repo_client,
                             self._data_visitors, mc.TaskType.MODIFY,
-                            self.observable, self._transferrer))
+                            self.observable))
                 else:
                     self._logger.info(f'Skipping the MODIFY task for '
                                       f'{storage_name.file_name}.')
