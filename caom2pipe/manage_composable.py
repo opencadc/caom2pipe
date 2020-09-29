@@ -2057,7 +2057,6 @@ def create_dir(dir_name):
     """Create the working area if it does not already exist."""
     try:
         if os.path.exists(dir_name):
-            logging.error(os.path.exists(dir_name))
             if not os.access(dir_name, os.W_OK | os.X_OK):
                 raise CadcException(f'{dir_name} is not writeable.')
         else:
@@ -2092,7 +2091,7 @@ def decompose_uri(uri):
     except Exception as e:
         logging.debug(f'URI {uri} caused error {e}. Expected '
                       f'scheme:path/FILE_NAME')
-        raise CadcException('Expected scheme:path/FILE_NAME')
+        raise CadcException(f'Expected scheme:path/FILE_NAME. Got {uri}.')
 
 
 def check_param(param, param_type):

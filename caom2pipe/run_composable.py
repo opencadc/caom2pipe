@@ -414,7 +414,7 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
         if config.use_local_files:
             transferrer = transfer_composable.Transfer()
         else:
-            transferrer = transfer_composable.CadcTransfer(config)
+            transferrer = transfer_composable.CadcTransfer()
 
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser,
@@ -470,7 +470,7 @@ def run_by_state(config=None, name_builder=None, command_name=None,
         if config.use_local_files:
             transferrer = transfer_composable.Transfer()
         else:
-            transferrer = transfer_composable.CadcTransfer(config)
+            transferrer = transfer_composable.CadcTransfer()
 
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser,
