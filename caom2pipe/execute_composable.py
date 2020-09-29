@@ -905,21 +905,25 @@ class Store(CaomExecute):
         self.working_dir = self.root_dir
         self.stream = config.stream
         self.multiple_files = storage_name.multiple_files(self.working_dir)
+        # handle the case of a URI source
+        self._destination_f_names = \
+            storage_name.multiple_files(self.working_dir)
         if len(self.multiple_files) == 0:
             self.multiple_files = [storage_name.entry]
+            self._destination_f_names = [storage_name.file_name]
         self._transferrer = transferrer
         self.logger = logging.getLogger(__name__)
 
     def execute(self, context):
         self.logger.debug(f'Begin execute')
 
-        self.logger.debug('Store multiple files to ad.')
-        for entry in self.multiple_files:
-            self.fname = entry
-            self._fqn = f'{self.working_dir}/{self.fname}'
-            self.logger.debug(f'Retrieve {self.fname}')
-            self._transferrer.get(self.fname, self._fqn)
+        self.logger.debug(f'Store {len(self.multiple_files)} files to ad.')
+        for index, entry in enumerate(self.multiple_files):
+            self._fqn = f'{self.working_dir}/{self._destination_f_names[index]}'
+            self.logger.debug(f'Retrieve {entry}')
+            self._transferrer.get(entry, self._fqn)
 
+            self.fname = self._destination_f_names[index]
             self.logger.debug(f'store the input file {self.fname} to ad')
             self._cadc_data_put_client()
 
