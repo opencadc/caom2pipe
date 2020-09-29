@@ -906,7 +906,7 @@ class Store(CaomExecute):
         self.stream = config.stream
         self.multiple_files = storage_name.multiple_files(self.working_dir)
         if len(self.multiple_files) == 0:
-            self.multiple_files = [storage_name.fname_on_disk]
+            self.multiple_files = [storage_name.entry]
         self._transferrer = transferrer
         self.logger = logging.getLogger(__name__)
 
