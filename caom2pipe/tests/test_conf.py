@@ -78,9 +78,10 @@ TEST_FILES_DIR = '/test_files'
 
 
 class TestStorageName(mc.StorageName):
-    def __init__(self, obs_id=None, file_name=None, fname_on_disk=None):
+    def __init__(self, obs_id=None, file_name=None, fname_on_disk=None,
+                 entry=None):
         super(TestStorageName, self).__init__(
-            'test_obs_id', 'TEST', '*', 'test_file.fits.gz')
+            'test_obs_id', 'TEST', '*', 'test_file.fits.gz', entry=entry)
         self.url = 'https://test_url/'
 
     def is_valid(self):

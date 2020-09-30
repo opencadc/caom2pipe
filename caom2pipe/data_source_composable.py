@@ -188,8 +188,10 @@ class TodoFileDataSource(DataSource):
         work = []
         with open(self._config.work_fqn) as f:
             for line in f:
-                logging.debug(f'Adding entry {line.strip()} to work list.')
-                work.append(line.strip())
+                temp = line.strip()
+                if len(temp) > 0:
+                    logging.debug(f'Adding entry {temp} to work list.')
+                    work.append(temp)
         self._logger.debug(f'End get_work in {self.__class__.__name__}')
         return work
 
