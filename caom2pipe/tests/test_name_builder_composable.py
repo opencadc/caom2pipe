@@ -67,6 +67,7 @@
 # ***********************************************************************
 #
 
+from caom2pipe import manage_composable as mc
 from caom2pipe import name_builder_composable as nbc
 
 import test_conf as tc
@@ -85,3 +86,23 @@ def test_storage_name_instance_builder():
     assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
     assert test_result.collection == 'TEST_COLLECTION', 'wrong collection'
     assert test_result.fname_on_disk == 'test_storage_name.fits', 'wrong fname'
+
+
+def test_file_name_builder():
+    test_subject = nbc.FileNameBuilder(tc.TestStorageName)
+    test_result = test_subject.build('test_storage_name.fits')
+    # note TestStorageName has its own hard-coded values
+    assert test_result.obs_id == 'test_obs_id', 'wrong obs_id'
+    assert test_result.collection == 'TEST', 'wrong collection'
+    assert test_result.fname_on_disk == 'test_file.fits.gz', 'wrong fname'
+    assert test_result.entry == 'test_storage_name.fits', 'wrong entry'
+
+
+def test_obs_id_builder():
+    test_subject = nbc.ObsIDBuilder(tc.TestStorageName)
+    test_result = test_subject.build('test_obs_id_2')
+    # note TestStorageName has its own hard-coded values
+    assert test_result.obs_id == 'test_obs_id', 'wrong obs_id'
+    assert test_result.collection == 'TEST', 'wrong collection'
+    assert test_result.fname_on_disk == 'test_file.fits.gz', 'wrong fname'
+    assert test_result.entry == 'test_obs_id_2', 'wrong entry'
