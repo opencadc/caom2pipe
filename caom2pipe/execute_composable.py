@@ -189,7 +189,9 @@ class CaomExecute(object):
         self.mime_encoding = storage_name.mime_encoding
         self.mime_type = storage_name.mime_type
         self._storage_name = storage_name
-        self._fqn = os.path.join(self.working_dir, self.fname)
+        self._fqn = None
+        if self.working_dir and self.fname:
+            self._fqn = os.path.join(self.working_dir, self.fname)
         self.log_file_directory = None
         self.data_visitors = []
 
