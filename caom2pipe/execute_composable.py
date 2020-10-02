@@ -905,9 +905,6 @@ class Store(CaomExecute):
             config, mc.TaskType.STORE, storage_name, command_name, cred_param,
             cadc_data_client, caom_repo_client, meta_visitors=None,
             observable=observable)
-        # when files are on disk don't worry about a separate directory
-        # per observation
-        self.working_dir = self.root_dir
         self.stream = config.stream
         self.multiple_files = storage_name.multiple_files(self.working_dir)
         # handle the case of a URI source
@@ -922,6 +919,9 @@ class Store(CaomExecute):
     def execute(self, context):
         self.logger.debug(f'Begin execute')
 
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
+
         self.logger.debug(f'Store {len(self.multiple_files)} files to ad.')
         for index, entry in enumerate(self.multiple_files):
             self._fqn = f'{self.working_dir}/{self._destination_f_names[index]}'
@@ -931,6 +931,9 @@ class Store(CaomExecute):
             self.fname = self._destination_f_names[index]
             self.logger.debug(f'store the input file {self.fname} to ad')
             self._cadc_data_put_client()
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
 
         self.logger.debug(f'End execute')
 

@@ -153,7 +153,7 @@ class TodoRunner(object):
         # the DataSource instance
         self._todo_list = []
         self._reporter = RunnerReport(self._config.working_directory)
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def _build_todo_list(self):
         self._logger.debug('Begin _build_todo_list.')
@@ -271,7 +271,7 @@ class StateRunner(TodoRunner):
                                           data_source)
         self._bookmark_name = bookmark_name
         self._end_time = get_utc_now() if max_ts is None else max_ts
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def run(self):
         """
