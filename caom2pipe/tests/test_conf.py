@@ -68,6 +68,7 @@
 #
 import os
 
+from caom2 import SimpleObservation, Algorithm
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
 
@@ -97,3 +98,14 @@ class TestChooser(ec.OrganizeChooser):
 
     def use_compressed(self, ignore):
         return True
+
+
+def mock_read(collection, obs_id):
+    return SimpleObservation(collection=collection, observation_id=obs_id,
+                             algorithm=Algorithm('exposure'))
+
+
+def mock_get_file(collection, f_name, **kwargs):
+    dest_fqn = kwargs.get('destination')
+    with open(dest_fqn, 'w') as f:
+        f.write(f'{collection} {f_name}\n')

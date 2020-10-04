@@ -1198,8 +1198,8 @@ class OrganizeExecutes(object):
         subject = mc.define_subject(self.config)
         if (self.config.proxy_fqn is not None and os.path.exists(
                 self.config.proxy_fqn)):
-            logging.debug(f'Using proxy certificate {self.config.proxy_fqn} for '
-                          f'credentials.')
+            logging.debug(f'Using proxy certificate {self.config.proxy_fqn} '
+                          f'for credentials.')
             cred_param = f'--cert {self.config.proxy_fqn}'
         elif (self.config.netrc_file is not None and os.path.exists(
                 self.config.netrc_file)):

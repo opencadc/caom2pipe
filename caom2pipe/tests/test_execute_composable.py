@@ -289,14 +289,24 @@ def test_data_local_execute(test_config):
 
 
 def test_data_store(test_config):
+    test_dir = f'{tc.TEST_DATA_DIR}/test_obs_id'
+    if os.path.exists(test_dir):
+        os.rmdir(test_dir)
+
     data_client_mock = Mock()
     repo_client_mock = Mock()
     test_observer = Mock()
+    # stat mock is for CadcDataClient
     stat_orig = os.stat
     os.stat = Mock()
     os.stat.st_size.return_value = 1243
+    # path.exists mock is because the stat mock causes os.path.exists to
+    # return True
+    path_orig = os.path.exists
+    os.path.exists = Mock(return_value=False)
     test_config.features.supports_multiple_files = False
     try:
+        test_config.working_directory = tc.TEST_DATA_DIR
         test_executor = ec.Store(
             test_config, tc.TestStorageName(), 'command_name', '',
             data_client_mock, repo_client_mock, observable=test_observer,
@@ -307,6 +317,7 @@ def test_data_store(test_config):
         assert data_client_mock.put_file.called, 'put_file call missed'
     finally:
         os.stat = stat_orig
+        os.path.exists = path_orig
 
 
 def test_scrape(test_config):
