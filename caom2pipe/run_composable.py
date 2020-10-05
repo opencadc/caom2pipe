@@ -273,6 +273,23 @@ class StateRunner(TodoRunner):
         self._end_time = get_utc_now() if max_ts is None else max_ts
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    def _record_progress(self, count, cumulative_count, start_time, save_time):
+        with open(self._config.progress_fqn, 'a') as progress:
+            progress.write(f'{datetime.now()} {self._organizer.command_name} '
+                           f'current:: {save_time} {count} since:: '
+                           f'{start_time}:: {cumulative_count}\n')
+
+    def _wrap_state_save(self, state, save_time):
+        save_str = save_time
+        if not isinstance(save_time, str):
+            from astropy.time import Time as astro_Time
+            if isinstance(save_time, datetime):
+                save_str = save_time
+            elif isinstance(save_time, astro_Time):
+                save_time.format = 'datetime'
+                save_str = save_time.value
+        state.save_state(self._bookmark_name, save_str)
+
     def run(self):
         """
         Uses an iterable with a two-item list:
@@ -312,6 +329,7 @@ class StateRunner(TodoRunner):
                 self._logger.info(
                     f'Processing from {prev_exec_time} to {exec_time}')
                 save_time = exec_time
+                self._organizer.success_count = 0
                 entries = self._data_source.get_time_box_work(
                     prev_exec_time, exec_time)
                 num_entries = len(entries)
@@ -319,7 +337,6 @@ class StateRunner(TodoRunner):
                 if num_entries > 0:
                     self._logger.info(f'Processing {num_entries} entries.')
                     self._organizer.complete_record_count = num_entries
-                    self._organizer.success_count = 0
                     self._organizer.set_log_location()
                     for entry in entries:
                         entry_name = entry[0]
@@ -330,9 +347,9 @@ class StateRunner(TodoRunner):
 
                 cumulative += num_entries
                 cumulative_correct += self._organizer.success_count
-                mc.record_progress(self._config, self._organizer.command_name,
-                                   num_entries, cumulative, start_time)
-                state.save_state(self._bookmark_name, save_time)
+                self._record_progress(
+                    num_entries, cumulative, start_time, save_time)
+                self._wrap_state_save(state, save_time)
 
                 if exec_time == self._end_time:
                     # the last interval will always have the exec time
@@ -351,7 +368,7 @@ class StateRunner(TodoRunner):
 
         self._reporter.add_entries(cumulative)
         self._reporter.add_successes(cumulative_correct)
-        state.save_state(self._bookmark_name, exec_time)
+        self._wrap_state_save(state, exec_time)
         self._logger.info('==================================================')
         self._logger.info(
             f'Done {self._organizer.command_name}, saved state is {exec_time}')

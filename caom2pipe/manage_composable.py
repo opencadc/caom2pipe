@@ -111,7 +111,7 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'get_cadc_headers', 'get_lineage', 'get_artifact_metadata',
            'data_put', 'data_get', 'build_uri', 'make_seconds', 'make_time',
            'increment_time', 'ISO_8601_FORMAT', 'http_get', 'Rejected',
-           'record_progress', 'look_pull_and_put',
+           'look_pull_and_put',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'reverse_lookup',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
@@ -2119,13 +2119,6 @@ def read_csv_file(fqn):
         logging.error(f'Could not read from csv file {fqn}')
         raise CadcException(e)
     return results
-
-
-def record_progress(config, application, count, cumulative, start_time):
-    """Common code to write the number of entries processed to a file."""
-    with open(config.progress_fqn, 'a') as progress:
-        progress.write(f'{datetime.now()} {application} current:: {count} '
-                       f'since {start_time}:: {cumulative}\n')
 
 
 def write_obs_to_file(obs, fqn):
