@@ -190,6 +190,7 @@ class TodoFileDataSource(DataSource):
             for line in f:
                 temp = line.strip()
                 if len(temp) > 0:
+                    # ignore empty lines
                     logging.debug(f'Adding entry {temp} to work list.')
                     work.append(temp)
         self._logger.debug(f'End get_work in {self.__class__.__name__}')

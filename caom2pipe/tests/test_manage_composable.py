@@ -873,3 +873,26 @@ def test_config_write():
             assert mc.TaskType.SCRAPE in test_config.task_types, 'scrape end'
     finally:
         os.getcwd = get_cwd_orig
+
+
+def test_reverse_lookup():
+    test_dict = {'a': 1, 'b': 2, 'c': 3}
+    test_result = mc.reverse_lookup(3, test_dict)
+    assert test_result is not None, 'expect a result'
+    assert test_result == 'c', 'wrong result'
+    test_result = mc.reverse_lookup(5, test_dict)
+    assert test_result is None, 'value not in dict'
+
+
+def test_make_time():
+    test_dict = {'2012-12-12T12:13:15': datetime(2012, 12, 12, 12, 13, 15),
+                 # %b %d %H:%M
+                 'Mar 12 12:12': datetime(2020, 3, 12, 12, 12),
+                 # %Y-%m-%dHST%H:%M:%S
+                 '2020-12-12HST12:12:12': datetime(2020, 12, 12, 22, 12, 12)}
+
+    for key, value in test_dict.items():
+        test_result = mc.make_time(key)
+        assert test_result is not None, 'expect a result'
+        assert isinstance(test_result, datetime), 'wrong result type'
+        assert test_result == value, f'wrong result {test_result} want {value}'
