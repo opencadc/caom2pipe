@@ -1703,6 +1703,9 @@ def append_as_array(append_to, key, value):
     existing array entry in a dict, if the key already exists. There may be
     a more elegant way to do this, in which case, the more elegant way can be
     implemented.
+
+    Deprecate this, and use collections.defaultdict(list) instead :)
+
     :param append_to dict
     :param key may already exist in dict
     :param value add to dict
@@ -2055,14 +2058,12 @@ def get_version(entry):
 
 def create_dir(dir_name):
     """Create the working area if it does not already exist."""
-    try:
-        if os.path.exists(dir_name):
-            if not os.access(dir_name, os.W_OK | os.X_OK):
-                raise CadcException(f'{dir_name} is not writeable.')
-        else:
-            os.makedirs(dir_name, mode=0o775)
-    except FileExistsError as e:
-        raise CadcException(f'{dir_name} already exists as a file.')
+    if os.path.exists(dir_name):
+        if (not os.path.isdir(dir_name) or not
+                os.access(dir_name, os.W_OK | os.X_OK)):
+            raise CadcException(f'{dir_name} is not writeable.')
+    else:
+        os.makedirs(dir_name, mode=0o775)
 
 
 def decompose_lineage(lineage):
