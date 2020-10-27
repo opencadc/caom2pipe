@@ -470,6 +470,19 @@ def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
                 coords = fp_results[1].split()
 
         if coords is None:
+            # try with a slightly lower fidelity
+            full_area, footprint_xc, footprint_yc, ra_bary, dec_bary, \
+                footprintstring, stc = footprintfinder.main(
+                    f'-r {params} -m 0.2 {science_fqn}')
+            fp_results = stc.split('Polygon FK5')
+            if len(fp_results) > 1:
+                coords = fp_results[1].split()
+            else:
+                fp_results = stc.split('Polygon ICRS')
+                if len(fp_results) > 1:
+                    coords = fp_results[1].split()
+
+        if coords is None:
             raise mc.CadcException(F'Do not recognize footprint {stc}')
 
         index = 0
