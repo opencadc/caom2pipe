@@ -452,26 +452,37 @@ def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
             and chunk.position.axis is not None):
         logging.debug(
             f'position exists, calculate footprints for {science_fqn}.')
-        full_area, footprint_xc, footprint_yc, ra_bary, dec_bary, \
-            footprintstring, stc = footprintfinder.main(
-                f'-r {params} {science_fqn}')
-        logging.debug(f'footprintfinder result: full area {full_area} '
-                      f'footprint xc {footprint_xc} footprint yc '
-                      f'{footprint_yc} ra bary {ra_bary} dec_bary {dec_bary} '
-                      f'footprintstring {footprintstring} stc {stc}')
-        bounds = CoordPolygon2D()
-        coords = None
-        fp_results = stc.split('Polygon FK5')
-        if len(fp_results) > 1:
-            coords = fp_results[1].split()
-        else:
-            fp_results = stc.split('Polygon ICRS')
+        for parameters in [params, f'{params} -m 0.2', '-f']:
+            # try in decreasing fidelity to get a Polygon that is supported
+            # by CAOM's Polygon/MultiPolygon structures
+            #
+            # -m 0.2 fewer points
+            # -f full chip
+
+            full_area, footprint_xc, footprint_yc, ra_bary, dec_bary, \
+                footprintstring, stc = footprintfinder.main(
+                    f'-r {parameters} {science_fqn}')
+            logging.debug(f'footprintfinder result: full area {full_area} '
+                          f'footprint xc {footprint_xc} footprint yc '
+                          f'{footprint_yc} ra bary {ra_bary} dec_bary '
+                          f'{dec_bary} footprintstring {footprintstring} '
+                          f'stc {stc}')
+            coords = None
+            fp_results = stc.split('Polygon FK5')
             if len(fp_results) > 1:
                 coords = fp_results[1].split()
+            else:
+                fp_results = stc.split('Polygon ICRS')
+                if len(fp_results) > 1:
+                    coords = fp_results[1].split()
+
+            if coords is not None:
+                break
 
         if coords is None:
             raise mc.CadcException(F'Do not recognize footprint {stc}')
 
+        bounds = CoordPolygon2D()
         index = 0
         while index < len(coords):
             vertex = ValueCoord2D(mc.to_float(coords[index]),
