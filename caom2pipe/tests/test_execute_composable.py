@@ -720,6 +720,99 @@ def test_data_visit(get_mock, test_config):
     assert kwargs.get('stream') == 'TEST'
 
 
+def test_store(test_config):
+    test_config.working_directory = '/test_files/caom2pipe'
+    test_sn = tc.TestStorageName()
+    test_command = 'collection2caom2'
+    test_cred_param = ''
+    test_data_client = Mock(autospec=True)
+    test_repo_client = Mock(autospec=True)
+    test_observable = Mock(autospec=True)
+    test_transferrer = Mock(autospec=True)
+    test_transferrer.get.side_effect = _transfer_get_mock
+    test_subject = ec.Store(test_config, test_sn, test_command,
+                            test_cred_param, test_data_client,
+                            test_repo_client, test_observable,
+                            test_transferrer)
+    assert test_subject is not None, 'expect construction'
+    assert test_subject.working_dir == '/test_files/caom2pipe/test_obs_id', \
+        'wrong working directory'
+    assert len(test_subject.multiple_files) == 1, 'wrong file count'
+    assert len(test_subject._destination_f_names) == 1, \
+        'wrong destination file count'
+    assert test_subject._destination_f_names[0] == 'test_obs_id.fits', \
+        'wrong destination'
+    test_subject.execute(None)
+    assert test_data_client.put_file.called, 'data put not called'
+    assert test_data_client.put_file.call_args.args[0] is None, \
+        'archive not set for test_config'
+    assert test_data_client.put_file.call_args.args[1] == 'test_obs_id.fits', \
+        'expect a file name'
+    assert test_data_client.put_file.call_args.kwargs['archive_stream'] == \
+           'TEST', 'wrong archive stream'
+    assert test_data_client.put_file.call_args.kwargs['mime_type'] == \
+           'application/fits', 'wrong archive'
+    assert test_data_client.put_file.call_args.kwargs['mime_encoding'] \
+           is None, 'wrong archive'
+    assert test_data_client.put_file.call_args.kwargs['md5_check'] is True, \
+        'wrong archive'
+
+
+def test_local_store(test_config):
+    test_config.working_directory = '/test_files/caom2pipe'
+    test_config.use_local_files = True
+    test_config.archive = 'LOCAL_TEST'
+    test_sn = tc.TestStorageName()
+
+    test_fqn = os.path.join(test_config.working_directory, test_sn.file_name)
+    if not os.path.exists(test_fqn):
+        with open(test_fqn, 'w') as f:
+            f.write('test content')
+
+    test_command = 'collection2caom2'
+    test_cred_param = ''
+    test_data_client = Mock(autospec=True)
+    test_repo_client = Mock(autospec=True)
+    test_observable = Mock(autospec=True)
+    test_transferrer = transfer_composable.Transfer()
+    test_subject = ec.LocalStore(test_config, test_sn, test_command,
+                                 test_cred_param, test_data_client,
+                                 test_repo_client, test_observable,
+                                 test_transferrer)
+    assert test_subject is not None, 'expect construction'
+    test_subject.execute(None)
+    # does the working directory get used if it's just a local store?
+    assert test_subject.working_dir == '/test_files/caom2pipe', \
+        'wrong working directory'
+    # do one file at a time, so it doesn't matter how many files are
+    # in the working directory
+    assert len(test_subject.multiple_files) == 1, 'wrong file count'
+    assert len(test_subject._destination_f_names) == 1, \
+        'wrong destination file count'
+    assert test_subject._destination_f_names[0] == 'test_obs_id.fits', \
+        'wrong destination'
+    assert test_data_client.put_file.called, 'data put not called'
+    assert test_data_client.put_file.call_args.args[0] == 'LOCAL_TEST', \
+        'expect an archive'
+    assert test_data_client.put_file.call_args.args[1] == 'test_obs_id.fits', \
+        'expect a file name'
+    assert test_data_client.put_file.call_args.kwargs['archive_stream'] == \
+           'TEST', 'wrong archive'
+    assert test_data_client.put_file.call_args.kwargs['mime_type'] == \
+           'application/fits', 'wrong archive'
+    assert test_data_client.put_file.call_args.kwargs['mime_encoding'] \
+           is None, 'wrong archive'
+    assert test_data_client.put_file.call_args.kwargs['md5_check'] is True, \
+        'wrong archive'
+
+
+def _transfer_get_mock(entry, fqn):
+    assert fqn == '/test_files/caom2pipe/test_obs_id/test_obs_id.fits', \
+        'wrong fqn'
+    with open(fqn, 'w') as f:
+        f.write('test content')
+
+
 def _communicate():
     return ['return status', None]
 

@@ -151,7 +151,7 @@ class CaomExecute(object):
             to metadata only.
         :param observable: things that last longer than a pipeline execution
         """
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(config.logging_level)
         formatter = logging.Formatter(
             '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s')
@@ -167,7 +167,11 @@ class CaomExecute(object):
         self.root_dir = config.working_directory
         self.collection = config.collection
         self.archive = config.archive
-        self.working_dir = os.path.join(self.root_dir, self.obs_id)
+        if config.use_local_files:
+            self.working_dir = self.root_dir
+        else:
+            self.working_dir = os.path.join(self.root_dir, self.obs_id)
+
         if config.log_to_file:
             self.model_fqn = os.path.join(config.log_file_directory,
                                           storage_name.model_file_name)
@@ -914,7 +918,7 @@ class Store(CaomExecute):
             self.multiple_files = [storage_name.entry]
             self._destination_f_names = [storage_name.file_name]
         self._transferrer = transferrer
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
         self.logger.debug(f'Begin execute')
@@ -938,6 +942,31 @@ class Store(CaomExecute):
         self.logger.debug(f'End execute')
 
 
+class LocalStore(Store):
+    """Defines the pipeline step for Collection storage of a file. This
+    requires access to the file on disk. The file originates from local
+    disk."""
+
+    def __init__(self, config, storage_name, command_name, cred_param,
+                 cadc_data_client, caom_repo_client, observable,
+                 transferrer):
+        super(LocalStore, self).__init__(
+            config, storage_name, command_name, cred_param,
+            cadc_data_client, caom_repo_client, observable, transferrer)
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def execute(self, context):
+        self.logger.debug(f'Begin execute')
+
+        self.logger.debug(f'Store {len(self.multiple_files)} files to ad.')
+        for index, entry in enumerate(self.multiple_files):
+            self.fname = self._destination_f_names[index]
+            self.logger.debug(f'store the input file {self.fname} to ad')
+            self._cadc_data_put_client()
+
+        self.logger.debug(f'End execute')
+
+
 class Scrape(CaomExecute):
     """Defines the pipeline step for Collection creation of a CAOM model
     observation. The file containing the metadata is located on disk.
@@ -953,7 +982,7 @@ class Scrape(CaomExecute):
         self.fname = storage_name.fname_on_disk
         if self.fname is None:
             self.fname = storage_name.file_name
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
         self.logger.debug(f'Begin execute')
@@ -989,7 +1018,7 @@ class ScrapeUpdate(CaomExecute):
         self.fname = storage_name.fname_on_disk
         if self.fname is None:
             self.fname = storage_name.file_name
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
         self.logger.debug(f'Begin execute')
@@ -1370,11 +1399,20 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                             'use_local_files must be True with '
                             'Task Type "SCRAPE"')
             elif task_type == mc.TaskType.STORE:
-                executors.append(
-                    Store(
-                        self.config, storage_name, self._command_name,
-                        cred_param, cadc_data_client,
-                        caom_repo_client, self.observable, self._transferrer))
+                if self.config.use_local_files:
+                    executors.append(
+                        LocalStore(
+                            self.config, storage_name, self._command_name,
+                            cred_param, cadc_data_client,
+                            caom_repo_client, self.observable,
+                            self._transferrer))
+                else:
+                    executors.append(
+                        Store(
+                            self.config, storage_name, self._command_name,
+                            cred_param, cadc_data_client,
+                            caom_repo_client, self.observable,
+                            self._transferrer))
             elif task_type == mc.TaskType.INGEST:
                 observation = CaomExecute.repo_cmd_get_client(
                     caom_repo_client, self.config.collection,
