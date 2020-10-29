@@ -75,6 +75,7 @@ import shutil
 from datetime import datetime
 from mock import patch
 
+from cadcutils import net
 from caom2pipe import data_source_composable as dsc
 from caom2pipe import manage_composable as mc
 from caom2pipe import name_builder_composable as nbc
@@ -114,7 +115,6 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
 @patch('caom2pipe.execute_composable.CAOM2RepoClient')
 @patch('caom2pipe.execute_composable.CadcDataClient')
 def test_run_state(data_mock, repo_mock):
-    logging.error(repo_mock)
     repo_mock.return_value.read.side_effect = tc.mock_read
     data_mock.return_value.get_file.side_effect = tc.mock_get_file
 
@@ -148,18 +148,26 @@ def test_run_state(data_mock, repo_mock):
                               mc.TaskType.MODIFY]
     test_config.features.use_file_names = True
     test_config.features.use_urls = False
+    test_config.use_local_files = False
 
     if not os.path.exists(test_wd):
         os.mkdir(test_wd)
 
+    # if this test is failing, did the docker container get
+    # restarted recently?
+    # first create /caom2pipe_test/1000003f.fits.fz,
+    # then check that the test_start_time and test_end_time values
+    # correspond somewhat to the timestamp on that file
+    #
     # this timestamp is 15 minutes earlier than the timestamp of the
     # file in /caom2pipe_test
-    test_start_time = '2020-10-07 21:17:00'
+    #
+    test_start_time = '2020-10-29 19:00:00'
     with open(test_config.state_fqn, 'w') as f:
         f.write('bookmarks:\n')
         f.write(f'  {caom2pipe_bookmark}:\n')
         f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(2020, 10, 8, 16, 23, 50, 965132)
+    test_end_time = datetime(2020, 10, 29, 19, 15, 50, 965132)
 
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content\n')
@@ -180,6 +188,8 @@ def test_run_state(data_mock, repo_mock):
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
         assert data_mock.called, 'expect put call'
+        assert isinstance(data_mock.call_args.args[0], net.Subject), \
+            'wrong args'
 
         # state file checking
         test_state = mc.State(test_config.state_fqn)
