@@ -76,6 +76,7 @@ import re
 import requests
 import subprocess
 import sys
+import traceback
 import yaml
 
 from datetime import datetime
@@ -1822,6 +1823,7 @@ def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
         if isinstance(e, CadcException):
             raise e
         logging.warning(f'Error with command {cmd}:: {e}')
+        logging.debug(traceback.format_exc())
         raise CadcException(f'Could not execute cmd {cmd}. Exception {e}')
 
 
@@ -1844,6 +1846,7 @@ def exec_cmd_info(cmd):
             return output.decode('utf-8')
     except Exception as e:
         logging.debug(f'Error with command {cmd}:: {e}')
+        logging.debug(traceback.format_exc())
         raise CadcException(f'Could not execute cmd {cmd}. Exception {e}')
 
 
@@ -1872,6 +1875,7 @@ def exec_cmd_redirect(cmd, fqn):
                     f'Command {cmd} had outerr {outerr.decode("utf-8")}')
     except Exception as e:
         logging.debug(f'Error with command {cmd}:: {e}')
+        logging.debug(traceback.format_exc())
         raise CadcException(f'Could not execute cmd {cmd}.Exception {e}')
 
 
@@ -1900,6 +1904,7 @@ def ftp_get(ftp_host_name, source_fqn, dest_fqn):
                                     f'{source_fqn} from {ftp_host_name}')
     except Exception as e:
         logging.error(e)
+        logging.debug(traceback.format_exc())
         raise CadcException(
             f'Could not transfer {source_fqn} from {ftp_host_name}')
 
@@ -1933,6 +1938,7 @@ def ftp_get_timeout(ftp_host_name, source_fqn, dest_fqn, timeout=20):
                                     f'{source_fqn} from {ftp_host_name}')
     except Exception as e:
         logging.error(e)
+        logging.debug(traceback.format_exc())
         raise CadcException(f'Could not transfer {source_fqn} from '
                             f'{ftp_host_name}')
 
@@ -2074,6 +2080,7 @@ def decompose_lineage(lineage):
     except Exception as e:
         logging.debug(f'Lineage {lineage} caused error {e}. Expected '
                       f'product_id/ad:ARCHIVE/FILE_NAME')
+        logging.debug(traceback.format_exc())
         raise CadcException('Expected product_id/ad:ARCHIVE/FILE_NAME')
 
 
@@ -2092,6 +2099,7 @@ def decompose_uri(uri):
     except Exception as e:
         logging.debug(f'URI {uri} caused error {e}. Expected '
                       f'scheme:path/FILE_NAME')
+        logging.debug(traceback.format_exc())
         raise CadcException(f'Expected scheme:path/FILE_NAME. Got {uri}.')
 
 
@@ -2118,6 +2126,7 @@ def read_csv_file(fqn):
                 results.append(row)
     except Exception as e:
         logging.error(f'Could not read from csv file {fqn}')
+        logging.debug(traceback.format_exc())
         raise CadcException(e)
     return results
 
@@ -2324,6 +2333,7 @@ def data_put(client, working_directory, file_name, archive, stream='raw',
         file_size = os.stat(file_name).st_size
     except Exception as e:
         metrics.observe_failure('get', 'data', file_name)
+        logging.debug(traceback.format_exc())
         raise CadcException(f'Failed to store data with {e}')
     finally:
         os.chdir(cwd)
@@ -2350,6 +2360,7 @@ def data_get(client, working_directory, file_name, archive, metrics):
             raise CadcException(f'ad retrieve failed. {fqn} does not exist.')
     except Exception as e:
         metrics.observe_failure('get', 'data', file_name)
+        logging.debug(traceback.format_exc())
         raise CadcException(f'Did not retrieve {fqn} because {e}')
     end = current()
     file_size = os.stat(fqn).st_size
@@ -2379,6 +2390,7 @@ def query_endpoint(url, timeout=20):
         response.raise_for_status()
         return response
     except Exception as e:
+        logging.debug(traceback.format_exc())
         raise CadcException(f'Endpoint {url} failure {str(e)}')
 
 
@@ -2403,6 +2415,7 @@ def write_as_yaml(content, fqn):
             yaml.dump(content, f, default_flow_style=False)
             logging.debug('End write_as_yaml.')
     except Exception as e:
+        logging.debug(traceback.format_exc())
         logging.error(e)
 
 
@@ -2545,6 +2558,7 @@ def http_get(url, local_fqn):
             raise CadcException(
                 f'Retrieve failed. {local_fqn} does not exist.')
     except exceptions.HttpException as e:
+        logging.debug(traceback.format_exc())
         raise CadcException(
             f'Could not retrieve {local_fqn} from {url}. Failed with {e}')
 
@@ -2625,6 +2639,7 @@ def repo_create(client, observation, metrics):
         client.create(observation)
     except Exception as e:
         metrics.observe_failure('create', 'caom2', observation.observation_id)
+        logging.debug(traceback.format_exc())
         raise CadcException(f'Could not create an observation record for '
                             f'{observation.observation_id}. {e}')
     end = current()
@@ -2638,6 +2653,7 @@ def repo_delete(client, collection, obs_id, metrics):
         client.delete(collection, obs_id)
     except Exception as e:
         metrics.observe_failure('delete', 'caom2', obs_id)
+        logging.debug(traceback.format_exc())
         raise CadcException(
             f'Could not delete the observation record for {obs_id}. {e}')
     end = current()
@@ -2652,6 +2668,7 @@ def repo_get(client, collection, obs_id, metrics):
         observation = None
     except Exception:
         metrics.observe_failure('read', 'caom2', obs_id)
+        logging.debug(traceback.format_exc())
         raise CadcException(
             f'Could not retrieve an observation record for {obs_id}.')
     end = current()
@@ -2666,6 +2683,7 @@ def repo_update(client, observation, metrics):
         client.update(observation)
     except Exception as e:
         metrics.observe_failure('update', 'caom2', observation.observation_id)
+        logging.debug(traceback.format_exc())
         raise CadcException(f'Could not update an observation record for '
                             f'{observation.observation_id}. {e}')
     end = current()

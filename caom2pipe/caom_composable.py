@@ -85,7 +85,7 @@ from caom2pipe import manage_composable as mc
 __all__ = ['append_plane_provenance', 'append_plane_provenance_single',
            'build_artifact_uri', 'build_chunk_energy_range',
            'build_chunk_time', 'change_to_simple', 'exec_footprintfinder',
-           'find_plane_and_artifact', 'get_differences',
+           'find_plane_and_artifact',
            'get_obs_id_from_cadc', 'update_plane_provenance',
            'update_observation_members', 'rename_parts',
            'reset_energy', 'reset_position',
