@@ -247,6 +247,7 @@ def test_data_execute(test_config):
         test_cred = ''
 
         ec.CaomExecute._data_cmd_info = Mock(side_effect=_get_fname)
+        repo_client_mock.read.side_effect = tc.mock_read
 
         # run the test
         test_executor = ec.DataVisit(
@@ -692,6 +693,7 @@ def test_data_visit(get_mock, test_config):
     get_mock.side_effect = Mock(autospec=True)
     test_data_client = Mock(autospec=True)
     test_repo_client = Mock(autospec=True)
+    test_repo_client.read.side_effect = tc.mock_read
     dv_mock = Mock(autospec=True)
     test_data_visitors = [dv_mock]
     test_observable = Mock(autospec=True)

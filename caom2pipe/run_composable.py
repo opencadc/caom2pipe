@@ -67,6 +67,16 @@
 # ***********************************************************************
 #
 
+"""
+On the structure and responsibility of the 'run' methods:
+- config file reads are in the 'composable' modules of the individual
+  pipelines, so that collection-specific changes will not be surprises
+  during execution
+- exception handling is also in execute_composable.CaomExecute
+  specializations, except for retry loops
+
+"""
+
 import logging
 import os
 import traceback
