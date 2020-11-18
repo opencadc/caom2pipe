@@ -96,13 +96,18 @@ The correlations that currently exist:
 - requires metadata access only => classes have "Meta" in their name
 - requires data access => classes have "Data" in their name
 
+What VISIT means when it comes to an CaomExecute specialization:
+- visit does NOT execute the 'to_caom2' method
+- *MetaVisit* executes all metadata visitors. These specializations leave
+  the metadata retrieval to the metadata visitor. If the visitor
+  implementation in a specific pipeline is careless, this may mean the VISIT
+  task type can not stand on its own.
+- *DataVisit* executes all data visitors as an implementation of the MODIFY
+  task type. These specializations retrieve the data prior to executing the
+  visitors.
+*DataVisit and *MetaVisit specializations don't behave the same way, or have
+the same assumptions about execution environment.
 
-On the structure and responsibility of the 'run' methods:
-- config file reads are in the 'composable' modules of the individual
-  pipelines, so that collection-specific changes will not be surprises
-  during execution
-- exception handling is also in composable, except for retry loops
--
 """
 
 import distutils.sysconfig
@@ -402,6 +407,9 @@ class MetaCreate(CaomExecute):
         self.logger.debug('the metadata visitors')
         self._visit_meta(observation)
 
+        self.logger.debug('write the observation to disk for debugging')
+        self._write_model(observation)
+
         self.logger.debug('create the observation with xml')
         self._repo_cmd_create_client(observation)
 
@@ -497,6 +505,9 @@ class MetaDeleteCreate(CaomExecute):
         self.logger.debug('the metadata visitors')
         self._visit_meta(self.observation)
 
+        self.logger.debug('write the observation to disk for debugging')
+        self._write_model(self.observation)
+
         self.logger.debug('the observation exists, delete it')
         self._repo_cmd_delete_client(self.observation)
 
@@ -556,6 +567,9 @@ class MetaUpdateObservation(CaomExecute):
         self.logger.debug('the metadata visitors')
         self._visit_meta(self.observation)
 
+        self.logger.debug('write the observation to disk for debugging')
+        self._write_model(self.observation)
+
         self.logger.debug('update the observation')
         self._repo_cmd_update_client(self.observation)
 
@@ -609,11 +623,11 @@ class LocalMetaCreate(CaomExecute):
         self.logger.debug('the metadata visitors')
         self._visit_meta(observation)
 
+        self.logger.debug('write the observation to disk for debugging')
+        self._write_model(observation)
+
         self.logger.debug('store the xml')
         self._repo_cmd_create_client(observation)
-
-        self.logger.debug('write the updated xml to disk for debugging')
-        self._write_model(observation)
 
         self.logger.debug('End execute')
 
@@ -654,14 +668,14 @@ class LocalMetaDeleteCreate(CaomExecute):
         self.logger.debug('the metadata visitors')
         self._visit_meta(observation)
 
+        self.logger.debug('write the observation to disk for debugging')
+        self._write_model(self.observation)
+
         self.logger.debug('the observation exists, delete it')
         self._repo_cmd_delete_client(self.observation)
 
         self.logger.debug('store the xml')
         self._repo_cmd_create_client(observation)
-
-        self.logger.debug('write the updated xml to disk for debugging')
-        self._write_model(observation)
 
         self.logger.debug('End execute')
 
@@ -699,11 +713,11 @@ class LocalMetaUpdate(CaomExecute):
         self.logger.debug('the metadata visitors')
         self._visit_meta(self.observation)
 
-        self.logger.debug('store the xml')
-        self._repo_cmd_update_client(self.observation)
-
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(self.observation)
+
+        self.logger.debug('store the xml')
+        self._repo_cmd_update_client(self.observation)
 
         self.logger.debug('End execute')
 
@@ -742,11 +756,11 @@ class MetaVisit(CaomExecute):
         self.logger.debug('the metadata visitors')
         self._visit_meta(observation)
 
-        self.logger.debug('store the xml')
-        self._repo_cmd_update_client(observation)
-
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
+
+        self.logger.debug('store the xml')
+        self._repo_cmd_update_client(observation)
 
         self.logger.debug('clean up the workspace')
         self._cleanup()
@@ -795,6 +809,9 @@ class DataVisit(CaomExecute):
 
         self.logger.debug('execute the data visitors')
         self._visit_data(observation)
+
+        self.logger.debug('write the observation to disk for debugging')
+        self._write_model(observation)
 
         self.logger.debug('store the updated xml')
         self._repo_cmd_update_client(observation)
@@ -854,11 +871,11 @@ class LocalDataVisit(DataVisit):
         self._logger.debug('execute the data visitors')
         self._visit_data(observation)
 
-        self._logger.debug('store the updated xml')
-        self._repo_cmd_update_client(observation)
-
         self._logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
+
+        self._logger.debug('store the updated xml')
+        self._repo_cmd_update_client(observation)
 
         self._logger.debug(f'End execute')
 
