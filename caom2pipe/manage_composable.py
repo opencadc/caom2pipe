@@ -79,6 +79,7 @@ import sys
 import traceback
 import yaml
 
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from ftplib import FTP
@@ -97,7 +98,7 @@ from cadcutils import net, exceptions
 from cadcdata import CadcDataClient
 from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact, Observation
-from caom2 import ChecksumURI
+from caom2 import ChecksumURI, ProductType, ReleaseType
 from caom2.diff import get_differences
 
 
@@ -116,9 +117,9 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'reverse_lookup',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
-           'Validator', 'Cache', 'CaomName', 'StorageName', 'append_as_array',
-           'to_float', 'to_int', 'to_str', 'load_module',
-           'compare_observations', 'convert_to_days']
+           'Validator', 'Cache', 'CaomName', 'StorageName', 'to_float',
+           'to_int', 'to_str', 'load_module', 'compare_observations',
+           'convert_to_days', 'convert_to_ts']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -1224,6 +1225,14 @@ class Config(object):
                     f.write(f'{entry}: {attribute}\n')
 
 
+@dataclass
+class PreviewMeta:
+    f_name: str
+    product_type: ProductType
+    release_type: ReleaseType
+    mime_type: str = 'image/jpeg'
+
+
 class PreviewVisitor(object):
     """
     Common code for creating thumbnails and previews. Must be extended with
@@ -1234,7 +1243,8 @@ class PreviewVisitor(object):
     files in CADC storage, and cleaning up things left behind on disk.
     """
 
-    def __init__(self, archive, release_type=None, mime_type='image/jpeg', **kwargs):
+    def __init__(self, archive, release_type=None, mime_type='image/jpeg',
+                 **kwargs):
         self._storage_name = None
         self._archive = archive
         self._release_type = release_type
@@ -1275,7 +1285,9 @@ class PreviewVisitor(object):
 
     def add_preview(self, uri, f_name, product_type, release_type=None,
                     mime_type='image/jpeg'):
-        self._previews[uri] = [f_name, product_type, mime_type, release_type]
+        preview_meta = PreviewMeta(f_name, product_type, release_type,
+                                   mime_type)
+        self._previews[uri] = preview_meta
 
     def add_to_delete(self, fqn):
         self._delete_list.append(fqn)
@@ -1286,11 +1298,11 @@ class PreviewVisitor(object):
             temp = None
             if uri in plane.artifacts:
                 temp = plane.artifacts[uri]
-            f_name = entry[0]
-            product_type = entry[1]
+            f_name = entry.f_name
+            product_type = entry.product_type
             release_type = self._release_type
             if self._release_type is None:
-                release_type = entry[3]
+                release_type = entry.release_type
             fqn = os.path.join(self._working_dir, f_name)
             plane.artifacts[uri] = get_artifact_metadata(
                 fqn, product_type, release_type, uri, temp)
@@ -1328,9 +1340,9 @@ class PreviewVisitor(object):
     def _store_smalls(self):
         if self._cadc_client is not None:
             for entry in self._previews.values():
-                data_put(self._cadc_client, self._working_dir, entry[0],
+                data_put(self._cadc_client, self._working_dir, entry.f_name,
                          self._archive, self._stream,
-                         mime_type=entry[2],
+                         mime_type=entry.mime_type,
                          metrics=self._observable.metrics)
 
 
@@ -1699,25 +1711,6 @@ class Validator(object):
         return [CaomName(ii.strip()).file_name for ii in meta['uri']]
 
 
-def append_as_array(append_to, key, value):
-    """Because I've written this more than once ... code to append to an
-    existing array entry in a dict, if the key already exists. There may be
-    a more elegant way to do this, in which case, the more elegant way can be
-    implemented.
-
-    Deprecate this, and use collections.defaultdict(list) instead :)
-
-    :param append_to dict
-    :param key may already exist in dict
-    :param value add to dict
-    """
-    if key in append_to:
-        temp = append_to.get(key)
-        temp.append(value)
-    else:
-        append_to[key] = [value]
-
-
 def compare_observations(actual_fqn, expected_fqn):
     """Compare the observation captured in actual_fqn with the observation
     captured in the expected_fqn. Returns the differences as a pretty
@@ -2041,7 +2034,7 @@ def get_file_meta(fqn):
     elif fqn.endswith('tar.gz'):
         meta['type'] = 'application/x-tar'
     elif fqn.endswith('h5') or fqn.endswith('hdf5'):
-        meta['type'] = 'application/x-hdf'
+        meta['type'] = 'application/x-hdf5'
     else:
         meta['type'] = 'application/fits'
     logging.debug(meta)
@@ -2293,6 +2286,22 @@ def convert_to_days(exposure_time):
     :return:
     """
     return exposure_time / (24.0 * 3600.0)
+
+
+def convert_to_ts(value):
+    """
+    Converts to seconds since the epoch. Tries to be lenient about the
+    type of the incoming value.
+    :param value:
+    :return: float that represents seconds since the epoch.
+    """
+    if isinstance(value, datetime):
+        result = value.timestamp()
+    elif isinstance(value, float):
+        result = value
+    else:
+        result = make_seconds(value)
+    return result
 
 
 def current():

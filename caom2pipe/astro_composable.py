@@ -168,7 +168,8 @@ def get_datetime(from_value):
                         break
                     except ValueError:
                         pass
-        elif isinstance(from_value, numpy.int32) or isinstance(from_value, float):
+        elif (isinstance(from_value, numpy.int32) or
+              isinstance(from_value, float)):
             result = Time(dt_datetime.fromtimestamp(from_value))
     if result is None:
         logging.error(f'Cannot parse datetime {from_value}')

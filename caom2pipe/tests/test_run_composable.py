@@ -235,11 +235,11 @@ def test_run_state(fits2caom2_mock, data_mock, repo_mock, tap_mock,
             os.unlink(test_config.success_fqn)
 
         test_chooser = ec.OrganizeChooser()
-        test_result = rc.run_by_state(config=test_config,
-                                      chooser=test_chooser,
-                                      command_name=TEST_COMMAND,
-                                      bookmark_name=TEST_BOOKMARK,
-                                      end_time=test_end_time)
+        test_result = rc.run_by_state_ts(config=test_config,
+                                         chooser=test_chooser,
+                                         command_name=TEST_COMMAND,
+                                         bookmark_name=TEST_BOOKMARK,
+                                         end_time=test_end_time)
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
         assert fits2caom2_mock.called, 'expect fits2caom2 call'
@@ -256,11 +256,11 @@ def test_run_state(fits2caom2_mock, data_mock, repo_mock, tap_mock,
         start_time = test_end_time
         _write_state(start_time)
         fits2caom2_mock.reset_mock()
-        test_result = rc.run_by_state(config=test_config,
-                                      chooser=test_chooser,
-                                      command_name=TEST_COMMAND,
-                                      bookmark_name=TEST_BOOKMARK,
-                                      end_time=test_end_time)
+        test_result = rc.run_by_state_ts(config=test_config,
+                                         chooser=test_chooser,
+                                         command_name=TEST_COMMAND,
+                                         bookmark_name=TEST_BOOKMARK,
+                                         end_time=test_end_time)
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
         assert not fits2caom2_mock.called, 'expect no fits2caom2 call'

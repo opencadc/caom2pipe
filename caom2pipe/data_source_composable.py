@@ -70,6 +70,7 @@
 import logging
 import os
 
+from dataclasses import dataclass
 from datetime import datetime
 from pytz import timezone
 
@@ -77,7 +78,7 @@ from cadctap import CadcTapClient
 from caom2pipe import manage_composable as mc
 
 __all__ = ['DataSource', 'ListDirDataSource', 'QueryTimeBoxDataSource',
-           'TodoFileDataSource']
+           'QueryTimeBoxDataSourceTS', 'StateRunnerMeta', 'TodoFileDataSource']
 
 
 class DataSource(object):
@@ -234,3 +235,58 @@ class QueryTimeBoxDataSource(DataSource):
                 "ORDER BY ingestDate ASC "
         self._logger.debug(query)
         return mc.query_tap_client(query, self._client)
+
+
+@dataclass
+class StateRunnerMeta:
+    entry_name: str  # how to refer to the item of work to be processed
+    entry_ts: datetime.timestamp  # timestamp associated with item of work
+
+
+class QueryTimeBoxDataSourceTS(DataSource):
+    """
+    Implements the identification of the work to be done, by querying a
+    TAP service, in time-boxed chunks. The time values are timestamps
+    (floats).
+
+    Deprecate the QueryTimeBoxDataSouce class in favour of this implementation.
+    """
+
+    def __init__(self, config, preview_suffix='jpg'):
+        super(QueryTimeBoxDataSourceTS, self).__init__(config)
+        self._preview_suffix = preview_suffix
+        subject = mc.define_subject(config)
+        self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
+        self._logger = logging.getLogger(__name__)
+
+    def get_time_box_work(self, prev_exec_time, exec_time):
+        """
+        Get a set of file names from an archive. Limit the entries by
+        time-boxing on ingestDate, and don't include previews.
+
+        :param prev_exec_time timestamp start of the time-boxed chunk
+        :param exec_time timestamp end of the time-boxed chunk
+        :return: a list of StateRunnerMeta instances in the CADC storage
+            system
+        """
+        # container timezone is UTC, ad timezone is Pacific
+        db_fmt = '%Y-%m-%d %H:%M:%S.%f'
+        prev_exec_time_pz = datetime.strftime(
+            datetime.utcfromtimestamp(prev_exec_time).astimezone(
+                timezone('US/Pacific')), db_fmt)
+        exec_time_pz = datetime.strftime(
+            datetime.utcfromtimestamp(exec_time).astimezone(
+                timezone('US/Pacific')), db_fmt)
+        self._logger.debug(f'Begin get_work.')
+        query = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
+                f"archiveName = '{self._config.archive}' " \
+                f"AND fileName NOT LIKE '%{self._preview_suffix}' " \
+                f"AND ingestDate > '{prev_exec_time_pz}' " \
+                f"AND ingestDate <= '{exec_time_pz}' " \
+                "ORDER BY ingestDate ASC "
+        self._logger.debug(query)
+        rows = mc.query_tap_client(query, self._client)
+        result = []
+        for row in rows:
+            result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
+        return result

@@ -106,9 +106,9 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
         file_list = glob.glob('/caom2pipe_test/*')
         for entry in file_list:
             stats = os.stat(entry)
-            mod_time = datetime.utcfromtimestamp(stats.st_mtime)
-            if prev_exec_time <= mod_time <= exec_time:
-                result.append([os.path.basename(entry), stats.st_mtime])
+            if prev_exec_time <= stats.st_mtime <= exec_time:
+                result.append(dsc.StateRunnerMeta(os.path.basename(entry),
+                                                  stats.st_mtime))
         return result
 
 
@@ -177,13 +177,13 @@ def test_run_state(data_mock, repo_mock):
     transferrer = TestTransfer()
 
     try:
-        test_result = rc.run_by_state(bookmark_name=caom2pipe_bookmark,
-                                      command_name='collection2caom2',
-                                      config=test_config,
-                                      end_time=test_end_time,
-                                      name_builder=test_builder,
-                                      source=test_data_source,
-                                      transferrer=transferrer)
+        test_result = rc.run_by_state_ts(bookmark_name=caom2pipe_bookmark,
+                                         command_name='collection2caom2',
+                                         config=test_config,
+                                         end_time=test_end_time,
+                                         name_builder=test_builder,
+                                         source=test_data_source,
+                                         transferrer=transferrer)
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
