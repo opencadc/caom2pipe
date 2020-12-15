@@ -80,14 +80,13 @@ import traceback
 import yaml
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from ftplib import FTP
 from ftputil import FTPHost
 from hashlib import md5
 from importlib_metadata import version
 from io import BytesIO
-from pytz import timezone
 from requests.adapters import HTTPAdapter
 from urllib import parse as parse
 from urllib3 import Retry
@@ -112,8 +111,8 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'read_from_file', 'read_file_list_from_archive', 'update_typed_set',
            'get_cadc_headers', 'get_lineage', 'get_artifact_metadata',
            'data_put', 'data_get', 'build_uri', 'make_seconds', 'make_time',
-           'increment_time', 'ISO_8601_FORMAT', 'http_get', 'Rejected',
-           'look_pull_and_put',
+           'increment_time', 'increment_time_tz', 'ISO_8601_FORMAT',
+           'http_get', 'Rejected', 'look_pull_and_put',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'reverse_lookup',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
@@ -144,7 +143,7 @@ class Features(object):
         self._run_in_airflow = True
         self._supports_composite = True
         self._supports_catalog = True
-        self._supports_latest_caom = True
+        self._supports_latest_client = False
         self._supports_multiple_files = True
         self._expects_retry = True
 
@@ -201,14 +200,14 @@ class Features(object):
         self._supports_catalog = value
 
     @property
-    def supports_latest_caom(self):
+    def supports_latest_client(self):
         """If true, will execute any latest-version-specific code when creating
          a CAOM instance."""
-        return self._supports_latest_caom
+        return self._supports_latest_client
 
-    @supports_latest_caom.setter
-    def supports_latest_caom(self, value):
-        self._supports_latest_caom = value
+    @supports_latest_client.setter
+    def supports_latest_client(self, value):
+        self._supports_latest_client = value
 
     @property
     def supports_multiple_files(self):
@@ -268,10 +267,12 @@ class State(object):
             self.content = result
 
     def get_bookmark(self, key):
-        """Lookup for last_record key."""
+        """Lookup for last_record key. Treat like an offset-aware datetime."""
         result = None
         if key in self.bookmarks:
             result = self.bookmarks.get(key).get('last_record')
+            if result:
+                result = result.replace(tzinfo=timezone.utc)
         else:
             self.logger.warning(f'No record found for {key}')
         return result
@@ -1593,6 +1594,8 @@ class Validator(object):
         :param source_tz String representation of timezone name, as understood
             by pytz.
         """
+        # over-ride the datetime.timezone import at the module level
+        from pytz import timezone
         self._config = Config()
         self._config.get_executors()
         self._source = []
@@ -1622,6 +1625,9 @@ class Validator(object):
                     # 1 - timestamps are the second column
                     dest_dt_orig = data[mask][0][1]
                     dest_dt = datetime.strptime(dest_dt_orig, ISO_8601_FORMAT)
+                    # over-ride the datetime.timezone import at the module
+                    # level
+                    from pytz import timezone
                     # AD - 2019-11-18 - 'ad' timezone is US/Pacific
                     dest_utc = dest_dt.astimezone(timezone('US/Pacific'))
                     if dest_utc < source_utc:
@@ -2536,6 +2542,29 @@ def increment_time(this_ts, by_interval, unit='%M'):
     interval = by_interval * factor
     temp = time_s + interval
     return datetime.fromtimestamp(temp)
+
+
+def increment_time_tz(this_ts, by_interval, unit='%M'):
+    """
+    Increment time by an interval. Times should be in datetime format, but
+    a modest attempt is made to check for otherwise.
+
+    :param this_ts: datetime
+    :param by_interval: integer - e.g. 10, for a 10 minute increment
+    :param unit: the formatting string, default is minutes
+    :return: this_ts incremented by interval amount. Offset-aware.
+    """
+    if isinstance(this_ts, datetime):
+        time_dt = this_ts
+    elif isinstance(this_ts, str):
+        time_dt = make_time(this_ts)
+    else:
+        time_dt = datetime.fromtimestamp(this_ts, tz=timezone.utc)
+    if unit == '%M':
+        temp = time_dt + timedelta(minutes=by_interval)
+    else:
+        raise NotImplementedError(f'Unexpected unit {unit}')
+    return temp
 
 
 def http_get(url, local_fqn):

@@ -72,7 +72,7 @@ import logging
 import os
 import shutil
 
-from datetime import datetime
+from datetime import datetime, timezone
 from mock import patch
 
 from cadcutils import net
@@ -162,12 +162,13 @@ def test_run_state(data_mock, repo_mock):
     # this timestamp is 15 minutes earlier than the timestamp of the
     # file in /caom2pipe_test
     #
-    test_start_time = '2020-11-17 21:45:00'
+    test_start_time = '2020-12-15 00:00:09'
     with open(test_config.state_fqn, 'w') as f:
         f.write('bookmarks:\n')
         f.write(f'  {caom2pipe_bookmark}:\n')
         f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(2020, 11, 17, 22, 15, 50, 965132)
+    test_end_time = datetime(2020, 12, 15, 22, 15, 50, 965132,
+                             tzinfo=timezone.utc)
 
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content\n')
@@ -177,7 +178,7 @@ def test_run_state(data_mock, repo_mock):
     transferrer = TestTransfer()
 
     try:
-        test_result = rc.run_by_state_ts(bookmark_name=caom2pipe_bookmark,
+        test_result = rc.run_by_state_tz(bookmark_name=caom2pipe_bookmark,
                                          command_name='collection2caom2',
                                          config=test_config,
                                          end_time=test_end_time,
