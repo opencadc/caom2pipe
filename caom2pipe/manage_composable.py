@@ -113,7 +113,7 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
            'get_cadc_headers', 'get_lineage', 'get_artifact_metadata',
            'data_put', 'data_get', 'build_uri', 'make_seconds', 'make_time',
            'increment_time', 'increment_time_tz', 'ISO_8601_FORMAT',
-           'http_get', 'Rejected', 'look_pull_and_put', 'look_pull_and_put_v'
+           'http_get', 'Rejected', 'look_pull_and_put', 'look_pull_and_put_v',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'reverse_lookup',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
