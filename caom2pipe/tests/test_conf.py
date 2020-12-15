@@ -115,3 +115,10 @@ def mock_copy(source, destination):
     with open(destination, 'w') as f:
         f.write('test content')
     return os.stat(destination).st_size
+
+
+def mock_get_node(uri, **kwargs):
+    node = type('', (), {})()
+    node.props = {'length': 42,
+                  'MD5': '1234'}
+    return node

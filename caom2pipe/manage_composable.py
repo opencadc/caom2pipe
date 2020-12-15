@@ -103,6 +103,7 @@ from caom2.diff import get_differences
 
 __all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
            'client_put', 'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
+           'FileMeta',
            'get_cadc_headers_client', 'get_cadc_meta',
            'get_cadc_meta_client', 'get_file_meta',
            'decompose_lineage', 'check_param', 'read_csv_file',
@@ -112,7 +113,7 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
            'get_cadc_headers', 'get_lineage', 'get_artifact_metadata',
            'data_put', 'data_get', 'build_uri', 'make_seconds', 'make_time',
            'increment_time', 'increment_time_tz', 'ISO_8601_FORMAT',
-           'http_get', 'Rejected', 'look_pull_and_put',
+           'http_get', 'Rejected', 'look_pull_and_put', 'look_pull_and_put_v'
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'reverse_lookup',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
@@ -2384,7 +2385,7 @@ def data_get(client, working_directory, file_name, archive, metrics):
     metrics.observe(start, end, file_size, 'get', 'data', file_name)
 
 
-def client_put(client, working_directory, file_name, destination,
+def client_put(client, working_directory, file_name, storage_name,
                metrics=None):
     """
     Make a copy of a locally available file by writing it to CADC. Assumes
@@ -2393,21 +2394,22 @@ def client_put(client, working_directory, file_name, destination,
     Will check that the size of the file stored is the same as the size of
     the file on disk.
 
-    :param client: The CadcDataClient for write access to CADC storage.
+    :param client: Client for write access to CADC storage.
     :param working_directory: Where 'file_name' exists locally.
     :param file_name: What to copy to CADC storage.
-    :param destination: Where to write the file.
+    :param storage_name: Where to write the file.
     :param metrics: Tracking success execution times, and failure counts.
     """
     start = current()
     cwd = os.getcwd()
     try:
         os.chdir(working_directory)
-        stored_size = client.copy(file_name, destination=destination)
+        stored_size = client.copy(file_name, destination=storage_name)
         file_size = os.stat(file_name).st_size
         if stored_size != file_size:
             raise CadcException(
-                f'Wrong file size {stored_size} at CADC for {destination}.')
+                f'Stored file size {stored_size} != {file_size} at CADC for '
+                f'{storage_name}.')
     except Exception as e:
         metrics.observe_failure('copy', 'vos', file_name)
         logging.debug(traceback.format_exc())
@@ -2423,7 +2425,7 @@ def client_get(client, working_directory, file_name, source, metrics):
     Retrieve a local copy of a file available from CADC. Assumes the working
     directory location exists and is writeable.
 
-    :param client: The CadcDataClient for read access to CADC storage.
+    :param client: The Client for read access to CADC storage.
     :param working_directory: Where 'file_name' will be written.
     :param file_name: What to copy from CADC storage.
     :param source: Where to retrieve the file from.
@@ -2434,7 +2436,7 @@ def client_get(client, working_directory, file_name, source, metrics):
     try:
         retrieved_size = client.copy(source, destination=fqn)
         if not os.path.exists(fqn):
-            raise CadcException(f'ad retrieve failed. {fqn} does not exist.')
+            raise CadcException(f'Retrieve failed. {fqn} does not exist.')
         file_size = os.stat(fqn).st_size
         if retrieved_size != file_size:
             raise CadcException(
@@ -2704,6 +2706,71 @@ def look_pull_and_put(f_name, working_dir, url, archive, stream, mime_type,
         http_get(url, fqn)
         data_put(cadc_client, working_dir, f_name, archive, stream,
                  mime_type, mime_encoding=None, metrics=metrics)
+
+
+def look_pull_and_put_v(storage_name, f_name, working_dir, url,
+                        cadc_client, checksum, metrics):
+    """Checks to see if a file exists at CADC. If yes, stop. If no,
+    pull via https to local storage, then put to CADC storage.
+
+    TODO - stream
+
+    :param storage_name The file name as it appears at CADC
+    :param f_name file name on disk for caching between the
+        pull and the put
+    :param working_dir together with f_name, location for caching
+    :param url for retrieving the file externally, if it does not exist
+    :param cadc_client access to the storage service
+    :param checksum what the CAOM observation says the checksum should be -
+        just the checksum part of ChecksumURI please, or the comparison will
+        always fail.
+    :param metrics track how long operations take
+    """
+    retrieve = False
+    try:
+        meta = _get_file_info(storage_name, cadc_client)
+        if checksum is not None and meta.md5sum != checksum:
+            logging.debug(f'Different checksums: CADC {meta.md5sum} '
+                          f'Source {checksum}')
+            retrieve = True
+        else:
+            logging.info(f'{f_name} already exists at CADC.')
+    except exceptions.NotFoundException:
+        retrieve = True
+
+    if retrieve:
+        logging.info(f'Retrieving {f_name}')
+        fqn = os.path.join(working_dir, f_name)
+        http_get(url, fqn)
+        client_put(
+            cadc_client, working_dir, f_name, storage_name, metrics=metrics)
+
+
+@dataclass
+class FileMeta:
+    """The bits of information about a file that are used to decide whether
+    or not to transfer, and whether or not a transfer was successful."""
+    f_size: int
+    md5sum: str
+
+
+def _get_file_info(storage_name, cadc_client):
+    """
+    Retrieve metadata for a single file. This implementation uses a
+    vos.Client.
+
+    This is a very bad implementation, but there is no information on what
+    might be a better one.
+
+    :param storage_name:
+    :param cadc_client:
+    :return:
+    """
+    target = cadc_client.glob(storage_name)
+    node = cadc_client.get_node(target)
+    f_size = node.props.get('length')
+    f_md5sum = node.props.get('MD5')
+    return FileMeta(f_size, f_md5sum)
 
 
 def query_tap(query_string, proxy_fqn, resource_id):

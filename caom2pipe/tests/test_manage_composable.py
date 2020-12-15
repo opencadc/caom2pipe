@@ -514,6 +514,35 @@ def test_look_pull_and_put(http_mock, mock_client):
         os.stat = stat_orig
 
 
+@patch('vos.vos.Client')
+@patch('caom2pipe.manage_composable.http_get')
+def test_look_pull_and_put_v(http_mock, mock_client):
+    stat_orig = os.stat
+    os.stat = Mock()
+    os.stat.return_value = Mock(st_size=1234)
+    try:
+        test_storage_name = 'cadc:GEMINI/TEST.fits'
+        f_name = 'test_f_name.fits'
+        url = f'https://localhost/{f_name}'
+        test_config = mc.Config()
+        test_config.observe_execution = True
+        test_metrics = mc.Metrics(test_config)
+        mock_client.get_node.side_effect = tc.mock_get_node
+        mock_client.copy.return_value = 1234
+        assert len(test_metrics.history) == 0, 'initial history conditions'
+        assert len(test_metrics.failures) == 0, 'initial failure conditions'
+        mc.look_pull_and_put_v(test_storage_name, f_name, tc.TEST_DATA_DIR,
+                               url, mock_client, 'md5:01234', test_metrics)
+        mock_client.copy.assert_called_with(
+            f_name, destination=test_storage_name), 'mock not called'
+        http_mock.assert_called_with(
+            url, os.path.join(tc.TEST_DATA_DIR, f_name)), 'http mock not called'
+        assert len(test_metrics.history) == 1, 'history conditions'
+        assert len(test_metrics.failures) == 0, 'failure conditions'
+    finally:
+        os.stat = stat_orig
+
+
 @patch('caom2repo.core.CAOM2RepoClient')
 def test_repo_create(mock_client):
     test_obs = mc.read_obs_from_file(TEST_OBS_FILE)
