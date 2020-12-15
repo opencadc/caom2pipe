@@ -287,9 +287,9 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.product_type == ProductType.WEIGHT, 'wrong product type'
-    assert result.content_length == 353, 'wrong length'
+    assert result.content_length == 373, 'wrong length'
     assert result.content_checksum.uri == \
-        'md5:7795d9a1720a7a8a2c79a5a2f5f77434', 'wrong checksum'
+        'md5:2d770260e5b7a88d6c943184912d6609', 'wrong checksum'
 
     # update action
     result.content_checksum = ChecksumURI('md5:abc')
@@ -298,7 +298,7 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.content_checksum.uri == \
-        'md5:7795d9a1720a7a8a2c79a5a2f5f77434', 'wrong checksum'
+        'md5:2d770260e5b7a88d6c943184912d6609', 'wrong checksum'
 
 
 @patch('cadcdata.core.CadcDataClient')
@@ -331,6 +331,78 @@ def test_data_get(mock_client):
                     test_metrics)
     assert len(test_metrics.failures) == 1, 'wrong failures'
     assert test_metrics.failures['data']['get']['TEST_get.fits'] == 1, 'count'
+
+
+@patch('vos.vos.Client')
+@patch('caom2pipe.manage_composable.Metrics')
+def test_client_put(mock_metrics, mock_client):
+    if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
+        with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
+            f.write('test content')
+
+    test_destination = 'TBD'
+    mock_client.copy.return_value = 12
+    mc.client_put(mock_client, tc.TEST_FILES_DIR, 'TEST.fits',
+                  test_destination, metrics=mock_metrics)
+    mock_client.copy.assert_called_with(
+        'TEST.fits', destination=test_destination), 'mock not called'
+    assert mock_metrics.observe.called, 'mock not called'
+    args, kwargs = mock_metrics.observe.call_args
+    assert args[2] == 12, 'wrong size'
+    assert args[3] == 'copy', 'wrong endpoint'
+    assert args[4] == 'vos', 'wrong service'
+    assert args[5] == 'TEST.fits', 'wrong id'
+
+
+@patch('vos.vos.Client')
+@patch('caom2pipe.manage_composable.Metrics')
+def test_client_put_failure(mock_metrics, mock_client):
+    if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
+        with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
+            f.write('test content')
+
+    # TODO
+    test_destination = 'cadc:GEMINI/TEST.fits'
+    mock_client.copy.return_value = 120
+    with pytest.raises(mc.CadcException):
+        mc.client_put(mock_client, tc.TEST_FILES_DIR, 'TEST.fits',
+                      test_destination, metrics=mock_metrics)
+    mock_client.copy.assert_called_with(
+        'TEST.fits', destination=test_destination), 'mock not called'
+    assert mock_metrics.observe_failure.called, 'mock not called'
+
+
+@patch('vos.vos.Client')
+def test_client_get_failure(mock_client):
+    test_config = mc.Config()
+    test_config.observe_execution = True
+    test_metrics = mc.Metrics(test_config)
+    with pytest.raises(mc.CadcException):
+        mc.client_get(mock_client, tc.TEST_DATA_DIR, 'TEST_get.fits', 'TEST',
+                      test_metrics)
+    assert len(test_metrics.failures) == 1, 'wrong failures'
+    assert test_metrics.failures['vos']['copy']['TEST_get.fits'] == 1, 'count'
+
+
+@patch('vos.vos.Client')
+@patch('caom2pipe.manage_composable.Metrics')
+def test_client_get(mock_metrics, mock_client):
+    test_fqn = f'{tc.TEST_FILES_DIR}/TEST.fits'
+    if os.path.exists(test_fqn):
+        os.unlink(test_fqn)
+
+    test_source = 'gemini:GEMINI/TEST.fits'
+    mock_client.copy.side_effect = tc.mock_copy
+    mc.client_get(mock_client, tc.TEST_FILES_DIR, 'TEST.fits',
+                  test_source, metrics=mock_metrics)
+    mock_client.copy.assert_called_with(
+        test_source, destination=test_fqn), 'mock not called'
+    assert mock_metrics.observe.called, 'mock not called'
+    args, kwargs = mock_metrics.observe.call_args
+    assert args[2] == 12, 'wrong size'
+    assert args[3] == 'copy', 'wrong endpoint'
+    assert args[4] == 'vos', 'wrong service'
+    assert args[5] == 'TEST.fits', 'wrong id'
 
 
 def test_state():

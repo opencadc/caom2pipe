@@ -11,3 +11,4 @@ collection: NEOSSAT
 features:
   supports_composite: False
   run_in_airflow: True
+  unexpected: False

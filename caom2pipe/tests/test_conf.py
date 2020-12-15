@@ -109,3 +109,9 @@ def mock_get_file(collection, f_name, **kwargs):
     dest_fqn = kwargs.get('destination')
     with open(dest_fqn, 'w') as f:
         f.write(f'{collection} {f_name}\n')
+
+
+def mock_copy(source, destination):
+    with open(destination, 'w') as f:
+        f.write('test content')
+    return os.stat(destination).st_size

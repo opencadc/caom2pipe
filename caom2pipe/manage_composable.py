@@ -101,8 +101,8 @@ from caom2 import ChecksumURI, ProductType, ReleaseType
 from caom2.diff import get_differences
 
 
-__all__ = ['CadcException', 'Config', 'State', 'TaskType',
-           'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
+__all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
+           'client_put', 'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
            'get_cadc_headers_client', 'get_cadc_meta',
            'get_cadc_meta_client', 'get_file_meta',
            'decompose_lineage', 'check_param', 'read_csv_file',
@@ -1032,8 +1032,10 @@ class Config(object):
         if 'features' in config:
             for ii in config['features']:
                 if not config['features'][ii]:
-                    getattr(feature_flags, ii)
-                    setattr(feature_flags, ii, False)
+                    if hasattr(feature_flags, ii):
+                        setattr(feature_flags, ii, False)
+                    else:
+                        logging.warning(f'Unexpected features item:{ii}.')
         return feature_flags
 
     def get(self):
@@ -2380,6 +2382,69 @@ def data_get(client, working_directory, file_name, archive, metrics):
     end = current()
     file_size = os.stat(fqn).st_size
     metrics.observe(start, end, file_size, 'get', 'data', file_name)
+
+
+def client_put(client, working_directory, file_name, destination,
+               metrics=None):
+    """
+    Make a copy of a locally available file by writing it to CADC. Assumes
+    file and directory locations are correct.
+
+    Will check that the size of the file stored is the same as the size of
+    the file on disk.
+
+    :param client: The CadcDataClient for write access to CADC storage.
+    :param working_directory: Where 'file_name' exists locally.
+    :param file_name: What to copy to CADC storage.
+    :param destination: Where to write the file.
+    :param metrics: Tracking success execution times, and failure counts.
+    """
+    start = current()
+    cwd = os.getcwd()
+    try:
+        os.chdir(working_directory)
+        stored_size = client.copy(file_name, destination=destination)
+        file_size = os.stat(file_name).st_size
+        if stored_size != file_size:
+            raise CadcException(
+                f'Wrong file size {stored_size} at CADC for {destination}.')
+    except Exception as e:
+        metrics.observe_failure('copy', 'vos', file_name)
+        logging.debug(traceback.format_exc())
+        raise CadcException(f'Failed to store data with {e}')
+    finally:
+        os.chdir(cwd)
+    end = current()
+    metrics.observe(start, end, file_size, 'copy', 'vos', file_name)
+
+
+def client_get(client, working_directory, file_name, source, metrics):
+    """
+    Retrieve a local copy of a file available from CADC. Assumes the working
+    directory location exists and is writeable.
+
+    :param client: The CadcDataClient for read access to CADC storage.
+    :param working_directory: Where 'file_name' will be written.
+    :param file_name: What to copy from CADC storage.
+    :param source: Where to retrieve the file from.
+    :param metrics: track success execution times, and failure counts.
+    """
+    start = current()
+    fqn = os.path.join(working_directory, file_name)
+    try:
+        retrieved_size = client.copy(source, destination=fqn)
+        if not os.path.exists(fqn):
+            raise CadcException(f'ad retrieve failed. {fqn} does not exist.')
+        file_size = os.stat(fqn).st_size
+        if retrieved_size != file_size:
+            raise CadcException(
+                f'Wrong file size {retrieved_size} retrieved for {source}.')
+    except Exception as e:
+        metrics.observe_failure('copy', 'vos', file_name)
+        logging.debug(traceback.format_exc())
+        raise CadcException(f'Did not retrieve {fqn} because {e}')
+    end = current()
+    metrics.observe(start, end, file_size, 'copy', 'vos', file_name)
 
 
 def build_uri(archive, file_name, scheme='ad'):
