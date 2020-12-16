@@ -151,16 +151,21 @@ class VoTransfer(Transfer):
     Uses the vos Client to manage transfers from CADC to local disk.
     """
 
-    def __init__(self, config):
-        import vos
+    def __init__(self):
         super(VoTransfer, self).__init__()
-        if not os.path.exists(config.proxy_fqn):
-            raise mc.CadcException('Require a certificate for vos access.')
-        self._client = vos.Client(vospace_certfile=config.proxy_fqn)
+        self._cadc_client = None
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    @property
+    def cadc_client(self):
+        return self._cadc_client
+
+    @cadc_client.setter
+    def cadc_client(self, value):
+        self._cadc_client = value
+
     def get(self, source, dest_fqn):
-        self._client.copy(source, dest_fqn, send_md5=True)
+        self._cadc_client.copy(source, dest_fqn, send_md5=True)
 
 
 class FitsTransfer(Transfer):

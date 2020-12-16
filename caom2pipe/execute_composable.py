@@ -91,8 +91,8 @@ execution for an Observation.
 
 The correlations that currently exist:
 - use_local_data: True => classes have "Local" in their name
-- uses the CadcDataClient, the Caom2RepoClient => classes have "Client"
-    in their name
+- uses the CadcDataClient, the vos.Client, or the Caom2RepoClient => classes
+    have "Client" in their name
 - requires metadata access only => classes have "Meta" in their name
 - requires data access => classes have "Data" in their name
 
@@ -121,6 +121,7 @@ from shutil import move
 
 from cadcdata import CadcDataClient
 from caom2repo import CAOM2RepoClient
+from vos import Client
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
 
@@ -133,7 +134,7 @@ class CaomExecute(object):
     classes."""
 
     def __init__(self, config, task_type, storage_name, command_name,
-                 cred_param, cadc_data_client, caom_repo_client,
+                 cred_param, cadc_client, caom_repo_client,
                  meta_visitors, observable):
         """
         :param config: Configurable parts of execution, as stored in
@@ -147,8 +148,8 @@ class CaomExecute(object):
         :param cred_param: either --netrc <value> or --cert <value>,
             depending on which credentials have been supplied to the
             process.
-        :param cadc_data_client: Instance of CadcDataClient. Used for data
-            service access.
+        :param cadc_client: Instance of CadcDataClient or Client. Used for
+            CADC storage service access.
         :param caom_repo_client: Instance of CAOM2Repo client. Used for
             caom2 repository service access.
         :param meta_visitors: List of classes with a
@@ -184,7 +185,7 @@ class CaomExecute(object):
             self.model_fqn = os.path.join(self.working_dir,
                                           storage_name.model_file_name)
         self.resource_id = config.resource_id
-        self.cadc_data_client = cadc_data_client
+        self.cadc_client = cadc_client
         self.caom_repo_client = caom_repo_client
         self.stream = config.stream
         self.meta_visitors = meta_visitors
@@ -317,7 +318,7 @@ class CaomExecute(object):
 
     def _cadc_data_put_client(self):
         """Store a collection file."""
-        mc.data_put(self.cadc_data_client, self.working_dir,
+        mc.data_put(self.cadc_client, self.working_dir,
                     self.fname, self.archive, self.stream, self.mime_type,
                     self.mime_encoding, metrics=self.observable.metrics)
 
@@ -330,7 +331,7 @@ class CaomExecute(object):
         memory."""
         if self.meta_visitors is not None and len(self.meta_visitors) > 0:
             kwargs = {'working_directory': self.working_dir,
-                      'cadc_client': self.cadc_data_client,
+                      'cadc_client': self.cadc_client,
                       'stream': self.stream,
                       'url': self.url,
                       'observable': self.observable}
@@ -381,11 +382,11 @@ class MetaCreate(CaomExecute):
     This pipeline step will execute a caom2-repo create."""
 
     def __init__(self, config, storage_name, command_name,
-                 cred_param, cadc_data_client, caom_repo_client,
+                 cred_param, cadc_client, caom_repo_client,
                  meta_visitors, observable):
         super(MetaCreate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name,
-            cred_param, cadc_data_client, caom_repo_client, meta_visitors,
+            cred_param, cadc_client, caom_repo_client, meta_visitors,
             observable)
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -426,11 +427,11 @@ class MetaUpdate(CaomExecute):
     This pipeline step will execute a caom2-repo update."""
 
     def __init__(self, config, storage_name, command_name, cred_param,
-                 cadc_data_client, caom_repo_client, observation,
+                 cadc_client, caom_repo_client, observation,
                  meta_visitors, observable):
         super(MetaUpdate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
-            cadc_data_client, caom_repo_client, meta_visitors, observable)
+            cadc_client, caom_repo_client, meta_visitors, observable)
         self.observation = observation
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -476,11 +477,11 @@ class MetaDeleteCreate(CaomExecute):
     structure."""
 
     def __init__(self, config, storage_name, command_name,
-                 cred_param, cadc_data_client, caom_repo_client,
+                 cred_param, cadc_client, caom_repo_client,
                  observation, meta_visitors, observable):
         super(MetaDeleteCreate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name,
-            cred_param, cadc_data_client, caom_repo_client, meta_visitors,
+            cred_param, cadc_client, caom_repo_client, meta_visitors,
             observable)
         self.observation = observation
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -531,11 +532,11 @@ class MetaUpdateObservation(CaomExecute):
     """
 
     def __init__(self, config, storage_name, command_name, cred_param,
-                 cadc_data_client, caom_repo_client,
+                 cadc_client, caom_repo_client,
                  observation, meta_visitors, observable):
         super(MetaUpdateObservation, self).__init__(
             config, mc.TaskType.INGEST_OBS, storage_name, command_name,
-            cred_param, cadc_data_client, caom_repo_client, meta_visitors,
+            cred_param, cadc_client, caom_repo_client, meta_visitors,
             observable)
         self.observation = observation
         # set the pre-conditions, as none of this is known, until
@@ -599,11 +600,11 @@ class LocalMetaCreate(CaomExecute):
     This pipeline step will execute a caom2-repo create."""
 
     def __init__(self, config, storage_name, command_name, cred_param,
-                 cadc_data_client, caom_repo_client, meta_visitors,
+                 cadc_client, caom_repo_client, meta_visitors,
                  observable):
         super(LocalMetaCreate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
-            cadc_data_client, caom_repo_client, meta_visitors, observable)
+            cadc_client, caom_repo_client, meta_visitors, observable)
         self._define_local_dirs(storage_name)
         self.fname = storage_name.fname_on_disk
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -642,11 +643,11 @@ class LocalMetaDeleteCreate(CaomExecute):
     structure."""
 
     def __init__(self, config, storage_name, command_name, cred_param,
-                 cadc_data_client, caom_repo_client, observation,
+                 cadc_client, caom_repo_client, observation,
                  meta_visitors, observable):
         super(LocalMetaDeleteCreate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
-            cadc_data_client, caom_repo_client, meta_visitors, observable)
+            cadc_client, caom_repo_client, meta_visitors, observable)
         self._define_local_dirs(storage_name)
         self.observation = observation
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -687,11 +688,11 @@ class LocalMetaUpdate(CaomExecute):
     This pipeline step will execute a caom2-repo update."""
 
     def __init__(self, config, storage_name, command_name, cred_param,
-                 cadc_data_client, caom_repo_client, observation,
+                 cadc_client, caom_repo_client, observation,
                  meta_visitors, observable):
         super(LocalMetaUpdate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
-            cadc_data_client, caom_repo_client, meta_visitors, observable)
+            cadc_client, caom_repo_client, meta_visitors, observable)
         self._define_local_dirs(storage_name)
         self.observation = observation
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -733,11 +734,11 @@ class MetaVisit(CaomExecute):
     """
 
     def __init__(self, config, storage_name, cred_param,
-                 cadc_data_client, caom_repo_client, meta_visitors,
+                 cadc_client, caom_repo_client, meta_visitors,
                  observable):
         super(MetaVisit, self).__init__(
             config, mc.TaskType.VISIT, storage_name, command_name=None,
-            cred_param=cred_param, cadc_data_client=cadc_data_client,
+            cred_param=cred_param, cadc_client=cadc_client,
             caom_repo_client=caom_repo_client,
             meta_visitors=meta_visitors, observable=observable)
         self.fname = None
@@ -778,21 +779,17 @@ class DataVisit(CaomExecute):
     """
 
     def __init__(self, config, storage_name, cred_param,
-                 cadc_data_client,
+                 cadc_client,
                  caom_repo_client, data_visitors, task_type,
-                 observable, transferrer=tc.CadcTransfer()):
+                 observable, transferrer):
         super(DataVisit, self).__init__(
             config, task_type=task_type, storage_name=storage_name,
-            command_name=None, cred_param=cred_param,
-            cadc_data_client=cadc_data_client,
+            command_name=None, cred_param=cred_param, cadc_client=cadc_client,
             caom_repo_client=caom_repo_client, meta_visitors=None,
             observable=observable)
         self._data_visitors = data_visitors
         self._log_file_directory = config.log_file_directory
         self._transferrer = transferrer
-        self._transferrer.observable = observable
-        if isinstance(self._transferrer, tc.CadcTransfer):
-            self._transferrer.cadc_client = cadc_data_client
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
@@ -827,7 +824,7 @@ class DataVisit(CaomExecute):
         kwargs = {'working_directory': self.working_dir,
                   'science_file': self.fname,
                   'log_file_directory': self._log_file_directory,
-                  'cadc_client': self.cadc_data_client,
+                  'cadc_client': self.cadc_client,
                   'caom_repo_client': self.caom_repo_client,
                   'stream': self.stream,
                   'observable': self.observable}
@@ -848,11 +845,11 @@ class LocalDataVisit(DataVisit):
     """
 
     def __init__(self, config, storage_name, cred_param,
-                 cadc_data_client, caom_repo_client, data_visitors,
+                 cadc_client, caom_repo_client, data_visitors,
                  observable):
         super(LocalDataVisit, self).__init__(
             config, storage_name=storage_name, cred_param=cred_param,
-            cadc_data_client=cadc_data_client,
+            cadc_client=cadc_client,
             caom_repo_client=caom_repo_client, data_visitors=data_visitors,
             task_type=mc.TaskType.MODIFY, observable=observable,
             transferrer=tc.Transfer())
@@ -890,7 +887,7 @@ class DataScrape(DataVisit):
     def __init__(self, config, storage_name, data_visitors, observable):
         super(DataScrape, self).__init__(
             config, storage_name, cred_param='',
-            cadc_data_client=None, caom_repo_client=None,
+            cadc_client=None, caom_repo_client=None,
             data_visitors=data_visitors, task_type=mc.TaskType.SCRAPE,
             observable=observable, transferrer=tc.Transfer())
         self._define_local_dirs(storage_name)
@@ -920,11 +917,11 @@ class Store(CaomExecute):
     requires access to the file on disk."""
 
     def __init__(self, config, storage_name, command_name, cred_param,
-                 cadc_data_client, caom_repo_client, observable,
+                 cadc_client, caom_repo_client, observable,
                  transferrer):
         super(Store, self).__init__(
             config, mc.TaskType.STORE, storage_name, command_name, cred_param,
-            cadc_data_client, caom_repo_client, meta_visitors=None,
+            cadc_client, caom_repo_client, meta_visitors=None,
             observable=observable)
         self.stream = config.stream
         self.multiple_files = storage_name.multiple_files(self.working_dir)
@@ -965,11 +962,11 @@ class LocalStore(Store):
     disk."""
 
     def __init__(self, config, storage_name, command_name, cred_param,
-                 cadc_data_client, caom_repo_client, observable,
+                 cadc_client, caom_repo_client, observable,
                  transferrer):
         super(LocalStore, self).__init__(
             config, storage_name, command_name, cred_param,
-            cadc_data_client, caom_repo_client, observable, transferrer)
+            cadc_client, caom_repo_client, observable, transferrer)
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
@@ -993,7 +990,7 @@ class Scrape(CaomExecute):
                  meta_visitors):
         super(Scrape, self).__init__(
             config, mc.TaskType.SCRAPE, storage_name, command_name,
-            cred_param='', cadc_data_client=None, caom_repo_client=None,
+            cred_param='', cadc_client=None, caom_repo_client=None,
             meta_visitors=meta_visitors, observable=observable)
         self._define_local_dirs(storage_name)
         self.fname = storage_name.fname_on_disk
@@ -1029,7 +1026,7 @@ class ScrapeUpdate(CaomExecute):
                  meta_visitors):
         super(ScrapeUpdate, self).__init__(
             config, mc.TaskType.SCRAPE, storage_name, command_name,
-            cred_param='', cadc_data_client=None, caom_repo_client=None,
+            cred_param='', cadc_client=None, caom_repo_client=None,
             meta_visitors=meta_visitors, observable=observable)
         self._define_local_dirs(storage_name)
         self.fname = storage_name.fname_on_disk
@@ -1240,7 +1237,7 @@ class OrganizeExecutes(object):
 
     def _define_subject(self):
         """Common code to figure out which credentials to use when
-        creating an instance of the CadcDataClient and the CAOM2Repo client."""
+        creating instances clients for CADC services."""
         subject = mc.define_subject(self.config)
         if (self.config.proxy_fqn is not None and os.path.exists(
                 self.config.proxy_fqn)):
@@ -1324,25 +1321,34 @@ class OrganizeExecutes(object):
 class OrganizeExecutesWithDoOne(OrganizeExecutes):
 
     def __init__(self, config, command_name, meta_visitors, data_visitors,
-                 chooser=None, transferrer=None):
+                 chooser=None, store_transfer=None, modify_transfer=None):
         """
+        Why there is support for two transfer instances:
+        - the store_transfer instance may do an http, ftp, or vo transfer
+            from an external source, for the purposes of storage
+        - the modify_transfer instance probably does a CADC retrieval,
+            so that metadata production that relies on the data content
+            (e.g. preview generation) can occur
 
         :param config:
         :param command_name extension of fits2caom2 for the collection
         :param meta_visitors List of metadata visit methods.
         :param data_visitors List of data visit methods.
         :param chooser:
-        :param transferrer Transfer implementation for retrieving files
-            from external sources.
+        :param store_transfer Transfer implementation for retrieving files
+        :param modify_transfer Transfer implementation for retrieving files
         """
         super(OrganizeExecutesWithDoOne, self).__init__(config, chooser)
         self._command_name = command_name
         self._meta_visitors = meta_visitors
         self._data_visitors = data_visitors
-        self._transferrer = transferrer
-        if transferrer is not None:
-            # use the same Observable everywhere
-            self._transferrer.observable = self.observable
+        self._modify_transfer = modify_transfer
+        self._store_transfer = store_transfer
+        # use the same Observable everywhere
+        if modify_transfer is not None:
+            self._modify_transfer.observable = self.observable
+        if store_transfer is not None:
+            self._store_transfer.observable = self.observable
         self._log_h = None
         self._logger = logging.getLogger(__name__)
 
@@ -1372,6 +1378,19 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
         if self.config.log_to_file:
             logging.getLogger().removeHandler(self._log_h)
 
+    def _define_client_credentials(self):
+        result = None
+        if self.config.features.supports_latest_client:
+            if (self.config.proxy_fqn is not None and os.path.exists(
+                    self.config.proxy_fqn)):
+                logging.debug(f'Using proxy certificate {self.config.proxy_fqn} '
+                              f'for credentials.')
+                result = self.config.proxy_fqn
+        if result is None:
+            raise mc.CadcException(f'No credentials configured or found. '
+                                   f'Stopping.')
+        return result
+
     def choose(self, storage_name):
         """The logic that decides which descendants of CaomExecute to
         instantiate. This is based on the content of the config.yml file
@@ -1382,14 +1401,25 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
         executors = []
         if mc.TaskType.SCRAPE in self.task_types:
             cred_param = None
-            cadc_data_client = None
+            cadc_client = None
             caom_repo_client = None
         else:
             subject, cred_param = self._define_subject()
-            cadc_data_client = CadcDataClient(subject)
             caom_repo_client = CAOM2RepoClient(
                 subject, self.config.logging_level,
                 self.config.resource_id)
+            if self.config.features.supports_latest_client:
+                self._logger.warning('Using vos.Client for storage.')
+                cadc_client = Client(
+                    vospace_certfile=self._define_client_credentials())
+            else:
+                self._logger.warning(
+                    'Using cadcdata.CadcDataClient for storage.')
+                cadc_client = CadcDataClient(subject)
+            for entry in [self._modify_transfer, self._store_transfer]:
+                if entry is not None:
+                    if hasattr(entry, '_cadc_client'):
+                        entry.cadc_client = cadc_client
         for task_type in self.task_types:
             self.logger.debug(task_type)
             if task_type == mc.TaskType.SCRAPE:
@@ -1420,16 +1450,16 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                     executors.append(
                         LocalStore(
                             self.config, storage_name, self._command_name,
-                            cred_param, cadc_data_client,
+                            cred_param, cadc_client,
                             caom_repo_client, self.observable,
-                            self._transferrer))
+                            self._store_transfer))
                 else:
                     executors.append(
                         Store(
                             self.config, storage_name, self._command_name,
-                            cred_param, cadc_data_client,
+                            cred_param, cadc_client,
                             caom_repo_client, self.observable,
-                            self._transferrer))
+                            self._store_transfer))
             elif task_type == mc.TaskType.INGEST:
                 observation = CaomExecute.repo_cmd_get_client(
                     caom_repo_client, self.config.collection,
@@ -1439,13 +1469,13 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                         executors.append(
                             LocalMetaCreate(
                                 self.config, storage_name, self._command_name,
-                                cred_param, cadc_data_client,
+                                cred_param, cadc_client,
                                 caom_repo_client, self._meta_visitors,
                                 self.observable))
                     else:
                         executors.append(MetaCreate(
                             self.config, storage_name, self._command_name,
-                            cred_param, cadc_data_client, caom_repo_client,
+                            cred_param, cadc_client, caom_repo_client,
                             self._meta_visitors, self.observable))
                 else:
                     if self.config.use_local_files:
@@ -1455,7 +1485,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                                 LocalMetaDeleteCreate(
                                     self.config, storage_name,
                                     self._command_name,
-                                    cred_param, cadc_data_client,
+                                    cred_param, cadc_client,
                                     caom_repo_client, observation,
                                     self._meta_visitors, self.observable))
                         else:
@@ -1463,7 +1493,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                                 LocalMetaUpdate(
                                     self.config, storage_name,
                                     self._command_name,
-                                    cred_param, cadc_data_client,
+                                    cred_param, cadc_client,
                                     caom_repo_client, observation,
                                     self._meta_visitors, self.observable))
                     else:
@@ -1473,7 +1503,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                                 MetaDeleteCreate(
                                     self.config, storage_name,
                                     self._command_name,
-                                    cred_param, cadc_data_client,
+                                    cred_param, cadc_client,
                                     caom_repo_client, observation,
                                     self._meta_visitors, self.observable))
                         else:
@@ -1481,7 +1511,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                                 MetaUpdate(
                                     self.config, storage_name,
                                     self._command_name, cred_param,
-                                    cadc_data_client, caom_repo_client,
+                                    cadc_client, caom_repo_client,
                                     observation, self._meta_visitors,
                                     self.observable))
             elif task_type == mc.TaskType.INGEST_OBS:
@@ -1499,7 +1529,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                         executors.append(
                             MetaUpdateObservation(
                                 self.config, storage_name, self._command_name,
-                                cred_param, cadc_data_client, caom_repo_client,
+                                cred_param, cadc_client, caom_repo_client,
                                 observation, self._meta_visitors,
                                 self.observable))
             elif task_type == mc.TaskType.MODIFY:
@@ -1516,21 +1546,21 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                             executors.append(
                                 LocalDataVisit(
                                     self.config, storage_name, cred_param,
-                                    cadc_data_client, caom_repo_client,
+                                    cadc_client, caom_repo_client,
                                     self._data_visitors, self.observable))
                     else:
                         executors.append(DataVisit(
                             self.config, storage_name, cred_param,
-                            cadc_data_client, caom_repo_client,
+                            cadc_client, caom_repo_client,
                             self._data_visitors, mc.TaskType.MODIFY,
-                            self.observable))
+                            self.observable, self._modify_transfer))
                 else:
                     self._logger.info(f'Skipping the MODIFY task for '
                                       f'{storage_name.file_name}.')
             elif task_type == mc.TaskType.VISIT:
                 executors.append(MetaVisit(
                     self.config, storage_name, cred_param,
-                    cadc_data_client, caom_repo_client, self._meta_visitors,
+                    cadc_client, caom_repo_client, self._meta_visitors,
                     self.observable))
             elif task_type == mc.TaskType.DEFAULT:
                 pass

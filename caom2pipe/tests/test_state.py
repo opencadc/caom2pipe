@@ -148,6 +148,7 @@ def test_run_state(data_mock, repo_mock):
                               mc.TaskType.MODIFY]
     test_config.features.use_file_names = True
     test_config.features.use_urls = False
+    test_config.features.supports_latest_client = False
     test_config.use_local_files = False
 
     if not os.path.exists(test_wd):
@@ -162,12 +163,12 @@ def test_run_state(data_mock, repo_mock):
     # this timestamp is 15 minutes earlier than the timestamp of the
     # file in /caom2pipe_test
     #
-    test_start_time = '2020-12-15 00:00:09'
+    test_start_time = '2020-12-15 00:10:09'
     with open(test_config.state_fqn, 'w') as f:
         f.write('bookmarks:\n')
         f.write(f'  {caom2pipe_bookmark}:\n')
         f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(2020, 12, 15, 22, 15, 50, 965132,
+    test_end_time = datetime(2020, 12, 15, 00, 37, 27, 965132,
                              tzinfo=timezone.utc)
 
     with open(test_config.proxy_fqn, 'w') as f:
@@ -184,7 +185,8 @@ def test_run_state(data_mock, repo_mock):
                                          end_time=test_end_time,
                                          name_builder=test_builder,
                                          source=test_data_source,
-                                         transferrer=transferrer)
+                                         modify_transfer=None,
+                                         store_transfer=transferrer)
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
