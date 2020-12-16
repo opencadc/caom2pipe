@@ -204,6 +204,7 @@ class CaomExecute(object):
             self._fqn = os.path.join(self.working_dir, self.fname)
         self.log_file_directory = None
         self.data_visitors = []
+        self.supports_latest_client = config.features.supports_latest_client
 
     def _cleanup(self):
         """Remove a directory and all its contents."""
@@ -316,11 +317,22 @@ class CaomExecute(object):
         mc.repo_delete(self.caom_repo_client, observation.collection,
                        observation.observation_id, self.observable.metrics)
 
+    def _cadc_put(self, storage_name):
+        if self.supports_latest_client:
+            self._client_put(storage_name)
+        else:
+            self._cadc_data_put_client()
+
     def _cadc_data_put_client(self):
         """Store a collection file."""
         mc.data_put(self.cadc_client, self.working_dir,
                     self.fname, self.archive, self.stream, self.mime_type,
                     self.mime_encoding, metrics=self.observable.metrics)
+
+    def _client_put(self, storage_name):
+        """Store a collection file using VOS."""
+        mc.client_put(self.cadc_client, self.working_dir,
+                      self.fname, storage_name, self.observable.metrics)
 
     def _read_model(self):
         """Read an observation into memory from an XML file on disk."""
@@ -931,6 +943,7 @@ class Store(CaomExecute):
         if len(self.multiple_files) == 0:
             self.multiple_files = [storage_name.entry]
             self._destination_f_names = [storage_name.file_name]
+            self._destination_uri = [storage_name.file_uri]
         self._transferrer = transferrer
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -947,8 +960,8 @@ class Store(CaomExecute):
             self._transferrer.get(entry, self._fqn)
 
             self.fname = self._destination_f_names[index]
-            self.logger.debug(f'store the input file {self.fname} to ad')
-            self._cadc_data_put_client()
+            self.logger.debug(f'store the input file {self.fname}')
+            self._cadc_put(self._destination_uri[index])
 
         self.logger.debug('clean up the workspace')
         self._cleanup()
@@ -975,8 +988,8 @@ class LocalStore(Store):
         self.logger.debug(f'Store {len(self.multiple_files)} files to ad.')
         for index, entry in enumerate(self.multiple_files):
             self.fname = self._destination_f_names[index]
-            self.logger.debug(f'store the input file {self.fname} to ad')
-            self._cadc_data_put_client()
+            self.logger.debug(f'store the input file {self.fname}')
+            self._cadc_put(self._destination_uri[index])
 
         self.logger.debug(f'End execute')
 

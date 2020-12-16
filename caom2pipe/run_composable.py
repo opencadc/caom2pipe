@@ -691,7 +691,10 @@ def run_by_state_tz(config=None, name_builder=None, command_name=None,
 
     if modify_transfer is None:
         if not config.use_local_files:
-            modify_transfer = transfer_composable.CadcTransfer()
+            if config.features.supports_latest_client:
+                modify_transfer = transfer_composable.VoTransfer()
+            else:
+                modify_transfer = transfer_composable.CadcTransfer()
 
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser,
