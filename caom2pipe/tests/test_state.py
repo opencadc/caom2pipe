@@ -179,14 +179,14 @@ def test_run_state(data_mock, repo_mock):
     transferrer = TestTransfer()
 
     try:
-        test_result = rc.run_by_state_tz(bookmark_name=caom2pipe_bookmark,
-                                         command_name='collection2caom2',
-                                         config=test_config,
-                                         end_time=test_end_time,
-                                         name_builder=test_builder,
-                                         source=test_data_source,
-                                         modify_transfer=None,
-                                         store_transfer=transferrer)
+        test_result = rc.run_by_state(bookmark_name=caom2pipe_bookmark,
+                                      command_name='collection2caom2',
+                                      config=test_config,
+                                      end_time=test_end_time,
+                                      name_builder=test_builder,
+                                      source=test_data_source,
+                                      modify_transfer=None,
+                                      store_transfer=transferrer)
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
@@ -321,14 +321,14 @@ def test_run_state_v(client_mock, repo_mock):
     transferrer = TestTransfer()
 
     try:
-        test_result = rc.run_by_state_tz(bookmark_name=caom2pipe_bookmark,
-                                         command_name='collection2caom2',
-                                         config=test_config,
-                                         end_time=test_end_time,
-                                         name_builder=test_builder,
-                                         source=test_data_source,
-                                         modify_transfer=None,
-                                         store_transfer=transferrer)
+        test_result = rc.run_by_state(bookmark_name=caom2pipe_bookmark,
+                                      command_name='collection2caom2',
+                                      config=test_config,
+                                      end_time=test_end_time,
+                                      name_builder=test_builder,
+                                      source=test_data_source,
+                                      modify_transfer=None,
+                                      store_transfer=transferrer)
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'

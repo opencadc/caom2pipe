@@ -112,6 +112,7 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
            'read_from_file', 'read_file_list_from_archive', 'update_typed_set',
            'get_cadc_headers', 'get_lineage', 'get_artifact_metadata',
            'data_put', 'data_get', 'build_uri', 'make_seconds', 'make_time',
+           'make_time_tz',
            'increment_time', 'increment_time_tz', 'ISO_8601_FORMAT',
            'http_get', 'Rejected', 'look_pull_and_put', 'look_pull_and_put_v',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
@@ -273,7 +274,7 @@ class State(object):
         if key in self.bookmarks:
             result = self.bookmarks.get(key).get('last_record')
             if result:
-                result = result.replace(tzinfo=timezone.utc)
+                result = make_time_tz(result)
         else:
             self.logger.warning(f'No record found for {key}')
         return result
@@ -2583,6 +2584,33 @@ def make_time(from_str):
     result = None
     if temp is not None:
         result = datetime.utcfromtimestamp(temp)
+    return result
+
+
+def make_time_tz(from_value):
+    """
+    Make an offset-aware datettime value. Input parameters should be in
+    datetime format, but a modest attempt is made to check for otherwise.
+
+    Why is UTC ok?
+    - OS times are all UTC, because they're all running in a Docker container
+      with no timezone configured
+    - make_seconds checks for time zones and adjusts there
+
+    :param from_value a representation of time.
+    :return the time as an offset-aware datetime
+    """
+    if isinstance(from_value, datetime):
+        result = from_value
+        if from_value.tzinfo is None:
+            result = from_value.replace(tzinfo=timezone.utc)
+    elif isinstance(from_value, str):
+        temp = make_seconds(from_value)
+        result = None
+        if temp is not None:
+            result = datetime.fromtimestamp(temp, tz=timezone.utc)
+    else:
+        result = from_value.fromtimestamp(from_value, tz=timezone.utc)
     return result
 
 

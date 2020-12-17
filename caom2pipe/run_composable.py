@@ -91,7 +91,7 @@ from caom2pipe import data_source_composable
 from caom2pipe import transfer_composable
 
 __all__ = ['TodoRunner', 'StateRunner', 'StateRunnerTS', 'run_by_todo',
-           'run_by_state', 'run_by_state_tz', 'get_utc_now', 'get_utc_now_tz']
+           'run_by_state_ad', 'run_by_state', 'get_utc_now', 'get_utc_now_tz']
 
 
 class RunnerReport(object):
@@ -519,6 +519,16 @@ def _set_logging(config):
         handler.setFormatter(formatter)
 
 
+def _set_modify_transfer(modify_transfer, config):
+    if modify_transfer is None:
+        if not config.use_local_files:
+            if config.features.supports_latest_client:
+                modify_transfer = transfer_composable.VoTransfer()
+            else:
+                modify_transfer = transfer_composable.CadcTransfer()
+    return modify_transfer
+
+
 def get_utc_now():
     """So that utcnow can be mocked."""
     return datetime.utcnow()
@@ -535,7 +545,7 @@ def get_utc_now_tz():
 
 def run_by_todo(config=None, name_builder=None, chooser=None,
                 command_name=None, source=None, meta_visitors=[],
-                data_visitors=[], transferrer=None):
+                data_visitors=[], modify_transfer=None, store_transfer=None):
     """A default implementation for using the TodoRunner.
 
     :param config Config instance
@@ -551,8 +561,14 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
         work file to exist on disk
     :param chooser OrganizerChooser, if there's strange rules about file
         naming.
-    :param transferrer Transfer extension that identifies how to retrieve
-        data from a source.
+    :param modify_transfer Transfer extension that identifies how to retrieve
+        data from a source for modification of CAOM2 metadata. By this time,
+        files are usually stored at CADC, so it's probably a CadcTransfer
+        instance, but this allows for the case that a file is never stored
+        at CADC. Try to guess what this one is.
+    :param store_transfer Transfer extension that identifies hot to retrieve
+        data from a source for storage at CADC, probably an HTTP or FTP site.
+        Don't try to guess what this one is.
     """
     if config is None:
         config = mc.Config()
@@ -569,15 +585,11 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
         else:
             source = data_source_composable.TodoFileDataSource(config)
 
-    if transferrer is None:
-        if config.use_local_files:
-            transferrer = transfer_composable.Transfer()
-        else:
-            transferrer = transfer_composable.CadcTransfer()
+    modify_transfer = _set_modify_transfer(modify_transfer, config)
 
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser,
-        transferrer)
+        store_transfer, modify_transfer)
 
     runner = TodoRunner(config, organizer, name_builder, source)
     result = runner.run()
@@ -586,9 +598,9 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
     return result
 
 
-def run_by_state(config=None, name_builder=None, command_name=None,
-                 bookmark_name=None, meta_visitors=[], data_visitors=[],
-                 end_time=None, chooser=None, source=None, transferrer=None):
+def run_by_state_ad(config=None, name_builder=None, command_name=None,
+                    bookmark_name=None, meta_visitors=[], data_visitors=[],
+                    end_time=None, chooser=None, source=None, transferrer=None):
     """A default implementation for using the StateRunner.
 
     :param config Config instance
@@ -643,10 +655,10 @@ def run_by_state(config=None, name_builder=None, command_name=None,
     return result
 
 
-def run_by_state_tz(config=None, name_builder=None, command_name=None,
-                    bookmark_name=None, meta_visitors=[], data_visitors=[],
-                    end_time=None, chooser=None, source=None,
-                    modify_transfer=None, store_transfer=None):
+def run_by_state(config=None, name_builder=None, command_name=None,
+                 bookmark_name=None, meta_visitors=[], data_visitors=[],
+                 end_time=None, chooser=None, source=None,
+                 modify_transfer=None, store_transfer=None):
     """A default implementation for using the StateRunner.
 
     :param config Config instance
@@ -689,12 +701,7 @@ def run_by_state_tz(config=None, name_builder=None, command_name=None,
     if end_time is None:
         end_time = get_utc_now_tz()
 
-    if modify_transfer is None:
-        if not config.use_local_files:
-            if config.features.supports_latest_client:
-                modify_transfer = transfer_composable.VoTransfer()
-            else:
-                modify_transfer = transfer_composable.CadcTransfer()
+    modify_transfer = _set_modify_transfer(modify_transfer, config)
 
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser,
