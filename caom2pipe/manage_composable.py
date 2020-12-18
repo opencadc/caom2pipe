@@ -2790,12 +2790,11 @@ def _get_file_info(storage_name, cadc_client):
     This is a very bad implementation, but there is no information on what
     might be a better one.
 
-    :param storage_name:
+    :param storage_name: Artifact URI
     :param cadc_client:
     :return:
     """
-    target = cadc_client.glob(storage_name)
-    node = cadc_client.get_node(target)
+    node = cadc_client.get_node(storage_name, limit=None, force=False)
     f_size = node.props.get('length')
     f_md5sum = node.props.get('MD5')
     return FileMeta(f_size, f_md5sum)
