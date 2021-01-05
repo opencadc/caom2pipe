@@ -70,7 +70,7 @@
 import logging
 import os
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pytz import timezone
 
@@ -237,10 +237,24 @@ class QueryTimeBoxDataSource(DataSource):
         return mc.query_tap_client(query, self._client)
 
 
+def is_offset_aware(dt):
+    """
+    Raises CadcException if tzinfo is not set
+    :param dt:
+    :return: a datetime.timestamp with tzinfo set
+    """
+    logging.error(dt.tzinfo)
+    if dt.tzinfo is None:
+        raise mc.CadcException(f'Expect tzinfo to be set for {dt}')
+    return dt
+
+
 @dataclass
 class StateRunnerMeta:
-    entry_name: str  # how to refer to the item of work to be processed
-    entry_ts: datetime.timestamp  # timestamp associated with item of work
+    # how to refer to the item of work to be processed
+    entry_name: str
+    # offset-aware timestamp associated with item of work
+    entry_ts: datetime.timestamp  # = field(default_factory=is_offset_aware)
 
 
 class QueryTimeBoxDataSourceTS(DataSource):
