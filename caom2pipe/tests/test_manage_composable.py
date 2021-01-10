@@ -113,49 +113,66 @@ def test_query_endpoint():
 
 
 def test_config_class():
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
-    mock_root = '/usr/src/app/caom2pipe/caom2pipe/tests/data'
-    test_config = mc.Config()
-    test_config.get_executors()
-    assert test_config is not None
-    assert test_config.work_file == 'todo.txt'
-    assert test_config.features is not None
-    assert test_config.features.supports_composite is False
-    assert test_config.working_directory == tc.TEST_DATA_DIR, 'wrong dir'
-    assert test_config.work_fqn == f'{tc.TEST_DATA_DIR}/todo.txt', 'work_fqn'
-    assert test_config.netrc_file == 'test_netrc', 'netrc'
-    assert test_config.archive == 'NEOSS', 'archive'
-    assert test_config.collection == 'NEOSSAT', 'collection'
-    assert test_config.log_file_directory == tc.TEST_DATA_DIR, 'logging dir'
-    assert test_config.success_fqn == f'{tc.TEST_DATA_DIR}/success_log.txt', \
-        'success fqn'
-    assert test_config.success_log_file_name == 'success_log.txt', \
-        'success file'
-    assert test_config.failure_fqn == f'{tc.TEST_DATA_DIR}/failure_log.txt', \
-        'failure fqn'
-    assert test_config.failure_log_file_name == 'failure_log.txt', \
-        'failure file'
-    assert test_config.retry_file_name == 'retries.txt', 'retry file'
-    assert test_config.retry_fqn == f'{tc.TEST_DATA_DIR}/retries.txt', \
-        'retry fqn'
-    assert test_config.proxy_file_name == 'test_proxy.pem', 'proxy file name'
-    assert test_config.proxy_fqn == f'{tc.TEST_DATA_DIR}/test_proxy.pem', \
-        'proxy fqn'
-    assert test_config.state_file_name == 'state.yml', 'state file name'
-    assert test_config.state_fqn == f'{tc.TEST_DATA_DIR}/state.yml', \
-        'state fqn'
-    assert test_config.rejected_directory == tc.TEST_DATA_DIR, \
-        'wrong rejected dir'
-    assert test_config.rejected_file_name == 'rejected.yml', \
-        'wrong rejected file'
-    assert test_config.rejected_fqn == f'{tc.TEST_DATA_DIR}/rejected.yml', \
-        'wrong rejected fqn'
-    assert test_config.features.run_in_airflow is True, 'wrong runs in airflow'
-    assert test_config.features.supports_catalog is True, \
-        'wrong supports catalog'
-    test_config.features.supports_catalog = False
-    assert test_config.features.supports_catalog is False, \
-        'modified supports catalog'
+    getcwd_orig = os.getcwd
+    try:
+        os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+        test_config = mc.Config()
+        test_config.get_executors()
+        assert test_config is not None
+        assert test_config.work_file == 'todo.txt'
+        assert test_config.features is not None
+        assert test_config.features.supports_composite is False
+        assert test_config.working_directory == tc.TEST_DATA_DIR, 'wrong dir'
+        assert test_config.work_fqn == f'{tc.TEST_DATA_DIR}/todo.txt', 'work_fqn'
+        assert test_config.netrc_file == 'test_netrc', 'netrc'
+        assert test_config.archive == 'NEOSS', 'archive'
+        assert test_config.collection == 'NEOSSAT', 'collection'
+        assert test_config.log_file_directory == tc.TEST_DATA_DIR, 'logging dir'
+        assert test_config.success_fqn == f'{tc.TEST_DATA_DIR}/success_log.txt', \
+            'success fqn'
+        assert test_config.success_log_file_name == 'success_log.txt', \
+            'success file'
+        assert test_config.failure_fqn == f'{tc.TEST_DATA_DIR}/failure_log.txt', \
+            'failure fqn'
+        assert test_config.failure_log_file_name == 'failure_log.txt', \
+            'failure file'
+        assert test_config.retry_file_name == 'retries.txt', 'retry file'
+        assert test_config.retry_fqn == f'{tc.TEST_DATA_DIR}/retries.txt', \
+            'retry fqn'
+        assert test_config.proxy_file_name == 'test_proxy.pem', 'proxy file name'
+        assert test_config.proxy_fqn == f'{tc.TEST_DATA_DIR}/test_proxy.pem', \
+            'proxy fqn'
+        assert test_config.state_file_name == 'state.yml', 'state file name'
+        assert test_config.state_fqn == f'{tc.TEST_DATA_DIR}/state.yml', \
+            'state fqn'
+        assert test_config.rejected_directory == tc.TEST_DATA_DIR, \
+            'wrong rejected dir'
+        assert test_config.rejected_file_name == 'rejected.yml', \
+            'wrong rejected file'
+        assert test_config.rejected_fqn == f'{tc.TEST_DATA_DIR}/rejected.yml', \
+            'wrong rejected fqn'
+        assert test_config.features.run_in_airflow is True, 'wrong runs in airflow'
+        assert test_config.features.supports_catalog is True, \
+            'wrong supports catalog'
+        test_config.features.supports_catalog = False
+        assert test_config.features.supports_catalog is False, \
+            'modified supports catalog'
+    finally:
+        os.getcwd = getcwd_orig
+
+
+def test_config_class_feature_true():
+    getcwd_orig = os.getcwd
+    try:
+        os.getcwd = Mock(return_value=os.path.join(tc.TEST_DATA_DIR,
+                                                   'features_test'))
+        test_config = mc.Config()
+        test_config.get_executors()
+        assert test_config is not None
+        assert test_config.features is not None
+        assert test_config.features.supports_latest_client is True
+    finally:
+        os.getcwd = getcwd_orig
 
 
 def test_exec_cmd():
@@ -993,7 +1010,7 @@ def test_reverse_lookup():
 def test_make_time():
     test_dict = {'2012-12-12T12:13:15': datetime(2012, 12, 12, 12, 13, 15),
                  # %b %d %H:%M
-                 'Mar 12 12:12': datetime(2020, 3, 12, 12, 12),
+                 'Mar 12 12:12': datetime(2021, 3, 12, 12, 12),
                  # %Y-%m-%dHST%H:%M:%S
                  '2020-12-12HST12:12:12': datetime(2020, 12, 12, 22, 12, 12)}
 

@@ -137,9 +137,6 @@ class Features(object):
     """Boolean feature flag implementation."""
 
     def __init__(self):
-        # the Config class setter expects the default value to be True,
-        # values must be in the config.yml file if they are expected to be
-        # False
         self._use_file_names = True
         self._use_urls = True
         self._run_in_airflow = True
@@ -1026,18 +1023,15 @@ class Config(object):
     @staticmethod
     def _obtain_features(config):
         """Make the configuration file entries into the class members.
-
-        Feature flags default to True, so only cover the case where setting to
-        False.
         """
         feature_flags = Features()
         if 'features' in config:
             for ii in config['features']:
-                if not config['features'][ii]:
-                    if hasattr(feature_flags, ii):
-                        setattr(feature_flags, ii, False)
-                    else:
-                        logging.warning(f'Unexpected features item:{ii}.')
+                feature = f'_{ii}'
+                if hasattr(feature_flags, feature):
+                    setattr(feature_flags, feature, config['features'][ii])
+                else:
+                    logging.warning(f'Unexpected features item:{ii}.')
         return feature_flags
 
     def get(self):
