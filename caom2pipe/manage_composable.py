@@ -256,7 +256,7 @@ class State(object):
     def __init__(self, fqn):
         self.fqn = fqn
         self.bookmarks = {}
-        self.logger = logging.getLogger('State')
+        self.logger = logging.getLogger(self.__class__.__name__)
         result = read_as_yaml(self.fqn)
         if result is None:
             raise CadcException(f'Could not load state from {fqn}')
@@ -473,7 +473,7 @@ class Cache(object):
         config = Config()
         config.get_executors()
         self._fqn = config.cache_fqn
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
         try:
             self._cache = read_as_yaml(self._fqn)
         except Exception as e:
@@ -1248,7 +1248,7 @@ class PreviewVisitor(object):
         self._archive = archive
         self._release_type = release_type
         self._mime_type = mime_type
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
         self._working_dir = kwargs.get('working_directory', './')
         self._cadc_client = kwargs.get('cadc_client')
         if self._cadc_client is None:
@@ -1396,7 +1396,7 @@ class StorageName(object):
         self._compression = compression
         self._source_name = None
         self._entry = entry
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def __str__(self):
         return f'obs_id {self.obs_id}, ' \
@@ -1593,7 +1593,7 @@ class Validator(object):
             by pytz.
         """
         # over-ride the datetime.timezone import at the module level
-        from pytz import timezone
+        from pytz import timezone as pytz_timezone
         self._config = Config()
         self._config.get_executors()
         self._source = []
@@ -1602,8 +1602,8 @@ class Validator(object):
         self._source_name = source_name
         self._scheme = scheme
         self._preview_suffix = preview_suffix
-        self._source_tz = timezone(source_tz)
-        self._logger = logging.getLogger()
+        self._source_tz = pytz_timezone(source_tz)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def _filter_result(self):
         """The default implementation does nothing, but this allows
@@ -1625,9 +1625,9 @@ class Validator(object):
                     dest_dt = datetime.strptime(dest_dt_orig, ISO_8601_FORMAT)
                     # over-ride the datetime.timezone import at the module
                     # level
-                    from pytz import timezone
+                    from pytz import timezone as pytz_timezone
                     # AD - 2019-11-18 - 'ad' timezone is US/Pacific
-                    dest_utc = dest_dt.astimezone(timezone('US/Pacific'))
+                    dest_utc = dest_dt.astimezone(pytz_timezone('US/Pacific'))
                     if dest_utc < source_utc:
                         result.add(f_name)
         return result
@@ -2396,11 +2396,10 @@ def client_put(client, working_directory, file_name, storage_name,
     :param metrics: Tracking success execution times, and failure counts.
     """
     start = current()
-    cwd = os.getcwd()
     try:
-        os.chdir(working_directory)
-        stored_size = client.copy(file_name, destination=storage_name)
-        file_size = os.stat(file_name).st_size
+        fqn = os.path.join(working_directory, file_name)
+        stored_size = client.copy(fqn, destination=storage_name)
+        file_size = os.stat(fqn).st_size
         if stored_size != file_size:
             raise CadcException(
                 f'Stored file size {stored_size} != {file_size} at CADC for '
@@ -2409,8 +2408,6 @@ def client_put(client, working_directory, file_name, storage_name,
         metrics.observe_failure('copy', 'vos', file_name)
         logging.debug(traceback.format_exc())
         raise CadcException(f'Failed to store data with {e}')
-    finally:
-        os.chdir(cwd)
     end = current()
     metrics.observe(start, end, file_size, 'copy', 'vos', file_name)
 

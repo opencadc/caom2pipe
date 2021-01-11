@@ -68,6 +68,7 @@
 #
 
 import distutils
+import logging
 import pytest
 import glob
 import os
@@ -803,7 +804,6 @@ def _mock_get_work(arg1, arg2):
 
 
 def _mock_query(arg1, arg2, arg3):
-    import logging
     global call_count
     if call_count == 0:
         logging.error('returning results')

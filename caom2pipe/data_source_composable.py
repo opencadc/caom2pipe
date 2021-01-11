@@ -100,7 +100,7 @@ class DataSource(object):
         self._config = config
         # if this value is used, it should be a timestamp - i.e. a float
         self._start_time_ts = None
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_work(self):
         return []
@@ -126,7 +126,7 @@ class ListDirDataSource(DataSource):
     def __init__(self, config, chooser):
         super(ListDirDataSource, self).__init__(config)
         self._chooser = chooser
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_work(self):
         self._logger.debug(f'Begin get_work from '
@@ -181,7 +181,7 @@ class TodoFileDataSource(DataSource):
 
     def __init__(self, config):
         super(TodoFileDataSource, self).__init__(config)
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_work(self):
         self._logger.debug(f'Begin get_work from {self._config.work_fqn} in '
@@ -209,7 +209,7 @@ class QueryTimeBoxDataSource(DataSource):
         self._preview_suffix = preview_suffix
         subject = mc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         """
@@ -271,7 +271,7 @@ class QueryTimeBoxDataSourceTS(DataSource):
         self._preview_suffix = preview_suffix
         subject = mc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         """

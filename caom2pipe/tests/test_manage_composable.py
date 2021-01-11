@@ -361,8 +361,9 @@ def test_client_put(mock_metrics, mock_client):
     mock_client.copy.return_value = 12
     mc.client_put(mock_client, tc.TEST_FILES_DIR, 'TEST.fits',
                   test_destination, metrics=mock_metrics)
+    test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
     mock_client.copy.assert_called_with(
-        'TEST.fits', destination=test_destination), 'mock not called'
+        test_fqn, destination=test_destination), 'mock not called'
     assert mock_metrics.observe.called, 'mock not called'
     args, kwargs = mock_metrics.observe.call_args
     assert args[2] == 12, 'wrong size'
@@ -384,8 +385,9 @@ def test_client_put_failure(mock_metrics, mock_client):
     with pytest.raises(mc.CadcException):
         mc.client_put(mock_client, tc.TEST_FILES_DIR, 'TEST.fits',
                       test_destination, metrics=mock_metrics)
+    test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
     mock_client.copy.assert_called_with(
-        'TEST.fits', destination=test_destination), 'mock not called'
+        test_fqn, destination=test_destination), 'mock not called'
     assert mock_metrics.observe_failure.called, 'mock not called'
 
 
@@ -550,8 +552,9 @@ def test_look_pull_and_put_v(http_mock, mock_client):
         assert len(test_metrics.failures) == 0, 'initial failure conditions'
         mc.look_pull_and_put_v(test_storage_name, f_name, tc.TEST_DATA_DIR,
                                url, mock_client, 'md5:01234', test_metrics)
+        test_fqn = os.path.join(tc.TEST_DATA_DIR, f_name)
         mock_client.copy.assert_called_with(
-            f_name, destination=test_storage_name), 'mock not called'
+            test_fqn, destination=test_storage_name), 'mock not called'
         http_mock.assert_called_with(
             url, os.path.join(tc.TEST_DATA_DIR, f_name)), 'http mock not called'
         assert len(test_metrics.history) == 1, 'history conditions'

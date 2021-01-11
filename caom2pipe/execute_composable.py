@@ -1391,19 +1391,6 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
         if self.config.log_to_file:
             logging.getLogger().removeHandler(self._log_h)
 
-    def _define_client_credentials(self):
-        result = None
-        if self.config.features.supports_latest_client:
-            if (self.config.proxy_fqn is not None and os.path.exists(
-                    self.config.proxy_fqn)):
-                logging.debug(f'Using proxy certificate {self.config.proxy_fqn} '
-                              f'for credentials.')
-                result = self.config.proxy_fqn
-        if result is None:
-            raise mc.CadcException(f'No credentials configured or found. '
-                                   f'Stopping.')
-        return result
-
     def choose(self, storage_name):
         """The logic that decides which descendants of CaomExecute to
         instantiate. This is based on the content of the config.yml file
@@ -1423,12 +1410,20 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                 self.config.resource_id)
             if self.config.features.supports_latest_client:
                 self._logger.warning('Using vos.Client for storage.')
-                cadc_client = Client(
-                    vospace_certfile=self._define_client_credentials())
+                cert_file = self.config.proxy_fqn
+                if cert_file is not None and os.path.exists(cert_file):
+                    cadc_client = Client(vospace_certfile=cert_file)
+                else:
+                    raise mc.CadcException(
+                        'No credentials configured or found. Stopping.')
             else:
                 self._logger.warning(
                     'Using cadcdata.CadcDataClient for storage.')
                 cadc_client = CadcDataClient(subject)
+            # Provide access to a single client instance for transactions with
+            # CADC storage services. If the Transfer specialization doesn't
+            # have a cadc_client attribute, it's an external data source that
+            # manages its own connection.
             for entry in [self._modify_transfer, self._store_transfer]:
                 if entry is not None:
                     if hasattr(entry, '_cadc_client'):

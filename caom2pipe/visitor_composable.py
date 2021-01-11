@@ -82,7 +82,7 @@ class ArtifactCleanupVisitor(object):
     def __init__(self, archive, scheme='ad'):
         self._archive = archive
         self._scheme = scheme
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def visit(self, observation, **kwargs):
         mc.check_param(observation, Observation)
