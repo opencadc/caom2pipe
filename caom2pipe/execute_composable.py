@@ -1424,6 +1424,10 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
             # CADC storage services. If the Transfer specialization doesn't
             # have a cadc_client attribute, it's an external data source that
             # manages its own connection.
+            #
+            # The cadc_client instances are provided externally to the the 
+            # classes that use them, so that it’s always the same instance 
+            # of the client, reducing the number of connections in use.
             for entry in [self._modify_transfer, self._store_transfer]:
                 if entry is not None:
                     if hasattr(entry, '_cadc_client'):
