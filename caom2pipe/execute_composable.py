@@ -1430,6 +1430,8 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
             # of the client, reducing the number of connections in use.
             for entry in [self._modify_transfer, self._store_transfer]:
                 if entry is not None:
+                    # set only for Transfer specializations that have a
+                    # cadc_client attribute (HttpTransfer, FtpTransfer do not)
                     if hasattr(entry, '_cadc_client'):
                         entry.cadc_client = cadc_client
         for task_type in self.task_types:
