@@ -394,7 +394,7 @@ def test_run_state_log_to_file_true(fits2caom2_mock, data_mock, repo_mock,
                 os.unlink(entry)
 
 
-@patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
+@patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 def test_run_todo_list_dir_data_source_exception(do_one_mock, test_config):
     test_config.working_directory = TEST_DIR
     test_config.use_local_files = True
@@ -431,7 +431,7 @@ def test_run_todo_list_dir_data_source_exception(do_one_mock, test_config):
             assert content == 'abc.fits\n', 'wrong retry content'
 
 
-@patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
+@patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 def test_run_todo_retry(do_one_mock, test_config):
     retry_success_fqn, retry_failure_fqn, retry_retry_fqn = \
         _clean_up_log_files(test_config)
@@ -454,7 +454,7 @@ def test_run_todo_retry(do_one_mock, test_config):
     assert do_one_mock.call_count == 2, 'wrong number of calls'
 
 
-@patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
+@patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 def test_run_todo_retry_v(do_one_mock, test_config):
     test_config.features.supports_latest_client = True
     retry_success_fqn, retry_failure_fqn, retry_retry_fqn = \
@@ -478,7 +478,7 @@ def test_run_todo_retry_v(do_one_mock, test_config):
     assert do_one_mock.call_count == 2, 'wrong number of calls'
 
 
-@patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
+@patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 @patch('caom2pipe.data_source_composable.CadcTapClient')
 @patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.'
        'get_time_box_work')
@@ -512,7 +512,7 @@ def test_run_state_retry(get_work_mock, tap_mock, do_one_mock, test_config):
     assert tap_mock.called, 'init should be called'
 
 
-@patch('caom2pipe.execute_composable.OrganizeExecutesWithDoOne.do_one')
+@patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 def test_run_single(do_mock, test_config):
     _clean_up_log_files(test_config)
     progress_file = os.path.join(tc.TEST_DATA_DIR, 'progress.txt')

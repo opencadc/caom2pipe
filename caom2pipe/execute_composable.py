@@ -125,8 +125,7 @@ from vos import Client
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
 
-__all__ = ['CaomExecute', 'OrganizeExecutes', 'OrganizeChooser',
-           'OrganizeExecutesWithDoOne']
+__all__ = ['CaomExecute', 'OrganizeExecutes', 'OrganizeChooser']
 
 
 class CaomExecute(object):
@@ -1089,51 +1088,59 @@ class OrganizeChooser(object):
 
 class OrganizeExecutes(object):
     """How to turn on/off various task types in a CaomExecute pipeline."""
-    def __init__(self, config, chooser=None, todo_file=None):
+    def __init__(self, config, command_name, meta_visitors, data_visitors,
+                 chooser=None, store_transfer=None, modify_transfer=None):
+        """
+        Why there is support for two transfer instances:
+        - the store_transfer instance may do an http, ftp, or vo transfer
+            from an external source, for the purposes of storage
+        - the modify_transfer instance probably does a CADC retrieval,
+            so that metadata production that relies on the data content
+            (e.g. preview generation) can occur
+
+        :param config:
+        :param command_name extension of fits2caom2 for the collection
+        :param meta_visitors List of metadata visit methods.
+        :param data_visitors List of data visit methods.
+        :param chooser:
+        :param store_transfer Transfer implementation for retrieving files
+        :param modify_transfer Transfer implementation for retrieving files
+        """
         self.config = config
         self.chooser = chooser
         self.task_types = config.task_types
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(config.logging_level)
         self.todo_fqn = None
         self.success_fqn = None
         self.failure_fqn = None
         self.retry_fqn = None
         self.rejected_fqn = None
-        self.set_log_location(todo_file)
+        self.set_log_location()
         self._success_count = 0
         self._rejected_count = 0
         self._complete_record_count = 0
         self._timeout = 0
         self.observable = mc.Observable(mc.Rejected(self.rejected_fqn),
                                         mc.Metrics(config))
+        self._command_name = command_name
+        self._meta_visitors = meta_visitors
+        self._data_visitors = data_visitors
+        self._modify_transfer = modify_transfer
+        self._store_transfer = store_transfer
+        # use the same Observable everywhere
+        if modify_transfer is not None:
+            self._modify_transfer.observable = self.observable
+        if store_transfer is not None:
+            self._store_transfer.observable = self.observable
+        self._log_h = None
+        self._logger = logging.getLogger(self.__class__.__name__)
+        self._logger.setLevel(config.logging_level)
 
-    def set_log_files(self, config, todo_file=None):
-        if todo_file is None:
-            self.todo_fqn = config.work_fqn
-            self.success_fqn = config.success_fqn
-            self.failure_fqn = config.failure_fqn
-            self.retry_fqn = config.retry_fqn
-            self.rejected_fqn = config.rejected_fqn
-        else:
-            self.todo_fqn = todo_file
-            todo_name = os.path.basename(todo_file).split('.')[0]
-            self.success_fqn = os.path.join(
-                self.config.log_file_directory,
-                f'{todo_name}_success_log.txt')
-            config.success_fqn = self.success_fqn
-            self.failure_fqn = os.path.join(
-                self.config.log_file_directory,
-                f'{todo_name}_failure_log.txt')
-            config.failure_fqn = self.failure_fqn
-            self.retry_fqn = os.path.join(
-                self.config.log_file_directory,
-                f'{todo_name}_retries.txt')
-            config.retry_fqn = self.retry_fqn
-            self.rejected_fqn = os.path.join(
-                self.config.log_file_directory,
-                f'{todo_name}_rejected.yml')
-            config.rejected_fqn = self.rejected_fqn
+    def set_log_files(self, config):
+        self.todo_fqn = config.work_fqn
+        self.success_fqn = config.success_fqn
+        self.failure_fqn = config.failure_fqn
+        self.retry_fqn = config.retry_fqn
+        self.rejected_fqn = config.rejected_fqn
 
     @property
     def rejected_count(self):
@@ -1230,8 +1237,8 @@ class OrganizeExecutes(object):
                      f'{execution_s:.2f} s.')
         logging.debug('******************************************************')
 
-    def set_log_location(self, todo_file=None):
-        self.set_log_files(self.config, todo_file)
+    def set_log_location(self):
+        self.set_log_files(self.config)
         if self.config.log_to_file:
             mc.create_dir(self.config.log_file_directory)
             now_s = datetime.utcnow().timestamp()
@@ -1338,41 +1345,6 @@ class OrganizeExecutes(object):
         else:
             return 'Unknown error. Check specific log.'
 
-
-class OrganizeExecutesWithDoOne(OrganizeExecutes):
-
-    def __init__(self, config, command_name, meta_visitors, data_visitors,
-                 chooser=None, store_transfer=None, modify_transfer=None):
-        """
-        Why there is support for two transfer instances:
-        - the store_transfer instance may do an http, ftp, or vo transfer
-            from an external source, for the purposes of storage
-        - the modify_transfer instance probably does a CADC retrieval,
-            so that metadata production that relies on the data content
-            (e.g. preview generation) can occur
-
-        :param config:
-        :param command_name extension of fits2caom2 for the collection
-        :param meta_visitors List of metadata visit methods.
-        :param data_visitors List of data visit methods.
-        :param chooser:
-        :param store_transfer Transfer implementation for retrieving files
-        :param modify_transfer Transfer implementation for retrieving files
-        """
-        super(OrganizeExecutesWithDoOne, self).__init__(config, chooser)
-        self._command_name = command_name
-        self._meta_visitors = meta_visitors
-        self._data_visitors = data_visitors
-        self._modify_transfer = modify_transfer
-        self._store_transfer = store_transfer
-        # use the same Observable everywhere
-        if modify_transfer is not None:
-            self._modify_transfer.observable = self.observable
-        if store_transfer is not None:
-            self._store_transfer.observable = self.observable
-        self._log_h = None
-        self._logger = logging.getLogger(__name__)
-
     @property
     def command_name(self):
         return self._command_name
@@ -1443,7 +1415,7 @@ class OrganizeExecutesWithDoOne(OrganizeExecutes):
                     if hasattr(entry, '_cadc_client'):
                         entry.cadc_client = cadc_client
         for task_type in self.task_types:
-            self.logger.debug(task_type)
+            self._logger.debug(task_type)
             if task_type == mc.TaskType.SCRAPE:
                 model_fqn = os.path.join(self.config.working_directory,
                                          storage_name.model_file_name)

@@ -459,7 +459,7 @@ def test_organize_executes_chooser(test_config):
 
         test_config.task_types = [mc.TaskType.INGEST]
         test_chooser = tc.TestChooser()
-        test_oe = ec.OrganizeExecutesWithDoOne(
+        test_oe = ec.OrganizeExecutes(
             test_config, 'command_name', [], [], test_chooser)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -472,7 +472,7 @@ def test_organize_executes_chooser(test_config):
 
         test_config.use_local_files = False
         test_config.task_types = [mc.TaskType.INGEST]
-        test_oe = ec.OrganizeExecutesWithDoOne(
+        test_oe = ec.OrganizeExecutes(
             test_config, 'command_name', [], [], test_chooser)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -497,7 +497,7 @@ def test_organize_executes_client_existing(test_config):
         ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
         test_config.task_types = [mc.TaskType.INGEST]
         test_config.use_local_files = False
-        test_oe = ec.OrganizeExecutesWithDoOne(
+        test_oe = ec.OrganizeExecutes(
             test_config, 'command_name', [], [])
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -514,7 +514,7 @@ def test_organize_executes_client_visit(test_config):
     test_config.features.use_clients = True
     test_config.task_types = [mc.TaskType.VISIT]
     test_config.use_local_files = False
-    test_oe = ec.OrganizeExecutesWithDoOne(
+    test_oe = ec.OrganizeExecutes(
         test_config, 'command_name', [], [])
     CadcDataClient.__init__ = Mock(return_value=None)
     CAOM2RepoClient.__init__ = Mock(return_value=None)
@@ -528,7 +528,7 @@ def test_organize_executes_client_visit(test_config):
 
 def test_do_one(test_config):
     test_config.task_types = []
-    test_organizer = ec.OrganizeExecutesWithDoOne(
+    test_organizer = ec.OrganizeExecutes(
         test_config, 'test2caom2', [], [])
     # no client
     test_result = test_organizer.do_one(tc.TestStorageName())
@@ -605,7 +605,7 @@ def test_choose_exceptions(test_config):
     test_config.init_local_files = False
     test_config.task_types = [mc.TaskType.SCRAPE]
     with pytest.raises(mc.CadcException):
-        test_organizer = ec.OrganizeExecutesWithDoOne(
+        test_organizer = ec.OrganizeExecutes(
             test_config, 'command name', [], [])
         test_organizer.choose(tc.TestStorageName())
 
@@ -623,7 +623,7 @@ def test_storage_name_failure(test_config):
     assert not os.path.exists(test_config.success_fqn)
     assert not os.path.exists(test_config.failure_fqn)
     assert not os.path.exists(test_config.retry_fqn)
-    test_organizer = ec.OrganizeExecutesWithDoOne(test_config, 'command name',
+    test_organizer = ec.OrganizeExecutes(test_config, 'command name',
                                                   [], [])
     test_organizer.choose(TestStorageNameFails())
     assert os.path.exists(test_config.success_fqn)
@@ -665,8 +665,8 @@ def test_organize_executes_client_do_one(test_config):
                               '      usize: 754408\n'.encode('utf-8'))
 
         test_config.task_types = [mc.TaskType.SCRAPE]
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=None)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=None)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
@@ -675,8 +675,8 @@ def test_organize_executes_client_do_one(test_config):
         test_config.task_types = [mc.TaskType.STORE,
                                   mc.TaskType.INGEST,
                                   mc.TaskType.MODIFY]
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=None)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=None)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 3
@@ -691,8 +691,8 @@ def test_organize_executes_client_do_one(test_config):
         test_config.use_local_files = False
         test_config.task_types = [mc.TaskType.INGEST,
                                   mc.TaskType.MODIFY]
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=None)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=None)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 2
@@ -704,8 +704,8 @@ def test_organize_executes_client_do_one(test_config):
         test_config.use_local_files = True
         test_config.task_types = [mc.TaskType.INGEST,
                                   mc.TaskType.MODIFY]
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=None)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=None)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 2
@@ -718,8 +718,8 @@ def test_organize_executes_client_do_one(test_config):
         test_config.task_types = [mc.TaskType.SCRAPE,
                                   mc.TaskType.MODIFY]
         test_config.use_local_files = True
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=None)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=None)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 2
@@ -732,8 +732,8 @@ def test_organize_executes_client_do_one(test_config):
         test_config.use_local_files = False
         test_chooser = tc.TestChooser()
         ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=test_chooser)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=test_chooser)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
@@ -745,7 +745,7 @@ def test_organize_executes_client_do_one(test_config):
         test_config.use_local_files = False
         ec.CaomExecute.repo_cmd_get_client = Mock(
             return_value=_read_obs(test_obs_id))
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [])
+        test_oe = ec.OrganizeExecutes(test_config, TEST_APP, [], [])
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
