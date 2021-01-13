@@ -67,7 +67,6 @@
 # ***********************************************************************
 #
 
-import distutils.sysconfig
 import logging
 import os
 import pytest
@@ -76,6 +75,7 @@ import sys
 from unittest.mock import Mock, patch
 
 from astropy.io import fits
+from hashlib import md5
 
 from caom2 import SimpleObservation, Algorithm
 from caom2repo import CAOM2RepoClient
@@ -124,6 +124,35 @@ def test_meta_create_client_execute(test_config):
         assert repo_client_mock.create.called, 'create call missed'
         assert test_executor.url == 'https://test_url/', 'url'
         assert test_observer.metrics.observe.called, 'observe not called'
+    finally:
+        mc.read_obs_from_file = read_obs_orig
+
+
+@patch('caom2utils.fits2caom2.CadcDataClient')
+@patch('caom2utils.fits2caom2.get_cadc_headers')
+def test_meta_create_client_execute_failed_update(
+        headers_mock, f2c2_data_client_mock, test_config):
+    test_cred = ''
+    data_client_mock = Mock()
+    data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
+    repo_client_mock = Mock()
+    test_observer = Mock()
+    read_obs_orig = mc.read_obs_from_file
+    mc.read_obs_from_file = Mock()
+    mc.read_obs_from_file.return_value = _read_obs(None)
+    f2c2_data_client_mock.return_value.get_file_info.side_effect = \
+        _mock_get_file_info
+    headers_mock.side_effect = _get_headers
+
+    test_executor = ec.MetaCreate(
+        test_config, tc.TestStorageName(), 'failedUpdateCollection2caom2',
+        test_cred, data_client_mock, repo_client_mock, meta_visitors=None,
+        observable=test_observer)
+    try:
+        with pytest.raises(mc.CadcException):
+            test_executor.execute(None)
+        assert not repo_client_mock.create.called, 'should have no create call'
+        assert test_executor.url == 'https://test_url/', 'url'
     finally:
         mc.read_obs_from_file = read_obs_orig
 
@@ -904,10 +933,6 @@ def _read_obs(arg1):
                              algorithm=Algorithm(str('exposure')))
 
 
-def _get_file_headers(fname):
-    return _get_headers(None, None)
-
-
 def _get_fname():
     return 'TBD'
 
@@ -939,3 +964,9 @@ def to_caom2():
                         'test_execute_composable/test_execute_composable.py',
                         '--lineage',
                         'test_obs_id/ad:TEST/test_obs_id.fits.gz']
+
+
+def _mock_get_file_info(archive, file_id):
+    return {'size': 10290,
+            'md5sum': 'md5:{}'.format(md5('-37'.encode()).hexdigest()),
+            'type': 'image/jpeg', 'name': file_id}

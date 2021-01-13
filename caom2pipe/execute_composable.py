@@ -253,7 +253,9 @@ class CaomExecute(object):
                     f'{self.obs_id} --local {local_fqn} --out '
                     f'{self.model_fqn} --plugin {plugin} --module {plugin} '
                     f'--lineage {self.lineage}').split()
-        command.to_caom2()
+        result = command.to_caom2()
+        if result == -1:
+            raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
 
     def _fits2caom2_cmd(self):
         """Execute fits2caom with a --cert parameter."""
@@ -265,7 +267,9 @@ class CaomExecute(object):
                     f'{self.obs_id} --out {self.model_fqn} '
                     f'{self.external_urls_param} --plugin {plugin} --module '
                     f'{plugin} --lineage {self.lineage}').split()
-        command.to_caom2()
+        result = command.to_caom2()
+        if result == -1:
+            raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
 
     def _fits2caom2_cmd_in_out(self):
         """Execute fits2caom with a --in, a --external_url and a --cert
@@ -278,7 +282,9 @@ class CaomExecute(object):
                     f'{self.model_fqn} {self.external_urls_param} --plugin '
                     f'{plugin} --module {plugin} --lineage '
                     f'{self.lineage}').split()
-        command.to_caom2()
+        result = command.to_caom2()
+        if result == -1:
+            raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
 
     def _fits2caom2_cmd_in_out_local(self, connected=True):
         """Execute fits2caom with a --in, --local and a --cert parameter."""
@@ -294,7 +300,9 @@ class CaomExecute(object):
                     f'{self.model_fqn} --local ' f'{local_fqn} --plugin '
                     f'{plugin} --module {plugin} --lineage '
                     f'{self.lineage}').split()
-        command.to_caom2()
+        result = command.to_caom2()
+        if result == -1:
+            raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
 
     def _repo_cmd_create_client(self, observation):
         """Create an observation instance from the input parameter."""
