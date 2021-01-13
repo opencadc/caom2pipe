@@ -81,7 +81,7 @@ import logging
 import os
 import traceback
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from caom2pipe import astro_composable as ac
 from caom2pipe import execute_composable as ec
@@ -90,8 +90,8 @@ from caom2pipe import name_builder_composable
 from caom2pipe import data_source_composable
 from caom2pipe import transfer_composable
 
-__all__ = ['TodoRunner', 'StateRunner', 'run_by_todo', 'run_by_state',
-           'get_utc_now']
+__all__ = ['TodoRunner', 'StateRunner', 'StateRunnerTS', 'run_by_todo',
+           'run_by_state_ad', 'run_by_state', 'get_utc_now', 'get_utc_now_tz']
 
 
 class RunnerReport(object):
@@ -100,7 +100,7 @@ class RunnerReport(object):
     """
     def __init__(self, location):
         self._location = os.path.basename(location)
-        self._start_time = get_utc_now().timestamp()
+        self._start_time = get_utc_now_tz().timestamp()
         self._entries_sum = 0
         self._timeouts_sum = 0
         self._retry_sum = 0
@@ -129,7 +129,7 @@ class RunnerReport(object):
     def report(self):
         msg1 = f'Location: {self._location}'
         msg2 = f'Date: {datetime.isoformat(datetime.utcnow())}'
-        execution_time = get_utc_now().timestamp() - self._start_time
+        execution_time = get_utc_now_tz().timestamp() - self._start_time
         msg3 = f'Execution Time: {execution_time:.2f} s'
         msg4 = f'    Number of Inputs: {self._entries_sum}'
         msg5 = f' Number of Successes: {self._success_sum}'
@@ -388,6 +388,129 @@ class StateRunner(TodoRunner):
         return result
 
 
+class StateRunnerTS(StateRunner):
+    """This is StateRunner with all times as timestamps (i.e. float),
+    somewhat enforced by the use of the StateRunnerMeta class.
+
+    Eventually deprecate StateRunner in favour of this class.
+    """
+
+    def __init__(self, config, organizer, builder, data_source, bookmark_name,
+                 max_ts=None):
+        super(StateRunnerTS, self).__init__(config, organizer, builder,
+                                            data_source, bookmark_name)
+        max_ts_in_s = None
+        if max_ts is not None:
+            max_ts_in_s = mc.convert_to_ts(max_ts)
+        # end time is a datetime.timestamp
+        self._end_time = (get_utc_now_tz().timestamp() if max_ts_in_s is None
+                          else max_ts_in_s)
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def _record_progress(self, count, cumulative_count, start_time, save_time):
+        start_time_dt = datetime.utcfromtimestamp(start_time)
+        save_time_dt = datetime.utcfromtimestamp(save_time)
+        super(StateRunnerTS, self)._record_progress(
+            count, cumulative_count, start_time_dt, save_time_dt)
+
+    def _wrap_state_save(self, state, save_time):
+        state.save_state(
+            self._bookmark_name, datetime.utcfromtimestamp(save_time))
+
+    def run(self):
+        """
+        Uses an iterable with an instance of StateRunnerMeta.
+
+        :return: 0 for success, -1 for failure
+        """
+        self._logger.debug(f'Begin run state for {self._bookmark_name}')
+        if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
+            os.makedirs(os.path.dirname(self._config.progress_fqn))
+
+        state = mc.State(self._config.state_fqn)
+        if self._data_source.start_time_ts is None:
+            temp = state.get_bookmark(self._bookmark_name)
+            start_time = mc.convert_to_ts(temp)
+        else:
+            start_time = self._data_source.start_time_ts
+
+        # make sure prev_exec_time is offset-aware type datetime.timestamp
+        prev_exec_time = start_time
+        incremented_ts = mc.increment_time_tz(
+            prev_exec_time, self._config.interval).timestamp()
+        exec_time = min(incremented_ts, self._end_time)
+
+        self._logger.debug(f'Starting at '
+                           f'{datetime.utcfromtimestamp(start_time)}, ending '
+                           f'at {datetime.utcfromtimestamp(self._end_time)}')
+        result = 0
+        cumulative = 0
+        cumulative_correct = 0
+        if prev_exec_time == self._end_time:
+            self._logger.info(
+                f'Start time is the same as end time '
+                f'{datetime.utcfromtimestamp(start_time)}, stopping.')
+            exec_time = prev_exec_time
+        else:
+            cumulative = 0
+            result = 0
+            while exec_time <= self._end_time:
+                self._logger.info(
+                    f'Processing from '
+                    f'{datetime.utcfromtimestamp(prev_exec_time)} to '
+                    f'{datetime.utcfromtimestamp(exec_time)}')
+                save_time = exec_time
+                self._organizer.success_count = 0
+                entries = self._data_source.get_time_box_work(
+                    prev_exec_time, exec_time)
+                num_entries = len(entries)
+
+                if num_entries > 0:
+                    self._logger.info(f'Processing {num_entries} entries.')
+                    self._organizer.complete_record_count = num_entries
+                    self._organizer.set_log_location()
+                    for entry in entries:
+                        result |= self._process_entry(entry.entry_name)
+                        save_time = min(mc.convert_to_ts(entry.entry_ts),
+                                        exec_time)
+                    self._finish_run()
+
+                cumulative += num_entries
+                cumulative_correct += self._organizer.success_count
+                self._record_progress(
+                    num_entries, cumulative, start_time, save_time)
+                state.save_state(self._bookmark_name,
+                                 datetime.utcfromtimestamp(save_time))
+
+                if exec_time == self._end_time:
+                    # the last interval will always have the exec time
+                    # equal to the end time, which will fail the while check
+                    # so leave after the last interval has been processed
+                    #
+                    # but the while <= check is required so that an interval
+                    # smaller than exec_time -> end_time will get executed,
+                    # so don't get rid of the '=' in the while loop
+                    # comparison, just because this one exists
+                    break
+                prev_exec_time = exec_time
+                new_time = mc.increment_time_tz(
+                    prev_exec_time, self._config.interval).timestamp()
+                exec_time = min(new_time, self._end_time)
+
+        self._reporter.add_entries(cumulative)
+        self._reporter.add_successes(cumulative_correct)
+        state.save_state(self._bookmark_name,
+                         datetime.utcfromtimestamp(exec_time))
+        self._logger.info('==================================================')
+        self._logger.info(
+            f'Done {self._organizer.command_name}, saved state is '
+            f'{datetime.utcfromtimestamp(exec_time)}')
+        self._logger.info(f'{cumulative_correct} of {cumulative} records '
+                          f'processed correctly.')
+        self._logger.info('==================================================')
+        return result
+
+
 def _set_logging(config):
     formatter = logging.Formatter(
         '%(asctime)s:%(levelname)-8s:%(name)-36s:%(lineno)-4d:%(message)s')
@@ -396,14 +519,33 @@ def _set_logging(config):
         handler.setFormatter(formatter)
 
 
+def _set_modify_transfer(modify_transfer, config):
+    if modify_transfer is None:
+        if not config.use_local_files:
+            if config.features.supports_latest_client:
+                modify_transfer = transfer_composable.VoTransfer()
+            else:
+                modify_transfer = transfer_composable.CadcTransfer()
+    return modify_transfer
+
+
 def get_utc_now():
     """So that utcnow can be mocked."""
     return datetime.utcnow()
 
 
+def get_utc_now_tz():
+    """So that utcnow can be mocked. And serendipitously, the guidance from
+    the dateutil maintainer is not to use this anymore:
+    https://blog.ganssle.io/articles/2019/11/utcnow.html
+    :return an offset-aware datetime.datetime
+    """
+    return datetime.now(tz=timezone.utc)
+
+
 def run_by_todo(config=None, name_builder=None, chooser=None,
                 command_name=None, source=None, meta_visitors=[],
-                data_visitors=[], transferrer=None):
+                data_visitors=[], modify_transfer=None, store_transfer=None):
     """A default implementation for using the TodoRunner.
 
     :param config Config instance
@@ -419,8 +561,14 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
         work file to exist on disk
     :param chooser OrganizerChooser, if there's strange rules about file
         naming.
-    :param transferrer Transfer extension that identifies how to retrieve
-        data from a source.
+    :param modify_transfer Transfer extension that identifies how to retrieve
+        data from a source for modification of CAOM2 metadata. By this time,
+        files are usually stored at CADC, so it's probably a CadcTransfer
+        instance, but this allows for the case that a file is never stored
+        at CADC. Try to guess what this one is.
+    :param store_transfer Transfer extension that identifies hot to retrieve
+        data from a source for storage at CADC, probably an HTTP or FTP site.
+        Don't try to guess what this one is.
     """
     if config is None:
         config = mc.Config()
@@ -437,15 +585,11 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
         else:
             source = data_source_composable.TodoFileDataSource(config)
 
-    if transferrer is None:
-        if config.use_local_files:
-            transferrer = transfer_composable.Transfer()
-        else:
-            transferrer = transfer_composable.CadcTransfer()
+    modify_transfer = _set_modify_transfer(modify_transfer, config)
 
     organizer = ec.OrganizeExecutesWithDoOne(
         config, command_name, meta_visitors, data_visitors, chooser,
-        transferrer)
+        store_transfer, modify_transfer)
 
     runner = TodoRunner(config, organizer, name_builder, source)
     result = runner.run()
@@ -454,9 +598,9 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
     return result
 
 
-def run_by_state(config=None, name_builder=None, command_name=None,
-                 bookmark_name=None, meta_visitors=[], data_visitors=[],
-                 end_time=None, chooser=None, source=None, transferrer=None):
+def run_by_state_ad(config=None, name_builder=None, command_name=None,
+                    bookmark_name=None, meta_visitors=[], data_visitors=[],
+                    end_time=None, chooser=None, source=None, transferrer=None):
     """A default implementation for using the StateRunner.
 
     :param config Config instance
@@ -505,6 +649,66 @@ def run_by_state(config=None, name_builder=None, command_name=None,
 
     runner = StateRunner(config, organizer, name_builder, source,
                          bookmark_name, end_time)
+    result = runner.run()
+    result |= runner.run_retry()
+    runner.report()
+    return result
+
+
+def run_by_state(config=None, name_builder=None, command_name=None,
+                 bookmark_name=None, meta_visitors=[], data_visitors=[],
+                 end_time=None, chooser=None, source=None,
+                 modify_transfer=None, store_transfer=None):
+    """A default implementation for using the StateRunner.
+
+    :param config Config instance
+    :param name_builder NameBuilder extension that creates an instance of
+        a StorageName extension, from an entry from a DataSourceComposable
+        listing
+    :param command_name string that represents the specific pipeline
+        application name
+    :param bookmark_name string that represents the state.yml lookup value
+    :param meta_visitors list of modules with visit methods, that expect
+        the metadata of a work file to exist on disk
+    :param data_visitors list of modules with visit methods, that expect the
+        work file to exist on disk
+    :param end_time datetime for stopping a run, should be in UTC.
+    :param chooser OrganizerChooser, if there's strange rules about file
+        naming.
+    :param source DataSourceComposable extension that identifies work to be
+        done.
+    :param modify_transfer Transfer extension that identifies how to retrieve
+        data from a source for modification of CAOM2 metadata. By this time,
+        files are usually stored at CADC, so it's probably a CadcTransfer
+        instance, but this allows for the case that a file is never stored
+        at CADC. Try to guess what this one is.
+    :param store_transfer Transfer extension that identifies hot to retrieve
+        data from a source for storage at CADC, probably an HTTP or FTP site.
+        Don't try to guess what this one is.
+    """
+    if config is None:
+        config = mc.Config()
+        config.get_executors()
+    _set_logging(config)
+
+    if name_builder is None:
+        name_builder = name_builder_composable.StorageNameInstanceBuilder(
+            config.collection)
+
+    if source is None:
+        source = data_source_composable.QueryTimeBoxDataSourceTS(config)
+
+    if end_time is None:
+        end_time = get_utc_now_tz()
+
+    modify_transfer = _set_modify_transfer(modify_transfer, config)
+
+    organizer = ec.OrganizeExecutesWithDoOne(
+        config, command_name, meta_visitors, data_visitors, chooser,
+        store_transfer, modify_transfer)
+
+    runner = StateRunnerTS(config, organizer, name_builder, source,
+                           bookmark_name, end_time)
     result = runner.run()
     result |= runner.run_retry()
     runner.report()

@@ -79,14 +79,14 @@ import sys
 import traceback
 import yaml
 
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from ftplib import FTP
 from ftputil import FTPHost
 from hashlib import md5
 from importlib_metadata import version
 from io import BytesIO
-from pytz import timezone
 from requests.adapters import HTTPAdapter
 from urllib import parse as parse
 from urllib3 import Retry
@@ -97,12 +97,13 @@ from cadcutils import net, exceptions
 from cadcdata import CadcDataClient
 from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact, Observation
-from caom2 import ChecksumURI
+from caom2 import ChecksumURI, ProductType, ReleaseType
 from caom2.diff import get_differences
 
 
-__all__ = ['CadcException', 'Config', 'State', 'TaskType',
-           'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
+__all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
+           'client_put', 'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
+           'FileMeta',
            'get_cadc_headers_client', 'get_cadc_meta',
            'get_cadc_meta_client', 'get_file_meta',
            'decompose_lineage', 'check_param', 'read_csv_file',
@@ -111,14 +112,15 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType',
            'read_from_file', 'read_file_list_from_archive', 'update_typed_set',
            'get_cadc_headers', 'get_lineage', 'get_artifact_metadata',
            'data_put', 'data_get', 'build_uri', 'make_seconds', 'make_time',
-           'increment_time', 'ISO_8601_FORMAT', 'http_get', 'Rejected',
-           'look_pull_and_put',
+           'make_time_tz',
+           'increment_time', 'increment_time_tz', 'ISO_8601_FORMAT',
+           'http_get', 'Rejected', 'look_pull_and_put', 'look_pull_and_put_v',
            'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
            'repo_update', 'reverse_lookup',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
-           'Validator', 'Cache', 'CaomName', 'StorageName', 'append_as_array',
-           'to_float', 'to_int', 'to_str', 'load_module',
-           'compare_observations', 'convert_to_days']
+           'Validator', 'Cache', 'CaomName', 'StorageName', 'to_float',
+           'to_int', 'to_str', 'load_module', 'compare_observations',
+           'convert_to_days', 'convert_to_ts']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -135,15 +137,12 @@ class Features(object):
     """Boolean feature flag implementation."""
 
     def __init__(self):
-        # the Config class setter expects the default value to be True,
-        # values must be in the config.yml file if they are expected to be
-        # False
         self._use_file_names = True
         self._use_urls = True
         self._run_in_airflow = True
         self._supports_composite = True
         self._supports_catalog = True
-        self._supports_latest_caom = True
+        self._supports_latest_client = False
         self._supports_multiple_files = True
         self._expects_retry = True
 
@@ -200,14 +199,14 @@ class Features(object):
         self._supports_catalog = value
 
     @property
-    def supports_latest_caom(self):
+    def supports_latest_client(self):
         """If true, will execute any latest-version-specific code when creating
          a CAOM instance."""
-        return self._supports_latest_caom
+        return self._supports_latest_client
 
-    @supports_latest_caom.setter
-    def supports_latest_caom(self, value):
-        self._supports_latest_caom = value
+    @supports_latest_client.setter
+    def supports_latest_client(self, value):
+        self._supports_latest_client = value
 
     @property
     def supports_multiple_files(self):
@@ -257,7 +256,7 @@ class State(object):
     def __init__(self, fqn):
         self.fqn = fqn
         self.bookmarks = {}
-        self.logger = logging.getLogger('State')
+        self.logger = logging.getLogger(self.__class__.__name__)
         result = read_as_yaml(self.fqn)
         if result is None:
             raise CadcException(f'Could not load state from {fqn}')
@@ -267,10 +266,12 @@ class State(object):
             self.content = result
 
     def get_bookmark(self, key):
-        """Lookup for last_record key."""
+        """Lookup for last_record key. Treat like an offset-aware datetime."""
         result = None
         if key in self.bookmarks:
             result = self.bookmarks.get(key).get('last_record')
+            if result:
+                result = make_time_tz(result)
         else:
             self.logger.warning(f'No record found for {key}')
         return result
@@ -472,7 +473,7 @@ class Cache(object):
         config = Config()
         config.get_executors()
         self._fqn = config.cache_fqn
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
         try:
             self._cache = read_as_yaml(self._fqn)
         except Exception as e:
@@ -1022,16 +1023,15 @@ class Config(object):
     @staticmethod
     def _obtain_features(config):
         """Make the configuration file entries into the class members.
-
-        Feature flags default to True, so only cover the case where setting to
-        False.
         """
         feature_flags = Features()
         if 'features' in config:
             for ii in config['features']:
-                if not config['features'][ii]:
-                    getattr(feature_flags, ii)
-                    setattr(feature_flags, ii, False)
+                feature = f'_{ii}'
+                if hasattr(feature_flags, feature):
+                    setattr(feature_flags, feature, config['features'][ii])
+                else:
+                    logging.warning(f'Unexpected features item:{ii}.')
         return feature_flags
 
     def get(self):
@@ -1224,6 +1224,14 @@ class Config(object):
                     f.write(f'{entry}: {attribute}\n')
 
 
+@dataclass
+class PreviewMeta:
+    f_name: str
+    product_type: ProductType
+    release_type: ReleaseType
+    mime_type: str = 'image/jpeg'
+
+
 class PreviewVisitor(object):
     """
     Common code for creating thumbnails and previews. Must be extended with
@@ -1234,12 +1242,13 @@ class PreviewVisitor(object):
     files in CADC storage, and cleaning up things left behind on disk.
     """
 
-    def __init__(self, archive, release_type=None, mime_type='image/jpeg', **kwargs):
+    def __init__(self, archive, release_type=None, mime_type='image/jpeg',
+                 **kwargs):
         self._storage_name = None
         self._archive = archive
         self._release_type = release_type
         self._mime_type = mime_type
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
         self._working_dir = kwargs.get('working_directory', './')
         self._cadc_client = kwargs.get('cadc_client')
         if self._cadc_client is None:
@@ -1275,7 +1284,9 @@ class PreviewVisitor(object):
 
     def add_preview(self, uri, f_name, product_type, release_type=None,
                     mime_type='image/jpeg'):
-        self._previews[uri] = [f_name, product_type, mime_type, release_type]
+        preview_meta = PreviewMeta(f_name, product_type, release_type,
+                                   mime_type)
+        self._previews[uri] = preview_meta
 
     def add_to_delete(self, fqn):
         self._delete_list.append(fqn)
@@ -1286,11 +1297,11 @@ class PreviewVisitor(object):
             temp = None
             if uri in plane.artifacts:
                 temp = plane.artifacts[uri]
-            f_name = entry[0]
-            product_type = entry[1]
+            f_name = entry.f_name
+            product_type = entry.product_type
             release_type = self._release_type
             if self._release_type is None:
-                release_type = entry[3]
+                release_type = entry.release_type
             fqn = os.path.join(self._working_dir, f_name)
             plane.artifacts[uri] = get_artifact_metadata(
                 fqn, product_type, release_type, uri, temp)
@@ -1328,9 +1339,9 @@ class PreviewVisitor(object):
     def _store_smalls(self):
         if self._cadc_client is not None:
             for entry in self._previews.values():
-                data_put(self._cadc_client, self._working_dir, entry[0],
+                data_put(self._cadc_client, self._working_dir, entry.f_name,
                          self._archive, self._stream,
-                         mime_type=entry[2],
+                         mime_type=entry.mime_type,
                          metrics=self._observable.metrics)
 
 
@@ -1385,7 +1396,7 @@ class StorageName(object):
         self._compression = compression
         self._source_name = None
         self._entry = entry
-        self._logger = logging.getLogger(__name__)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def __str__(self):
         return f'obs_id {self.obs_id}, ' \
@@ -1581,6 +1592,8 @@ class Validator(object):
         :param source_tz String representation of timezone name, as understood
             by pytz.
         """
+        # over-ride the datetime.timezone import at the module level
+        from pytz import timezone as pytz_timezone
         self._config = Config()
         self._config.get_executors()
         self._source = []
@@ -1589,8 +1602,8 @@ class Validator(object):
         self._source_name = source_name
         self._scheme = scheme
         self._preview_suffix = preview_suffix
-        self._source_tz = timezone(source_tz)
-        self._logger = logging.getLogger()
+        self._source_tz = pytz_timezone(source_tz)
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def _filter_result(self):
         """The default implementation does nothing, but this allows
@@ -1610,8 +1623,11 @@ class Validator(object):
                     # 1 - timestamps are the second column
                     dest_dt_orig = data[mask][0][1]
                     dest_dt = datetime.strptime(dest_dt_orig, ISO_8601_FORMAT)
+                    # over-ride the datetime.timezone import at the module
+                    # level
+                    from pytz import timezone as pytz_timezone
                     # AD - 2019-11-18 - 'ad' timezone is US/Pacific
-                    dest_utc = dest_dt.astimezone(timezone('US/Pacific'))
+                    dest_utc = dest_dt.astimezone(pytz_timezone('US/Pacific'))
                     if dest_utc < source_utc:
                         result.add(f_name)
         return result
@@ -1697,25 +1713,6 @@ class Validator(object):
     @staticmethod
     def filter_meta(meta):
         return [CaomName(ii.strip()).file_name for ii in meta['uri']]
-
-
-def append_as_array(append_to, key, value):
-    """Because I've written this more than once ... code to append to an
-    existing array entry in a dict, if the key already exists. There may be
-    a more elegant way to do this, in which case, the more elegant way can be
-    implemented.
-
-    Deprecate this, and use collections.defaultdict(list) instead :)
-
-    :param append_to dict
-    :param key may already exist in dict
-    :param value add to dict
-    """
-    if key in append_to:
-        temp = append_to.get(key)
-        temp.append(value)
-    else:
-        append_to[key] = [value]
 
 
 def compare_observations(actual_fqn, expected_fqn):
@@ -2041,7 +2038,7 @@ def get_file_meta(fqn):
     elif fqn.endswith('tar.gz'):
         meta['type'] = 'application/x-tar'
     elif fqn.endswith('h5') or fqn.endswith('hdf5'):
-        meta['type'] = 'application/x-hdf'
+        meta['type'] = 'application/x-hdf5'
     else:
         meta['type'] = 'application/fits'
     logging.debug(meta)
@@ -2295,6 +2292,22 @@ def convert_to_days(exposure_time):
     return exposure_time / (24.0 * 3600.0)
 
 
+def convert_to_ts(value):
+    """
+    Converts to seconds since the epoch. Tries to be lenient about the
+    type of the incoming value.
+    :param value:
+    :return: float that represents seconds since the epoch.
+    """
+    if isinstance(value, datetime):
+        result = value.timestamp()
+    elif isinstance(value, float):
+        result = value
+    else:
+        result = make_seconds(value)
+    return result
+
+
 def current():
     """Encapsulate returning UTC now in microsecond resolution."""
     return datetime.utcnow().timestamp()
@@ -2365,6 +2378,67 @@ def data_get(client, working_directory, file_name, archive, metrics):
     end = current()
     file_size = os.stat(fqn).st_size
     metrics.observe(start, end, file_size, 'get', 'data', file_name)
+
+
+def client_put(client, working_directory, file_name, storage_name,
+               metrics=None):
+    """
+    Make a copy of a locally available file by writing it to CADC. Assumes
+    file and directory locations are correct.
+
+    Will check that the size of the file stored is the same as the size of
+    the file on disk.
+
+    :param client: Client for write access to CADC storage.
+    :param working_directory: Where 'file_name' exists locally.
+    :param file_name: What to copy to CADC storage.
+    :param storage_name: Where to write the file.
+    :param metrics: Tracking success execution times, and failure counts.
+    """
+    start = current()
+    try:
+        fqn = os.path.join(working_directory, file_name)
+        stored_size = client.copy(fqn, destination=storage_name)
+        file_size = os.stat(fqn).st_size
+        if stored_size != file_size:
+            raise CadcException(
+                f'Stored file size {stored_size} != {file_size} at CADC for '
+                f'{storage_name}.')
+    except Exception as e:
+        metrics.observe_failure('copy', 'vos', file_name)
+        logging.debug(traceback.format_exc())
+        raise CadcException(f'Failed to store data with {e}')
+    end = current()
+    metrics.observe(start, end, file_size, 'copy', 'vos', file_name)
+
+
+def client_get(client, working_directory, file_name, source, metrics):
+    """
+    Retrieve a local copy of a file available from CADC. Assumes the working
+    directory location exists and is writeable.
+
+    :param client: The Client for read access to CADC storage.
+    :param working_directory: Where 'file_name' will be written.
+    :param file_name: What to copy from CADC storage.
+    :param source: Where to retrieve the file from.
+    :param metrics: track success execution times, and failure counts.
+    """
+    start = current()
+    fqn = os.path.join(working_directory, file_name)
+    try:
+        retrieved_size = client.copy(source, destination=fqn)
+        if not os.path.exists(fqn):
+            raise CadcException(f'Retrieve failed. {fqn} does not exist.')
+        file_size = os.stat(fqn).st_size
+        if retrieved_size != file_size:
+            raise CadcException(
+                f'Wrong file size {retrieved_size} retrieved for {source}.')
+    except Exception as e:
+        metrics.observe_failure('copy', 'vos', file_name)
+        logging.debug(traceback.format_exc())
+        raise CadcException(f'Did not retrieve {fqn} because {e}')
+    end = current()
+    metrics.observe(start, end, file_size, 'copy', 'vos', file_name)
 
 
 def build_uri(archive, file_name, scheme='ad'):
@@ -2504,6 +2578,33 @@ def make_time(from_str):
     return result
 
 
+def make_time_tz(from_value):
+    """
+    Make an offset-aware datettime value. Input parameters should be in
+    datetime format, but a modest attempt is made to check for otherwise.
+
+    Why is UTC ok?
+    - OS times are all UTC, because they're all running in a Docker container
+      with no timezone configured
+    - make_seconds checks for time zones and adjusts there
+
+    :param from_value a representation of time.
+    :return the time as an offset-aware datetime
+    """
+    if isinstance(from_value, datetime):
+        result = from_value
+        if from_value.tzinfo is None:
+            result = from_value.replace(tzinfo=timezone.utc)
+    elif isinstance(from_value, str):
+        temp = make_seconds(from_value)
+        result = None
+        if temp is not None:
+            result = datetime.fromtimestamp(temp, tz=timezone.utc)
+    else:
+        result = from_value.fromtimestamp(from_value, tz=timezone.utc)
+    return result
+
+
 def increment_time(this_ts, by_interval, unit='%M'):
     """
     Increment time by an interval. Times should be in datetime format, but
@@ -2527,6 +2628,29 @@ def increment_time(this_ts, by_interval, unit='%M'):
     interval = by_interval * factor
     temp = time_s + interval
     return datetime.fromtimestamp(temp)
+
+
+def increment_time_tz(this_ts, by_interval, unit='%M'):
+    """
+    Increment time by an interval. Times should be in datetime format, but
+    a modest attempt is made to check for otherwise.
+
+    :param this_ts: datetime
+    :param by_interval: integer - e.g. 10, for a 10 minute increment
+    :param unit: the formatting string, default is minutes
+    :return: this_ts incremented by interval amount. Offset-aware.
+    """
+    if isinstance(this_ts, datetime):
+        time_dt = this_ts
+    elif isinstance(this_ts, str):
+        time_dt = make_time(this_ts)
+    else:
+        time_dt = datetime.fromtimestamp(this_ts, tz=timezone.utc)
+    if unit == '%M':
+        temp = time_dt + timedelta(minutes=by_interval)
+    else:
+        raise NotImplementedError(f'Unexpected unit {unit}')
+    return temp
 
 
 def http_get(url, local_fqn):
@@ -2601,6 +2725,70 @@ def look_pull_and_put(f_name, working_dir, url, archive, stream, mime_type,
         http_get(url, fqn)
         data_put(cadc_client, working_dir, f_name, archive, stream,
                  mime_type, mime_encoding=None, metrics=metrics)
+
+
+def look_pull_and_put_v(storage_name, f_name, working_dir, url,
+                        cadc_client, checksum, metrics):
+    """Checks to see if a file exists at CADC. If yes, stop. If no,
+    pull via https to local storage, then put to CADC storage.
+
+    TODO - stream
+
+    :param storage_name The file name as it appears at CADC
+    :param f_name file name on disk for caching between the
+        pull and the put
+    :param working_dir together with f_name, location for caching
+    :param url for retrieving the file externally, if it does not exist
+    :param cadc_client access to the storage service
+    :param checksum what the CAOM observation says the checksum should be -
+        just the checksum part of ChecksumURI please, or the comparison will
+        always fail.
+    :param metrics track how long operations take
+    """
+    retrieve = False
+    try:
+        meta = _get_file_info(storage_name, cadc_client)
+        if checksum is not None and meta.md5sum != checksum:
+            logging.debug(f'Different checksums: CADC {meta.md5sum} '
+                          f'Source {checksum}')
+            retrieve = True
+        else:
+            logging.info(f'{f_name} already exists at CADC.')
+    except exceptions.NotFoundException:
+        retrieve = True
+
+    if retrieve:
+        logging.info(f'Retrieving {f_name}')
+        fqn = os.path.join(working_dir, f_name)
+        http_get(url, fqn)
+        client_put(
+            cadc_client, working_dir, f_name, storage_name, metrics=metrics)
+
+
+@dataclass
+class FileMeta:
+    """The bits of information about a file that are used to decide whether
+    or not to transfer, and whether or not a transfer was successful."""
+    f_size: int
+    md5sum: str
+
+
+def _get_file_info(storage_name, cadc_client):
+    """
+    Retrieve metadata for a single file. This implementation uses a
+    vos.Client.
+
+    This is a very bad implementation, but there is no information on what
+    might be a better one.
+
+    :param storage_name: Artifact URI
+    :param cadc_client:
+    :return:
+    """
+    node = cadc_client.get_node(storage_name, limit=None, force=False)
+    f_size = node.props.get('length')
+    f_md5sum = node.props.get('MD5')
+    return FileMeta(f_size, f_md5sum)
 
 
 def query_tap(query_string, proxy_fqn, resource_id):

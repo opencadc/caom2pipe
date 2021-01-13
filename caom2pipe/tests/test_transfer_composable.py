@@ -100,21 +100,19 @@ def test_cadc_transfer(data_get_mock, caps_mock):
     assert args[3] == 'TEST', 'wrong archive name'
 
 
-@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-@patch('vos.Client.copy')
-def test_vo_transfer(get_mock, caps_mock):
-    caps_mock.return_value = 'https://sc2.canfar.net/sc2tap'
-    get_mock.side_effect = Mock(autospec=True)
+def test_vo_transfer():
+    cadc_client_mock = Mock(autospec=True)
     test_config = mc.Config()
     test_config.working_directory = test_conf.TEST_DATA_DIR
     test_config.proxy_file_name = 'proxy.pem'
-    test_subject = tc.VoTransfer(test_config)
+    test_subject = tc.VoTransfer()
     assert test_subject is not None, 'expect a result'
+    test_subject.cadc_client = cadc_client_mock
     test_source = 'vault:goliaths/test_file.fits'
     test_dest = '/tmp/test_file.fits'
     test_subject.get(test_source, test_dest)
-    assert get_mock.called, 'should have been called'
-    args, kwargs = get_mock.call_args
+    assert cadc_client_mock.copy.called, 'should have been called'
+    args, kwargs = cadc_client_mock.copy.call_args
     assert args[0] == test_source, 'wrong source'
     assert args[1] == test_dest, 'wrong source'
 

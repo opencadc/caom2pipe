@@ -245,6 +245,8 @@ def test_data_execute(test_config):
         data_client_mock = Mock()
         test_observer = Mock()
         test_cred = ''
+        test_transferrer = transfer_composable.VoTransfer()
+        test_transferrer.cadc_client = data_client_mock
 
         ec.CaomExecute._data_cmd_info = Mock(side_effect=_get_fname)
         repo_client_mock.read.side_effect = tc.mock_read
@@ -253,13 +255,59 @@ def test_data_execute(test_config):
         test_executor = ec.DataVisit(
             test_config, tc.TestStorageName(), test_cred,
             data_client_mock, repo_client_mock, test_data_visitors,
-            mc.TaskType.MODIFY, test_observer)
+            mc.TaskType.MODIFY, test_observer, test_transferrer)
         test_executor.execute(None)
 
         # check that things worked as expected
         assert repo_client_mock.read.called, 'read call missed'
         assert repo_client_mock.update.called, 'update call missed'
         assert test_observer.metrics.observe.called, 'observe not called'
+    finally:
+        if os.path.exists(test_fits_fqn):
+            os.unlink(test_fits_fqn)
+        if os.path.exists(test_dir):
+            os.rmdir(test_dir)
+
+
+def test_data_execute_v(test_config):
+    test_config.features.supports_latest_client = True
+    test_obs_id = 'test_obs_id'
+    test_dir = os.path.join(tc.THIS_DIR, test_obs_id)
+    test_fits_fqn = os.path.join(test_dir,
+                                 tc.TestStorageName().file_name)
+    try:
+        if not os.path.exists(test_dir):
+            os.mkdir(test_dir, mode=0o755)
+        # precondition = open(test_fits_fqn, 'w')
+        # precondition.close()
+
+        test_data_visitors = [TestVisit]
+        repo_client_mock = Mock(autospec=True)
+        cadc_client_mock = Mock(autospec=True)
+        cadc_client_mock.copy.side_effect = tc.mock_copy_md5
+        test_observer = Mock(autospec=True)
+        test_cred = ''
+        test_transferrer = transfer_composable.VoTransfer()
+        test_transferrer.cadc_client = cadc_client_mock
+
+        ec.CaomExecute._data_cmd_info = Mock(side_effect=_get_fname)
+        repo_client_mock.read.side_effect = tc.mock_read
+
+        # run the test
+        test_executor = ec.DataVisit(
+            test_config, tc.TestStorageName(), test_cred,
+            cadc_client_mock, repo_client_mock, test_data_visitors,
+            mc.TaskType.MODIFY, test_observer, test_transferrer)
+        test_executor.execute(None)
+
+        # check that things worked as expected
+        assert repo_client_mock.read.called, 'read call missed'
+        assert repo_client_mock.update.called, 'update call missed'
+        assert test_observer.metrics.observe.called, 'observe not called'
+        assert cadc_client_mock.copy.called, 'copy not called'
+        cadc_client_mock.copy.assert_called_with(
+            'ad:TEST/test_obs_id.fits.gz', test_fits_fqn, send_md5=True), \
+            'wrong call args'
     finally:
         if os.path.exists(test_fits_fqn):
             os.unlink(test_fits_fqn)
@@ -700,10 +748,15 @@ def test_data_visit(get_mock, test_config):
     test_sn = mc.StorageName(obs_id='test_obs_id', collection='TEST',
                              collection_pattern='T[\\w+-]+')
     test_cred_param = ''
+    test_transferrer = transfer_composable.CadcTransfer()
+    test_transferrer.cadc_client = test_data_client
+    test_transferrer.observable = test_observable
+
     test_subject = ec.DataVisit(test_config, test_sn,
                                 test_cred_param, test_data_client,
                                 test_repo_client, test_data_visitors,
-                                mc.TaskType.VISIT, test_observable)
+                                mc.TaskType.VISIT, test_observable,
+                                test_transferrer)
     test_subject.execute(None)
     assert get_mock.called, 'should be called'
     args, kwargs = get_mock.call_args

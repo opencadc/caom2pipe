@@ -118,7 +118,7 @@ def append_plane_provenance(plane, headers, lookup, collection,
 
 def append_plane_provenance_single(plane, headers, lookup, collection, repair,
                                    obs_id):
-    """AAppend inputs to Planes, based on a particular keyword prefix. This
+    """Append inputs to Planes, based on a particular keyword prefix. This
     differs from update_plane_provenance because all the values are in a
     single keyword, such as COMMENT or HISTORY. It differs from
     update_plane_provenance_single in that it does NOT replace existing

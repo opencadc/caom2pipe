@@ -70,7 +70,7 @@
 import os
 import pytest
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from caom2 import ProductType, ReleaseType, Artifact, ChecksumURI
@@ -113,49 +113,66 @@ def test_query_endpoint():
 
 
 def test_config_class():
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
-    mock_root = '/usr/src/app/caom2pipe/caom2pipe/tests/data'
-    test_config = mc.Config()
-    test_config.get_executors()
-    assert test_config is not None
-    assert test_config.work_file == 'todo.txt'
-    assert test_config.features is not None
-    assert test_config.features.supports_composite is False
-    assert test_config.working_directory == tc.TEST_DATA_DIR, 'wrong dir'
-    assert test_config.work_fqn == f'{tc.TEST_DATA_DIR}/todo.txt', 'work_fqn'
-    assert test_config.netrc_file == 'test_netrc', 'netrc'
-    assert test_config.archive == 'NEOSS', 'archive'
-    assert test_config.collection == 'NEOSSAT', 'collection'
-    assert test_config.log_file_directory == tc.TEST_DATA_DIR, 'logging dir'
-    assert test_config.success_fqn == f'{tc.TEST_DATA_DIR}/success_log.txt', \
-        'success fqn'
-    assert test_config.success_log_file_name == 'success_log.txt', \
-        'success file'
-    assert test_config.failure_fqn == f'{tc.TEST_DATA_DIR}/failure_log.txt', \
-        'failure fqn'
-    assert test_config.failure_log_file_name == 'failure_log.txt', \
-        'failure file'
-    assert test_config.retry_file_name == 'retries.txt', 'retry file'
-    assert test_config.retry_fqn == f'{tc.TEST_DATA_DIR}/retries.txt', \
-        'retry fqn'
-    assert test_config.proxy_file_name == 'test_proxy.pem', 'proxy file name'
-    assert test_config.proxy_fqn == f'{tc.TEST_DATA_DIR}/test_proxy.pem', \
-        'proxy fqn'
-    assert test_config.state_file_name == 'state.yml', 'state file name'
-    assert test_config.state_fqn == f'{tc.TEST_DATA_DIR}/state.yml', \
-        'state fqn'
-    assert test_config.rejected_directory == tc.TEST_DATA_DIR, \
-        'wrong rejected dir'
-    assert test_config.rejected_file_name == 'rejected.yml', \
-        'wrong rejected file'
-    assert test_config.rejected_fqn == f'{tc.TEST_DATA_DIR}/rejected.yml', \
-        'wrong rejected fqn'
-    assert test_config.features.run_in_airflow is True, 'wrong runs in airflow'
-    assert test_config.features.supports_catalog is True, \
-        'wrong supports catalog'
-    test_config.features.supports_catalog = False
-    assert test_config.features.supports_catalog is False, \
-        'modified supports catalog'
+    getcwd_orig = os.getcwd
+    try:
+        os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+        test_config = mc.Config()
+        test_config.get_executors()
+        assert test_config is not None
+        assert test_config.work_file == 'todo.txt'
+        assert test_config.features is not None
+        assert test_config.features.supports_composite is False
+        assert test_config.working_directory == tc.TEST_DATA_DIR, 'wrong dir'
+        assert test_config.work_fqn == f'{tc.TEST_DATA_DIR}/todo.txt', 'work_fqn'
+        assert test_config.netrc_file == 'test_netrc', 'netrc'
+        assert test_config.archive == 'NEOSS', 'archive'
+        assert test_config.collection == 'NEOSSAT', 'collection'
+        assert test_config.log_file_directory == tc.TEST_DATA_DIR, 'logging dir'
+        assert test_config.success_fqn == f'{tc.TEST_DATA_DIR}/success_log.txt', \
+            'success fqn'
+        assert test_config.success_log_file_name == 'success_log.txt', \
+            'success file'
+        assert test_config.failure_fqn == f'{tc.TEST_DATA_DIR}/failure_log.txt', \
+            'failure fqn'
+        assert test_config.failure_log_file_name == 'failure_log.txt', \
+            'failure file'
+        assert test_config.retry_file_name == 'retries.txt', 'retry file'
+        assert test_config.retry_fqn == f'{tc.TEST_DATA_DIR}/retries.txt', \
+            'retry fqn'
+        assert test_config.proxy_file_name == 'test_proxy.pem', 'proxy file name'
+        assert test_config.proxy_fqn == f'{tc.TEST_DATA_DIR}/test_proxy.pem', \
+            'proxy fqn'
+        assert test_config.state_file_name == 'state.yml', 'state file name'
+        assert test_config.state_fqn == f'{tc.TEST_DATA_DIR}/state.yml', \
+            'state fqn'
+        assert test_config.rejected_directory == tc.TEST_DATA_DIR, \
+            'wrong rejected dir'
+        assert test_config.rejected_file_name == 'rejected.yml', \
+            'wrong rejected file'
+        assert test_config.rejected_fqn == f'{tc.TEST_DATA_DIR}/rejected.yml', \
+            'wrong rejected fqn'
+        assert test_config.features.run_in_airflow is True, 'wrong runs in airflow'
+        assert test_config.features.supports_catalog is True, \
+            'wrong supports catalog'
+        test_config.features.supports_catalog = False
+        assert test_config.features.supports_catalog is False, \
+            'modified supports catalog'
+    finally:
+        os.getcwd = getcwd_orig
+
+
+def test_config_class_feature_true():
+    getcwd_orig = os.getcwd
+    try:
+        os.getcwd = Mock(return_value=os.path.join(tc.TEST_DATA_DIR,
+                                                   'features_test'))
+        test_config = mc.Config()
+        test_config.get_executors()
+        assert test_config is not None
+        assert test_config.features is not None
+        assert test_config.features.supports_latest_client is True
+    finally:
+        os.getcwd = getcwd_orig
 
 
 def test_exec_cmd():
@@ -287,9 +304,9 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.product_type == ProductType.WEIGHT, 'wrong product type'
-    assert result.content_length == 353, 'wrong length'
+    assert result.content_length == 373, 'wrong length'
     assert result.content_checksum.uri == \
-        'md5:7795d9a1720a7a8a2c79a5a2f5f77434', 'wrong checksum'
+        'md5:2d770260e5b7a88d6c943184912d6609', 'wrong checksum'
 
     # update action
     result.content_checksum = ChecksumURI('md5:abc')
@@ -298,7 +315,7 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.content_checksum.uri == \
-        'md5:7795d9a1720a7a8a2c79a5a2f5f77434', 'wrong checksum'
+        'md5:2d770260e5b7a88d6c943184912d6609', 'wrong checksum'
 
 
 @patch('cadcdata.core.CadcDataClient')
@@ -331,6 +348,80 @@ def test_data_get(mock_client):
                     test_metrics)
     assert len(test_metrics.failures) == 1, 'wrong failures'
     assert test_metrics.failures['data']['get']['TEST_get.fits'] == 1, 'count'
+
+
+@patch('vos.vos.Client')
+@patch('caom2pipe.manage_composable.Metrics')
+def test_client_put(mock_metrics, mock_client):
+    if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
+        with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
+            f.write('test content')
+
+    test_destination = 'TBD'
+    mock_client.copy.return_value = 12
+    mc.client_put(mock_client, tc.TEST_FILES_DIR, 'TEST.fits',
+                  test_destination, metrics=mock_metrics)
+    test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
+    mock_client.copy.assert_called_with(
+        test_fqn, destination=test_destination), 'mock not called'
+    assert mock_metrics.observe.called, 'mock not called'
+    args, kwargs = mock_metrics.observe.call_args
+    assert args[2] == 12, 'wrong size'
+    assert args[3] == 'copy', 'wrong endpoint'
+    assert args[4] == 'vos', 'wrong service'
+    assert args[5] == 'TEST.fits', 'wrong id'
+
+
+@patch('vos.vos.Client')
+@patch('caom2pipe.manage_composable.Metrics')
+def test_client_put_failure(mock_metrics, mock_client):
+    if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
+        with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
+            f.write('test content')
+
+    # TODO
+    test_destination = 'cadc:GEMINI/TEST.fits'
+    mock_client.copy.return_value = 120
+    with pytest.raises(mc.CadcException):
+        mc.client_put(mock_client, tc.TEST_FILES_DIR, 'TEST.fits',
+                      test_destination, metrics=mock_metrics)
+    test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
+    mock_client.copy.assert_called_with(
+        test_fqn, destination=test_destination), 'mock not called'
+    assert mock_metrics.observe_failure.called, 'mock not called'
+
+
+@patch('vos.vos.Client')
+def test_client_get_failure(mock_client):
+    test_config = mc.Config()
+    test_config.observe_execution = True
+    test_metrics = mc.Metrics(test_config)
+    with pytest.raises(mc.CadcException):
+        mc.client_get(mock_client, tc.TEST_DATA_DIR, 'TEST_get.fits', 'TEST',
+                      test_metrics)
+    assert len(test_metrics.failures) == 1, 'wrong failures'
+    assert test_metrics.failures['vos']['copy']['TEST_get.fits'] == 1, 'count'
+
+
+@patch('vos.vos.Client')
+@patch('caom2pipe.manage_composable.Metrics')
+def test_client_get(mock_metrics, mock_client):
+    test_fqn = f'{tc.TEST_FILES_DIR}/TEST.fits'
+    if os.path.exists(test_fqn):
+        os.unlink(test_fqn)
+
+    test_source = 'gemini:GEMINI/TEST.fits'
+    mock_client.copy.side_effect = tc.mock_copy
+    mc.client_get(mock_client, tc.TEST_FILES_DIR, 'TEST.fits',
+                  test_source, metrics=mock_metrics)
+    mock_client.copy.assert_called_with(
+        test_source, destination=test_fqn), 'mock not called'
+    assert mock_metrics.observe.called, 'mock not called'
+    args, kwargs = mock_metrics.observe.call_args
+    assert args[2] == 12, 'wrong size'
+    assert args[3] == 'copy', 'wrong endpoint'
+    assert args[4] == 'vos', 'wrong service'
+    assert args[5] == 'TEST.fits', 'wrong id'
 
 
 def test_state():
@@ -392,20 +483,25 @@ def test_make_seconds():
 def test_increment_time():
     t1 = '2017-06-26T17:07:21.527'
     t1_dt = datetime.strptime(t1, mc.ISO_8601_FORMAT)
-    result = mc.increment_time(t1_dt, 10)
+    result = mc.increment_time_tz(t1_dt, 10)
     assert result is not None, 'expect a result'
     assert result == datetime(2017, 6, 26, 17, 17, 21, 527000),\
         'wrong result'
 
     t2 = '2017-07-26T17:07:21.527'
     t2_dt = datetime.strptime(t2, mc.ISO_8601_FORMAT)
-    result = mc.increment_time(t2_dt, 5)
+    result = mc.increment_time_tz(t2_dt, 5)
     assert result is not None, 'expect a result'
     assert result == datetime(2017, 7, 26, 17, 12, 21, 527000),\
         'wrong result'
 
+    t3 = 1571595618.0
+    result = mc.increment_time_tz(t3, 15)
+    assert result == datetime(2019, 10, 20, 18, 35, 18, tzinfo=timezone.utc), \
+        'wrong t3 result'
+
     with pytest.raises(NotImplementedError):
-        mc.increment_time(t2_dt, 23, '%f')
+        mc.increment_time_tz(t2_dt, 23, '%f')
 
 
 @patch('cadcdata.core.CadcDataClient')
@@ -429,6 +525,36 @@ def test_look_pull_and_put(http_mock, mock_client):
             'TEST', f_name, archive_stream='default', md5_check=True,
             mime_encoding=None,
             mime_type='application/fits'), 'mock not called'
+        http_mock.assert_called_with(
+            url, os.path.join(tc.TEST_DATA_DIR, f_name)), 'http mock not called'
+        assert len(test_metrics.history) == 1, 'history conditions'
+        assert len(test_metrics.failures) == 0, 'failure conditions'
+    finally:
+        os.stat = stat_orig
+
+
+@patch('vos.vos.Client')
+@patch('caom2pipe.manage_composable.http_get')
+def test_look_pull_and_put_v(http_mock, mock_client):
+    stat_orig = os.stat
+    os.stat = Mock()
+    os.stat.return_value = Mock(st_size=1234)
+    try:
+        test_storage_name = 'cadc:GEMINI/TEST.fits'
+        f_name = 'test_f_name.fits'
+        url = f'https://localhost/{f_name}'
+        test_config = mc.Config()
+        test_config.observe_execution = True
+        test_metrics = mc.Metrics(test_config)
+        mock_client.get_node.side_effect = tc.mock_get_node
+        mock_client.copy.return_value = 1234
+        assert len(test_metrics.history) == 0, 'initial history conditions'
+        assert len(test_metrics.failures) == 0, 'initial failure conditions'
+        mc.look_pull_and_put_v(test_storage_name, f_name, tc.TEST_DATA_DIR,
+                               url, mock_client, 'md5:01234', test_metrics)
+        test_fqn = os.path.join(tc.TEST_DATA_DIR, f_name)
+        mock_client.copy.assert_called_with(
+            test_fqn, destination=test_storage_name), 'mock not called'
         http_mock.assert_called_with(
             url, os.path.join(tc.TEST_DATA_DIR, f_name)), 'http mock not called'
         assert len(test_metrics.history) == 1, 'history conditions'
@@ -887,7 +1013,7 @@ def test_reverse_lookup():
 def test_make_time():
     test_dict = {'2012-12-12T12:13:15': datetime(2012, 12, 12, 12, 13, 15),
                  # %b %d %H:%M
-                 'Mar 12 12:12': datetime(2020, 3, 12, 12, 12),
+                 'Mar 12 12:12': datetime(2021, 3, 12, 12, 12),
                  # %Y-%m-%dHST%H:%M:%S
                  '2020-12-12HST12:12:12': datetime(2020, 12, 12, 22, 12, 12)}
 

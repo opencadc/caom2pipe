@@ -101,7 +101,8 @@ def test_exec_footprintfinder():
                    'image.pbcor.tt0.subim'
     test_file = os.path.join(tc.TEST_FILES_DIR, f'{test_file_id}.fits')
     if not os.path.exists(test_file):
-        shutil.copy(f'/usr/src/app/test_files/{test_file_id}.fits', test_file)
+        shutil.copy(f'/usr/src/app/vlass2caom2/int_test/test_files/'
+                    f'{test_file_id}.fits', test_file)
     test_log_dir = os.path.join(tc.TEST_DATA_DIR, 'logs')
     assert test_chunk is not None, 'chunk expected'
     assert test_chunk.position is not None, 'position expected'
