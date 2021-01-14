@@ -587,7 +587,7 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
 
     modify_transfer = _set_modify_transfer(modify_transfer, config)
 
-    organizer = ec.OrganizeExecutesWithDoOne(
+    organizer = ec.OrganizeExecutes(
         config, command_name, meta_visitors, data_visitors, chooser,
         store_transfer, modify_transfer)
 
@@ -643,7 +643,7 @@ def run_by_state_ad(config=None, name_builder=None, command_name=None,
         else:
             transferrer = transfer_composable.CadcTransfer()
 
-    organizer = ec.OrganizeExecutesWithDoOne(
+    organizer = ec.OrganizeExecutes(
         config, command_name, meta_visitors, data_visitors, chooser,
         transferrer)
 
@@ -703,7 +703,7 @@ def run_by_state(config=None, name_builder=None, command_name=None,
 
     modify_transfer = _set_modify_transfer(modify_transfer, config)
 
-    organizer = ec.OrganizeExecutesWithDoOne(
+    organizer = ec.OrganizeExecutes(
         config, command_name, meta_visitors, data_visitors, chooser,
         store_transfer, modify_transfer)
 
@@ -732,7 +732,7 @@ def run_single(config, storage_name, command_name, meta_visitors,
     # missing the metrics and the reporting
     #
     logging.debug(f'Begin run_single {config.work_fqn}')
-    organizer = ec.OrganizeExecutesWithDoOne(
+    organizer = ec.OrganizeExecutes(
         config, command_name, meta_visitors, data_visitors, chooser)
     organizer.complete_record_count = 1
     result = organizer.do_one(storage_name)

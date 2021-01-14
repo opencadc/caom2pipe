@@ -67,7 +67,6 @@
 # ***********************************************************************
 #
 
-import distutils.sysconfig
 import logging
 import os
 import pytest
@@ -76,6 +75,7 @@ import sys
 from unittest.mock import Mock, patch
 
 from astropy.io import fits
+from hashlib import md5
 
 from caom2 import SimpleObservation, Algorithm
 from caom2repo import CAOM2RepoClient
@@ -124,6 +124,35 @@ def test_meta_create_client_execute(test_config):
         assert repo_client_mock.create.called, 'create call missed'
         assert test_executor.url == 'https://test_url/', 'url'
         assert test_observer.metrics.observe.called, 'observe not called'
+    finally:
+        mc.read_obs_from_file = read_obs_orig
+
+
+@patch('caom2utils.fits2caom2.CadcDataClient')
+@patch('caom2utils.fits2caom2.get_cadc_headers')
+def test_meta_create_client_execute_failed_update(
+        headers_mock, f2c2_data_client_mock, test_config):
+    test_cred = ''
+    data_client_mock = Mock()
+    data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
+    repo_client_mock = Mock()
+    test_observer = Mock()
+    read_obs_orig = mc.read_obs_from_file
+    mc.read_obs_from_file = Mock()
+    mc.read_obs_from_file.return_value = _read_obs(None)
+    f2c2_data_client_mock.return_value.get_file_info.side_effect = \
+        _mock_get_file_info
+    headers_mock.side_effect = _get_headers
+
+    test_executor = ec.MetaCreate(
+        test_config, tc.TestStorageName(), 'failedUpdateCollection2caom2',
+        test_cred, data_client_mock, repo_client_mock, meta_visitors=None,
+        observable=test_observer)
+    try:
+        with pytest.raises(mc.CadcException):
+            test_executor.execute(None)
+        assert not repo_client_mock.create.called, 'should have no create call'
+        assert test_executor.url == 'https://test_url/', 'url'
     finally:
         mc.read_obs_from_file = read_obs_orig
 
@@ -430,7 +459,7 @@ def test_organize_executes_chooser(test_config):
 
         test_config.task_types = [mc.TaskType.INGEST]
         test_chooser = tc.TestChooser()
-        test_oe = ec.OrganizeExecutesWithDoOne(
+        test_oe = ec.OrganizeExecutes(
             test_config, 'command_name', [], [], test_chooser)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -443,7 +472,7 @@ def test_organize_executes_chooser(test_config):
 
         test_config.use_local_files = False
         test_config.task_types = [mc.TaskType.INGEST]
-        test_oe = ec.OrganizeExecutesWithDoOne(
+        test_oe = ec.OrganizeExecutes(
             test_config, 'command_name', [], [], test_chooser)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -468,7 +497,7 @@ def test_organize_executes_client_existing(test_config):
         ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
         test_config.task_types = [mc.TaskType.INGEST]
         test_config.use_local_files = False
-        test_oe = ec.OrganizeExecutesWithDoOne(
+        test_oe = ec.OrganizeExecutes(
             test_config, 'command_name', [], [])
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -485,7 +514,7 @@ def test_organize_executes_client_visit(test_config):
     test_config.features.use_clients = True
     test_config.task_types = [mc.TaskType.VISIT]
     test_config.use_local_files = False
-    test_oe = ec.OrganizeExecutesWithDoOne(
+    test_oe = ec.OrganizeExecutes(
         test_config, 'command_name', [], [])
     CadcDataClient.__init__ = Mock(return_value=None)
     CAOM2RepoClient.__init__ = Mock(return_value=None)
@@ -499,7 +528,7 @@ def test_organize_executes_client_visit(test_config):
 
 def test_do_one(test_config):
     test_config.task_types = []
-    test_organizer = ec.OrganizeExecutesWithDoOne(
+    test_organizer = ec.OrganizeExecutes(
         test_config, 'test2caom2', [], [])
     # no client
     test_result = test_organizer.do_one(tc.TestStorageName())
@@ -576,7 +605,7 @@ def test_choose_exceptions(test_config):
     test_config.init_local_files = False
     test_config.task_types = [mc.TaskType.SCRAPE]
     with pytest.raises(mc.CadcException):
-        test_organizer = ec.OrganizeExecutesWithDoOne(
+        test_organizer = ec.OrganizeExecutes(
             test_config, 'command name', [], [])
         test_organizer.choose(tc.TestStorageName())
 
@@ -594,7 +623,7 @@ def test_storage_name_failure(test_config):
     assert not os.path.exists(test_config.success_fqn)
     assert not os.path.exists(test_config.failure_fqn)
     assert not os.path.exists(test_config.retry_fqn)
-    test_organizer = ec.OrganizeExecutesWithDoOne(test_config, 'command name',
+    test_organizer = ec.OrganizeExecutes(test_config, 'command name',
                                                   [], [])
     test_organizer.choose(TestStorageNameFails())
     assert os.path.exists(test_config.success_fqn)
@@ -636,8 +665,8 @@ def test_organize_executes_client_do_one(test_config):
                               '      usize: 754408\n'.encode('utf-8'))
 
         test_config.task_types = [mc.TaskType.SCRAPE]
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=None)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=None)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
@@ -646,8 +675,8 @@ def test_organize_executes_client_do_one(test_config):
         test_config.task_types = [mc.TaskType.STORE,
                                   mc.TaskType.INGEST,
                                   mc.TaskType.MODIFY]
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=None)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=None)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 3
@@ -662,8 +691,8 @@ def test_organize_executes_client_do_one(test_config):
         test_config.use_local_files = False
         test_config.task_types = [mc.TaskType.INGEST,
                                   mc.TaskType.MODIFY]
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=None)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=None)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 2
@@ -675,8 +704,8 @@ def test_organize_executes_client_do_one(test_config):
         test_config.use_local_files = True
         test_config.task_types = [mc.TaskType.INGEST,
                                   mc.TaskType.MODIFY]
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=None)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=None)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 2
@@ -689,8 +718,8 @@ def test_organize_executes_client_do_one(test_config):
         test_config.task_types = [mc.TaskType.SCRAPE,
                                   mc.TaskType.MODIFY]
         test_config.use_local_files = True
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=None)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=None)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 2
@@ -703,8 +732,8 @@ def test_organize_executes_client_do_one(test_config):
         test_config.use_local_files = False
         test_chooser = tc.TestChooser()
         ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [],
-                                               chooser=test_chooser)
+        test_oe = ec.OrganizeExecutes(
+            test_config, TEST_APP, [], [], chooser=test_chooser)
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
@@ -716,7 +745,7 @@ def test_organize_executes_client_do_one(test_config):
         test_config.use_local_files = False
         ec.CaomExecute.repo_cmd_get_client = Mock(
             return_value=_read_obs(test_obs_id))
-        test_oe = ec.OrganizeExecutesWithDoOne(test_config, TEST_APP, [], [])
+        test_oe = ec.OrganizeExecutes(test_config, TEST_APP, [], [])
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
@@ -904,10 +933,6 @@ def _read_obs(arg1):
                              algorithm=Algorithm(str('exposure')))
 
 
-def _get_file_headers(fname):
-    return _get_headers(None, None)
-
-
 def _get_fname():
     return 'TBD'
 
@@ -939,3 +964,9 @@ def to_caom2():
                         'test_execute_composable/test_execute_composable.py',
                         '--lineage',
                         'test_obs_id/ad:TEST/test_obs_id.fits.gz']
+
+
+def _mock_get_file_info(archive, file_id):
+    return {'size': 10290,
+            'md5sum': 'md5:{}'.format(md5('-37'.encode()).hexdigest()),
+            'type': 'image/jpeg', 'name': file_id}
