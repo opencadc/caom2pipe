@@ -70,9 +70,9 @@
 import logging
 import os
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from pytz import timezone
+from dateutil import tz
 
 from cadctap import CadcTapClient
 from caom2pipe import manage_composable as mc
@@ -223,9 +223,9 @@ class QueryTimeBoxDataSource(DataSource):
         # container timezone is UTC, ad timezone is Pacific
         db_fmt = '%Y-%m-%d %H:%M:%S.%f'
         prev_exec_time_pz = datetime.strftime(
-            prev_exec_time.astimezone(timezone('US/Pacific')), db_fmt)
+            prev_exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt)
         exec_time_pz = datetime.strftime(
-            exec_time.astimezone(timezone('US/Pacific')), db_fmt)
+            exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt)
         self._logger.debug(f'Begin get_work.')
         query = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
                 f"archiveName = '{self._config.archive}' " \
@@ -287,10 +287,10 @@ class QueryTimeBoxDataSourceTS(DataSource):
         db_fmt = '%Y-%m-%d %H:%M:%S.%f'
         prev_exec_time_pz = datetime.strftime(
             datetime.utcfromtimestamp(prev_exec_time).astimezone(
-                timezone('US/Pacific')), db_fmt)
+                tz.gettz('US/Pacific')), db_fmt)
         exec_time_pz = datetime.strftime(
             datetime.utcfromtimestamp(exec_time).astimezone(
-                timezone('US/Pacific')), db_fmt)
+                tz.gettz('US/Pacific')), db_fmt)
         self._logger.debug(f'Begin get_work.')
         query = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
                 f"archiveName = '{self._config.archive}' " \
