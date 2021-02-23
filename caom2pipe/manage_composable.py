@@ -81,6 +81,7 @@ import yaml
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from dateutil import tz
 from enum import Enum
 from ftplib import FTP
 from ftputil import FTPHost
@@ -1579,7 +1580,7 @@ class Validator(object):
     run to completion.
     """
     def __init__(self, source_name, scheme='ad', preview_suffix='jpg',
-                 source_tz='UTC'):
+                 source_tz=timezone.utc):
         """
 
         :param source_name: String value used for logging
@@ -1592,8 +1593,6 @@ class Validator(object):
         :param source_tz String representation of timezone name, as understood
             by pytz.
         """
-        # over-ride the datetime.timezone import at the module level
-        from pytz import timezone as pytz_timezone
         self._config = Config()
         self._config.get_executors()
         self._source = []
@@ -1602,7 +1601,7 @@ class Validator(object):
         self._source_name = source_name
         self._scheme = scheme
         self._preview_suffix = preview_suffix
-        self._source_tz = pytz_timezone(source_tz)
+        self._source_tz = source_tz
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _filter_result(self):
@@ -1623,11 +1622,8 @@ class Validator(object):
                     # 1 - timestamps are the second column
                     dest_dt_orig = data[mask][0][1]
                     dest_dt = datetime.strptime(dest_dt_orig, ISO_8601_FORMAT)
-                    # over-ride the datetime.timezone import at the module
-                    # level
-                    from pytz import timezone as pytz_timezone
                     # AD - 2019-11-18 - 'ad' timezone is US/Pacific
-                    dest_utc = dest_dt.astimezone(pytz_timezone('US/Pacific'))
+                    dest_utc = dest_dt.astimezone(tz.gettz('US/Pacific'))
                     if dest_utc < source_utc:
                         result.add(f_name)
         return result
