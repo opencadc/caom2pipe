@@ -1613,17 +1613,20 @@ class Validator(object):
     def _find_unaligned_dates(self, source, meta, data):
         result = set()
         if len(data) > 0:
+            # AD - 2019-11-18 - 'ad' timezone is US/Pacific
+            dest_tz = tz.gettz('US/Pacific')
             for f_name in meta:
                 if f_name in source and f_name in data['fileName']:
-                    source_dt = datetime.utcfromtimestamp(source[f_name])
-                    source_utc = source_dt.astimezone(self._source_tz)
+                    source_dt = datetime.fromtimestamp(source[f_name])
+                    source_in_tz = source_dt.replace(tzinfo=self._source_tz)
+                    source_utc = source_in_tz.astimezone(timezone.utc)
                     mask = data['fileName'] == f_name
                     # 0 - only one row in the mask
                     # 1 - timestamps are the second column
                     dest_dt_orig = data[mask][0][1]
                     dest_dt = datetime.strptime(dest_dt_orig, ISO_8601_FORMAT)
-                    # AD - 2019-11-18 - 'ad' timezone is US/Pacific
-                    dest_utc = dest_dt.astimezone(tz.gettz('US/Pacific'))
+                    dest_pac = dest_dt.replace(tzinfo=dest_tz)
+                    dest_utc = dest_pac.astimezone(timezone.utc)
                     if dest_utc < source_utc:
                         result.add(f_name)
         return result
