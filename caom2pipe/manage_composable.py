@@ -81,9 +81,8 @@ import yaml
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from dateutil import tz
 from enum import Enum
-from ftplib import FTP
-from ftputil import FTPHost
 from hashlib import md5
 from importlib_metadata import version
 from io import BytesIO
@@ -590,6 +589,7 @@ class Config(object):
         self.rejected_fqn = None
         self.slack_channel = None
         self.slack_token = None
+        self._store_newer_files_only = False
         self._progress_file_name = None
         self.progress_fqn = None
         self._interval = None
@@ -866,6 +866,14 @@ class Config(object):
         self._slack_token = value
 
     @property
+    def store_newer_files_only(self):
+        return self._store_newer_files_only
+
+    @store_newer_files_only.setter
+    def store_newer_files_only(self, value):
+        self._store_newer_files_only = value
+
+    @property
     def progress_file_name(self):
         """the filename where pipeline progress is written, this will be created
         in log_file_directory. Useful when using timestamp windows for
@@ -1000,6 +1008,7 @@ class Config(object):
                f'  slack_token:: secret\n' \
                f'  source_host:: {self.source_host}\n' \
                f'  state_fqn:: {self.state_fqn}\n' \
+               f'  store_newer_files_only:: {self.store_newer_files_only}\n' \
                f'  stream:: {self.stream}\n' \
                f'  success_fqn:: {self.success_fqn}\n' \
                f'  success_log_file_name:: {self.success_log_file_name}\n' \
@@ -1090,6 +1099,8 @@ class Config(object):
             self.slack_channel = config.get('slack_channel', None)
             self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
+            self.store_newer_files_only = config.get('store_newer_files_only',
+                                                     False)
             self._report_fqn = os.path.join(
                 self.log_file_directory,
                 f'{os.path.basename(self.working_directory)}_report.txt')
@@ -1579,7 +1590,7 @@ class Validator(object):
     run to completion.
     """
     def __init__(self, source_name, scheme='ad', preview_suffix='jpg',
-                 source_tz='UTC'):
+                 source_tz=timezone.utc):
         """
 
         :param source_name: String value used for logging
@@ -1592,8 +1603,6 @@ class Validator(object):
         :param source_tz String representation of timezone name, as understood
             by pytz.
         """
-        # over-ride the datetime.timezone import at the module level
-        from pytz import timezone as pytz_timezone
         self._config = Config()
         self._config.get_executors()
         self._source = []
@@ -1602,7 +1611,7 @@ class Validator(object):
         self._source_name = source_name
         self._scheme = scheme
         self._preview_suffix = preview_suffix
-        self._source_tz = pytz_timezone(source_tz)
+        self._source_tz = source_tz
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _filter_result(self):
@@ -1614,20 +1623,20 @@ class Validator(object):
     def _find_unaligned_dates(self, source, meta, data):
         result = set()
         if len(data) > 0:
+            # AD - 2019-11-18 - 'ad' timezone is US/Pacific
+            dest_tz = tz.gettz('US/Pacific')
             for f_name in meta:
                 if f_name in source and f_name in data['fileName']:
-                    source_dt = datetime.utcfromtimestamp(source[f_name])
-                    source_utc = source_dt.astimezone(self._source_tz)
+                    source_dt = datetime.fromtimestamp(source[f_name])
+                    source_in_tz = source_dt.replace(tzinfo=self._source_tz)
+                    source_utc = source_in_tz.astimezone(timezone.utc)
                     mask = data['fileName'] == f_name
                     # 0 - only one row in the mask
                     # 1 - timestamps are the second column
                     dest_dt_orig = data[mask][0][1]
                     dest_dt = datetime.strptime(dest_dt_orig, ISO_8601_FORMAT)
-                    # over-ride the datetime.timezone import at the module
-                    # level
-                    from pytz import timezone as pytz_timezone
-                    # AD - 2019-11-18 - 'ad' timezone is US/Pacific
-                    dest_utc = dest_dt.astimezone(pytz_timezone('US/Pacific'))
+                    dest_pac = dest_dt.replace(tzinfo=dest_tz)
+                    dest_utc = dest_pac.astimezone(timezone.utc)
                     if dest_utc < source_utc:
                         result.add(f_name)
         return result
@@ -1887,6 +1896,8 @@ def ftp_get(ftp_host_name, source_fqn, dest_fqn):
 
     Uses ftputil, which always transfers files in binary mode.
     """
+    # remove the need to have ftputil libraries on EVERY *2caom2 pipeline
+    from ftputil import FTPHost
     try:
         with FTPHost(ftp_host_name, 'anonymous', '@anonymous') as ftp_host:
             ftp_host.download(source_fqn, dest_fqn)
@@ -1918,6 +1929,8 @@ def ftp_get_timeout(ftp_host_name, source_fqn, dest_fqn, timeout=20):
 
     Uses ftplib, which supports specifying timeouts in the connection.
     """
+    # remove the need to have ftputil libraries on EVERY *2caom2 pipeline
+    from ftplib import FTP
     try:
         with FTP(ftp_host_name, timeout=timeout) as ftp_host:
             ftp_host.login()

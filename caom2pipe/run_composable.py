@@ -200,6 +200,7 @@ class TodoRunner(object):
         except Exception as e:
             if storage_name is None:
                 # keep going through storage name build failures
+                self._logger.debug(traceback.format_exc())
                 self._logger.warning(f'StorageName construction failed. Using '
                                      f'a default instance for {entry}, for '
                                      f'logging only.')
@@ -469,7 +470,8 @@ class StateRunnerTS(StateRunner):
                     self._logger.info(f'Processing {num_entries} entries.')
                     self._organizer.complete_record_count = num_entries
                     self._organizer.set_log_location()
-                    for entry in entries:
+                    while len(entries) > 0:
+                        entry = entries.pop()
                         result |= self._process_entry(entry.entry_name)
                         save_time = min(mc.convert_to_ts(entry.entry_ts),
                                         exec_time)
