@@ -75,6 +75,7 @@ import sys
 from unittest.mock import Mock, patch
 
 from astropy.io import fits
+from datetime import datetime
 from hashlib import md5
 
 from caom2 import SimpleObservation, Algorithm
@@ -846,6 +847,8 @@ def test_local_store(test_config):
     test_config.working_directory = '/test_files/caom2pipe'
     test_config.use_local_files = True
     test_config.archive = 'LOCAL_TEST'
+    test_config.store_newer_files_only = False
+    test_config.features.supports_latest_client = False
     test_sn = tc.TestStorageName()
 
     test_fqn = os.path.join(test_config.working_directory, test_sn.file_name)
@@ -888,6 +891,119 @@ def test_local_store(test_config):
            is None, 'wrong archive'
     assert test_data_client.put_file.call_args.kwargs['md5_check'] is True, \
         'wrong archive'
+
+
+class FlagStorageName(mc.StorageName):
+
+    def __init__(self, file_name):
+        super(FlagStorageName, self).__init__(fname_on_disk=file_name,
+                                              obs_id='1000003f',
+                                              collection='TEST',
+                                              archive='TEST', compression='',
+                                              entry=file_name)
+        self._file_name = file_name
+
+    @property
+    def file_name(self):
+        return self._file_name
+
+
+@patch('cadcdata.CadcDataClient')
+def test_store_newer_files_only_flag(client_mock, test_config):
+    # first test case
+    # flag set to True, file is older at CADC, supports_latest_client = False
+    test_config.working_directory = '/caom2pipe_test'
+    test_config.use_local_files = True
+    test_config.store_newer_files_only = True
+    test_config.features.supports_latest_client = False
+    test_sn = FlagStorageName('1000003f.fits.fz')
+    cred_param_mock = Mock(autospec=True)
+    repo_client_mock = Mock(autospec=True)
+    observable_mock = Mock(autospec=True)
+    transferrer_mock = Mock(autospec=True)
+    client_mock.get_file_info.return_value = {
+        'lastmod': datetime(
+            year=2019, month=3, day=4, hour=19, minute=5).timestamp()}
+
+    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
+                                 cred_param_mock, client_mock,
+                                 repo_client_mock, observable_mock,
+                                 transferrer_mock)
+    test_subject.execute(None)
+    assert client_mock.put_file.called, 'expect put call'
+
+    # second test case, flag set to True, file is newer at CADC
+    client_mock.put_file.reset()
+    client_mock.get_file_info.return_value = {
+        'lastmod': datetime.utcnow().timestamp()}
+
+    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
+                                 cred_param_mock, client_mock,
+                                 repo_client_mock, observable_mock,
+                                 transferrer_mock)
+    test_subject.execute(None)
+    assert client_mock.put_file.called, 'expect put call, file time is newer'
+
+    # third test case, flag set to False, file is older
+    test_config.store_newer_files_only = False
+    client_mock.put_file.reset()
+    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
+                                 cred_param_mock, client_mock,
+                                 repo_client_mock, observable_mock,
+                                 transferrer_mock)
+    test_subject.execute(None)
+    assert client_mock.put_file.called, 'expect put call, file time irrelevant'
+
+
+@patch('caom2pipe.manage_composable.client_put')
+@patch('vos.Client')
+def test_store_newer_files_only_flag_client(
+        client_mock, put_mock, test_config):
+    # just like the previous test, except supports_latest_client = True
+    # first test case
+    # flag set to True, file is older at CADC, supports_latest_client = False
+    test_config.working_directory = '/caom2pipe_test'
+    test_config.use_local_files = True
+    test_config.store_newer_files_only = True
+    test_config.features.supports_latest_client = True
+    test_sn = FlagStorageName('1000003f.fits.fz')
+    cred_param_mock = Mock(autospec=True)
+    repo_client_mock = Mock(autospec=True)
+    observable_mock = Mock(autospec=True)
+    transferrer_mock = Mock(autospec=True)
+    test_node = type('', (), {})()
+    test_node.props = {'date': datetime(
+        year=2019, month=3, day=4, hour=19, minute=5).timestamp()}
+    client_mock.get_node.return_value = test_node
+
+    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
+                                 cred_param_mock, client_mock,
+                                 repo_client_mock, observable_mock,
+                                 transferrer_mock)
+    test_subject.execute(None)
+    assert put_mock.called, 'expect copy call'
+
+    # second test case, flag set to True, file is newer at CADC
+    put_mock.reset()
+    test_node.props = {'date': datetime.utcnow().timestamp()}
+    client_mock.get_node.return_value = test_node
+
+    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
+                                 cred_param_mock, client_mock,
+                                 repo_client_mock, observable_mock,
+                                 transferrer_mock)
+    test_subject.execute(None)
+    assert put_mock.called, 'expect copy call, file time is newer'
+
+    # third test case, flag set to False, file is older
+    test_config.store_newer_files_only = False
+    put_mock.reset()
+    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
+                                 cred_param_mock, client_mock,
+                                 repo_client_mock, observable_mock,
+                                 transferrer_mock)
+    test_subject.execute(None)
+    assert put_mock.called, 'expect copy call, file time irrelevant'
 
 
 def _transfer_get_mock(entry, fqn):

@@ -117,6 +117,7 @@ import sys
 import traceback
 
 from datetime import datetime
+from dateutil import tz
 from shutil import move
 
 from cadcdata import CadcDataClient
@@ -204,6 +205,12 @@ class CaomExecute(object):
         self.log_file_directory = None
         self.data_visitors = []
         self.supports_latest_client = config.features.supports_latest_client
+        if hasattr(config, 'store_newer_files_only'):
+            self.store_newer_files_only = (config.store_newer_files_only and
+                                           config.use_local_files)
+        else:
+            # do nothing different, if flag is missing from config
+            self.store_newer_files_only = False
 
     def _cleanup(self):
         """Remove a directory and all its contents."""
@@ -325,10 +332,48 @@ class CaomExecute(object):
                        observation.observation_id, self.observable.metrics)
 
     def _cadc_put(self, storage_name):
-        if self.supports_latest_client:
-            self._client_put(storage_name)
+        """
+        :param storage_name: Artifact URI
+        """
+        # if use_local_files is True, and store_newer_files_only is True,
+        # and a file already exists at CADC, the file will only be sent for
+        # storage if it's last modified time is later than the last modified
+        # time of the file already at CADC
+        transfer_data = False
+        if self.store_newer_files_only:
+            # get the metadata locally
+            fqn = os.path.join(self.working_dir, self.fname)
+            s = os.stat(fqn)
+            local_timestamp = s.st_mtime
+            # running from a Docker container with timezone UTC
+            local_utc = datetime.fromtimestamp(local_timestamp, tz=tz.UTC)
+
+            # get the metadata at CADC
+            if self.supports_latest_client:
+                cadc_meta = self.cadc_client.get_node(
+                    storage_name, limit=None, force=False)
+                cadc_timestamp = cadc_meta.props.get('date')
+            else:
+                cadc_meta = mc.get_cadc_meta_client(
+                    self.cadc_client, self.archive, storage_name)
+                cadc_timestamp = cadc_meta.get('lastmod')
+
+            # CADC data stored with a Pacific timezone - confirmed with AD
+            # 12-03-21. Either client will return CADC local time.
+            cadc_utc = datetime.fromtimestamp(cadc_timestamp,
+                                              tz=tz.gettz('US/Pacific'))
+            if local_utc > cadc_utc:
+                self.logger.debug(f'Transferring. {self.fname} has CADC '
+                                  f'timestamp {cadc_utc}.')
+                transfer_data = True
         else:
-            self._cadc_data_put_client()
+            transfer_data = True
+
+        if transfer_data:
+            if self.supports_latest_client:
+                self._client_put(storage_name)
+            else:
+                self._cadc_data_put_client()
 
     def _cadc_data_put_client(self):
         """Store a collection file."""
