@@ -128,7 +128,8 @@ def test_build_plane_time():
     result = ac.build_plane_time(start, end, exposure)
     assert result is not None, 'expected a value'
     assert result.bounds is not None, 'expected a bounds value'
-    assert result.exposure == 7199.999999999994, 'wrong exposure value'
+    assert math.isclose(result.exposure, 7199.999999999994), \
+        'wrong exposure value'
 
 
 def test_get_time_delta_in_s():
