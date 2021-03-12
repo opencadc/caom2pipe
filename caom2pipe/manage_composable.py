@@ -320,7 +320,8 @@ class Rejected(object):
                BAD_METADATA: 'Cannot build an observation',
                INVALID_FORMAT: 'Invalid observation ID',
                NO_INSTRUMENT: 'Unknown value for instrument',
-               NO_PREVIEW: '404 Client Error: Not Found for url'}
+               NO_PREVIEW: 'Internal Server Error for url: '
+                           'https://archive.gemini.edu/preview'}
 
     def __init__(self, fqn):
         """
