@@ -2594,7 +2594,7 @@ def make_time(from_str):
 
 def make_time_tz(from_value):
     """
-    Make an offset-aware datettime value. Input parameters should be in
+    Make an offset-aware datetime value. Input parameters should be in
     datetime format, but a modest attempt is made to check for otherwise.
 
     Why is UTC ok?

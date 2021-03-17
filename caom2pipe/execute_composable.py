@@ -358,10 +358,9 @@ class CaomExecute(object):
                     self.cadc_client, self.archive, self.fname)
                 cadc_timestamp = cadc_meta.get('lastmod')
 
-            # CADC data stored with a Pacific timezone - confirmed with AD
-            # 12-03-21. Either client will return CADC local time.
-            cadc_utc = datetime.fromtimestamp(cadc_timestamp,
-                                              tz=tz.gettz('US/Pacific'))
+            # CADC lastmod value looks like:
+            # 'lastmod': 'Fri, 28 Feb 2020 05:04:41 GMT'
+            cadc_utc = mc.make_time_tz(cadc_timestamp)
             if local_utc > cadc_utc:
                 self.logger.debug(f'Transferring. {self.fname} has CADC '
                                   f'timestamp {cadc_utc}.')

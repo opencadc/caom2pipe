@@ -922,8 +922,7 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     observable_mock = Mock(autospec=True)
     transferrer_mock = Mock(autospec=True)
     client_mock.get_file_info.return_value = {
-        'lastmod': datetime(
-            year=2019, month=3, day=4, hour=19, minute=5).timestamp()}
+        'lastmod': 'Mon, 4 Mar 2019 19:05:41 GMT'}
 
     test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
                                  cred_param_mock, client_mock,
@@ -935,7 +934,7 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     # second test case, flag set to True, file is newer at CADC
     client_mock.put_file.reset()
     client_mock.get_file_info.return_value = {
-        'lastmod': datetime.utcnow().timestamp()}
+        'lastmod': datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')}
 
     test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
                                  cred_param_mock, client_mock,
@@ -943,6 +942,8 @@ def test_store_newer_files_only_flag(client_mock, test_config):
                                  transferrer_mock)
     test_subject.execute(None)
     assert client_mock.put_file.called, 'expect put call, file time is newer'
+    client_mock.get_file_info.assert_called_with(None, '1000003f.fits.fz'), \
+        'wrong get_file_info call args'
 
     # third test case, flag set to False, file is older
     test_config.store_newer_files_only = False
@@ -972,8 +973,7 @@ def test_store_newer_files_only_flag_client(
     observable_mock = Mock(autospec=True)
     transferrer_mock = Mock(autospec=True)
     test_node = type('', (), {})()
-    test_node.props = {'date': datetime(
-        year=2019, month=3, day=4, hour=19, minute=5).timestamp()}
+    test_node.props = {'date': 'Mon, 4 Mar 2019 19:05:41 GMT'}
     client_mock.get_node.return_value = test_node
 
     test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
@@ -985,7 +985,8 @@ def test_store_newer_files_only_flag_client(
 
     # second test case, flag set to True, file is newer at CADC
     put_mock.reset()
-    test_node.props = {'date': datetime.utcnow().timestamp()}
+    test_node.props = {
+        'date': datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')}
     client_mock.get_node.return_value = test_node
 
     test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
