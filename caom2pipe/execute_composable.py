@@ -1622,7 +1622,8 @@ class OrganizeExecutes(object):
                 return 0
             executors = self.choose(storage_name)
             for executor in executors:
-                self._logger.info(f'Step {executor.task_type} for '
+                self._logger.info(f'Step {executor.task_type} with '
+                                  f'{executor.__class__.__name__} for '
                                   f'{storage_name.obs_id}')
                 executor.execute(context=None)
             if len(executors) > 0:

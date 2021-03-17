@@ -208,7 +208,7 @@ class TodoRunner(object):
             self._organizer.capture_failure(storage_name,
                                             e=traceback.format_exc())
             self._logger.info(
-                f'Execution failed for {storage_name.file_name} with {e}')
+                f'Execution failed for {storage_name.entry} with {e}')
             self._logger.debug(traceback.format_exc())
             # keep processing the rest of the entries, so don't throw
             # this or any other exception at this point
