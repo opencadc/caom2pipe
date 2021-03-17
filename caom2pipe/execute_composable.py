@@ -355,7 +355,7 @@ class CaomExecute(object):
                 cadc_timestamp = cadc_meta.props.get('date')
             else:
                 cadc_meta = mc.get_cadc_meta_client(
-                    self.cadc_client, self.archive, storage_name)
+                    self.cadc_client, self.archive, self.fname)
                 cadc_timestamp = cadc_meta.get('lastmod')
 
             # CADC data stored with a Pacific timezone - confirmed with AD
