@@ -365,6 +365,9 @@ class CaomExecute(object):
                 self.logger.debug(f'Transferring. {self.fname} has CADC '
                                   f'timestamp {cadc_utc}.')
                 transfer_data = True
+            else:
+                self.logger.warning(
+                    f'{self.fname} newer at CADC. Not transferring.')
         else:
             transfer_data = True
 
