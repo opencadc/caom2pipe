@@ -469,12 +469,16 @@ class Cache(object):
     from outside of a pipeline invocation.
     """
 
-    def __init__(self):
+    def __init__(self, rigorous_get=True):
         """
         """
         config = Config()
         config.get_executors()
+        logging.error(config.cache_fqn)
         self._fqn = config.cache_fqn
+        # if True, raise exceptions, which tends to call a halt to any
+        # pipeline. If False, only log a warning.
+        self._rigorous_get = rigorous_get
         self._logger = logging.getLogger(self.__class__.__name__)
         try:
             self._cache = read_as_yaml(self._fqn)
@@ -490,8 +494,12 @@ class Cache(object):
     def get_from(self, key):
         result = self._cache.get(key)
         if result is None:
-            raise CadcException(
-                f'Failed to find key {key} in cache {self._fqn}.')
+            msg = f'Failed to find key {key} in cache {self._fqn}.'
+            if self._rigorous_get:
+                raise CadcException(msg)
+            else:
+                self._logger.warning(msg)
+                result = []
         return result
 
     def save(self):

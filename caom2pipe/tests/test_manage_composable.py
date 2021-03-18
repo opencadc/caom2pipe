@@ -1022,3 +1022,20 @@ def test_make_time():
         assert test_result is not None, 'expect a result'
         assert isinstance(test_result, datetime), 'wrong result type'
         assert test_result == value, f'wrong result {test_result} want {value}'
+
+
+def test_cache():
+    get_cwd_orig = os.getcwd
+    test_dir = f'{tc.TEST_DATA_DIR}/test_config_dir'
+    os.getcwd = Mock(return_value=test_dir)
+    try:
+        test_subject = mc.Cache()
+        assert test_subject is not None, 'expect a return value'
+        with pytest.raises(mc.CadcException):
+            test_subject.get_from('not_found')
+        test_subject = mc.Cache(rigorous_get=False)
+        assert test_subject is not None, 'expect a return value'
+        test_result = test_subject.get_from('not_found')
+        assert test_result == [], 'expect no execution failure'
+    finally:
+        os.getcwd = get_cwd_orig
