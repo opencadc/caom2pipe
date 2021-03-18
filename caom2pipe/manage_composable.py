@@ -83,8 +83,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from dateutil import tz
 from enum import Enum
-from ftplib import FTP
-from ftputil import FTPHost
 from hashlib import md5
 from importlib_metadata import version
 from io import BytesIO
@@ -600,6 +598,7 @@ class Config(object):
         self.rejected_fqn = None
         self.slack_channel = None
         self.slack_token = None
+        self._store_newer_files_only = False
         self._progress_file_name = None
         self.progress_fqn = None
         self._interval = None
@@ -876,6 +875,14 @@ class Config(object):
         self._slack_token = value
 
     @property
+    def store_newer_files_only(self):
+        return self._store_newer_files_only
+
+    @store_newer_files_only.setter
+    def store_newer_files_only(self, value):
+        self._store_newer_files_only = value
+
+    @property
     def progress_file_name(self):
         """the filename where pipeline progress is written, this will be created
         in log_file_directory. Useful when using timestamp windows for
@@ -1010,6 +1017,7 @@ class Config(object):
                f'  slack_token:: secret\n' \
                f'  source_host:: {self.source_host}\n' \
                f'  state_fqn:: {self.state_fqn}\n' \
+               f'  store_newer_files_only:: {self.store_newer_files_only}\n' \
                f'  stream:: {self.stream}\n' \
                f'  success_fqn:: {self.success_fqn}\n' \
                f'  success_log_file_name:: {self.success_log_file_name}\n' \
@@ -1100,6 +1108,8 @@ class Config(object):
             self.slack_channel = config.get('slack_channel', None)
             self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
+            self.store_newer_files_only = config.get('store_newer_files_only',
+                                                     False)
             self._report_fqn = os.path.join(
                 self.log_file_directory,
                 f'{os.path.basename(self.working_directory)}_report.txt')
@@ -1895,6 +1905,8 @@ def ftp_get(ftp_host_name, source_fqn, dest_fqn):
 
     Uses ftputil, which always transfers files in binary mode.
     """
+    # remove the need to have ftputil libraries on EVERY *2caom2 pipeline
+    from ftputil import FTPHost
     try:
         with FTPHost(ftp_host_name, 'anonymous', '@anonymous') as ftp_host:
             ftp_host.download(source_fqn, dest_fqn)
@@ -1926,6 +1938,8 @@ def ftp_get_timeout(ftp_host_name, source_fqn, dest_fqn, timeout=20):
 
     Uses ftplib, which supports specifying timeouts in the connection.
     """
+    # remove the need to have ftputil libraries on EVERY *2caom2 pipeline
+    from ftplib import FTP
     try:
         with FTP(ftp_host_name, timeout=timeout) as ftp_host:
             ftp_host.login()
@@ -2588,7 +2602,7 @@ def make_time(from_str):
 
 def make_time_tz(from_value):
     """
-    Make an offset-aware datettime value. Input parameters should be in
+    Make an offset-aware datetime value. Input parameters should be in
     datetime format, but a modest attempt is made to check for otherwise.
 
     Why is UTC ok?

@@ -263,7 +263,8 @@ class QueryTimeBoxDataSourceTS(DataSource):
     TAP service, in time-boxed chunks. The time values are timestamps
     (floats).
 
-    Deprecate the QueryTimeBoxDataSouce class in favour of this implementation.
+    Deprecate the QueryTimeBoxDataSource class in favour of this
+    implementation.
     """
 
     def __init__(self, config, preview_suffix='jpg'):
