@@ -339,7 +339,7 @@ class CaomExecute(object):
         # and a file already exists at CADC, the file will only be sent for
         # storage if it's last modified time is later than the last modified
         # time of the file already at CADC
-        transfer_data = False
+        transfer_data = True
         if self.store_newer_files_only:
             # get the metadata locally
             fqn = os.path.join(self.working_dir, self.fname)
@@ -364,12 +364,10 @@ class CaomExecute(object):
             if local_utc > cadc_utc:
                 self.logger.debug(f'Transferring. {self.fname} has CADC '
                                   f'timestamp {cadc_utc}.')
-                transfer_data = True
             else:
                 self.logger.warning(
                     f'{self.fname} newer at CADC. Not transferring.')
-        else:
-            transfer_data = True
+                transfer_data = False
 
         if transfer_data:
             if self.supports_latest_client:
