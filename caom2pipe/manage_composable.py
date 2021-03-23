@@ -311,6 +311,7 @@ class Rejected(object):
     BAD_DATA = 'bad_data'
     BAD_METADATA = 'bad_metadata'
     INVALID_FORMAT = 'is_valid_fails'
+    MISSING = 'missing_at_source'
     NO_INSTRUMENT = 'no_instrument'
     NO_PREVIEW = 'no_preview'
 
@@ -318,6 +319,7 @@ class Rejected(object):
     reasons = {BAD_DATA: 'Header missing END card',
                BAD_METADATA: 'Cannot build an observation',
                INVALID_FORMAT: 'Invalid observation ID',
+               MISSING: 'Could not find JSON record for',
                NO_INSTRUMENT: 'Unknown value for instrument',
                NO_PREVIEW: 'Internal Server Error for url: '
                            'https://archive.gemini.edu/preview'}
