@@ -1237,7 +1237,10 @@ class OrganizeExecutes(object):
         self._count_timeouts(stack_trace)
         if self.config.log_to_file:
             with open(self.failure_fqn, 'a') as failure:
-                min_error = e.args[0]
+                if e.args is not None and len(e.args) > 1:
+                    min_error = e.args[0]
+                else:
+                    min_error = str(e)
                 failure.write(f'{datetime.now()} {storage_name.obs_id} '
                               f'{storage_name.file_name} {min_error}\n')
 
