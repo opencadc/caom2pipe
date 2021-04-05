@@ -76,7 +76,7 @@ from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
 from caom2 import ValueCoord2D, Algorithm, Artifact, Part, TemporalWCS
 from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
-from caom2 import CoordFunction1D, DerivedObservation
+from caom2 import CoordFunction1D, DerivedObservation, Provenance
 from caom2.diff import get_differences
 
 from caom2pipe import astro_composable as ac
@@ -91,7 +91,7 @@ __all__ = ['append_plane_provenance', 'append_plane_provenance_single',
            'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
            'compare', 'copy_artifact', 'copy_chunk', 'copy_instrument',
-           'copy_part', 'undo_astropy_cdfix_call',
+           'copy_part', 'copy_provenance', 'undo_astropy_cdfix_call',
            'update_observation_members_filtered',
            'update_plane_provenance_list']
 
@@ -421,6 +421,25 @@ def copy_part(from_part, features=None):
                 chunks=None)
     if features is not None and features.supports_latest_caom:
         copy.meta_producer = from_part.meta_producer
+    return copy
+
+
+def copy_provenance(from_provenance):
+    """Make a deep copy of a Provenance instance.
+    :param from_provenance Provenance of which to make a shallow copy
+    :return a copy of the from_provenance, with keywords set to None
+    """
+    copy = Provenance(name=from_provenance.name,
+                      version=from_provenance.version,
+                      project=from_provenance.project,
+                      producer=from_provenance.producer,
+                      run_id=from_provenance.run_id,
+                      reference=from_provenance.reference,
+                      last_executed=from_provenance.last_executed)
+    for entry in from_provenance.inputs:
+        copy.inputs.add(entry)
+    for entry in from_provenance.keywords:
+        copy.keywords.add(entry)
     return copy
 
 
