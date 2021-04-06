@@ -194,8 +194,9 @@ class TodoRunner(object):
             else:
                 self._logger.error(
                     f'{storage_name.obs_id} failed naming validation check.')
-                self._organizer.capture_failure(storage_name,
-                                                'Invalid name format.')
+                self._organizer.capture_failure(
+                    storage_name, BaseException('Invalid name format'),
+                    'Invalid name format.')
                 result = -1
         except Exception as e:
             if storage_name is None:
@@ -205,8 +206,8 @@ class TodoRunner(object):
                                      f'a default instance for {entry}, for '
                                      f'logging only.')
                 storage_name = mc.StorageName(obs_id=entry)
-            self._organizer.capture_failure(storage_name,
-                                            e=traceback.format_exc())
+            self._organizer.capture_failure(storage_name, e,
+                                            traceback.format_exc())
             self._logger.info(
                 f'Execution failed for {storage_name.entry} with {e}')
             self._logger.debug(traceback.format_exc())
