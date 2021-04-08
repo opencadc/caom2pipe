@@ -71,6 +71,7 @@ import csv
 import importlib
 import io
 import logging
+import math
 import os
 import re
 import requests
@@ -119,7 +120,7 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
            'Validator', 'Cache', 'CaomName', 'StorageName', 'to_float',
            'to_int', 'to_str', 'load_module', 'compare_observations',
-           'convert_to_days', 'convert_to_ts']
+           'convert_to_days', 'convert_to_ts', 'ValueRepairCache']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -2924,3 +2925,146 @@ def find_missing(compare_this, to_this):
     :return: list of elements from to_this not in compare_this
     """
     return list(set(compare_this).difference(to_this))
+
+
+class ValueRepairCache(Cache):
+    """Use a cache file to repair metadata values.
+
+    The cache file is identified in the config.yml file.
+
+    The cache file contents should look like:
+    value_repair:  # must have this value
+      observation.type:  # a caom2 entity.attribute value
+        dark: DARK       # can have multiple entries per attribute, 'any'
+                         # will replace all possible values, can have more
+                         # than one replacement value
+
+    Caveats:
+
+    Some CAOM2 attributes are not assignable. These attributes cannot be
+    repaired using this class.
+
+    List content cannot be repaired using this class.
+
+    Use the string value 'none' to set an attribute to None.
+
+    Use '*' to replace part of a string only works with str values, and only
+    trailing changes, because there haven't been any preceding cases that I've
+    needed to write code for yet.
+    """
+
+    VALUE_REPAIR = 'value_repair'
+
+    def __init__(self):
+        super(ValueRepairCache, self).__init__()
+        self._value_repair = self.get_from(ValueRepairCache.VALUE_REPAIR)
+        self._key = None
+        self._values = None
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def repair(self, observation):
+        try:
+            for key, values in self._value_repair.items():
+                self._logger.debug(f'Checking for {key}')
+                self._key = key
+                self._values = values
+                attribute_name = None
+                entity_name = None
+                bits = key.split('.')
+                if len(bits) == 2:
+                    entity_name = bits[0]
+                    attribute_name = bits[1]
+                elif len(bits) == 3:
+                    entity_name = bits[1]
+                    attribute_name = bits[2]
+                # else:
+                # the other possible lengths are for chunk entity/attribute
+                # checking
+
+                if key.startswith('observation'):
+                    self._find_and_fix(observation, entity_name,
+                                       attribute_name)
+                elif key.startswith('plane'):
+                    for plane in observation.planes.values():
+                        self._find_and_fix(plane, entity_name, attribute_name)
+                elif key.startswith('artifact'):
+                    for plane in observation.planes.values():
+                        for artifact in plane.artifacts.values():
+                            self._find_and_fix(artifact, entity_name,
+                                               attribute_name)
+                elif key.startswith('part'):
+                    for plane in observation.planes.values():
+                        for artifact in plane.artifacts.values():
+                            for part in artifact.parts.values():
+                                self._find_and_fix(part, entity_name,
+                                                   attribute_name)
+                elif key.startswith('chunk'):
+                    for plane in observation.planes.values():
+                        for artifact in plane.artifacts.values():
+                            for part in artifact.parts.values():
+                                for chunk in part.chunks:
+                                    self._recurse(chunk, 'chunk', bits[1:])
+                else:
+                    raise CadcException(f'Unexpected repair key {key}.')
+        except Exception as e:
+            self._logger.debug(traceback.format_exc())
+            raise CadcException(e)
+
+    def _find_and_fix(self, parent, entity_name, attribute_name):
+        if hasattr(parent, attribute_name):
+            entity = parent
+        elif hasattr(parent, entity_name):
+            entity = getattr(parent, entity_name)
+        else:
+            raise CadcException(f'Could not figure out attribute name '
+                                f'{attribute_name} from key {self._key}')
+        self._repair_attribute(entity, attribute_name)
+
+    def _recurse(self, entity, entity_name, bits):
+        attribute_name = bits[0]
+        if len(bits) == 1:
+            self._find_and_fix(entity, entity_name, attribute_name)
+        else:
+            if hasattr(entity, attribute_name):
+                new_entity = getattr(entity, attribute_name)
+                self._recurse(new_entity, attribute_name, bits[1:])
+            else:
+                raise CadcException(f'Could not find attribute '
+                                    f'{attribute_name} in entity '
+                                    f'{entity_name}')
+
+    def _repair_attribute(self, entity, attribute_name):
+        # this is the Enum class used in the caom2 library
+        from aenum import Enum
+        try:
+            if hasattr(entity, attribute_name):
+                attribute_value = getattr(entity, attribute_name)
+                for original, fix in self._values.items():
+                    if (original == attribute_value or original == 'any' or
+                            (type(attribute_value) is float and
+                             math.isclose(attribute_value, original)) or
+                            (type(original) == str and '*' in fix) or
+                            (isinstance(attribute_value, Enum) and
+                             attribute_value.name == original)):
+                        self._fix(entity, attribute_name, attribute_value,
+                                  original, fix)
+                        break
+        except Exception as e:
+            self._logger.debug(traceback.format_exc())
+            raise CadcException(e)
+
+    def _fix(self, entity, attribute_name, attribute_value, original, fix):
+        if type(fix) == str and '*' in fix:
+            with_str = fix.split('*')[0]
+            new_fix = attribute_value.replace(original, with_str)
+            setattr(entity, attribute_name, new_fix)
+            self._logger.info(
+                f'Repair {self._key} from {original} to {new_fix}')
+        elif fix == 'none':
+            setattr(entity, attribute_name, None)
+            self._logger.info(
+                f'Repair {self._key} from {original} to None')
+        else:
+            setattr(entity, attribute_name, fix)
+            self._logger.info(
+                f'Repair {self._key} from {original} to {fix}')

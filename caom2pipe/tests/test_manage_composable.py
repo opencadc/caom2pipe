@@ -67,6 +67,7 @@
 # ***********************************************************************
 #
 
+import math
 import os
 import pytest
 
@@ -1039,3 +1040,64 @@ def test_cache():
         assert test_result == [], 'expect no execution failure'
     finally:
         os.getcwd = get_cwd_orig
+
+
+def test_value_repair_cache():
+    test_subject = mc.ValueRepairCache()
+    assert test_subject is not None, 'expect a result'
+
+    test_observation = mc.read_obs_from_file(
+        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml'))
+    test_product_id = 'GN2001BQ013-04'
+    test_artifact_uri = 'gemini:GEM/GN2001BQ013-04.fits'
+    test_part = '0'
+    test_chunk_index = 0
+    test_plane = test_observation.planes[test_product_id]
+    test_artifact = test_plane.artifacts[test_artifact_uri]
+    test_part = test_artifact.parts[test_part]
+    test_chunk = test_part.chunks[test_chunk_index]
+    assert test_observation.type == 'Dark', 'repair initial condition'
+    assert test_observation.proposal.pi_name == 'jjk', 'pi name ic'
+    assert test_plane.meta_release == datetime(1990, 1, 1, 0, 0), \
+        'plane meta release ic'
+    assert math.isclose(test_chunk.position.axis.function.ref_coord.coord1.pix,
+                        512.579594886106), 'position pix ic'
+    assert test_artifact.uri == test_artifact_uri, 'artifact uri ic'
+    assert test_part.product_type is ProductType.CALIBRATION, 'part ic'
+    test_subject.repair(test_observation)
+
+    assert test_observation.type == 'DARK', 'repair failed'
+    assert test_observation.proposal.pi_name == 'JJ Kavelaars', \
+        'proposal pi name repair failed'
+    assert test_plane.meta_release == datetime(2000, 1, 1, 0, 0), \
+        'plane meta release repair failed'
+    assert math.isclose(test_chunk.position.axis.function.ref_coord.coord1.pix,
+                        512.57959987654321), 'position pix repair failed'
+    assert test_artifact.uri == 'cadc:GEMINI/GN2001BQ013-04.fits', \
+        'uri repair failed'
+    assert test_part.product_type is None, 'product type repair failed'
+
+    with pytest.raises(mc.CadcException):
+        # pre-condition of 'Unexpected repair key' error
+        test_subject._value_repair = {'unknown': 'unknown'}
+        test_subject.repair(test_observation)
+
+    with pytest.raises(mc.CadcException):
+        # pre-condition of 'Could not figure out attribute name'
+        # the first part of the name is correct, the second is not
+        test_subject._value_repair = {'observation.unknown': 'unknown'}
+        test_subject.repair(test_observation)
+
+    with pytest.raises(mc.CadcException):
+        # the first part of a chunk name is correct, the succeeding bits are
+        # note
+        test_subject._value_repair = \
+            {'chunk.position.axis.function.refCoord.coord1.pix':
+             {512.579594886106: 5.6}}
+        test_subject.repair(test_observation)
+
+    with pytest.raises(mc.CadcException):
+        # try to set an attribute that cannot be assigned
+        test_subject._value_repair = \
+            {'observation.instrument.name': {'gmos': 'GMOS-N'}}
+        test_subject.repair(test_observation)
