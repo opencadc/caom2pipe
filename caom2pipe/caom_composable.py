@@ -77,6 +77,7 @@ from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
 from caom2 import ValueCoord2D, Algorithm, Artifact, Part, TemporalWCS
 from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
 from caom2 import CoordFunction1D, DerivedObservation, Provenance
+from caom2 import CoordBounds1D, TypedList
 from caom2.diff import get_differences
 
 from caom2pipe import astro_composable as ac
@@ -84,8 +85,9 @@ from caom2pipe import manage_composable as mc
 
 __all__ = ['append_plane_provenance', 'append_plane_provenance_single',
            'build_artifact_uri', 'build_chunk_energy_range',
-           'build_chunk_time', 'change_to_simple', 'exec_footprintfinder',
-           'find_plane_and_artifact',
+           'build_chunk_time', 'build_temporal_wcs_append_sample',
+           'build_temporal_wcs_bounds', 'change_to_simple',
+           'exec_footprintfinder', 'find_plane_and_artifact',
            'get_obs_id_from_cadc', 'update_plane_provenance',
            'update_observation_members', 'rename_parts',
            'reset_energy', 'reset_position',
@@ -246,6 +248,90 @@ def build_chunk_time(chunk, header, name):
         chunk.time.exposure = exp_time
         chunk.time.resolution = mc.convert_to_days(exp_time)
     logging.debug(f'End build_chunk_time.')
+
+
+def _find_keywords_in_header(header, lookups):
+    """
+    Common code to find all the values for a list of keywords with a common
+    prefix in a FITS header.
+    """
+    values = []
+    for keyword in header:
+        for lookup in lookups:
+            if keyword.startswith(lookup):
+                values.append(header.get(keyword))
+    return values
+
+
+def build_temporal_wcs_append_sample(temporal_wcs, lower, upper):
+    """All the CAOM entities for building a TemporalWCS instance with
+    a bounds definition, or appending a sample, in one function.
+    """
+    if temporal_wcs is None:
+        samples = TypedList(CoordRange1D,)
+        bounds = CoordBounds1D(samples=samples)
+        temporal_wcs = TemporalWCS(axis=CoordAxis1D(axis=Axis('TIME', 'd'),
+                                                    bounds=bounds),
+                                   timesys='UTC')
+    start_ref_coord = RefCoord(pix=0.5, val=lower)
+    end_ref_coord = RefCoord(pix=1.5, val=upper)
+    sample = CoordRange1D(start_ref_coord, end_ref_coord)
+    temporal_wcs.axis.bounds.samples.append(sample)
+    return temporal_wcs
+
+
+def build_temporal_wcs_bounds(tap_client, header, lookups, collection):
+    """Assemble a bounds/sample time definition, based on the inputs
+    identified in the header.
+
+    :param tap_client CadcTapClient for querying existing CAOM records for
+        time metadata
+    :param header fits.Header a FITS file header, which may contain the names
+        of input files
+    :param lookups keyword prefixes for finding input file names
+    :param collection str to scope the query
+    """
+    logging.debug(f'Begin build_temporal_wcs_bounds.')
+    f_names = _find_keywords_in_header(header, lookups)
+    logging.info(f'Finding temporal inputs for {len(f_names)} files.')
+
+    inputs = []
+    for f_name in f_names:
+        query_string = f"""
+        SELECT C.time_axis_function_refCoord_val AS val,
+               C.time_axis_function_delta AS delta,
+               C.time_axis_axis_cunit AS cunit,
+               C.time_axis_function_naxis AS naxis
+        FROM caom2.Observation AS O
+        JOIN caom2.Plane AS P on P.obsID = O.obsID
+        JOIN caom2.Artifact AS A on P.planeID = A.planeID
+        JOIN caom2.Part AS PT on A.artifactID = PT.artifactID
+        JOIN caom2.Chunk AS C on PT.partID = C.partID
+        WHERE A.uri like '%{f_name}%'
+        AND O.collection = '{collection}'
+        """
+
+        table_result = mc.query_tap_client(query_string, tap_client)
+        if len(table_result) > 0:
+            for row in table_result:
+                logging.error(row)
+                if row['cunit'] == 'd' and row['naxis'] == 1:
+                    inputs.append([row['val'], row['delta']])
+                else:
+                    logging.warning(f'Could not make use of values for '
+                                    f'{f_name}.NAXISi is {row["naxis"]} and '
+                                    f'CUNITi is {row["cunit"]}')
+        else:
+            logging.warning(f'No CAOM record for {f_name} found at CADC.')
+    logging.error(inputs)
+    logging.error(f'Building temporal bounds for {len(inputs)} inputs.')
+
+    temporal_wcs = None
+    for ip in inputs:
+        temporal_wcs = build_temporal_wcs_append_sample(
+            temporal_wcs, lower=ip[0], upper=(ip[0] + ip[1]))
+    logging.debug(f'End build_temporal_wcs_bounds.')
+    return temporal_wcs
 
 
 def change_to_composite(observation, algorithm_name='composite',
