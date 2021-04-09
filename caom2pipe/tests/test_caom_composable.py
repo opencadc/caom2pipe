@@ -72,10 +72,13 @@ import pytest
 import shutil
 
 no_footprintfinder = False
+from astropy.io import fits
+from astropy.table import Table
 from caom2 import ValueCoord2D
 from caom2pipe import caom_composable as cc
 from caom2pipe import manage_composable as mc
 
+from mock import Mock, patch
 import test_conf as tc
 
 try:
@@ -158,3 +161,33 @@ def test_reset():
     cc.reset_observable(test_chunk)
     assert test_chunk.observable is None, 'observable not expected'
     assert test_chunk.observable_axis is None, 'observable axis not expected'
+
+
+@patch('caom2pipe.manage_composable.query_tap_client')
+def test_build_temporal_wcs(query_mock):
+    def _mock_query(arg1, arg2):
+        if 'N20160102S0296' in arg1:
+            return Table.read(
+                'val,delta,cunit,naxis\n'
+                '57389.66314699074,0.000115798611111111,d,1\n'.split('\n'),
+                format='csv')
+        else:
+            return Table.read(
+                'val,delta,cunit,naxis\n'
+                '57389.66342476852,0.000115798611111111,d,1\n'.split('\n'),
+                format='csv')
+
+    query_mock.side_effect = _mock_query
+    test_tap_client = Mock()
+    test_header = fits.Header()
+    test_header['SIMPLE'] = 'T'
+    test_header['IMCMB001'] = 'N20160102S0296.fits'
+    test_header['IMCMB002'] = 'N20160102S0297.fits'
+    test_lookups = ['IMCMB']
+    test_collection = 'TEST'
+    test_result = cc.build_temporal_wcs_bounds(test_tap_client, test_header,
+                                               test_lookups, test_collection)
+    assert test_result is not None, 'expect a result'
+    assert test_result.axis is not None, 'expect axis'
+    assert test_result.axis.bounds is not None, 'expect bounds'
+    assert len(test_result.axis.bounds.samples) == 2, 'expect two samples'
