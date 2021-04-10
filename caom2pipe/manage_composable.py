@@ -2949,6 +2949,10 @@ class ValueRepairCache(Cache):
       e.g. observation.type:
              dark: none
 
+    Use the string value 'none' to set un-set attributes to a value:
+      e.g. observation.type:
+             none: DARK
+
     Use the string value 'any' to set all values of an attribute to a single
     value:
       e.g. observation.type:
@@ -2960,6 +2964,9 @@ class ValueRepairCache(Cache):
     repaired using this class.
 
     List content cannot be repaired using this class.
+
+    Values that are originally None are un-changed, unless 'none' is provided
+    as the key.
 
     """
 
@@ -3020,10 +3027,15 @@ class ValueRepairCache(Cache):
         try:
             attribute_value = getattr(entity, attribute_name)
             for original, fix in self._values.items():
-                fixed = self._fix(entity, attribute_name, attribute_value,
-                                  original, fix)
-                if fixed is None or fixed == fix or fixed != attribute_value:
-                    break
+                if attribute_value is None and original != 'none':
+                    self._logger.debug(f'{attribute_name} value is None.'
+                                       f'This class only repairs values.')
+                else:
+                    fixed = self._fix(entity, attribute_name, attribute_value,
+                                      original, fix)
+                    if (fixed is None or fixed == fix or
+                            fixed != attribute_value):
+                        break
         except Exception as e:
             self._logger.debug(traceback.format_exc())
             raise CadcException(e)
@@ -3040,9 +3052,13 @@ class ValueRepairCache(Cache):
                 f'Repair {self._key} from {attribute_value} to {fix}')
             fixed = fix
         else:
-            attribute_value_type = type(attribute_value)
-            fixed = re.sub(str(original), str(fix), str(attribute_value))
-            setattr(entity, attribute_name, attribute_value_type(fixed))
+            if attribute_value is None:
+                setattr(entity, attribute_name, fix)
+                fixed = fix
+            else:
+                attribute_value_type = type(attribute_value)
+                fixed = re.sub(str(original), str(fix), str(attribute_value))
+                setattr(entity, attribute_name, attribute_value_type(fixed))
             self._logger.info(
                 f'Repair {self._key} from {attribute_value} to {fixed}')
         return fixed

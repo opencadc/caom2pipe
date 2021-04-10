@@ -1,10 +1,14 @@
 value_repair:
+  observation.intent:
+    none: science
   observation.type:
     dark: DARK
     Dark: DARK
     object: OBJECT
   observation.proposal.pi_name:
     jjk: JJ Kavelaars
+  observation.environment.seeing:
+    12.4: 12.6
   plane.meta_release:
     any: 2000-01-01T00:00:00.000
   chunk.position.axis.function.ref_coord.coord1.pix:

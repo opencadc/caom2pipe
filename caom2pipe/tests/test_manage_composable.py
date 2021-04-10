@@ -75,7 +75,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from caom2 import ProductType, ReleaseType, Artifact, ChecksumURI
-from caom2 import SimpleObservation
+from caom2 import SimpleObservation, ObservationIntentType
 from caom2pipe import manage_composable as mc
 
 import test_conf as tc
@@ -1065,6 +1065,8 @@ def test_value_repair_cache():
     assert test_artifact.uri == test_artifact_uri, 'artifact uri ic'
     assert test_part.product_type is ProductType.CALIBRATION, 'part ic'
     assert test_chunk.position.coordsys == 'ICRS', 'un-changed ic'
+    assert test_observation.intent is None, 'None ic'
+    assert test_observation.environment.seeing is None, 'None ic'
 
     test_subject.repair(test_observation)
 
@@ -1081,6 +1083,12 @@ def test_value_repair_cache():
 
     # check that values that do not match are un-changed
     assert test_chunk.position.coordsys == 'ICRS', 'should be un-changed'
+    # check that None values are not set - it's a _repair_ function, after
+    # all, and the code cannot repair something that does not exist
+    assert test_observation.intent == ObservationIntentType.SCIENCE, \
+        'None value should be set, since "none" was the original type'
+    assert test_observation.environment.seeing is None, \
+        'None remains None because the original is a specific value'
 
     with pytest.raises(mc.CadcException):
         # pre-condition of 'Unexpected repair key' error
