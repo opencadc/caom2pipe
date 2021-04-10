@@ -1,17 +1,17 @@
-<caom2:Observation xmlns:caom2="http://www.opencadc.org/caom2/xml/v2.3" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="caom2:SimpleObservation" caom2:id="00000000-0000-0000-16b2-01506e4c9700">
+<caom2:Observation xmlns:caom2="http://www.opencadc.org/caom2/xml/v2.4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="caom2:SimpleObservation" caom2:id="00000000-0000-0000-16b2-01506e4c9700">
   <caom2:collection>GEMINI</caom2:collection>
   <caom2:observationID>GN2001BQ013-04</caom2:observationID>
   <caom2:algorithm>
     <caom2:name>exposure</caom2:name>
   </caom2:algorithm>
   <caom2:type>Dark</caom2:type>
-  <caom2:instrument>
-    <caom2:name>gmos</caom2:name>
-  </caom2:instrument>
   <caom2:proposal>
     <caom2:id>abc</caom2:id>
     <caom2:pi>jjk</caom2:pi>
   </caom2:proposal>
+  <caom2:instrument>
+    <caom2:name>gmos</caom2:name>
+  </caom2:instrument>
   <caom2:planes>
     <caom2:plane caom2:id="00000000-0000-0000-89dc-edb27c90c000">
       <caom2:productID>GN2001BQ013-04</caom2:productID>
@@ -64,29 +64,6 @@
                     </caom2:axis>
                     <caom2:coordsys>ICRS</caom2:coordsys>
                   </caom2:position>
-                  <caom2:time>
-                    <caom2:axis>
-                      <caom2:axis>
-                        <caom2:ctype>TIME</caom2:ctype>
-                        <caom2:cunit>d</caom2:cunit>
-                      </caom2:axis>
-                      <caom2:error>
-                        <caom2:syser>1e-07</caom2:syser>
-                        <caom2:rnder>1e-07</caom2:rnder>
-                      </caom2:error>
-                      <caom2:function>
-                        <caom2:naxis>1</caom2:naxis>
-                        <caom2:delta>1.15856481481481e-05</caom2:delta>
-                        <caom2:refCoord>
-                          <caom2:pix>0.5</caom2:pix>
-                          <caom2:val>52445.3004293981</caom2:val>
-                        </caom2:refCoord>
-                      </caom2:function>
-                    </caom2:axis>
-                    <caom2:timesys>UTC</caom2:timesys>
-                    <caom2:exposure>1.001</caom2:exposure>
-                    <caom2:resolution>1.001</caom2:resolution>
-                  </caom2:time>
                 </caom2:chunk>
               </caom2:chunks>
             </caom2:part>

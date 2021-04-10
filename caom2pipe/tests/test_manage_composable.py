@@ -1064,6 +1064,8 @@ def test_value_repair_cache():
                         512.579594886106), 'position pix ic'
     assert test_artifact.uri == test_artifact_uri, 'artifact uri ic'
     assert test_part.product_type is ProductType.CALIBRATION, 'part ic'
+    assert test_chunk.position.coordsys == 'ICRS', 'un-changed ic'
+
     test_subject.repair(test_observation)
 
     assert test_observation.type == 'DARK', 'repair failed'
@@ -1074,8 +1076,11 @@ def test_value_repair_cache():
     assert math.isclose(test_chunk.position.axis.function.ref_coord.coord1.pix,
                         512.57959987654321), 'position pix repair failed'
     assert test_artifact.uri == 'cadc:GEMINI/GN2001BQ013-04.fits', \
-        'uri repair failed'
+        f'uri repair failed {test_artifact.uri}'
     assert test_part.product_type is None, 'product type repair failed'
+
+    # check that values that do not match are un-changed
+    assert test_chunk.position.coordsys == 'ICRS', 'should be un-changed'
 
     with pytest.raises(mc.CadcException):
         # pre-condition of 'Unexpected repair key' error
