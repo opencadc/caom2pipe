@@ -119,7 +119,7 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
            'Validator', 'Cache', 'CaomName', 'StorageName', 'to_float',
            'to_int', 'to_str', 'load_module', 'compare_observations',
-           'convert_to_days', 'convert_to_ts']
+           'convert_to_days', 'convert_to_ts', 'ValueRepairCache']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -2924,3 +2924,141 @@ def find_missing(compare_this, to_this):
     :return: list of elements from to_this not in compare_this
     """
     return list(set(compare_this).difference(to_this))
+
+
+class ValueRepairCache(Cache):
+    """Use a cache file to repair metadata values.
+
+    The cache file is identified in the config.yml file.
+
+    The cache file contents should look like:
+    value_repair:  # must have this value
+      observation.type:  # a fully-qualified caom2 entity.attribute value
+        dark: DARK       # a key: value pair
+
+    There can be multiple entries per attribute:
+      e.g. observation.type:
+             dark: DARK
+             Dark: DARK
+             object: OBJECT
+
+    The key and the value are treated as regular expressions, with the
+    following exceptions:
+
+    Use the string value 'none' to set an attribute to None:
+      e.g. observation.type:
+             dark: none
+
+    Use the string value 'none' to set un-set attributes to a value:
+      e.g. observation.type:
+             none: DARK
+
+    Use the string value 'any' to set all values of an attribute to a single
+    value:
+      e.g. observation.type:
+             any: DARK
+
+    Caveats:
+
+    Some CAOM2 attributes are not assignable. These attributes cannot be
+    repaired using this class.
+
+    List content cannot be repaired using this class.
+
+    Values that are originally None are un-changed, unless 'none' is provided
+    as the key.
+
+    """
+
+    VALUE_REPAIR = 'value_repair'
+
+    def __init__(self):
+        super(ValueRepairCache, self).__init__()
+        self._value_repair = self.get_from(ValueRepairCache.VALUE_REPAIR)
+        self._key = None
+        self._values = None
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def repair(self, observation):
+        try:
+            for key, values in self._value_repair.items():
+                self._logger.debug(f'Checking for {key}')
+                self._key = key
+                self._values = values
+                bits = key.split('.')[1:]
+                if key.startswith('observation'):
+                    self._recurse(observation, 'observation', bits)
+                elif key.startswith('plane'):
+                    for plane in observation.planes.values():
+                        self._recurse(plane, 'plane', bits)
+                elif key.startswith('artifact'):
+                    for plane in observation.planes.values():
+                        for artifact in plane.artifacts.values():
+                            self._recurse(artifact, 'artifact', bits)
+                elif key.startswith('part'):
+                    for plane in observation.planes.values():
+                        for artifact in plane.artifacts.values():
+                            for part in artifact.parts.values():
+                                self._recurse(part, 'part', bits)
+                elif key.startswith('chunk'):
+                    for plane in observation.planes.values():
+                        for artifact in plane.artifacts.values():
+                            for part in artifact.parts.values():
+                                for chunk in part.chunks:
+                                    self._recurse(chunk, 'chunk', bits)
+                else:
+                    raise CadcException(f'Unexpected repair key {key}.')
+        except Exception as e:
+            self._logger.debug(traceback.format_exc())
+            raise CadcException(e)
+
+    def _recurse(self, entity, entity_name, bits):
+        attribute_name = bits[0]
+        if not hasattr(entity, attribute_name):
+            raise CadcException(f'Could not find attribute {attribute_name} '
+                                f'in entity {entity_name}')
+        if len(bits) == 1:
+            self._repair_attribute(entity, attribute_name)
+        else:
+            new_entity = getattr(entity, attribute_name)
+            self._recurse(new_entity, attribute_name, bits[1:])
+
+    def _repair_attribute(self, entity, attribute_name):
+        try:
+            attribute_value = getattr(entity, attribute_name)
+            for original, fix in self._values.items():
+                if attribute_value is None and original != 'none':
+                    self._logger.debug(f'{attribute_name} value is None.'
+                                       f'This class only repairs values.')
+                else:
+                    fixed = self._fix(entity, attribute_name, attribute_value,
+                                      original, fix)
+                    if (fixed is None or fixed == fix or
+                            fixed != attribute_value):
+                        break
+        except Exception as e:
+            self._logger.debug(traceback.format_exc())
+            raise CadcException(e)
+
+    def _fix(self, entity, attribute_name, attribute_value, original, fix):
+        if fix == 'none':
+            setattr(entity, attribute_name, None)
+            self._logger.info(
+                f'Repair {self._key} from {original} to None')
+            fixed = None
+        elif original == 'any':
+            setattr(entity, attribute_name, fix)
+            self._logger.info(
+                f'Repair {self._key} from {attribute_value} to {fix}')
+            fixed = fix
+        else:
+            if attribute_value is None:
+                setattr(entity, attribute_name, fix)
+                fixed = fix
+            else:
+                attribute_value_type = type(attribute_value)
+                fixed = re.sub(str(original), str(fix), str(attribute_value))
+                setattr(entity, attribute_name, attribute_value_type(fixed))
+            self._logger.info(
+                f'Repair {self._key} from {attribute_value} to {fixed}')
+        return fixed
