@@ -314,7 +314,6 @@ def build_temporal_wcs_bounds(tap_client, header, lookups, collection):
         table_result = mc.query_tap_client(query_string, tap_client)
         if len(table_result) > 0:
             for row in table_result:
-                logging.error(row)
                 if row['cunit'] == 'd' and row['naxis'] == 1:
                     inputs.append([row['val'], row['delta']])
                 else:
@@ -323,8 +322,7 @@ def build_temporal_wcs_bounds(tap_client, header, lookups, collection):
                                     f'CUNITi is {row["cunit"]}')
         else:
             logging.warning(f'No CAOM record for {f_name} found at CADC.')
-    logging.error(inputs)
-    logging.error(f'Building temporal bounds for {len(inputs)} inputs.')
+    logging.debug(f'Building temporal bounds for {len(inputs)} inputs.')
 
     temporal_wcs = None
     for ip in inputs:
