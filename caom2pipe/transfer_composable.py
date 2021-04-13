@@ -255,21 +255,14 @@ class FtpTransfer(FitsTransfer):
 
 class VoFitsTransfer(FitsTransfer):
     """
-    Uses the vos Client to manage transfers from CADC to local disk.
+    Uses the vos Client to manage transfers from CADC to local disk. Have
+    FITS integrity-checking.
     """
 
-    def __init__(self):
+    def __init__(self, vos_client):
         super(VoFitsTransfer, self).__init__()
-        self._cadc_client = None
+        self._vos_client = vos_client
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    @property
-    def cadc_client(self):
-        return self._cadc_client
-
-    @cadc_client.setter
-    def cadc_client(self, value):
-        self._cadc_client = value
-
     def get(self, source, dest_fqn):
-        self._cadc_client.copy(source, dest_fqn, send_md5=True)
+        self._vos_client.copy(source, dest_fqn, send_md5=True)
