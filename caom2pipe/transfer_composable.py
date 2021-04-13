@@ -70,11 +70,11 @@
 import logging
 import os
 
-from cadcdata import CadcDataClient
 from caom2pipe import manage_composable as mc
 
 
-__all__ = ['CadcTransfer', 'Transfer', 'VoTransfer']
+__all__ = ['CadcTransfer', 'FtpTransfer', 'HttpTransfer', 'Transfer',
+           'VoFitsTransfer', 'VoTransfer']
 
 
 class Transfer(object):
@@ -251,3 +251,25 @@ class FtpTransfer(FitsTransfer):
         if '.fits' in dest_fqn:
             self.check(dest_fqn)
         self._logger.debug(f'Successfully retrieved {source}')
+
+
+class VoFitsTransfer(FitsTransfer):
+    """
+    Uses the vos Client to manage transfers from CADC to local disk.
+    """
+
+    def __init__(self):
+        super(VoFitsTransfer, self).__init__()
+        self._cadc_client = None
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    @property
+    def cadc_client(self):
+        return self._cadc_client
+
+    @cadc_client.setter
+    def cadc_client(self, value):
+        self._cadc_client = value
+
+    def get(self, source, dest_fqn):
+        self._cadc_client.copy(source, dest_fqn, send_md5=True)
