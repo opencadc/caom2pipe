@@ -77,7 +77,7 @@ from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
 from caom2 import ValueCoord2D, Algorithm, Artifact, Part, TemporalWCS
 from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
 from caom2 import CoordFunction1D, DerivedObservation, Provenance
-from caom2 import CoordBounds1D, TypedList
+from caom2 import CoordBounds1D, TypedList, ProductType
 from caom2.diff import get_differences
 
 from caom2pipe import astro_composable as ac
@@ -280,57 +280,6 @@ def build_temporal_wcs_append_sample(temporal_wcs, lower, upper):
     return temporal_wcs
 
 
-# def build_temporal_wcs_bounds(tap_client, header, lookups, collection):
-#     """Assemble a bounds/sample time definition, based on the inputs
-#     identified in the header.
-#
-#     :param tap_client CadcTapClient for querying existing CAOM records for
-#         time metadata
-#     :param header fits.Header a FITS file header, which may contain the names
-#         of input files
-#     :param lookups keyword prefixes for finding input file names
-#     :param collection str to scope the query
-#     """
-#     logging.debug(f'Begin build_temporal_wcs_bounds.')
-#     f_names = _find_keywords_in_header(header, lookups)
-#     logging.info(f'Finding temporal inputs for {len(f_names)} files.')
-#
-#     inputs = []
-#     for f_name in f_names:
-#         query_string = f"""
-#         SELECT C.time_axis_function_refCoord_val AS val,
-#                C.time_axis_function_delta AS delta,
-#                C.time_axis_axis_cunit AS cunit,
-#                C.time_axis_function_naxis AS naxis
-#         FROM caom2.Observation AS O
-#         JOIN caom2.Plane AS P on P.obsID = O.obsID
-#         JOIN caom2.Artifact AS A on P.planeID = A.planeID
-#         JOIN caom2.Part AS PT on A.artifactID = PT.artifactID
-#         JOIN caom2.Chunk AS C on PT.partID = C.partID
-#         WHERE A.uri like '%{f_name}%'
-#         AND O.collection = '{collection}'
-#         """
-#
-#         table_result = mc.query_tap_client(query_string, tap_client)
-#         if len(table_result) > 0:
-#             for row in table_result:
-#                 if row['cunit'] == 'd' and row['naxis'] == 1:
-#                     inputs.append([row['val'], row['delta']])
-#                 else:
-#                     logging.warning(f'Could not make use of values for '
-#                                     f'{f_name}.NAXISi is {row["naxis"]} and '
-#                                     f'CUNITi is {row["cunit"]}')
-#         else:
-#             logging.warning(f'No CAOM record for {f_name} found at CADC.')
-#     logging.debug(f'Building temporal bounds for {len(inputs)} inputs.')
-#
-#     temporal_wcs = None
-#     for ip in inputs:
-#         temporal_wcs = build_temporal_wcs_append_sample(
-#             temporal_wcs, lower=ip[0], upper=(ip[0] + ip[1]))
-#     logging.debug(f'End build_temporal_wcs_bounds.')
-#     return temporal_wcs
-
 def build_temporal_wcs_bounds(tap_client, plane, collection):
     """Assemble a bounds/sample time definition, based on the inputs
     identified in the header.
@@ -346,7 +295,7 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
     product_ids = []
     for input in plane.provenance.inputs:
         product_ids.append(input.get_product_id())
-    logging.info(f'Finding temporal inputs for {len(product_ids)} files.')
+    logging.info(f'Finding temporal inputs for {len(product_ids)} inputs.')
 
     inputs = []
     # this query makes the assumption that there's a remarkable resemblance
@@ -386,7 +335,7 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
 
     for artifact in plane.artifacts.values():
         for part in artifact.parts.values():
-            if part.product_type == 'science':
+            if part.product_type == ProductType.SCIENCE:
                 for chunk in part.chunks:
                     logging.debug(f'Adding TemporalWCS to chunks in artifact '
                                   f'{artifact.uri}, part {part.name}.')
