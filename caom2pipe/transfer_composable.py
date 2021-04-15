@@ -266,3 +266,6 @@ class VoFitsTransfer(FitsTransfer):
 
     def get(self, source, dest_fqn):
         self._vos_client.copy(source, dest_fqn, send_md5=True)
+        if '.fits' in dest_fqn:
+            self.check(dest_fqn)
+        self._logger.debug(f'Successfully retrieved {source}')
