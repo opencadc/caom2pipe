@@ -314,12 +314,9 @@ class VaultListDirDataSource(DataSource):
     listing.
     """
 
-    def __init__(self, config):
-        import vos
+    def __init__(self, vos_client, config):
         super(VaultListDirDataSource, self).__init__(config)
-        if config.proxy_fqn is None:
-            raise mc.CadcException('Require a certificate.')
-        self._client = vos.Client(vospace_certfile=config.proxy_fqn)
+        self._client = vos_client
         self._source_directory = config.data_source
         self._logger = logging.getLogger(__name__)
 
