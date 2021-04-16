@@ -117,6 +117,25 @@ def test_vo_transfer():
     assert args[1] == test_dest, 'wrong source'
 
 
+def test_vo_fits_transfer():
+    cadc_client_mock = Mock(autospec=True)
+    test_config = mc.Config()
+    test_config.working_directory = test_conf.TEST_DATA_DIR
+    test_config.proxy_file_name = 'proxy.pem'
+    test_subject = tc.VoFitsTransfer(cadc_client_mock)
+    assert test_subject is not None, 'expect a result'
+    test_subject.observable = Mock()
+    test_source = 'vos:goliaths/test_file.fits'
+    test_dest = '/tmp/test_file.fits'
+
+    with pytest.raises(mc.CadcException):
+        test_subject.get(test_source, test_dest)
+        assert cadc_client_mock.copy.called, 'should have been called'
+        args, kwargs = cadc_client_mock.copy.call_args
+        assert args[0] == test_source, 'wrong source'
+        assert args[1] == test_dest, 'wrong source'
+
+
 @patch('caom2pipe.manage_composable.http_get')
 def test_http_transfer(get_mock):
     test_source = 'http://localhost/test_file.fits'
