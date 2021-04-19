@@ -194,20 +194,22 @@ class TodoRunner(object):
             else:
                 self._logger.error(
                     f'{storage_name.obs_id} failed naming validation check.')
-                self._organizer.capture_failure(storage_name,
-                                                'Invalid name format.')
+                self._organizer.capture_failure(
+                    storage_name, BaseException('Invalid name format'),
+                    'Invalid name format.')
                 result = -1
         except Exception as e:
             if storage_name is None:
                 # keep going through storage name build failures
+                self._logger.debug(traceback.format_exc())
                 self._logger.warning(f'StorageName construction failed. Using '
                                      f'a default instance for {entry}, for '
                                      f'logging only.')
                 storage_name = mc.StorageName(obs_id=entry)
-            self._organizer.capture_failure(storage_name,
-                                            e=traceback.format_exc())
+            self._organizer.capture_failure(storage_name, e,
+                                            traceback.format_exc())
             self._logger.info(
-                f'Execution failed for {storage_name.file_name} with {e}')
+                f'Execution failed for {storage_name.entry} with {e}')
             self._logger.debug(traceback.format_exc())
             # keep processing the rest of the entries, so don't throw
             # this or any other exception at this point
@@ -469,7 +471,8 @@ class StateRunnerTS(StateRunner):
                     self._logger.info(f'Processing {num_entries} entries.')
                     self._organizer.complete_record_count = num_entries
                     self._organizer.set_log_location()
-                    for entry in entries:
+                    while len(entries) > 0:
+                        entry = entries.pop()
                         result |= self._process_entry(entry.entry_name)
                         save_time = min(mc.convert_to_ts(entry.entry_ts),
                                         exec_time)

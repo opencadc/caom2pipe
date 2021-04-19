@@ -81,9 +81,8 @@ import yaml
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from dateutil import tz
 from enum import Enum
-from ftplib import FTP
-from ftputil import FTPHost
 from hashlib import md5
 from importlib_metadata import version
 from io import BytesIO
@@ -120,7 +119,7 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
            'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
            'Validator', 'Cache', 'CaomName', 'StorageName', 'to_float',
            'to_int', 'to_str', 'load_module', 'compare_observations',
-           'convert_to_days', 'convert_to_ts']
+           'convert_to_days', 'convert_to_ts', 'ValueRepairCache']
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -312,6 +311,7 @@ class Rejected(object):
     BAD_DATA = 'bad_data'
     BAD_METADATA = 'bad_metadata'
     INVALID_FORMAT = 'is_valid_fails'
+    MISSING = 'missing_at_source'
     NO_INSTRUMENT = 'no_instrument'
     NO_PREVIEW = 'no_preview'
 
@@ -319,8 +319,10 @@ class Rejected(object):
     reasons = {BAD_DATA: 'Header missing END card',
                BAD_METADATA: 'Cannot build an observation',
                INVALID_FORMAT: 'Invalid observation ID',
+               MISSING: 'Could not find JSON record for',
                NO_INSTRUMENT: 'Unknown value for instrument',
-               NO_PREVIEW: '404 Client Error: Not Found for url'}
+               NO_PREVIEW: 'Internal Server Error for url: '
+                           'https://archive.gemini.edu/preview'}
 
     def __init__(self, fqn):
         """
@@ -467,12 +469,16 @@ class Cache(object):
     from outside of a pipeline invocation.
     """
 
-    def __init__(self):
+    def __init__(self, rigorous_get=True):
         """
         """
         config = Config()
         config.get_executors()
+        logging.error(config.cache_fqn)
         self._fqn = config.cache_fqn
+        # if True, raise exceptions, which tends to call a halt to any
+        # pipeline. If False, only log a warning.
+        self._rigorous_get = rigorous_get
         self._logger = logging.getLogger(self.__class__.__name__)
         try:
             self._cache = read_as_yaml(self._fqn)
@@ -488,8 +494,12 @@ class Cache(object):
     def get_from(self, key):
         result = self._cache.get(key)
         if result is None:
-            raise CadcException(
-                f'Failed to find key {key} in cache {self._fqn}.')
+            msg = f'Failed to find key {key} in cache {self._fqn}.'
+            if self._rigorous_get:
+                raise CadcException(msg)
+            else:
+                self._logger.warning(msg)
+                result = []
         return result
 
     def save(self):
@@ -590,6 +600,7 @@ class Config(object):
         self.rejected_fqn = None
         self.slack_channel = None
         self.slack_token = None
+        self._store_newer_files_only = False
         self._progress_file_name = None
         self.progress_fqn = None
         self._interval = None
@@ -866,6 +877,14 @@ class Config(object):
         self._slack_token = value
 
     @property
+    def store_newer_files_only(self):
+        return self._store_newer_files_only
+
+    @store_newer_files_only.setter
+    def store_newer_files_only(self, value):
+        self._store_newer_files_only = value
+
+    @property
     def progress_file_name(self):
         """the filename where pipeline progress is written, this will be created
         in log_file_directory. Useful when using timestamp windows for
@@ -1000,6 +1019,7 @@ class Config(object):
                f'  slack_token:: secret\n' \
                f'  source_host:: {self.source_host}\n' \
                f'  state_fqn:: {self.state_fqn}\n' \
+               f'  store_newer_files_only:: {self.store_newer_files_only}\n' \
                f'  stream:: {self.stream}\n' \
                f'  success_fqn:: {self.success_fqn}\n' \
                f'  success_log_file_name:: {self.success_log_file_name}\n' \
@@ -1090,6 +1110,8 @@ class Config(object):
             self.slack_channel = config.get('slack_channel', None)
             self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
+            self.store_newer_files_only = config.get('store_newer_files_only',
+                                                     False)
             self._report_fqn = os.path.join(
                 self.log_file_directory,
                 f'{os.path.basename(self.working_directory)}_report.txt')
@@ -1579,7 +1601,7 @@ class Validator(object):
     run to completion.
     """
     def __init__(self, source_name, scheme='ad', preview_suffix='jpg',
-                 source_tz='UTC'):
+                 source_tz=timezone.utc):
         """
 
         :param source_name: String value used for logging
@@ -1592,8 +1614,6 @@ class Validator(object):
         :param source_tz String representation of timezone name, as understood
             by pytz.
         """
-        # over-ride the datetime.timezone import at the module level
-        from pytz import timezone as pytz_timezone
         self._config = Config()
         self._config.get_executors()
         self._source = []
@@ -1602,7 +1622,7 @@ class Validator(object):
         self._source_name = source_name
         self._scheme = scheme
         self._preview_suffix = preview_suffix
-        self._source_tz = pytz_timezone(source_tz)
+        self._source_tz = source_tz
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _filter_result(self):
@@ -1614,20 +1634,20 @@ class Validator(object):
     def _find_unaligned_dates(self, source, meta, data):
         result = set()
         if len(data) > 0:
+            # AD - 2019-11-18 - 'ad' timezone is US/Pacific
+            dest_tz = tz.gettz('US/Pacific')
             for f_name in meta:
                 if f_name in source and f_name in data['fileName']:
-                    source_dt = datetime.utcfromtimestamp(source[f_name])
-                    source_utc = source_dt.astimezone(self._source_tz)
+                    source_dt = datetime.fromtimestamp(source[f_name])
+                    source_in_tz = source_dt.replace(tzinfo=self._source_tz)
+                    source_utc = source_in_tz.astimezone(timezone.utc)
                     mask = data['fileName'] == f_name
                     # 0 - only one row in the mask
                     # 1 - timestamps are the second column
                     dest_dt_orig = data[mask][0][1]
                     dest_dt = datetime.strptime(dest_dt_orig, ISO_8601_FORMAT)
-                    # over-ride the datetime.timezone import at the module
-                    # level
-                    from pytz import timezone as pytz_timezone
-                    # AD - 2019-11-18 - 'ad' timezone is US/Pacific
-                    dest_utc = dest_dt.astimezone(pytz_timezone('US/Pacific'))
+                    dest_pac = dest_dt.replace(tzinfo=dest_tz)
+                    dest_utc = dest_pac.astimezone(timezone.utc)
                     if dest_utc < source_utc:
                         result.add(f_name)
         return result
@@ -1887,6 +1907,8 @@ def ftp_get(ftp_host_name, source_fqn, dest_fqn):
 
     Uses ftputil, which always transfers files in binary mode.
     """
+    # remove the need to have ftputil libraries on EVERY *2caom2 pipeline
+    from ftputil import FTPHost
     try:
         with FTPHost(ftp_host_name, 'anonymous', '@anonymous') as ftp_host:
             ftp_host.download(source_fqn, dest_fqn)
@@ -1918,6 +1940,8 @@ def ftp_get_timeout(ftp_host_name, source_fqn, dest_fqn, timeout=20):
 
     Uses ftplib, which supports specifying timeouts in the connection.
     """
+    # remove the need to have ftputil libraries on EVERY *2caom2 pipeline
+    from ftplib import FTP
     try:
         with FTP(ftp_host_name, timeout=timeout) as ftp_host:
             ftp_host.login()
@@ -2580,7 +2604,7 @@ def make_time(from_str):
 
 def make_time_tz(from_value):
     """
-    Make an offset-aware datettime value. Input parameters should be in
+    Make an offset-aware datetime value. Input parameters should be in
     datetime format, but a modest attempt is made to check for otherwise.
 
     Why is UTC ok?
@@ -2900,3 +2924,141 @@ def find_missing(compare_this, to_this):
     :return: list of elements from to_this not in compare_this
     """
     return list(set(compare_this).difference(to_this))
+
+
+class ValueRepairCache(Cache):
+    """Use a cache file to repair metadata values.
+
+    The cache file is identified in the config.yml file.
+
+    The cache file contents should look like:
+    value_repair:  # must have this value
+      observation.type:  # a fully-qualified caom2 entity.attribute value
+        dark: DARK       # a key: value pair
+
+    There can be multiple entries per attribute:
+      e.g. observation.type:
+             dark: DARK
+             Dark: DARK
+             object: OBJECT
+
+    The key and the value are treated as regular expressions, with the
+    following exceptions:
+
+    Use the string value 'none' to set an attribute to None:
+      e.g. observation.type:
+             dark: none
+
+    Use the string value 'none' to set un-set attributes to a value:
+      e.g. observation.type:
+             none: DARK
+
+    Use the string value 'any' to set all values of an attribute to a single
+    value:
+      e.g. observation.type:
+             any: DARK
+
+    Caveats:
+
+    Some CAOM2 attributes are not assignable. These attributes cannot be
+    repaired using this class.
+
+    List content cannot be repaired using this class.
+
+    Values that are originally None are un-changed, unless 'none' is provided
+    as the key.
+
+    """
+
+    VALUE_REPAIR = 'value_repair'
+
+    def __init__(self):
+        super(ValueRepairCache, self).__init__()
+        self._value_repair = self.get_from(ValueRepairCache.VALUE_REPAIR)
+        self._key = None
+        self._values = None
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def repair(self, observation):
+        try:
+            for key, values in self._value_repair.items():
+                self._logger.debug(f'Checking for {key}')
+                self._key = key
+                self._values = values
+                bits = key.split('.')[1:]
+                if key.startswith('observation'):
+                    self._recurse(observation, 'observation', bits)
+                elif key.startswith('plane'):
+                    for plane in observation.planes.values():
+                        self._recurse(plane, 'plane', bits)
+                elif key.startswith('artifact'):
+                    for plane in observation.planes.values():
+                        for artifact in plane.artifacts.values():
+                            self._recurse(artifact, 'artifact', bits)
+                elif key.startswith('part'):
+                    for plane in observation.planes.values():
+                        for artifact in plane.artifacts.values():
+                            for part in artifact.parts.values():
+                                self._recurse(part, 'part', bits)
+                elif key.startswith('chunk'):
+                    for plane in observation.planes.values():
+                        for artifact in plane.artifacts.values():
+                            for part in artifact.parts.values():
+                                for chunk in part.chunks:
+                                    self._recurse(chunk, 'chunk', bits)
+                else:
+                    raise CadcException(f'Unexpected repair key {key}.')
+        except Exception as e:
+            self._logger.debug(traceback.format_exc())
+            raise CadcException(e)
+
+    def _recurse(self, entity, entity_name, bits):
+        attribute_name = bits[0]
+        if not hasattr(entity, attribute_name):
+            raise CadcException(f'Could not find attribute {attribute_name} '
+                                f'in entity {entity_name}')
+        if len(bits) == 1:
+            self._repair_attribute(entity, attribute_name)
+        else:
+            new_entity = getattr(entity, attribute_name)
+            self._recurse(new_entity, attribute_name, bits[1:])
+
+    def _repair_attribute(self, entity, attribute_name):
+        try:
+            attribute_value = getattr(entity, attribute_name)
+            for original, fix in self._values.items():
+                if attribute_value is None and original != 'none':
+                    self._logger.debug(f'{attribute_name} value is None.'
+                                       f'This class only repairs values.')
+                else:
+                    fixed = self._fix(entity, attribute_name, attribute_value,
+                                      original, fix)
+                    if (fixed is None or fixed == fix or
+                            fixed != attribute_value):
+                        break
+        except Exception as e:
+            self._logger.debug(traceback.format_exc())
+            raise CadcException(e)
+
+    def _fix(self, entity, attribute_name, attribute_value, original, fix):
+        if fix == 'none':
+            setattr(entity, attribute_name, None)
+            self._logger.info(
+                f'Repair {self._key} from {original} to None')
+            fixed = None
+        elif original == 'any':
+            setattr(entity, attribute_name, fix)
+            self._logger.info(
+                f'Repair {self._key} from {attribute_value} to {fix}')
+            fixed = fix
+        else:
+            if attribute_value is None:
+                setattr(entity, attribute_name, fix)
+                fixed = fix
+            else:
+                attribute_value_type = type(attribute_value)
+                fixed = re.sub(str(original), str(fix), str(attribute_value))
+                setattr(entity, attribute_name, attribute_value_type(fixed))
+            self._logger.info(
+                f'Repair {self._key} from {attribute_value} to {fixed}')
+        return fixed

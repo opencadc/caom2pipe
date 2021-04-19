@@ -117,6 +117,7 @@ import sys
 import traceback
 
 from datetime import datetime
+from dateutil import tz
 from shutil import move
 
 from cadcdata import CadcDataClient
@@ -204,6 +205,12 @@ class CaomExecute(object):
         self.log_file_directory = None
         self.data_visitors = []
         self.supports_latest_client = config.features.supports_latest_client
+        if hasattr(config, 'store_newer_files_only'):
+            self.store_newer_files_only = (config.store_newer_files_only and
+                                           config.use_local_files)
+        else:
+            # do nothing different, if flag is missing from config
+            self.store_newer_files_only = False
 
     def _cleanup(self):
         """Remove a directory and all its contents."""
@@ -325,10 +332,48 @@ class CaomExecute(object):
                        observation.observation_id, self.observable.metrics)
 
     def _cadc_put(self, storage_name):
-        if self.supports_latest_client:
-            self._client_put(storage_name)
-        else:
-            self._cadc_data_put_client()
+        """
+        :param storage_name: Artifact URI
+        """
+        # if use_local_files is True, and store_newer_files_only is True,
+        # and a file already exists at CADC, the file will only be sent for
+        # storage if it's last modified time is later than the last modified
+        # time of the file already at CADC
+        transfer_data = True
+        if self.store_newer_files_only:
+            # get the metadata locally
+            fqn = os.path.join(self.working_dir, self.fname)
+            s = os.stat(fqn)
+            local_timestamp = s.st_mtime
+            # running from a Docker container with timezone UTC
+            local_utc = datetime.fromtimestamp(local_timestamp, tz=tz.UTC)
+
+            # get the metadata at CADC
+            if self.supports_latest_client:
+                cadc_meta = self.cadc_client.get_node(
+                    storage_name, limit=None, force=False)
+                cadc_timestamp = cadc_meta.props.get('date')
+            else:
+                cadc_meta = mc.get_cadc_meta_client(
+                    self.cadc_client, self.archive, self.fname)
+                cadc_timestamp = cadc_meta.get('lastmod')
+
+            # CADC lastmod value looks like:
+            # 'lastmod': 'Fri, 28 Feb 2020 05:04:41 GMT'
+            cadc_utc = mc.make_time_tz(cadc_timestamp)
+            if local_utc > cadc_utc:
+                self.logger.debug(f'Transferring. {self.fname} has CADC '
+                                  f'timestamp {cadc_utc}.')
+            else:
+                self.logger.warning(
+                    f'{self.fname} newer at CADC. Not transferring.')
+                transfer_data = False
+
+        if transfer_data:
+            if self.supports_latest_client:
+                self._client_put(storage_name)
+            else:
+                self._cadc_data_put_client()
 
     def _cadc_data_put_client(self):
         """Store a collection file."""
@@ -1173,7 +1218,7 @@ class OrganizeExecutes(object):
     def timeouts(self):
         return self._timeout
 
-    def capture_failure(self, storage_name, e):
+    def capture_failure(self, storage_name, e, stack_trace):
         """Log an error message to the failure file.
 
         If the failure is of a known type, also capture it to the rejected
@@ -1189,14 +1234,18 @@ class OrganizeExecutes(object):
         :e Exception to log - the entire stack trace, which, if logging
             level is not set to debug, will be lost for debugging purposes.
         """
+        self._count_timeouts(stack_trace)
         if self.config.log_to_file:
             with open(self.failure_fqn, 'a') as failure:
-                min_error = self._minimize_error_message(e)
+                if e.args is not None and len(e.args) > 1:
+                    min_error = e.args[0]
+                else:
+                    min_error = str(e)
                 failure.write(f'{datetime.now()} {storage_name.obs_id} '
                               f'{storage_name.file_name} {min_error}\n')
 
         # only retry entries that are not permanently marked as rejected
-        reason = mc.Rejected.known_failure(e)
+        reason = mc.Rejected.known_failure(stack_trace)
         if reason == mc.Rejected.NO_REASON:
             if self.config.log_to_file:
                 with open(self.retry_fqn, 'a') as retry:
@@ -1295,55 +1344,12 @@ class OrganizeExecutes(object):
         f_handle = open(log_fqn, 'w')
         f_handle.close()
 
-    def _minimize_error_message(self, e):
-        """Turn the long-winded stack trace into something minimal that lends
-        itself to awk."""
-        if e is None:
-            return 'None'
-        elif 'Read timed out' in e:
+    def _count_timeouts(self, e):
+        if (e is not None and ('Read timed out' in e or
+                               'reset by peer' in e or
+                               'ConnectTimeoutError' in e or
+                               'Broken pipe' in e)):
             self._timeout += 1
-            return 'Read timed out'
-        elif 'failed to load external entity' in e:
-            return 'caom2repo xml error'
-        elif 'Did not retrieve' in e:
-            return 'cadc-data get error'
-        elif 'NAXES was not set' in e:
-            return 'NAXES was not set'
-        elif 'Invalid SpatialWCS' in e:
-            return 'Invalid SpatialWCS'
-        elif 'getProxyCertficate failed' in e:
-            return 'getProxyCertificate failed'
-        elif 'AlreadyExistsException' in e:
-            return 'already exists'
-        elif 'Could not find the file' in e:
-            return 'cadc-data info failed'
-        elif 'md5sum not the same' in e:
-            return 'md5sum not the same'
-        elif 'Start tag expected' in e:
-            return 'XML Syntax Exception'
-        elif 'failed to compute metadata' in e:
-            return 'Failed to compute metadata'
-        elif 'reset by peer' in e:
-            self._timeout += 1
-            return 'Connection reset by peer'
-        elif 'ConnectTimeoutError' in e:
-            self._timeout += 1
-            return 'Connection to host timed out'
-        elif 'FileNotFoundError' in e:
-            return 'No such file or directory'
-        elif 'Must set a value of' in e:
-            return 'Value Error'
-        elif 'This does not look like a FITS file' in e:
-            return 'Not a FITS file'
-        elif 'invalid Polygon: segment intersect' in e:
-            return 'Segment intersect in polygon'
-        elif 'Could not read observation record' in e:
-            return 'Observation not found'
-        elif 'Broken pipe' in e:
-            self._timeout += 1
-            return 'Broken pipe'
-        else:
-            return 'Unknown error. Check specific log.'
 
     @property
     def command_name(self):
@@ -1572,12 +1578,15 @@ class OrganizeExecutes(object):
         start_s = datetime.utcnow().timestamp()
         try:
             if self.is_rejected(storage_name):
-                self.capture_failure(storage_name, e='Rejected')
+                self.capture_failure(storage_name, 
+                                     BaseException('StorageName.is_rejected'),
+                                     'Rejected')
                 # successful rejection of the execution case
                 return 0
             executors = self.choose(storage_name)
             for executor in executors:
-                self._logger.info(f'Step {executor.task_type} for '
+                self._logger.info(f'Step {executor.task_type} with '
+                                  f'{executor.__class__.__name__} for '
                                   f'{storage_name.obs_id}')
                 executor.execute(context=None)
             if len(executors) > 0:
@@ -1588,10 +1597,10 @@ class OrganizeExecutes(object):
                 self._logger.info(f'No executors for {storage_name}')
                 return -1  # cover the case where file name validation fails
         except Exception as e:
-            self.capture_failure(storage_name, e=traceback.format_exc())
+            self.capture_failure(storage_name, e, traceback.format_exc())
             self._logger.warning(f'Execution failed for {storage_name.obs_id} '
                                  f'with {e}')
-            self._logger.error(traceback.format_exc())
+            self._logger.debug(traceback.format_exc())
             return -1
         finally:
             self._unset_file_logging()
