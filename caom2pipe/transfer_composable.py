@@ -70,11 +70,11 @@
 import logging
 import os
 
-from cadcdata import CadcDataClient
 from caom2pipe import manage_composable as mc
 
 
-__all__ = ['CadcTransfer', 'Transfer', 'VoTransfer']
+__all__ = ['CadcTransfer', 'FtpTransfer', 'HttpTransfer', 'Transfer',
+           'VoFitsTransfer', 'VoTransfer']
 
 
 class Transfer(object):
@@ -177,6 +177,14 @@ class FitsTransfer(Transfer):
         self._observable = None
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    @property
+    def observable(self):
+        return self._observable
+
+    @observable.setter
+    def observable(self, value):
+        self._observable = value
+
     def get(self, source, dest_fqn):
         raise NotImplementedError
 
@@ -189,21 +197,25 @@ class FitsTransfer(Transfer):
                 h.verify('warn')
             hdulist.close()
         except (fits.VerifyError, OSError) as e:
-            self._observable.rejected.record(mc.Rejected.BAD_DATA,
-                                             os.path.basename(dest_fqn))
-            os.unlink(dest_fqn)
-            raise mc.CadcException(
-                f'astropy verify error {dest_fqn} when reading {e}')
+            if self._observable is not None:
+                self._observable.rejected.record(mc.Rejected.BAD_DATA,
+                                                 os.path.basename(dest_fqn))
+            if os.path.exists(dest_fqn):
+                os.unlink(dest_fqn)
+                raise mc.CadcException(
+                    f'astropy verify error {dest_fqn} when reading {e}')
         # a second check that fails for some NEOSSat cases - if this works,
         # the file might have been correctly retrieved
         try:
             # ignore the return value - if the file is corrupted, the getdata
             # fails, which is the only interesting behaviour here
             fits.getdata(dest_fqn, ext=0)
-        except TypeError as e:
-            self._observable.rejected.record(mc.Rejected.BAD_DATA,
-                                             os.path.basename(dest_fqn))
-            os.unlink(dest_fqn)
+        except (TypeError, OSError) as e:
+            if self._observable is not None:
+                self._observable.rejected.record(mc.Rejected.BAD_DATA,
+                                                 os.path.basename(dest_fqn))
+            if os.path.exists(dest_fqn):
+                os.unlink(dest_fqn)
             raise mc.CadcException(
                 f'astropy getdata error {dest_fqn} when reading {e}')
 
@@ -248,6 +260,24 @@ class FtpTransfer(FitsTransfer):
         """
         self._logger.debug(f'Retrieve {source}')
         mc.ftp_get_timeout(self._ftp_host, source, dest_fqn)
+        if '.fits' in dest_fqn:
+            self.check(dest_fqn)
+        self._logger.debug(f'Successfully retrieved {source}')
+
+
+class VoFitsTransfer(FitsTransfer):
+    """
+    Uses the vos Client to manage transfers from CADC to local disk. Have
+    FITS integrity-checking.
+    """
+
+    def __init__(self, vos_client):
+        super(VoFitsTransfer, self).__init__()
+        self._vos_client = vos_client
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def get(self, source, dest_fqn):
+        self._vos_client.copy(source, dest_fqn, send_md5=True)
         if '.fits' in dest_fqn:
             self.check(dest_fqn)
         self._logger.debug(f'Successfully retrieved {source}')

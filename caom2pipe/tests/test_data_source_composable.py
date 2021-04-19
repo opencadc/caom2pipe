@@ -177,3 +177,19 @@ def test_storage_time_box_query(query_mock):
     finally:
         os.getcwd = getcwd_orig
         CadcTapClient.__init__ = tap_client_ctor_orig
+
+
+def test_vault_list_dir_data_source():
+    def _query_mock(ignore_source_directory):
+        return ['abc.txt', 'abc.fits']
+    test_vos_client = Mock()
+    test_vos_client.listdir.side_effect = _query_mock
+    test_config = mc.Config()
+    test_config.get_executors()
+    test_config.data_source = 'vos:goliaths/wrong'
+    test_subject = dsc.VaultListDirDataSource(test_vos_client, test_config)
+    assert test_subject is not None, 'expect a test_subject'
+    test_result = test_subject.get_work()
+    assert test_result is not None, 'expect a test result'
+    assert len(test_result) == 1, 'wrong number of results'
+    assert 'vos:goliaths/wrong/abc.fits' in test_result, 'wrong result'

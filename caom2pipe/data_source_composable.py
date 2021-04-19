@@ -78,7 +78,8 @@ from cadctap import CadcTapClient
 from caom2pipe import manage_composable as mc
 
 __all__ = ['DataSource', 'ListDirDataSource', 'QueryTimeBoxDataSource',
-           'QueryTimeBoxDataSourceTS', 'StateRunnerMeta', 'TodoFileDataSource']
+           'QueryTimeBoxDataSourceTS', 'StateRunnerMeta', 'TodoFileDataSource',
+           'VaultListDirDataSource']
 
 
 class DataSource(object):
@@ -305,3 +306,33 @@ class QueryTimeBoxDataSourceTS(DataSource):
         for row in rows:
             result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
         return result
+
+
+class VaultListDirDataSource(DataSource):
+    """
+    Implement the identification of the work to be done, by doing a directory
+    listing.
+    """
+
+    def __init__(self, vos_client, config):
+        super(VaultListDirDataSource, self).__init__(config)
+        self._client = vos_client
+        self._source_directory = config.data_source
+        self._logger = logging.getLogger(__name__)
+
+    def get_work(self):
+        self._logger.debug('Begin get_work.')
+        file_list = self._client.listdir(self._source_directory)
+        work = []
+        for f_name in file_list:
+            endings = ['.fits', '.fits.gz', '.fits.fz']
+            for ending in endings:
+                if f_name.endswith(ending):
+                    fqn = f'{self._source_directory}/{f_name}'
+                    work.append(fqn)
+                    self._logger.debug(f'{fqn} added to work list.')
+                    break
+        # ensure unique entries
+        temp = list(set(work))
+        self._logger.debug('End get_work.')
+        return temp

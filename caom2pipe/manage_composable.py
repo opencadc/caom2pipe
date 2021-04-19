@@ -474,7 +474,6 @@ class Cache(object):
         """
         config = Config()
         config.get_executors()
-        logging.error(config.cache_fqn)
         self._fqn = config.cache_fqn
         # if True, raise exceptions, which tends to call a halt to any
         # pipeline. If False, only log a warning.
