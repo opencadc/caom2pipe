@@ -1579,7 +1579,8 @@ class OrganizeExecutes(object):
         try:
             if self.is_rejected(storage_name):
                 self.capture_failure(storage_name, 
-                        BaseException('StorageName.is_rejected'), 'Rejected')
+                                     BaseException('StorageName.is_rejected'),
+                                     'Rejected')
                 # successful rejection of the execution case
                 return 0
             executors = self.choose(storage_name)
