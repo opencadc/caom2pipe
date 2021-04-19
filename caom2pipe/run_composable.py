@@ -719,7 +719,8 @@ def run_by_state(config=None, name_builder=None, command_name=None,
 
 
 def run_single(config, storage_name, command_name, meta_visitors,
-               data_visitors, chooser=None):
+               data_visitors, chooser=None, store_transfer=None,
+               modify_transfer=None):
     """Process a single entry by StorageName detail.
 
     :param config mc.Config
@@ -729,15 +730,26 @@ def run_single(config, storage_name, command_name, meta_visitors,
     :param data_visitors List of data visit methods.
     :param chooser OrganizeChooser instance for detailed CaomExecute
         descendant choices
+    :param store_transfer Transfer extension that identifies hot to retrieve
+        data from a source for storage at CADC, probably an HTTP or FTP site.
+        Don't try to guess what this one is.
+    :param modify_transfer Transfer extension that identifies how to retrieve
+        data from a source for modification of CAOM2 metadata. By this time,
+        files are usually stored at CADC, so it's probably a CadcTransfer
+        instance, but this allows for the case that a file is never stored
+        at CADC. Try to guess what this one is.
     """
     # TODO - this does not follow the current implementation pattern -
     # maybe there's a rethink required
     # missing the metrics and the reporting
     #
     logging.debug(f'Begin run_single {config.work_fqn}')
+    modify_transfer = _set_modify_transfer(modify_transfer, config)
     organizer = ec.OrganizeExecutes(
-        config, command_name, meta_visitors, data_visitors, chooser)
+        config, command_name, meta_visitors, data_visitors, chooser,
+        store_transfer, modify_transfer)
     organizer.complete_record_count = 1
+    organizer.choose(storage_name)
     result = organizer.do_one(storage_name)
     logging.debug(f'run_single result is {result}')
     return result
