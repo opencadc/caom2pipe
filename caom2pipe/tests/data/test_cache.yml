@@ -1,0 +1,21 @@
+value_repair:
+  observation.intent:
+    none: science
+  observation.type:
+    dark: DARK
+    Dark: DARK
+    object: OBJECT
+  observation.proposal.pi_name:
+    jjk: JJ Kavelaars
+  observation.environment.seeing:
+    12.4: 12.6
+  plane.meta_release:
+    any: 2000-01-01T00:00:00.000
+  chunk.position.axis.function.ref_coord.coord1.pix:
+    512.579594886106: 512.57959987654321
+  chunk.position.coordsys:
+    FK4: FK5
+  artifact.uri:
+    gemini:GEM: cadc:GEMINI
+  part.product_type:
+    CALIBRATION: none
