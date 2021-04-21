@@ -1067,6 +1067,7 @@ def test_value_repair_cache():
     assert test_chunk.position.coordsys == 'ICRS', 'un-changed ic'
     assert test_observation.intent is None, 'None ic'
     assert test_observation.environment.seeing is None, 'None ic'
+    assert test_chunk.position.axis.axis1.ctype == 'RA---TAN', 'unchanged ic'
 
     test_subject.repair(test_observation)
 
@@ -1089,6 +1090,7 @@ def test_value_repair_cache():
         'None value should be set, since "none" was the original type'
     assert test_observation.environment.seeing is None, \
         'None remains None because the original is a specific value'
+    assert test_chunk.position.axis.axis1.ctype == 'RA---TAN', 'unchanged post'
 
     with pytest.raises(mc.CadcException):
         # pre-condition of 'Unexpected repair key' error
