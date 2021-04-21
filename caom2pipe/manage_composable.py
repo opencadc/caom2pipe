@@ -3025,24 +3025,23 @@ class ValueRepairCache(Cache):
     def _repair_attribute(self, entity, attribute_name):
         try:
             attribute_value = getattr(entity, attribute_name)
-            for original, fix in self._values.items():
-                if attribute_value is None and original != 'none':
-                    self._logger.debug(f'{attribute_name} value is None.'
-                                       f'This class only repairs values.')
-                else:
-                    fixed = self._fix(entity, attribute_name, attribute_value,
-                                      original, fix)
-                    if (fixed is None or fixed == fix or
-                            fixed != attribute_value):
-                        break
+            if attribute_value not in self._values.values():
+                for original, fix in self._values.items():
+                    if attribute_value is None and original != 'none':
+                        self._logger.info(f'{attribute_name} value is None.'
+                                          f'This class only repairs values.')
+                    else:
+                        fixed = self._fix(entity, attribute_name,
+                                          attribute_value, original, fix)
+                        if (fixed is None or fixed == fix or
+                                fixed != attribute_value):
+                            break
         except Exception as e:
             self._logger.debug(traceback.format_exc())
             raise CadcException(e)
 
     def _fix(self, entity, attribute_name, attribute_value, original, fix):
-        if attribute_value == fix:
-            fixed = None
-        elif fix == 'none':
+        if fix == 'none':
             setattr(entity, attribute_name, None)
             self._logger.info(
                 f'Repair {self._key} from {original} to None')
