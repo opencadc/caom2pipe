@@ -19,3 +19,5 @@ value_repair:
     gemini:GEM: cadc:GEMINI
   part.product_type:
     CALIBRATION: none
+  chunk.position.axis.axis1.ctype:
+    RA--TAN: RA---TAN
