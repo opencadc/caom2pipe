@@ -2623,6 +2623,8 @@ def make_time_tz(from_value):
         result = None
         if temp is not None:
             result = datetime.fromtimestamp(temp, tz=timezone.utc)
+    elif isinstance(from_value, float):
+        result = datetime.fromtimestamp(from_value, tz=timezone.utc)
     else:
         result = from_value.fromtimestamp(from_value, tz=timezone.utc)
     return result

@@ -472,7 +472,7 @@ class StateRunnerTS(StateRunner):
                     self._organizer.complete_record_count = num_entries
                     self._organizer.set_log_location()
                     while len(entries) > 0:
-                        entry = entries.pop()
+                        entry = entries.popleft()
                         result |= self._process_entry(entry.entry_name)
                         save_time = min(mc.convert_to_ts(entry.entry_ts),
                                         exec_time)
