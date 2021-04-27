@@ -104,7 +104,7 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
            'client_put', 'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
            'FileMeta',
            'get_cadc_headers_client', 'get_cadc_meta',
-           'get_cadc_meta_client', 'get_file_meta',
+           'get_cadc_meta_client', 'get_endpoint_session', 'get_file_meta',
            'decompose_lineage', 'check_param', 'read_csv_file',
            'write_obs_to_file', 'read_obs_from_file',
            'Features', 'write_to_file',
@@ -114,9 +114,9 @@ __all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
            'make_time_tz',
            'increment_time', 'increment_time_tz', 'ISO_8601_FORMAT',
            'http_get', 'Rejected', 'look_pull_and_put', 'look_pull_and_put_v',
-           'Observable', 'Metrics', 'repo_create', 'repo_delete', 'repo_get',
-           'repo_update', 'reverse_lookup',
-           'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
+           'Observable', 'Metrics', 'query_endpoint', 'query_endpoint_session',
+           'repo_create', 'repo_delete', 'repo_get', 'repo_update',
+           'reverse_lookup', 'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
            'Validator', 'Cache', 'CaomName', 'StorageName', 'to_float',
            'to_int', 'to_str', 'load_module', 'compare_observations',
            'convert_to_days', 'convert_to_ts', 'ValueRepairCache']
@@ -2482,6 +2482,38 @@ def query_endpoint(url, timeout=20):
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
+    try:
+        response = session.get(url, timeout=timeout)
+        response.raise_for_status()
+        return response
+    except Exception as e:
+        logging.debug(traceback.format_exc())
+        raise CadcException(f'Endpoint {url} failure {str(e)}')
+
+
+def get_endpoint_session(retries=10, backoff_factor=0.5):
+    session = requests.Session()
+    retry = Retry(total=retries, read=retries, connect=retries,
+                  backoff_factor=backoff_factor)
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
+
+
+def query_endpoint_session(url, session, timeout=20):
+    """Return a response for an endpoint. Caller needs to call 'close'
+    on the response.
+    """
+
+    # Open the URL and fetch the JSON document for the observation
+    # session = requests.Session()
+    # retries = 10
+    # retry = Retry(total=retries, read=retries, connect=retries,
+    #               backoff_factor=0.5)
+    # adapter = HTTPAdapter(max_retries=retry)
+    # session.mount('http://', adapter)
+    # session.mount('https://', adapter)
     try:
         response = session.get(url, timeout=timeout)
         response.raise_for_status()
