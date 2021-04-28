@@ -2507,13 +2507,6 @@ def query_endpoint_session(url, session, timeout=20):
     """
 
     # Open the URL and fetch the JSON document for the observation
-    # session = requests.Session()
-    # retries = 10
-    # retry = Retry(total=retries, read=retries, connect=retries,
-    #               backoff_factor=0.5)
-    # adapter = HTTPAdapter(max_retries=retry)
-    # session.mount('http://', adapter)
-    # session.mount('https://', adapter)
     try:
         response = session.get(url, timeout=timeout)
         response.raise_for_status()
