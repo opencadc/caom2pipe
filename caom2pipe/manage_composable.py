@@ -3088,6 +3088,8 @@ class ValueRepairCache(Cache):
                 attribute_value_type = type(attribute_value)
                 fixed = re.sub(str(original), str(fix), str(attribute_value))
                 setattr(entity, attribute_name, attribute_value_type(fixed))
+        new_value = getattr(entity, attribute_name)
+        if attribute_value != new_value:
             self._logger.info(
-                f'Repair {self._key} from {attribute_value} to {fixed}')
+                f'Repair {self._key} from {attribute_value} to {new_value}')
         return fixed
