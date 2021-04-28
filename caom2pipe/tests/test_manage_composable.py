@@ -113,6 +113,16 @@ def test_query_endpoint():
         session_get_mock.assert_called_with('https://localhost', timeout=25)
 
 
+def test_query_endpoint_session():
+    session_mock = Mock()
+    test_result = mc.query_endpoint_session(
+        'https://localhost', session_mock, timeout=25
+    )
+    assert test_result is not None, 'expected result'
+    assert session_mock.get.called, 'mock not called'
+    session_mock.get.assert_called_with('https://localhost', timeout=25)
+
+
 def test_config_class():
     getcwd_orig = os.getcwd
     try:
