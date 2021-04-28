@@ -81,6 +81,7 @@ import logging
 import os
 import traceback
 
+from collections import deque
 from datetime import datetime, timezone
 
 from caom2pipe import astro_composable as ac
@@ -471,8 +472,11 @@ class StateRunnerTS(StateRunner):
                     self._logger.info(f'Processing {num_entries} entries.')
                     self._organizer.complete_record_count = num_entries
                     self._organizer.set_log_location()
+                    pop_action = entries.pop
+                    if isinstance(entries, deque):
+                        pop_action = entries.popleft
                     while len(entries) > 0:
-                        entry = entries.popleft()
+                        entry = pop_action()
                         result |= self._process_entry(entry.entry_name)
                         save_time = min(mc.convert_to_ts(entry.entry_ts),
                                         exec_time)
