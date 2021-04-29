@@ -165,14 +165,13 @@ def test_run_state(data_mock, repo_mock):
     # this timestamp is 15 minutes earlier than the timestamp of the
     # file in /caom2pipe_test
     #
-    test_start_time = '2021-05-08 02:25:09'
+    test_start_time = '2021-04-21 10:55:09'
     with open(test_config.state_fqn, 'w') as f:
         f.write('bookmarks:\n')
         f.write(f'  {caom2pipe_bookmark}:\n')
         f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(
-        2021, 5, 8, 2, 41, 27, 965132, tzinfo=timezone.utc
-    )
+    test_end_time = datetime(2021, 4, 21, 17, 18, 27, 965132,
+                             tzinfo=timezone.utc)
 
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content\n')
@@ -310,14 +309,13 @@ def test_run_state_v(client_mock, repo_mock):
     # this timestamp is 15 minutes earlier than the timestamp of the
     # file in /caom2pipe_test
     #
-    test_start_time = '2021-05-08 02:25:09'
+    test_start_time = '2021-04-21 10:55:09'
     with open(test_config.state_fqn, 'w') as f:
         f.write('bookmarks:\n')
         f.write(f'  {caom2pipe_bookmark}:\n')
         f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(
-        2021, 5, 8, 2, 41, 27, 965132, tzinfo=timezone.utc
-    )
+    test_end_time = datetime(2021, 4, 21, 17, 18, 27, 965132,
+                             tzinfo=timezone.utc)
 
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content\n')

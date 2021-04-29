@@ -199,3 +199,35 @@ def test_vault_list_dir_data_source():
     assert test_result is not None, 'expect a test result'
     assert len(test_result) == 1, 'wrong number of results'
     assert 'vos:goliaths/wrong/abc.fits' in test_result, 'wrong result'
+
+
+def test_list_dir_time_box_data_source():
+    test_config = mc.Config()
+    test_config.data_source = ['/test_files']
+    test_config.data_source_extensions = [
+        '.fits', '.fits.gz', '.fits.fz', '.hdf5'
+    ]
+    test_subject = dsc.ListDirTimeBoxDataSource(test_config)
+    assert test_subject is not None, 'ctor is broken'
+    test_prev_exec_time = datetime(
+        year=2021, month=2, day=4, hour=20
+    ).timestamp()
+    test_exec_time = datetime(year=2021, month=4, day=30).timestamp()
+    test_result = test_subject.get_time_box_work(
+        test_prev_exec_time, test_exec_time
+    )
+    assert test_result is not None, 'expect a result'
+    assert len(test_result) == 33, 'expect contents in the result'
+    test_entry = test_result.pop()
+    assert test_entry.entry_name == '/test_files/sub_directory/abc.fits', \
+        'wrong entry'
+
+    test_subject = dsc.ListDirTimeBoxDataSource(test_config, recursive=False)
+    test_result = test_subject.get_time_box_work(
+        test_prev_exec_time, test_exec_time
+    )
+    assert test_result is not None, 'expect a non-recursive result'
+    assert len(test_result) == 32, 'expect contents in non-recursive result'
+    x = [ii.entry_name for ii in test_result]
+    assert '/test_files/sub_directory/abc.fits' not in x, \
+        'recursive result should not be present'
