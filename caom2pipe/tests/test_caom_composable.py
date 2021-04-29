@@ -72,7 +72,6 @@ import pytest
 import shutil
 
 no_footprintfinder = False
-from astropy.io import fits
 from astropy.table import Table
 from caom2 import ValueCoord2D
 from caom2pipe import caom_composable as cc
@@ -178,16 +177,18 @@ def test_build_temporal_wcs(query_mock):
                 format='csv')
 
     query_mock.side_effect = _mock_query
+
     test_tap_client = Mock()
-    test_header = fits.Header()
-    test_header['SIMPLE'] = 'T'
-    test_header['IMCMB001'] = 'N20160102S0296.fits'
-    test_header['IMCMB002'] = 'N20160102S0297.fits'
-    test_lookups = ['IMCMB']
+    test_observation = mc.read_obs_from_file(
+        f'{tc.TEST_DATA_DIR}/build_temporal_wcs_start.xml'
+    )
+    test_plane = test_observation.planes['GN2001BQ013-04']
+    test_part = test_plane.artifacts['cadc:GEMINI/test.fits'].parts['0']
+    assert test_part.chunks[0].time is None, 'temporal wcs ic'
     test_collection = 'TEST'
-    test_result = cc.build_temporal_wcs_bounds(test_tap_client, test_header,
-                                               test_lookups, test_collection)
-    assert test_result is not None, 'expect a result'
-    assert test_result.axis is not None, 'expect axis'
-    assert test_result.axis.bounds is not None, 'expect bounds'
-    assert len(test_result.axis.bounds.samples) == 2, 'expect two samples'
+    cc.build_temporal_wcs_bounds(test_tap_client, test_plane, test_collection)
+    assert test_part.chunks[0].time is not None, 'expect a result'
+    assert test_part.chunks[0].time.axis is not None, 'expect axis'
+    assert test_part.chunks[0].time.axis.bounds is not None, 'expect bounds'
+    assert len(test_part.chunks[0].time.axis.bounds.samples) == 2, \
+        'expect two samples'

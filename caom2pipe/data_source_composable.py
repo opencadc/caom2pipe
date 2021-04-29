@@ -77,9 +77,9 @@ from dateutil import tz
 from cadctap import CadcTapClient
 from caom2pipe import manage_composable as mc
 
-__all__ = ['DataSource', 'ListDirDataSource', 'QueryTimeBoxDataSource',
-           'QueryTimeBoxDataSourceTS', 'StateRunnerMeta', 'TodoFileDataSource',
-           'VaultListDirDataSource']
+__all__ = ['DataSource', 'ListDirDataSource', 'ListDirTimeBoxDataSource',
+           'QueryTimeBoxDataSource', 'QueryTimeBoxDataSourceTS',
+           'StateRunnerMeta', 'TodoFileDataSource', 'VaultListDirDataSource']
 
 
 class DataSource(object):
@@ -93,6 +93,7 @@ class DataSource(object):
     - a time-boxed listing (based on bookmarks in a state.yml file) - an
         incremental approach, where the work to be done is chunked (by
         time-boxes for now, as it's the only in-use requirement)
+    - a time-boxed directory listing
     - an implementation of the work_composable.work class, which returns a
         list of work todo as a method implementation
     """
@@ -172,6 +173,76 @@ class ListDirDataSource(DataSource):
         temp = list(set(work))
         self._logger.debug(f'End get_work in {self.__class__.__name__}.')
         return temp
+
+
+class ListDirTimeBoxDataSource(DataSource):
+    """
+    A time-boxed directory listing of all .fits* and .hdf5 files. The time-box
+    is based on os.stat.st_mtime for a file.
+
+    Implementation choices:
+    - one or many directories? one is fire-and-forget, many is probably
+      more accurate of operational conditions - e.g. VLASS1.1, VLASS1.2,
+      etc, OR vos:Nat/NIFS/...., OR NEOSSAT's NESS, 2017, 2018, 2019, etc
+    - send it off to glob, walk, or do it semi-here? one/a few high-level
+      directories that point to a lot of occupied storage space could take a
+      very long time, and a lot of memory, in glob/walk
+    """
+
+    def __init__(
+            self,
+            config,
+            recursive=True):
+        """
+
+        :param config: manage_composable.Config
+        :param recursive: True if sub-directories should also be checked
+        """
+        super(ListDirTimeBoxDataSource, self).__init__(config)
+        self._source_directories = config.data_source
+        self._extensions = config.data_source_extensions
+        self._recursive = recursive
+        self._work = []
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def get_time_box_work(self, prev_exec_time, exec_time):
+        """
+        :param prev_exec_time datetime start of the timestamp chunk
+        :param exec_time datetime end of the timestamp chunk
+        :return: a list of StateRunnerMeta instances, with
+            prev_exec_time <= os.stat.mtime <= exec_time
+        """
+        self._logger.debug(
+            f'Begin get_time_box_work from {prev_exec_time} to {exec_time}.'
+        )
+        for source in self._source_directories:
+            self._append_work(prev_exec_time, exec_time, source)
+        self._logger.debug('End get_time_box_work')
+        return self._work
+
+    def _append_work(self, prev_exec_time, exec_time, entry):
+        with os.scandir(entry) as dir_listing:
+            for entry in dir_listing:
+                # the slowest thing to do is the 'stat' call, so delay it as
+                # long as possible, and only if necessary
+                if entry.is_dir() and self._recursive:
+                    entry_stats = entry.stat()
+                    if exec_time >= entry_stats.st_mtime >= prev_exec_time:
+                        self._append_work(
+                            prev_exec_time, exec_time, entry.path
+                        )
+                else:
+                    for extension in self._extensions:
+                        if entry.name.endswith(extension):
+                            entry_stats = entry.stat()
+                            if (exec_time >= entry_stats.st_mtime >=
+                                    prev_exec_time):
+                                self._work.append(
+                                    StateRunnerMeta(
+                                        entry.path, entry_stats.st_mtime
+                                    )
+                                )
+                                break
 
 
 class TodoFileDataSource(DataSource):

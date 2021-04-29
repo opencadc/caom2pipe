@@ -609,7 +609,8 @@ class Config(object):
         self._cache_file_name = None
         # the fully qualified name for the file
         self.cache_fqn = None
-        self._data_source = None
+        self._data_sources = []
+        self._data_source_extensions = ['.fits']
         self._features = Features()
 
     @property
@@ -639,13 +640,22 @@ class Config(object):
                 self._working_directory, self._work_file)
 
     @property
-    def data_source(self):
+    def data_sources(self):
         """Root URI for data retrieval"""
-        return self._data_source
+        return self._data_sources
 
-    @data_source.setter
-    def data_source(self, value):
-        self._data_source = value
+    @data_sources.setter
+    def data_sources(self, value):
+        self._data_sources = value
+
+    @property
+    def data_source_extensions(self):
+        """Root URI for data retrieval"""
+        return self._data_source_extensions
+
+    @data_source_extensions.setter
+    def data_source_extensions(self, value):
+        self._data_source_extensions = value
 
     @property
     def netrc_file(self):
@@ -990,7 +1000,8 @@ class Config(object):
                f'  archive:: {self.archive}\n' \
                f'  cache_fqn:: {self.cache_fqn}\n' \
                f'  collection:: {self.collection}\n' \
-               f'  data_source:: {self.data_source}\n' \
+               f'  data_sources:: {self.data_sources}\n' \
+               f'  data_source_extensions:: {self.data_source_extensions}\n' \
                f'  failure_fqn:: {self.failure_fqn}\n' \
                f'  failure_log_file_name:: {self.failure_log_file_name}\n' \
                f'  features:: {self.features}\n' \
@@ -1027,6 +1038,15 @@ class Config(object):
                f'  use_local_files:: {self.use_local_files}\n' \
                f'  work_fqn:: {self.work_fqn}\n' \
                f'  working_directory:: {self.working_directory}'
+
+    @staticmethod
+    def _obtain_list(key, config, default=[]):
+        """Make the configuration file entries into the Enum."""
+        result = default
+        if key in config:
+            for ii in config[key]:
+                result.append(ii)
+        return result
 
     @staticmethod
     def _obtain_task_types(config, default=None):
@@ -1067,37 +1087,49 @@ class Config(object):
         """
         try:
             config = self.get_config()
-            self.working_directory = config.get('working_directory',
-                                                os.getcwd())
+            self.working_directory = config.get(
+                'working_directory', os.getcwd()
+            )
             self.work_file = config.get('todo_file_name', 'todo.txt')
             self.netrc_file = config.get('netrc_filename', None)
-            self.data_source = config.get('data_source', None)
-            self.resource_id = config.get('resource_id',
-                                          'ivo://cadc.nrc.ca/sc2repo')
+            self.data_sources = Config._obtain_list('data_sources', [])
+            self.data_source_extensions = Config._obtain_list(
+                'data_source_extensions', ['.fits']
+            )
+            self.resource_id = config.get(
+                'resource_id', 'ivo://cadc.nrc.ca/sc2repo'
+            )
             self.tap_id = config.get('tap_id', 'ivo://cadc.nrc.ca/sc2tap')
             self.use_local_files = bool(config.get('use_local_files', False))
             self.logging_level = config.get('logging_level', 'DEBUG')
             self.log_to_file = config.get('log_to_file', False)
-            self.log_file_directory = config.get('log_file_directory',
-                                                 self.working_directory)
+            self.log_file_directory = config.get(
+                'log_file_directory', self.working_directory
+            )
             self.stream = config.get('stream', 'raw')
-            self.task_types = self._obtain_task_types(config, [])
+            self.task_types = Config._obtain_task_types(config, [])
             self.collection = config.get('collection', 'TEST')
             self.archive = config.get('archive', self.collection)
-            self.success_log_file_name = config.get('success_log_file_name',
-                                                    'success_log.txt')
-            self.failure_log_file_name = config.get('failure_log_file_name',
-                                                    'failure_log.txt')
-            self.retry_file_name = config.get('retry_file_name',
-                                              'retries.txt')
+            self.success_log_file_name = config.get(
+                'success_log_file_name', 'success_log.txt'
+            )
+            self.failure_log_file_name = config.get(
+                'failure_log_file_name', 'failure_log.txt'
+            )
+            self.retry_file_name = config.get(
+                'retry_file_name', 'retries.txt'
+            )
             self.retry_failures = config.get('retry_failures', False)
             self.retry_count = config.get('retry_count', 1)
-            self.rejected_file_name = config.get('rejected_file_name',
-                                                 'rejected.yml')
-            self.rejected_directory = config.get('rejected_directory',
-                                                 os.getcwd())
-            self.progress_file_name = config.get('progress_file_name',
-                                                 'progress.txt')
+            self.rejected_file_name = config.get(
+                'rejected_file_name', 'rejected.yml'
+            )
+            self.rejected_directory = config.get(
+                'rejected_directory', os.getcwd()
+            )
+            self.progress_file_name = config.get(
+                'progress_file_name', 'progress.txt'
+            )
             self.interval = config.get('interval', 10)
             self.features = self._obtain_features(config)
             self.proxy_file_name = config.get('proxy_file_name', None)
@@ -1105,15 +1137,18 @@ class Config(object):
             self.cache_file_name = config.get('cache_file_name', None)
             self.observe_execution = config.get('observe_execution', False)
             self.observable_directory = config.get(
-                'observable_directory', None)
+                'observable_directory', None
+            )
             self.slack_channel = config.get('slack_channel', None)
             self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
-            self.store_newer_files_only = config.get('store_newer_files_only',
-                                                     False)
+            self.store_newer_files_only = config.get(
+                'store_newer_files_only', False
+            )
             self._report_fqn = os.path.join(
                 self.log_file_directory,
-                f'{os.path.basename(self.working_directory)}_report.txt')
+                f'{os.path.basename(self.working_directory)}_report.txt'
+            )
         except KeyError as e:
             raise CadcException(f'Error in config file {e}')
 
