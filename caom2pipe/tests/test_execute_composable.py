@@ -106,6 +106,26 @@ class TestVisit:
         assert observation is not None, 'undefined observation'
 
 
+class LocalTestVisit:
+    @staticmethod
+    def visit(observation, **kwargs):
+        v = kwargs['stream']
+        assert v is not None, 'stream'
+        assert v == 'TEST', 'wrong stream'
+        x = kwargs['working_directory']
+        assert x is not None, 'working directory'
+        assert (
+            x == os.path.join(tc.TEST_DATA_DIR, 'test_obs_id')
+        ), 'wrong working directory'
+        y = kwargs['science_file']
+        assert y is not None, 'science file'
+        assert y == 'test_obs_id.fits', 'wrong science file'
+        z = kwargs['log_file_directory']
+        assert z is not None, 'log file directory'
+        assert z == tc.TEST_DATA_DIR, 'wrong log dir'
+        assert observation is not None, 'undefined observation'
+
+
 def test_meta_create_client_execute(test_config):
     test_cred = ''
     data_client_mock = Mock()
@@ -358,25 +378,40 @@ def test_data_execute_v(test_config):
 
 
 def test_data_local_execute(test_config):
-    test_data_visitors = [TestVisit]
+    # ensure the model uses the log directory for writing the model file
+    test_config.log_to_file = True
+    test_config.working_directory = tc.TEST_DATA_DIR
+    test_data_visitors = [LocalTestVisit]
 
     data_client_mock = Mock()
-    data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
     repo_client_mock = Mock()
     repo_client_mock.read.return_value = _read_obs(None)
-    test_cred = None
     test_observer = Mock()
+
+    test_model_fqn = os.path.join(tc.TEST_DATA_DIR, 'test_obs_id.fits.xml')
+    # check that a file is written to disk
+    if os.path.exists(test_model_fqn):
+        os.unlink(test_model_fqn)
 
     # run the test
     test_executor = ec.LocalDataVisit(
-        test_config, tc.TestStorageName(), data_client_mock,
-        repo_client_mock, test_data_visitors, observable=test_observer)
+        test_config,
+        tc.TestStorageName(),
+        data_client_mock,
+        repo_client_mock,
+        test_data_visitors,
+        observable=test_observer
+    )
     test_executor.execute(None)
 
     # check that things worked as expected - no cleanup
     assert repo_client_mock.read.called, 'read call missed'
+    repo_client_mock.read.assert_called_with(
+        'OMM', 'test_obs_id'
+    ), 'wrong repo client read args'
     assert repo_client_mock.update.called, 'update call missed'
     assert test_observer.metrics.observe.called, 'observe not called'
+    assert os.path.exists(test_model_fqn), 'observation not written to disk'
 
 
 def test_data_store(test_config):
