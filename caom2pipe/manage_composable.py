@@ -1405,22 +1405,27 @@ class PreviewVisitor(object):
 
 
 class StorageName(object):
-    """Naming rules for a collection:
-    - support mixed-case file name storage
-    - support gzipped and not zipped file names
-
-    This class assumes the obs_id is part of the file name. This assumption
-    may be broken in the future, in which case lots of CaomExecute
-    implementations will need to be re-addressed somehow.
-
-    This class assumes the file name in storage, and the file name on disk
-    are not necessarily the same thing.
+    """
+    This class encapsulates:
+    - naming rules for a collection, for example:
+        - file name case in storage,
+        - compression extensions
+        - naming pattern enforcement
+    - cardinality rules for a collection. Specialize for creation support of:
+        - observation_id
+        - product_id
+        - artifact URI
+        - preview URI
+        - thumbnail URI
+    - fully-qualified name of a file at it's source, if required. This
+      may be a Linux directory+file name, and HTTP URL, or a IVOA Virtual
+      Storage URI.
     """
 
     def __init__(self, obs_id=None, collection=None, collection_pattern='.*',
                  fname_on_disk=None, scheme='ad', archive=None, url=None,
                  mime_encoding=None, mime_type='application/fits',
-                 compression='.gz', entry=None):
+                 compression='.gz', entry=None, source_names=[]):
         """
 
         :param obs_id: string value for Observation.observationID
@@ -1439,6 +1444,13 @@ class StorageName(object):
             the url for retrieval
         :param entry: string - the value as obtained from the DataSource,
             unchanged for use in the retries.txt file.
+        :param source_names: list of str - the fully-qualified representation
+            of files, as represented at the source. Sufficient for retrieval,
+            probably includes a scheme.
+        :param scheme: str, should eventually default to 'cadc'
+        :param archive: str, used for Artifact URI construction
+        :param mime_encoding: str, used for CADC /data storage
+        :param mime_type: str, used for CADC /data storage
         """
         self.obs_id = obs_id
         self.collection = collection
@@ -1453,7 +1465,7 @@ class StorageName(object):
         self._mime_encoding = mime_encoding
         self._mime_type = mime_type
         self._compression = compression
-        self._source_name = None
+        self._source_names = source_names
         self._entry = entry
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -1569,16 +1581,12 @@ class StorageName(object):
         return f'{self.product_id}/{self.file_uri}'
 
     @property
-    def source_name(self):
-        """The fully-qualified representation of the file, as represented
-        at the source. Sufficient for retrieval, probably includes a scheme."""
-        if self._source_name is None:
-            self._source_name = self.file_uri
-        return self._source_name
+    def source_names(self):
+        return self._source_names
 
-    @source_name.setter
-    def source_name(self, value):
-        self._source_name = value
+    @source_names.setter
+    def source_names(self, value):
+        self._source_names = value
 
     @property
     def external_urls(self):
@@ -2425,13 +2433,50 @@ def data_put(client, working_directory, file_name, archive, stream='raw',
                         md5_check=True)
         file_size = os.stat(file_name).st_size
     except Exception as e:
-        metrics.observe_failure('get', 'data', file_name)
+        metrics.observe_failure('put', 'data', file_name)
         logging.debug(traceback.format_exc())
         raise CadcException(f'Failed to store data with {e}')
     finally:
         os.chdir(cwd)
     end = current()
     metrics.observe(start, end, file_size, 'put', 'data', file_name)
+
+
+def data_put_fqn(
+        client,
+        source_name,
+        storage_name,
+        stream='raw',
+        metrics=None,
+):
+    """
+    Make a copy of a locally available file by writing it to CADC. Assumes
+    file and directory locations are correct. Requires a checksum comparison
+    by the client.
+
+    :param client: The CadcDataClient for write access to CADC storage.
+    :param source_name: str fully-qualified
+    :param storage_name: StorageName instance
+    :param stream: str A relic of the old CADC storage.
+    :param metrics: Tracking success execution times, and failure counts.
+    """
+    start = current()
+    try:
+        client.put_file(
+            storage_name.archive,
+            source_name,
+            archive_stream=stream,
+            mime_type=storage_name.mime_type,
+            mime_encoding=storage_name.mime_encoding,
+            md5_check=True,
+        )
+        file_size = os.stat(source_name).st_size
+    except Exception as e:
+        metrics.observe_failure('put', 'data', source_name)
+        logging.debug(traceback.format_exc())
+        raise CadcException(f'Failed to store data with {e}')
+    end = current()
+    metrics.observe(start, end, file_size, 'put', 'data', source_name)
 
 
 def data_get(client, working_directory, file_name, archive, metrics):
