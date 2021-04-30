@@ -211,6 +211,7 @@ class CaomExecute(object):
         else:
             # do nothing different, if flag is missing from config
             self.store_newer_files_only = False
+        self._storage_name = storage_name
 
     def _cleanup(self):
         """Remove a directory and all its contents."""
@@ -331,9 +332,9 @@ class CaomExecute(object):
         mc.repo_delete(self.caom_repo_client, observation.collection,
                        observation.observation_id, self.observable.metrics)
 
-    def _cadc_put(self, storage_name):
+    def _cadc_put(self, source_name, destination_name):
         """
-        :param storage_name: Artifact URI
+        :param destination_name: Artifact URI
         """
         # if use_local_files is True, and store_newer_files_only is True,
         # and a file already exists at CADC, the file will only be sent for
@@ -342,8 +343,7 @@ class CaomExecute(object):
         transfer_data = True
         if self.store_newer_files_only:
             # get the metadata locally
-            fqn = os.path.join(self.working_dir, self.fname)
-            s = os.stat(fqn)
+            s = os.stat(source_name)
             local_timestamp = s.st_mtime
             # running from a Docker container with timezone UTC
             local_utc = datetime.fromtimestamp(local_timestamp, tz=tz.UTC)
@@ -351,35 +351,50 @@ class CaomExecute(object):
             # get the metadata at CADC
             if self.supports_latest_client:
                 cadc_meta = self.cadc_client.get_node(
-                    storage_name, limit=None, force=False)
+                    destination_name, limit=None, force=False
+                )
                 cadc_timestamp = cadc_meta.props.get('date')
             else:
                 cadc_meta = mc.get_cadc_meta_client(
-                    self.cadc_client, self.archive, self.fname)
+                    self.cadc_client, self.archive, self.fname
+                )
                 cadc_timestamp = cadc_meta.get('lastmod')
 
             # CADC lastmod value looks like:
             # 'lastmod': 'Fri, 28 Feb 2020 05:04:41 GMT'
             cadc_utc = mc.make_time_tz(cadc_timestamp)
             if local_utc > cadc_utc:
-                self.logger.debug(f'Transferring. {self.fname} has CADC '
-                                  f'timestamp {cadc_utc}.')
+                self.logger.debug(
+                    f'Transferring. {self.fname} has CADC timestamp '
+                    f'{cadc_utc}.'
+                )
             else:
                 self.logger.warning(
-                    f'{self.fname} newer at CADC. Not transferring.')
+                    f'{self.fname} newer at CADC. Not transferring.'
+                )
                 transfer_data = False
 
         if transfer_data:
             if self.supports_latest_client:
-                self._client_put(storage_name)
+                self._client_put(destination_name)
             else:
-                self._cadc_data_put_client()
+                self._cadc_data_put_client_fqn(source_name)
 
     def _cadc_data_put_client(self):
         """Store a collection file."""
         mc.data_put(self.cadc_client, self.working_dir,
                     self.fname, self.archive, self.stream, self.mime_type,
                     self.mime_encoding, metrics=self.observable.metrics)
+
+    def _cadc_data_put_client_fqn(self, source_name):
+        """Store a collection file."""
+        mc.data_put_fqn(
+            self.cadc_client,
+            source_name,
+            self._storage_name,
+            self.stream,
+            self.observable.metrics,
+        )
 
     def _client_put(self, storage_name):
         """Store a collection file using VOS."""
@@ -962,7 +977,7 @@ class DataScrape(DataVisit):
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute')
+        self.logger.debug('Begin execute')
 
         self.logger.debug('get observation for the existing model from disk')
         observation = self._read_model()
@@ -973,77 +988,116 @@ class DataScrape(DataVisit):
         self.logger.debug('output the updated xml')
         self._write_model(observation)
 
-        self.logger.debug(f'End execute')
+        self.logger.debug('End execute')
 
 
 class Store(CaomExecute):
     """Defines the pipeline step for Collection storage of a file. This
     requires access to the file on disk."""
 
-    def __init__(self, config, storage_name, command_name, cred_param,
-                 cadc_client, caom_repo_client, observable,
-                 transferrer):
+    def __init__(
+            self,
+            config,
+            storage_name,
+            command_name,
+            cadc_client,
+            observable,
+            transferrer,
+    ):
         super(Store, self).__init__(
-            config, mc.TaskType.STORE, storage_name, command_name, cred_param,
-            cadc_client, caom_repo_client, meta_visitors=None,
-            observable=observable)
-        self.stream = config.stream
-        self.multiple_files = storage_name.multiple_files(self.working_dir)
-        # handle the case of a URI source
-        self._destination_f_names = \
-            storage_name.multiple_files(self.working_dir)
-        if len(self.multiple_files) == 0:
-            self.multiple_files = [storage_name.entry]
-            self._destination_f_names = [storage_name.file_name]
-            self._destination_uri = [storage_name.file_uri]
+            config,
+            mc.TaskType.STORE,
+            storage_name,
+            command_name,
+            cred_param=None,
+            cadc_client=cadc_client,
+            caom_repo_client=None,
+            meta_visitors=None,
+            observable=observable,
+        )
+        self._destination_f_names = []
+        self._destination_uris = []
+        for entry in self._storage_name.source_names:
+            self._destination_f_names.append(os.path.basename(entry))
+            self._destination_uris.append(
+                mc.build_uri(
+                    self._storage_name.archive,
+                    os.path.basename(entry),
+                    self._storage_name.scheme,
+                ),
+            )
         self._transferrer = transferrer
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute')
+        self.logger.debug('Begin execute')
 
         self.logger.debug('create the work space, if it does not exist')
         self._create_dir()
 
-        self.logger.debug(f'Store {len(self.multiple_files)} files to ad.')
-        for index, entry in enumerate(self.multiple_files):
-            self._fqn = f'{self.working_dir}/{self._destination_f_names[index]}'
+        self.logger.debug(
+            f'Store {len(self._storage_name.source_names)} files to ad.'
+        )
+        for index, entry in enumerate(self._storage_name.source_names):
+            local_fqn = os.path.join(
+                self.working_dir, self._destination_f_names[index]
+            )
             self.logger.debug(f'Retrieve {entry}')
-            self._transferrer.get(entry, self._fqn)
+            self._transferrer.get(entry, local_fqn)
 
-            self.fname = self._destination_f_names[index]
-            self.logger.debug(f'store the input file {self.fname}')
-            self._cadc_put(self._destination_uri[index])
+            self.logger.debug(
+                f'store the input file {entry} to '
+                f'{self._destination_uris[index]}'
+            )
+            self._cadc_put(local_fqn, self._destination_uris[index])
 
         self.logger.debug('clean up the workspace')
         self._cleanup()
 
-        self.logger.debug(f'End execute')
+        self.logger.debug('End execute')
 
 
 class LocalStore(Store):
     """Defines the pipeline step for Collection storage of a file. This
     requires access to the file on disk. The file originates from local
-    disk."""
+    disk.
 
-    def __init__(self, config, storage_name, command_name, cred_param,
-                 cadc_client, caom_repo_client, observable,
-                 transferrer):
+    The destination_name holds the fully-qualified source name of the
+    entry being processed. It's the job of this class to ensure the
+    transferrer can report the fully-qualified destination name of the
+    entry being processed.
+    """
+
+    def __init__(
+            self,
+            config,
+            storage_name,
+            command_name,
+            cadc_client,
+            observable,
+            transferrer
+    ):
         super(LocalStore, self).__init__(
-            config, storage_name, command_name, cred_param,
-            cadc_client, caom_repo_client, observable, transferrer)
+            config,
+            storage_name,
+            command_name,
+            cadc_client,
+            observable,
+            transferrer
+        )
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
-        self.logger.debug(f'Begin execute')
+        self.logger.debug('Begin execute')
 
-        self.logger.debug(f'Store {len(self.multiple_files)} files to ad.')
-        for index, entry in enumerate(self.multiple_files):
-            self.fname = self._destination_f_names[index]
-            self.logger.debug(f'store the input file {self.fname}')
-            self._cadc_put(self._destination_uri[index])
+        self.logger.debug(
+            f'Store {len(self._storage_name.source_names)} files to ad.'
+        )
+        for index, entry in enumerate(self._storage_name.source_names):
+            self.logger.debug(f'store the input file {entry}')
+            self._cadc_put(entry, self._destination_uris[index])
 
-        self.logger.debug(f'End execute')
+        self.logger.debug('End execute')
 
 
 class Scrape(CaomExecute):
@@ -1381,7 +1435,7 @@ class OrganizeExecutes(object):
         """The logic that decides which descendants of CaomExecute to
         instantiate. This is based on the content of the config.yml file
         for an application.
-        :storage_name StorageName extension that handles the naming rules for
+        :destination_name StorageName extension that handles the naming rules for
             a file.
         """
         executors = []
@@ -1449,17 +1503,25 @@ class OrganizeExecutes(object):
                 if self.config.use_local_files:
                     executors.append(
                         LocalStore(
-                            self.config, storage_name, self._command_name,
-                            cred_param, cadc_client,
-                            caom_repo_client, self.observable,
-                            self._store_transfer))
+                            self.config,
+                            storage_name,
+                            self._command_name,
+                            cadc_client,
+                            self.observable,
+                            self._store_transfer,
+                        )
+                    )
                 else:
                     executors.append(
                         Store(
-                            self.config, storage_name, self._command_name,
-                            cred_param, cadc_client,
-                            caom_repo_client, self.observable,
-                            self._store_transfer))
+                            self.config,
+                            storage_name,
+                            self._command_name,
+                            cadc_client,
+                            self.observable,
+                            self._store_transfer
+                        )
+                    )
             elif task_type == mc.TaskType.INGEST:
                 observation = CaomExecute.repo_cmd_get_client(
                     caom_repo_client, self.config.collection,

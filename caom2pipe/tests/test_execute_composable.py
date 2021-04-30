@@ -373,7 +373,6 @@ def test_data_store(test_config):
         os.rmdir(test_dir)
 
     data_client_mock = Mock()
-    repo_client_mock = Mock()
     test_observer = Mock()
     # stat mock is for CadcDataClient
     stat_orig = os.stat
@@ -387,9 +386,13 @@ def test_data_store(test_config):
     try:
         test_config.working_directory = tc.TEST_DATA_DIR
         test_executor = ec.Store(
-            test_config, tc.TestStorageName(), 'command_name', '',
-            data_client_mock, repo_client_mock, observable=test_observer,
-            transferrer=transfer_composable.Transfer())
+            test_config,
+            tc.TestStorageName(),
+            'command_name',
+            data_client_mock,
+            observable=test_observer,
+            transferrer=transfer_composable.Transfer(),
+        )
         test_executor.execute(None)
 
         # check that things worked as expected - no cleanup
@@ -806,101 +809,127 @@ def test_data_visit(get_mock, test_config):
 
 
 def test_store(test_config):
-    test_config.working_directory = '/test_files/caom2pipe'
+    test_config.working_directory = tc.TEST_DATA_DIR
     test_sn = tc.TestStorageName()
+    test_sn.source_names = ['vos:goliaths/nonexistent.fits.gz']
     test_command = 'collection2caom2'
-    test_cred_param = ''
     test_data_client = Mock(autospec=True)
-    test_repo_client = Mock(autospec=True)
     test_observable = Mock(autospec=True)
     test_transferrer = Mock(autospec=True)
     test_transferrer.get.side_effect = _transfer_get_mock
-    test_subject = ec.Store(test_config, test_sn, test_command,
-                            test_cred_param, test_data_client,
-                            test_repo_client, test_observable,
-                            test_transferrer)
+    test_subject = ec.Store(
+        test_config,
+        test_sn,
+        test_command,
+        test_data_client,
+        test_observable,
+        test_transferrer,
+    )
     assert test_subject is not None, 'expect construction'
-    assert test_subject.working_dir == '/test_files/caom2pipe/test_obs_id', \
-        'wrong working directory'
-    assert len(test_subject.multiple_files) == 1, 'wrong file count'
+    assert test_subject.working_dir == os.path.join(
+        tc.TEST_DATA_DIR, 'test_obs_id'
+    ), 'wrong working directory'
+    assert len(test_subject._destination_uris) == 1, 'wrong file count'
     assert len(test_subject._destination_f_names) == 1, \
         'wrong destination file count'
-    assert test_subject._destination_f_names[0] == 'test_obs_id.fits', \
-        'wrong destination'
+    assert (
+        test_subject._destination_f_names[0] == 'nonexistent.fits.gz'
+    ), 'wrong destination'
     test_subject.execute(None)
     assert test_data_client.put_file.called, 'data put not called'
-    assert test_data_client.put_file.call_args.args[0] is None, \
-        'archive not set for test_config'
-    assert test_data_client.put_file.call_args.args[1] == 'test_obs_id.fits', \
-        'expect a file name'
-    assert test_data_client.put_file.call_args.kwargs['archive_stream'] == \
-           'TEST', 'wrong archive stream'
-    assert test_data_client.put_file.call_args.kwargs['mime_type'] == \
-           'application/fits', 'wrong archive'
-    assert test_data_client.put_file.call_args.kwargs['mime_encoding'] \
-           is None, 'wrong archive'
-    assert test_data_client.put_file.call_args.kwargs['md5_check'] is True, \
-        'wrong archive'
+    assert (
+        test_data_client.put_file.call_args.args[0] == 'TEST'
+    ), 'archive not set for test_config, is set for TestStorageName'
+    assert (
+        test_data_client.put_file.call_args.args[1] == os.path.join(
+            tc.TEST_DATA_DIR, 'test_obs_id/nonexistent.fits.gz',
+        )
+    ), 'expect a fully-qualified file name'
+    assert (
+        test_data_client.put_file.call_args.kwargs['archive_stream'] == 'TEST'
+    ), 'wrong archive stream'
+    assert (
+        test_data_client.put_file.call_args.kwargs['mime_type'] ==
+        'application/fits'
+    ), 'wrong archive'
+    assert (
+        test_data_client.put_file.call_args.kwargs['mime_encoding'] is None
+    ), 'wrong archive'
+    assert (
+        test_data_client.put_file.call_args.kwargs['md5_check'] is True
+    ), 'wrong archive'
 
 
 def test_local_store(test_config):
-    test_config.working_directory = '/test_files/caom2pipe'
+    test_config.working_directory = tc.TEST_DATA_DIR
+    test_config.data_source = ['/test_files/caom2pipe']
     test_config.use_local_files = True
-    test_config.archive = 'LOCAL_TEST'
     test_config.store_newer_files_only = False
     test_config.features.supports_latest_client = False
     test_sn = tc.TestStorageName()
 
-    test_fqn = os.path.join(test_config.working_directory, test_sn.file_name)
-    if not os.path.exists(test_fqn):
-        with open(test_fqn, 'w') as f:
+    if not os.path.exists(test_sn.source_names[0]):
+        with open(test_sn.source_names[0], 'w') as f:
             f.write('test content')
 
     test_command = 'collection2caom2'
-    test_cred_param = ''
     test_data_client = Mock(autospec=True)
-    test_repo_client = Mock(autospec=True)
     test_observable = Mock(autospec=True)
     test_transferrer = transfer_composable.Transfer()
-    test_subject = ec.LocalStore(test_config, test_sn, test_command,
-                                 test_cred_param, test_data_client,
-                                 test_repo_client, test_observable,
-                                 test_transferrer)
+    test_subject = ec.LocalStore(
+        test_config,
+        test_sn,
+        test_command,
+        test_data_client,
+        test_observable,
+        test_transferrer,
+    )
     assert test_subject is not None, 'expect construction'
     test_subject.execute(None)
     # does the working directory get used if it's just a local store?
-    assert test_subject.working_dir == '/test_files/caom2pipe', \
+    assert test_subject.working_dir == tc.TEST_DATA_DIR, \
         'wrong working directory'
     # do one file at a time, so it doesn't matter how many files are
     # in the working directory
-    assert len(test_subject.multiple_files) == 1, 'wrong file count'
-    assert len(test_subject._destination_f_names) == 1, \
-        'wrong destination file count'
-    assert test_subject._destination_f_names[0] == 'test_obs_id.fits', \
-        'wrong destination'
+    assert len(test_subject._destination_uris) == 1, 'wrong file count'
+    assert (
+        len(test_subject._destination_f_names) == 1
+    ), 'wrong destination file count'
+    assert (
+        test_subject._destination_f_names[0] == 'test_file.fits.gz'
+    ), 'wrong destination'
     assert test_data_client.put_file.called, 'data put not called'
-    assert test_data_client.put_file.call_args.args[0] == 'LOCAL_TEST', \
-        'expect an archive'
-    assert test_data_client.put_file.call_args.args[1] == 'test_obs_id.fits', \
-        'expect a file name'
-    assert test_data_client.put_file.call_args.kwargs['archive_stream'] == \
-           'TEST', 'wrong archive'
-    assert test_data_client.put_file.call_args.kwargs['mime_type'] == \
-           'application/fits', 'wrong archive'
-    assert test_data_client.put_file.call_args.kwargs['mime_encoding'] \
-           is None, 'wrong archive'
-    assert test_data_client.put_file.call_args.kwargs['md5_check'] is True, \
-        'wrong archive'
+    assert test_data_client.put_file.call_args.args[0] == 'TEST', 'archive'
+    assert (
+        test_data_client.put_file.call_args.args[1] == test_sn.source_names[0]
+    ), 'expect a file name'
+    assert (
+        test_data_client.put_file.call_args.kwargs['archive_stream'] == 'TEST'
+    ), 'wrong archive'
+    assert (
+        test_data_client.put_file.call_args.kwargs['mime_type'] ==
+        'application/fits'
+    ), 'wrong archive'
+    assert (
+        test_data_client.put_file.call_args.kwargs['mime_encoding'] is None
+    ), 'wrong archive'
+    assert (
+        test_data_client.put_file.call_args.kwargs['md5_check'] is True
+    ), 'wrong archive'
 
 
 class FlagStorageName(mc.StorageName):
 
-    def __init__(self, file_name):
-        super(FlagStorageName, self).__init__(fname_on_disk=file_name,
-                                              obs_id='1000003f',
-                                              collection='TEST',
-                                              archive='TEST', compression='',
-                                              entry=file_name)
+    def __init__(self, file_name, source_names):
+        super(FlagStorageName, self).__init__(
+            fname_on_disk=file_name,
+            obs_id='1000003f',
+            collection='TEST',
+            archive='TEST',
+            compression='',
+            entry=file_name,
+            source_names=source_names,
+        )
         self._file_name = file_name
 
     @property
@@ -912,34 +941,43 @@ class FlagStorageName(mc.StorageName):
 def test_store_newer_files_only_flag(client_mock, test_config):
     # first test case
     # flag set to True, file is older at CADC, supports_latest_client = False
-    test_config.working_directory = '/caom2pipe_test'
+    test_config.working_directory = tc.TEST_DATA_DIR
     test_config.use_local_files = True
     test_config.store_newer_files_only = True
     test_config.features.supports_latest_client = False
-    test_sn = FlagStorageName('1000003f.fits.fz')
-    cred_param_mock = Mock(autospec=True)
-    repo_client_mock = Mock(autospec=True)
+    test_f_name = '1000003f.fits.fz'
+    sn = [os.path.join('/caom2pipe_test', test_f_name)]
+    test_sn = FlagStorageName(test_f_name, sn)
     observable_mock = Mock(autospec=True)
     transferrer_mock = Mock(autospec=True)
     client_mock.get_file_info.return_value = {
         'lastmod': 'Mon, 4 Mar 2019 19:05:41 GMT'}
 
-    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
-                                 cred_param_mock, client_mock,
-                                 repo_client_mock, observable_mock,
-                                 transferrer_mock)
+    test_subject = ec.LocalStore(
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
+        transferrer_mock,
+    )
     test_subject.execute(None)
     assert client_mock.put_file.called, 'expect put call'
 
     # second test case, flag set to True, file is newer at CADC
     client_mock.put_file.reset()
     client_mock.get_file_info.return_value = {
-        'lastmod': datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')}
+        'lastmod': datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT'),
+    }
 
-    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
-                                 cred_param_mock, client_mock,
-                                 repo_client_mock, observable_mock,
-                                 transferrer_mock)
+    test_subject = ec.LocalStore(
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
+        transferrer_mock,
+    )
     test_subject.execute(None)
     assert client_mock.put_file.called, 'expect put call, file time is newer'
     client_mock.get_file_info.assert_called_with(None, '1000003f.fits.fz'), \
@@ -948,10 +986,14 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     # third test case, flag set to False, file is older
     test_config.store_newer_files_only = False
     client_mock.put_file.reset()
-    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
-                                 cred_param_mock, client_mock,
-                                 repo_client_mock, observable_mock,
-                                 transferrer_mock)
+    test_subject = ec.LocalStore(
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
+        transferrer_mock,
+    )
     test_subject.execute(None)
     assert client_mock.put_file.called, 'expect put call, file time irrelevant'
 
@@ -963,23 +1005,27 @@ def test_store_newer_files_only_flag_client(
     # just like the previous test, except supports_latest_client = True
     # first test case
     # flag set to True, file is older at CADC, supports_latest_client = False
-    test_config.working_directory = '/caom2pipe_test'
+    test_config.working_directory = tc.TEST_DATA_DIR
     test_config.use_local_files = True
     test_config.store_newer_files_only = True
     test_config.features.supports_latest_client = True
-    test_sn = FlagStorageName('1000003f.fits.fz')
-    cred_param_mock = Mock(autospec=True)
-    repo_client_mock = Mock(autospec=True)
+    test_f_name = '1000003f.fits.fz'
+    sn = [os.path.join('/caom2pipe_test', test_f_name)]
+    test_sn = FlagStorageName(test_f_name, sn)
     observable_mock = Mock(autospec=True)
     transferrer_mock = Mock(autospec=True)
     test_node = type('', (), {})()
     test_node.props = {'date': 'Mon, 4 Mar 2019 19:05:41 GMT'}
     client_mock.get_node.return_value = test_node
 
-    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
-                                 cred_param_mock, client_mock,
-                                 repo_client_mock, observable_mock,
-                                 transferrer_mock)
+    test_subject = ec.LocalStore(
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
+        transferrer_mock,
+    )
     test_subject.execute(None)
     assert put_mock.called, 'expect copy call'
 
@@ -989,27 +1035,39 @@ def test_store_newer_files_only_flag_client(
         'date': datetime.utcnow().strftime('%a, %d %b %Y %H:%M:%S GMT')}
     client_mock.get_node.return_value = test_node
 
-    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
-                                 cred_param_mock, client_mock,
-                                 repo_client_mock, observable_mock,
-                                 transferrer_mock)
+    test_subject = ec.LocalStore(
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
+        transferrer_mock,
+    )
     test_subject.execute(None)
     assert put_mock.called, 'expect copy call, file time is newer'
 
     # third test case, flag set to False, file is older
     test_config.store_newer_files_only = False
     put_mock.reset()
-    test_subject = ec.LocalStore(test_config, test_sn, 'TEST_STORE',
-                                 cred_param_mock, client_mock,
-                                 repo_client_mock, observable_mock,
-                                 transferrer_mock)
+    test_subject = ec.LocalStore(
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
+        transferrer_mock,
+    )
     test_subject.execute(None)
     assert put_mock.called, 'expect copy call, file time irrelevant'
 
 
 def _transfer_get_mock(entry, fqn):
-    assert fqn == '/test_files/caom2pipe/test_obs_id/test_obs_id.fits', \
-        'wrong fqn'
+    assert entry == 'vos:goliaths/nonexistent.fits.gz', 'wrong entry'
+    assert (
+        fqn == os.path.join(
+            tc.TEST_DATA_DIR, 'test_obs_id/nonexistent.fits.gz'
+        )
+    ), 'wrong fqn'
     with open(fqn, 'w') as f:
         f.write('test content')
 

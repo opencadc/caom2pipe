@@ -84,6 +84,7 @@ class TestStorageName(mc.StorageName):
         super(TestStorageName, self).__init__(
             'test_obs_id', 'TEST', '*', 'test_file.fits.gz', entry=entry)
         self.url = 'https://test_url/'
+        self._source_names = [os.path.join(TEST_DATA_DIR, 'test_file.fits.gz')]
 
     def is_valid(self):
         return True
