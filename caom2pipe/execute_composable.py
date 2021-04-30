@@ -859,15 +859,28 @@ class DataVisit(CaomExecute):
         how to get data from any DataSource for execution.
     """
 
-    def __init__(self, config, storage_name, cred_param,
-                 cadc_client,
-                 caom_repo_client, data_visitors, task_type,
-                 observable, transferrer):
+    def __init__(
+            self,
+            config,
+            storage_name,
+            cadc_client,
+            caom_repo_client,
+            data_visitors,
+            task_type,
+            observable,
+            transferrer,
+    ):
         super(DataVisit, self).__init__(
-            config, task_type=task_type, storage_name=storage_name,
-            command_name=None, cred_param=cred_param, cadc_client=cadc_client,
-            caom_repo_client=caom_repo_client, meta_visitors=None,
-            observable=observable)
+            config,
+            task_type=task_type,
+            storage_name=storage_name,
+            command_name=None,
+            cred_param=None,
+            cadc_client=cadc_client,
+            caom_repo_client=caom_repo_client,
+            meta_visitors=None,
+            observable=observable,
+        )
         self._data_visitors = data_visitors
         self._log_file_directory = config.log_file_directory
         self._transferrer = transferrer
@@ -879,8 +892,12 @@ class DataVisit(CaomExecute):
         self.logger.debug('create the work space, if it does not exist')
         self._create_dir()
 
-        self.logger.debug('get the input file')
-        self._transferrer.get(self._storage_name.source_name, self._fqn)
+        self.logger.debug('get the input files')
+        for entry in self._storage_name.source_names:
+            local_fqn = os.path.join(
+                self.working_dir, os.path.basename(entry)
+            )
+            self._transferrer.get(entry, local_fqn)
 
         self.logger.debug('get the observation for the existing model')
         observation = self._repo_cmd_read_client()
@@ -902,13 +919,15 @@ class DataVisit(CaomExecute):
     def _visit_data(self, observation):
         """Execute the visitors that require access to the full data content
         of a file."""
-        kwargs = {'working_directory': self.working_dir,
-                  'science_file': self.fname,
-                  'log_file_directory': self._log_file_directory,
-                  'cadc_client': self.cadc_client,
-                  'caom_repo_client': self.caom_repo_client,
-                  'stream': self.stream,
-                  'observable': self.observable}
+        kwargs = {
+            'working_directory': self.working_dir,
+            'science_file': self.fname,
+            'log_file_directory': self._log_file_directory,
+            'cadc_client': self.cadc_client,
+            'caom_repo_client': self.caom_repo_client,
+            'stream': self.stream,
+            'observable': self.observable,
+        }
         for visitor in self._data_visitors:
             try:
                 self.logger.debug(f'Visit for {visitor}')
@@ -925,11 +944,11 @@ class LocalDataVisit(DataVisit):
     entries with the service.
     """
 
-    def __init__(self, config, storage_name, cred_param,
+    def __init__(self, config, storage_name,
                  cadc_client, caom_repo_client, data_visitors,
                  observable):
         super(LocalDataVisit, self).__init__(
-            config, storage_name=storage_name, cred_param=cred_param,
+            config, storage_name=storage_name,
             cadc_client=cadc_client,
             caom_repo_client=caom_repo_client, data_visitors=data_visitors,
             task_type=mc.TaskType.MODIFY, observable=observable,
@@ -967,10 +986,15 @@ class DataScrape(DataVisit):
 
     def __init__(self, config, storage_name, data_visitors, observable):
         super(DataScrape, self).__init__(
-            config, storage_name, cred_param='',
-            cadc_client=None, caom_repo_client=None,
-            data_visitors=data_visitors, task_type=mc.TaskType.SCRAPE,
-            observable=observable, transferrer=tc.Transfer())
+            config,
+            storage_name,
+            cadc_client=None,
+            caom_repo_client=None,
+            data_visitors=data_visitors,
+            task_type=mc.TaskType.SCRAPE,
+            observable=observable,
+            transferrer=tc.Transfer()
+        )
         self._define_local_dirs(storage_name)
         self.fname = storage_name.fname_on_disk
         self.log_file_directory = config.log_file_directory
@@ -1063,11 +1087,6 @@ class LocalStore(Store):
     """Defines the pipeline step for Collection storage of a file. This
     requires access to the file on disk. The file originates from local
     disk.
-
-    The destination_name holds the fully-qualified source name of the
-    entry being processed. It's the job of this class to ensure the
-    transferrer can report the fully-qualified destination name of the
-    entry being processed.
     """
 
     def __init__(
@@ -1077,7 +1096,6 @@ class LocalStore(Store):
             command_name,
             cadc_client,
             observable,
-            transferrer
     ):
         super(LocalStore, self).__init__(
             config,
@@ -1085,7 +1103,7 @@ class LocalStore(Store):
             command_name,
             cadc_client,
             observable,
-            transferrer
+            transferrer=None,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -1498,7 +1516,6 @@ class OrganizeExecutes(object):
                             self._command_name,
                             self._cadc_client,
                             self.observable,
-                            self._store_transfer,
                         )
                     )
                 else:
@@ -1599,16 +1616,27 @@ class OrganizeExecutes(object):
                         else:
                             executors.append(
                                 LocalDataVisit(
-                                    self.config, storage_name,
-                                    self._cred_param,
-                                    self._cadc_client, self._caom_client,
-                                    self._data_visitors, self.observable))
+                                    self.config,
+                                    storage_name,
+                                    self._cadc_client,
+                                    self._caom_client,
+                                    self._data_visitors,
+                                    self.observable,
+                                )
+                            )
                     else:
-                        executors.append(DataVisit(
-                            self.config, storage_name, self._cred_param,
-                            self._cadc_client, self._caom_client,
-                            self._data_visitors, mc.TaskType.MODIFY,
-                            self.observable, self._modify_transfer))
+                        executors.append(
+                            DataVisit(
+                                self.config,
+                                storage_name,
+                                self._cadc_client,
+                                self._caom_client,
+                                self._data_visitors,
+                                mc.TaskType.MODIFY,
+                                self.observable,
+                                self._modify_transfer,
+                            )
+                        )
                 else:
                     self._logger.info(f'Skipping the MODIFY task for '
                                       f'{storage_name.file_name}.')
