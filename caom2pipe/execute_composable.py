@@ -228,8 +228,9 @@ class CaomExecute(object):
         """when files are on disk don't worry about a separate directory
         per observation"""
         self.working_dir = self.root_dir
-        self.model_fqn = os.path.join(self.working_dir,
-                                      storage_name.model_file_name)
+        self.model_fqn = os.path.join(
+            self.working_dir, storage_name.model_file_name
+        )
 
     def _find_fits2caom2_plugin(self):
         """Find the code that is passed as the --plugin parameter to
@@ -944,23 +945,32 @@ class LocalDataVisit(DataVisit):
     entries with the service.
     """
 
-    def __init__(self, config, storage_name,
-                 cadc_client, caom_repo_client, data_visitors,
-                 observable):
+    def __init__(
+            self,
+            config,
+            storage_name,
+            cadc_client,
+            caom_repo_client,
+            data_visitors,
+            observable,
+    ):
         super(LocalDataVisit, self).__init__(
-            config, storage_name=storage_name,
+            config,
+            storage_name=storage_name,
             cadc_client=cadc_client,
-            caom_repo_client=caom_repo_client, data_visitors=data_visitors,
-            task_type=mc.TaskType.MODIFY, observable=observable,
-            transferrer=tc.Transfer())
-        self._define_local_dirs(storage_name)
-        self.fname = storage_name.fname_on_disk
-        self.prev_fname = storage_name.prev
-        self.thumb_fname = storage_name.thumb
+            caom_repo_client=caom_repo_client,
+            data_visitors=data_visitors,
+            task_type=mc.TaskType.MODIFY,
+            observable=observable,
+            transferrer=tc.Transfer(),
+        )
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
         self._logger.debug(f'Begin execute')
+
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
 
         self._logger.debug('get the observation for the existing model')
         observation = self._repo_cmd_read_client()
@@ -973,6 +983,9 @@ class LocalDataVisit(DataVisit):
 
         self._logger.debug('store the updated xml')
         self._repo_cmd_update_client(observation)
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
 
         self._logger.debug(f'End execute')
 
@@ -1649,7 +1662,8 @@ class OrganizeExecutes(object):
                 pass
             else:
                 raise mc.CadcException(
-                    f'Do not understand task type {task_type}')
+                    f'Do not understand task type {task_type}'
+                )
         return executors
 
     def do_one(self, storage_name):
