@@ -937,8 +937,10 @@ def test_local_store(test_config):
     assert test_subject is not None, 'expect construction'
     test_subject.execute(None)
     # does the working directory get used if it's just a local store?
-    assert test_subject.working_dir == tc.TEST_DATA_DIR, \
-        'wrong working directory'
+    assert (
+        test_subject.working_dir == os.path.join(
+            tc.TEST_DATA_DIR, 'test_obs_id')
+    ), 'wrong working directory'
     # do one file at a time, so it doesn't matter how many files are
     # in the working directory
     assert len(test_subject._destination_uris) == 1, 'wrong file count'
@@ -1032,7 +1034,7 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     assert client_mock.put_file.called, 'expect put call, file time irrelevant'
 
 
-@patch('caom2pipe.manage_composable.client_put')
+@patch('caom2pipe.manage_composable.client_put_fqn')
 @patch('vos.Client')
 def test_store_newer_files_only_flag_client(
         client_mock, put_mock, test_config):

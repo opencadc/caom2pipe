@@ -90,9 +90,17 @@ class TestTransfer(transfer_composable.Transfer):
     def __init__(self):
         super(TestTransfer, self).__init__()
 
-    def get(self, source, dest_fqn):
-        logging.error(f'source {source} dest {dest_fqn}')
-        source_fqn = f'/caom2pipe_test/{source}'
+    def get(self, source_fqn, dest_fqn):
+        logging.error(f'source {source_fqn} dest {dest_fqn}')
+        assert (
+            source_fqn == os.path.join(
+                tc.TEST_DATA_DIR, 'test_file.fits.gz'
+            )
+        ), 'wrong source directory'
+        assert (
+            dest_fqn ==
+            '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz'
+        ), 'wrong destination directory'
         shutil.copy(source_fqn, dest_fqn)
 
 
@@ -107,8 +115,11 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
         for entry in file_list:
             stats = os.stat(entry)
             if prev_exec_time <= stats.st_mtime <= exec_time:
-                result.append(dsc.StateRunnerMeta(os.path.basename(entry),
-                                                  stats.st_mtime))
+                result.append(
+                    dsc.StateRunnerMeta(
+                        os.path.basename(entry), stats.st_mtime
+                    )
+                )
         return result
 
 
@@ -119,7 +130,6 @@ def test_run_state(data_mock, repo_mock):
     data_mock.return_value.get_file.side_effect = tc.mock_get_file
 
     test_f_id = '1000003f'
-    test_f_name = f'{test_f_id}.fits.fz'
     test_wd = '/usr/src/app/caom2pipe/int_test'
     caom2pipe_bookmark = 'caom2_timestamp'
     test_config = mc.Config()
@@ -135,7 +145,8 @@ def test_run_state(data_mock, repo_mock):
     test_config.proxy_file_name = f'{test_wd}/cadcproxy.pem'
     test_config.rejected_file_name = 'rejected.yml'
     test_config.rejected_directory = f'{test_wd}/rejected'
-    test_config._report_fqn = f'{test_config.log_file_directory}/app_report.txt'
+    test_config._report_fqn = \
+        f'{test_config.log_file_directory}/app_report.txt'
     test_config.resource_id = 'ivo://cadc.nrc.ca/sc2repo'
     test_config.retry_file_name = 'retries.txt'
     test_config.retry_fqn = \
@@ -144,8 +155,11 @@ def test_run_state(data_mock, repo_mock):
     test_config.success_fqn = \
         f'{test_config.log_file_directory}/success_log.txt'
     test_config.tap_id = 'ivo://cadc.nrc.ca/sc2tap'
-    test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST,
-                              mc.TaskType.MODIFY]
+    test_config.task_types = [
+        mc.TaskType.STORE,
+        mc.TaskType.INGEST,
+        mc.TaskType.MODIFY,
+    ]
     test_config.features.use_file_names = True
     test_config.features.use_urls = False
     test_config.features.supports_latest_client = False
@@ -179,20 +193,23 @@ def test_run_state(data_mock, repo_mock):
     transferrer = TestTransfer()
 
     try:
-        test_result = rc.run_by_state(bookmark_name=caom2pipe_bookmark,
-                                      command_name='collection2caom2',
-                                      config=test_config,
-                                      end_time=test_end_time,
-                                      name_builder=test_builder,
-                                      source=test_data_source,
-                                      modify_transfer=None,
-                                      store_transfer=transferrer)
+        test_result = rc.run_by_state(
+            bookmark_name=caom2pipe_bookmark,
+            command_name='collection2caom2',
+            config=test_config,
+            end_time=test_end_time,
+            name_builder=test_builder,
+            source=test_data_source,
+            modify_transfer=transferrer,
+            store_transfer=transferrer,
+        )
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
         assert data_mock.called, 'expect put call'
-        assert isinstance(data_mock.call_args.args[0], net.Subject), \
-            'wrong args'
+        assert (
+            isinstance(data_mock.call_args.args[0], net.Subject)
+        ), 'wrong args'
 
         # state file checking
         test_state = mc.State(test_config.state_fqn)
@@ -258,7 +275,7 @@ def test_run_state_v(client_mock, repo_mock):
     repo_mock.return_value.read.side_effect = tc.mock_read
     client_mock.get_node.side_effect = tc.mock_get_node
     # the test file is length 0
-    client_mock.return_value.copy.return_value = 0
+    client_mock.return_value.copy.return_value = 48
 
     # test_f_id = '1000003f'
     # test_f_name = f'{test_f_id}.fits.fz'
@@ -272,12 +289,13 @@ def test_run_state_v(client_mock, repo_mock):
     test_config.failure_fqn = \
         f'{test_config.log_file_directory}/failure_log.txt'
     test_config.log_to_file = True
-    test_config.logging_level = 'DEBUG'
+    test_config.logging_level = 'INFO'
     test_config.progress_file_name = 'progress.txt'
     test_config.proxy_file_name = f'{test_wd}/cadcproxy.pem'
     test_config.rejected_file_name = 'rejected.yml'
     test_config.rejected_directory = f'{test_wd}/rejected'
-    test_config._report_fqn = f'{test_config.log_file_directory}/app_report.txt'
+    test_config._report_fqn = \
+        f'{test_config.log_file_directory}/app_report.txt'
     test_config.resource_id = 'ivo://cadc.nrc.ca/sc2repo'
     test_config.retry_file_name = 'retries.txt'
     test_config.retry_fqn = \
@@ -286,8 +304,11 @@ def test_run_state_v(client_mock, repo_mock):
     test_config.success_fqn = \
         f'{test_config.log_file_directory}/success_log.txt'
     test_config.tap_id = 'ivo://cadc.nrc.ca/sc2tap'
-    test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST,
-                              mc.TaskType.MODIFY]
+    test_config.task_types = [
+        mc.TaskType.STORE,
+        mc.TaskType.INGEST,
+        mc.TaskType.MODIFY,
+    ]
     test_config.features.use_file_names = True
     test_config.features.use_urls = False
     test_config.features.supports_latest_client = True
@@ -321,22 +342,24 @@ def test_run_state_v(client_mock, repo_mock):
     transferrer = TestTransfer()
 
     try:
-        test_result = rc.run_by_state(bookmark_name=caom2pipe_bookmark,
-                                      command_name='collection2caom2',
-                                      config=test_config,
-                                      end_time=test_end_time,
-                                      name_builder=test_builder,
-                                      source=test_data_source,
-                                      modify_transfer=None,
-                                      store_transfer=transferrer)
+        test_result = rc.run_by_state(
+            bookmark_name=caom2pipe_bookmark,
+            command_name='collection2caom2',
+            config=test_config,
+            end_time=test_end_time,
+            name_builder=test_builder,
+            source=test_data_source,
+            modify_transfer=transferrer,
+            store_transfer=transferrer,
+        )
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
         assert client_mock.return_value.copy.called, 'expect put call'
-        args, kwargs = client_mock.return_value.copy.call_args
-        assert args[0] == 'ad:TEST/test_obs_id.fits.gz', 'wrong args[0]'
-        assert args[1] == '/usr/src/app/caom2pipe/int_test/test_obs_id/' \
-                          'test_obs_id.fits', 'wrong args[1]'
+        client_mock.return_value.copy.assert_called_with(
+            '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz',
+            destination='ad:TEST/test_file.fits.gz'
+        ), 'wrong call args'
 
         # state file checking
         test_state = mc.State(test_config.state_fqn)
