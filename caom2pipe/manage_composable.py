@@ -2537,6 +2537,38 @@ def client_put(client, working_directory, file_name, storage_name,
     metrics.observe(start, end, file_size, 'copy', 'vos', file_name)
 
 
+def client_put_fqn(client, source_name, destination_name, metrics=None):
+    """
+    Make a copy of a locally available file by writing it to CADC. Assumes
+    file and directory locations are correct.
+
+    Will check that the size of the file stored is the same as the size of
+    the file on disk.
+
+    :param client: Client for write access to CADC storage.
+    :param source_name: fully-qualified file name on local storage
+    :param destination_name: Where to write the file.
+    :param metrics: Tracking success execution times, and failure counts.
+    """
+    start = current()
+    try:
+        stored_size = client.copy(source_name, destination=destination_name)
+        file_size = os.stat(source_name).st_size
+        if stored_size != file_size:
+            raise CadcException(
+                f'Stored file size {stored_size} != {file_size} at CADC for '
+                f'{destination_name}.'
+            )
+    except Exception as e:
+        metrics.observe_failure('copy', 'vos', os.path.basename(source_name))
+        logging.debug(traceback.format_exc())
+        raise CadcException(f'Failed to store data with {e}')
+    end = current()
+    metrics.observe(
+        start, end, file_size, 'copy', 'vos', os.path.basename(source_name)
+    )
+
+
 def client_get(client, working_directory, file_name, source, metrics):
     """
     Retrieve a local copy of a file available from CADC. Assumes the working

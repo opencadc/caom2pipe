@@ -173,10 +173,7 @@ class CaomExecute(object):
         self.root_dir = config.working_directory
         self.collection = config.collection
         self.archive = config.archive
-        if config.use_local_files:
-            self.working_dir = self.root_dir
-        else:
-            self.working_dir = os.path.join(self.root_dir, self.obs_id)
+        self.working_dir = os.path.join(self.root_dir, self.obs_id)
 
         if config.log_to_file:
             self.model_fqn = os.path.join(config.log_file_directory,
@@ -379,7 +376,7 @@ class CaomExecute(object):
 
         if transfer_data:
             if self.supports_latest_client:
-                self._client_put(destination_name)
+                self._client_put(source_name, destination_name)
             else:
                 self._cadc_data_put_client_fqn(source_name)
 
@@ -399,10 +396,14 @@ class CaomExecute(object):
             self.observable.metrics,
         )
 
-    def _client_put(self, storage_name):
+    def _client_put(self, source_name, destination_name):
         """Store a collection file using VOS."""
-        mc.client_put(self.cadc_client, self.working_dir,
-                      self.fname, storage_name, self.observable.metrics)
+        mc.client_put_fqn(
+            self.cadc_client,
+            source_name,
+            destination_name,
+            self.observable.metrics
+        )
 
     def _read_model(self):
         """Read an observation into memory from an XML file on disk."""
