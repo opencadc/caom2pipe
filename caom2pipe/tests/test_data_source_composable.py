@@ -217,7 +217,7 @@ def test_list_dir_time_box_data_source():
         test_prev_exec_time, test_exec_time
     )
     assert test_result is not None, 'expect a result'
-    assert len(test_result) == 32, 'expect contents in the result'
+    assert len(test_result) == 14, 'expect contents in the result'
     test_entry = test_result.pop()
     assert test_entry.entry_name == '/test_files/sub_directory/abc.fits', \
         'wrong entry'
@@ -227,7 +227,7 @@ def test_list_dir_time_box_data_source():
         test_prev_exec_time, test_exec_time
     )
     assert test_result is not None, 'expect a non-recursive result'
-    assert len(test_result) == 31, 'expect contents in non-recursive result'
+    assert len(test_result) == 13, 'expect contents in non-recursive result'
     x = [ii.entry_name for ii in test_result]
     assert '/test_files/sub_directory/abc.fits' not in x, \
         'recursive result should not be present'

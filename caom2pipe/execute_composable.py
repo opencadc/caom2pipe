@@ -244,21 +244,22 @@ class CaomExecute(object):
 
     def _fits2caom2_cmd_local(self, connected=True):
         """
-        Execute fits2caom with a --cert parameter and a --local parameter.
+        Execute fits2caom with a credential parameter and a --local parameter.
         """
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
         conn = ''
         if not connected:
             conn = f'--not_connected'
-        local_fqn = os.path.join(self.working_dir, self.fname)
-        temp = (
-            f'{self.command_name} {self.logging_level_param} {conn} '
-            f'{self.cred_param} --observation {self.collection} '
-            f'{self.obs_id} --local {local_fqn} --out {self.model_fqn} '
-            f'--plugin {plugin} --module {plugin} --lineage {self.lineage}'
-        )
-        self._invoke_to_caom2(temp, plugin)
+        local_fqn = ' '.join(ii for ii in self._storage_name.source_names)
+        sys.argv = (f'{self.command_name} {self.logging_level_param} {conn} '
+                    f'{self.cred_param} --observation {self.collection} '
+                    f'{self.obs_id} --local {local_fqn} --out '
+                    f'{self.model_fqn} --plugin {plugin} --module {plugin} '
+                    f'--lineage {self._storage_name.lineage}').split()
+        result = command.to_caom2()
+        if result == -1:
+            raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
 
     def _fits2caom2_cmd(self):
         """Execute fits2caom with a --cert parameter."""
@@ -290,7 +291,8 @@ class CaomExecute(object):
         """Execute fits2caom with a --in, --local and a --cert parameter."""
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
-        local_fqn = os.path.join(self.working_dir, self.fname)
+        command = mc.load_module(plugin, 'to_caom2')
+        local_fqn = ' '.join(ii for ii in self._storage_name.source_names)
         conn = ''
         if not connected:
             conn = f'--not_connected'
@@ -677,28 +679,45 @@ class MetaUpdateObservation(CaomExecute):
 
 
 class LocalMetaCreate(CaomExecute):
-    """Defines the pipeline step for Collection ingestion of metadata into CAOM.
-    This requires access to only header information.
+    """Defines the pipeline step for Collection ingestion of metadata into
+    CAOM. This requires access to only header information.
 
     This pipeline step will execute a caom2-repo create."""
 
-    def __init__(self, config, storage_name, command_name, cred_param,
-                 cadc_client, caom_repo_client, meta_visitors,
-                 observable):
+    def __init__(
+            self,
+            config,
+            storage_name,
+            command_name,
+            cred_param,
+            cadc_client,
+            caom_repo_client,
+            meta_visitors,
+            observable,
+    ):
         super(LocalMetaCreate, self).__init__(
-            config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
-            cadc_client, caom_repo_client, meta_visitors, observable)
-        self._define_local_dirs(storage_name)
-        self.fname = storage_name.fname_on_disk
+            config,
+            mc.TaskType.INGEST,
+            storage_name,
+            command_name,
+            cred_param,
+            cadc_client,
+            caom_repo_client,
+            meta_visitors,
+            observable,
+        )
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
         self.logger.debug('Begin execute')
-        self.logger.debug('the steps:')
 
-        self.logger.debug('the observation does not exist, so go '
-                          'straight to generating the xml, as the main_app '
-                          'will retrieve the headers')
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
+
+        self.logger.debug(
+            'the observation does not exist, so go straight to generating '
+            'the xml, as the main_app will retrieve the headers'
+        )
         self._fits2caom2_cmd_local()
 
         self.logger.debug('read the xml from disk')
@@ -712,6 +731,9 @@ class LocalMetaCreate(CaomExecute):
 
         self.logger.debug('store the xml')
         self._repo_cmd_create_client(observation)
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
 
         self.logger.debug('End execute')
 
@@ -1145,15 +1167,13 @@ class Scrape(CaomExecute):
             config, mc.TaskType.SCRAPE, storage_name, command_name,
             cred_param='', cadc_client=None, caom_repo_client=None,
             meta_visitors=meta_visitors, observable=observable)
-        self._define_local_dirs(storage_name)
-        self.fname = storage_name.fname_on_disk
-        if self.fname is None:
-            self.fname = storage_name.file_name
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
         self.logger.debug(f'Begin execute')
-        self.logger.debug('the steps:')
+
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
 
         self.logger.debug('generate the xml from the file on disk')
         self._fits2caom2_cmd_local(connected=False)
@@ -1166,6 +1186,9 @@ class Scrape(CaomExecute):
 
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
 
         self.logger.debug(f'End execute')
 
