@@ -75,7 +75,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from caom2 import ProductType, ReleaseType, Artifact, ChecksumURI
-from caom2 import SimpleObservation, ObservationIntentType
+from caom2 import SimpleObservation, ObservationIntentType, Algorithm
 from caom2pipe import manage_composable as mc
 
 import test_conf as tc
@@ -85,7 +85,17 @@ TEST_OBS_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_obs_id.fits.xml')
 ISO8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 
 
-def test_read_obs():
+def test_read_write_obs_with_file():
+    if os.path.exists(TEST_OBS_FILE):
+        os.unlink(TEST_OBS_FILE)
+    mc.write_obs_to_file(
+        SimpleObservation(
+            collection='test_collection',
+            observation_id='test_obs_id',
+            algorithm=Algorithm(str('exposure'))
+        ),
+        TEST_OBS_FILE,
+    )
     test_subject = mc.read_obs_from_file(TEST_OBS_FILE)
     assert test_subject is not None, 'expect a result'
     assert isinstance(test_subject, SimpleObservation), 'wrong read'

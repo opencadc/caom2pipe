@@ -112,7 +112,7 @@ def test_run_todo_list_dir_data_source(read_obs_mock, fits2caom2_in_out_mock,
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     if fits2caom2_mock.called:
-        assert not fits2caom2_in_out_mock.called, 'expect no in/out call'
+        fits2caom2_mock.assert_called_with(connected=False)
     else:
         assert fits2caom2_in_out_mock.called, 'expect fits2caom2 in/out call'
 
@@ -132,7 +132,7 @@ def test_run_todo_list_dir_data_source_v(read_obs_mock, fits2caom2_in_out_mock,
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     if fits2caom2_mock.called:
-        assert not fits2caom2_in_out_mock.called, 'expect no in/out call'
+        fits2caom2_mock.assert_called_with(connected=False)
     else:
         assert fits2caom2_in_out_mock.called, 'expect fits2caom2 in/out call'
     assert read_obs_mock.called, 'read_obs not called'

@@ -210,16 +210,29 @@ def test_meta_delete_create_client_execute(test_config):
 
 
 def test_local_meta_create_client_execute(test_config):
+    test_dir = os.path.join(tc.THIS_DIR, 'test_obs_id')
+    test_f_fqn = os.path.join(test_dir, 'test_obs_id.fits.xml')
+    if os.path.exists(test_f_fqn):
+        os.unlink(test_f_fqn)
+        os.rmdir(test_dir)
+
     test_cred = ''
     data_client_mock = Mock()
     data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
     repo_client_mock = Mock()
     test_observer = Mock()
+    test_config.logging_level = 'INFO'
 
     test_executor = ec.LocalMetaCreate(
-        test_config, tc.TestStorageName(), TEST_APP, test_cred,
-        data_client_mock, repo_client_mock, meta_visitors=None,
-        observable=test_observer)
+        test_config,
+        tc.TestStorageName(),
+        __name__,
+        test_cred,
+        data_client_mock,
+        repo_client_mock,
+        meta_visitors=None,
+        observable=test_observer,
+    )
     test_executor.execute(None)
     assert repo_client_mock.create.called, 'create call missed'
     assert test_observer.metrics.observe.called, 'observe not called'
@@ -451,15 +464,22 @@ def test_data_store(test_config):
 
 def test_scrape(test_config):
     # clean up from previous tests
-    if os.path.exists(tc.TestStorageName().model_file_name):
-        os.remove(tc.TestStorageName().model_file_name)
+    test_sn = tc.TestStorageName()
+    model_fqn = os.path.join(tc.TEST_DATA_DIR, test_sn.model_file_name)
+    if os.path.exists(model_fqn):
+        os.remove(model_fqn)
+
     netrc = os.path.join(tc.TEST_DATA_DIR, 'test_netrc')
     assert os.path.exists(netrc)
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.logging_level = 'INFO'
     test_executor = ec.Scrape(
-        test_config, tc.TestStorageName(), __name__, observable=None,
-        meta_visitors=[])
+        test_config,
+        tc.TestStorageName(),
+        __name__,
+        observable=None,
+        meta_visitors=[],
+    )
     test_executor.execute(None)
 
 
@@ -1142,23 +1162,63 @@ def _get_file_info():
 
 
 def to_caom2():
-    """Called from ScrapeDirect"""
+    plugin = '/usr/local/lib/python3.8/site-packages/test_execute_composable/' \
+             'test_execute_composable.py'
     assert sys.argv is not None, 'expect sys.argv to be set'
-    assert sys.argv == ['test_execute_composable', '--verbose',
-                        '--not_connected', '--observation', 'OMM',
-                        'test_obs_id', '--local',
-                        '/usr/src/app/caom2pipe/caom2pipe/tests/data/'
-                        'test_file.fits.gz',
-                        '--out',
-                        '/usr/src/app/caom2pipe/caom2pipe/tests/data/'
-                        'test_obs_id.fits.xml', '--plugin',
-                        '/usr/local/lib/python3.8/site-packages/'
-                        'test_execute_composable/test_execute_composable.py',
-                        '--module',
-                        '/usr/local/lib/python3.8/site-packages/'
-                        'test_execute_composable/test_execute_composable.py',
-                        '--lineage',
-                        'test_obs_id/ad:TEST/test_obs_id.fits.gz']
+    local_meta_create_answer = [
+        'test_execute_composable',
+        '--verbose',
+        '--observation',
+        'OMM',
+        'test_obs_id',
+        '--local',
+        '/usr/src/app/caom2pipe/caom2pipe/tests/data/test_file.fits.gz',
+        '--out',
+        '/usr/src/app/caom2pipe/caom2pipe/tests/test_obs_id/'
+        'test_obs_id.fits.xml',
+        '--plugin',
+        f'{plugin}',
+        '--module',
+        f'{plugin}',
+        '--lineage',
+        'test_obs_id/ad:TEST/test_obs_id.fits.gz',
+    ]
+    scrape_answer = [
+        'test_execute_composable',
+        '--verbose',
+        '--not_connected',
+        '--observation',
+        'OMM',
+        'test_obs_id',
+        '--local',
+        '/usr/src/app/caom2pipe/caom2pipe/tests/data/test_file.fits.gz',
+        '--out',
+        '/usr/src/app/caom2pipe/caom2pipe/tests/data/test_obs_id/'
+        'test_obs_id.fits.xml',
+        '--plugin',
+        f'{plugin}',
+        '--module',
+        f'{plugin}',
+        '--lineage',
+        'test_obs_id/ad:TEST/test_obs_id.fits.gz',
+    ]
+    # TaskType.SCRAPE (Scrape)
+    if sys.argv != scrape_answer:
+        # TaskType.INGEST (LocalMetaCreate)
+        if sys.argv != local_meta_create_answer:
+            assert False, \
+                f'wrong sys.argv values \n{sys.argv} ' \
+                f'\n{local_meta_create_answer}'
+    fqn_index = sys.argv.index('--out') + 1
+    fqn = sys.argv[fqn_index]
+    mc.write_obs_to_file(
+        SimpleObservation(
+            collection='test_collection',
+            observation_id='test_obs_id',
+            algorithm=Algorithm(str('exposure'))
+        ),
+        fqn,
+    )
 
 
 def _mock_get_file_info(archive, file_id):
