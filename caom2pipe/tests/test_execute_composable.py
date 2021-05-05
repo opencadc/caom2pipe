@@ -556,32 +556,26 @@ def test_organize_executes_chooser(test_config):
     caom_client.read.side_effect = _read_obs2
 
     try:
-        mc.exec_cmd_info = \
-            Mock(
-                return_value='INFO:cadc-data:info\n'
-                             'File C170324_0054_SCI_prev.jpg:\n'
-                             '    archive: OMM\n'
-                             '   encoding: None\n'
-                             '    lastmod: Mon, 25 Jun 2018 16:52:07 GMT\n'
-                             '     md5sum: f37d21c53055498d1b5cb7753e1c6d6f\n'
-                             '       name: C120902_sh2-132_J_old_'
-                             'SCIRED.fits.gz\n'
-                             '       size: 754408\n'
-                             '       type: image/jpeg\n'
-                             '    umd5sum: 704b494a972eed30b18b817e243ced7d\n'
-                             '      usize: 754408\n'.encode('utf-8')
-            )
+        ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
+        mc.exec_cmd_info = Mock(
+            return_value='INFO:cadc-data:info\n'
+                         'File C170324_0054_SCI_prev.jpg:\n'
+                         '    archive: OMM\n'
+                         '   encoding: None\n'
+                         '    lastmod: Mon, 25 Jun 2018 16:52:07 GMT\n'
+                         '     md5sum: f37d21c53055498d1b5cb7753e1c6d6f\n'
+                         '       name: C120902_sh2-132_J_old_'
+                         'SCIRED.fits.gz\n'
+                         '       size: 754408\n'
+                         '       type: image/jpeg\n'
+                         '    umd5sum: 704b494a972eed30b18b817e243ced7d\n'
+                         '      usize: 754408\n'.encode('utf-8')
+        )
 
         test_config.task_types = [mc.TaskType.INGEST]
         test_chooser = tc.TestChooser()
         test_oe = ec.OrganizeExecutes(
-            test_config,
-            'command_name',
-            [],
-            [],
-            test_chooser,
-            cadc_client=Mock(autospec=True, return_value=None),
-            caom_client=caom_client,
+            test_config, 'command_name', [], [], test_chooser
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -596,19 +590,14 @@ def test_organize_executes_chooser(test_config):
         test_config.use_local_files = False
         test_config.task_types = [mc.TaskType.INGEST]
         test_oe = ec.OrganizeExecutes(
-            test_config,
-            'command_name',
-            [],
-            [],
-            test_chooser,
-            cadc_client=Mock(autospec=True, return_value=None),
-            caom_client=caom_client,
+            test_config, 'command_name', [], [], test_chooser
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
         assert isinstance(executors[0], ec.MetaDeleteCreate)
-        assert caom_client.read.called, 'read should be called'
+        assert CadcDataClient.__init__.called, 'mock not called'
+        assert CAOM2RepoClient.__init__.called, 'mock not called'
     finally:
         mc.exec_cmd_orig = exec_cmd_orig
 
