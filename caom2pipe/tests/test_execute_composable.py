@@ -583,8 +583,10 @@ def test_organize_executes_chooser(test_config):
         assert isinstance(executors[0], ec.LocalMetaDeleteCreate)
         assert executors[0].fname == 'test_obs_id.fits', 'file name'
         assert executors[0].stream == 'TEST', 'stream'
-        assert executors[0].working_dir == os.path.join(
-            tc.THIS_DIR, 'test_obs_id'
+        assert (
+            executors[0].working_dir == os.path.join(
+                tc.THIS_DIR, 'test_obs_id'
+            )
         ), 'working_dir'
 
         test_config.use_local_files = False
