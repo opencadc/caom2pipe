@@ -539,7 +539,9 @@ def test_organize_executes_chooser(test_config):
                           ec.LocalMetaDeleteCreate)
         assert executors[0].fname == 'test_obs_id.fits', 'file name'
         assert executors[0].stream == 'TEST', 'stream'
-        assert executors[0].working_dir == tc.THIS_DIR, 'working_dir'
+        assert executors[0].working_dir == os.path.join(
+            tc.THIS_DIR, 'test_obs_id'
+        ), 'working_dir'
 
         test_config.use_local_files = False
         test_config.task_types = [mc.TaskType.INGEST]
