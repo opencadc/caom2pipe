@@ -75,7 +75,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from caom2 import ProductType, ReleaseType, Artifact, ChecksumURI
-from caom2 import SimpleObservation, ObservationIntentType
+from caom2 import SimpleObservation, ObservationIntentType, get_differences
 from caom2pipe import manage_composable as mc
 
 import test_conf as tc
@@ -1108,21 +1108,21 @@ def test_value_repair_cache():
         test_subject.repair(test_observation)
 
     with pytest.raises(mc.CadcException):
-        # pre-condition of 'Could not figure out attribute name'
-        # the first part of the name is correct, the second is not
-        test_subject._value_repair = {'observation.unknown': 'unknown'}
-        test_subject.repair(test_observation)
-
-    with pytest.raises(mc.CadcException):
-        # the first part of a chunk name is correct, the succeeding bits are
-        # note
-        test_subject._value_repair = \
-            {'chunk.position.axis.function.refCoord.coord1.pix':
-             {512.579594886106: 5.6}}
-        test_subject.repair(test_observation)
-
-    with pytest.raises(mc.CadcException):
         # try to set an attribute that cannot be assigned
         test_subject._value_repair = \
             {'observation.instrument.name': {'gmos': 'GMOS-N'}}
         test_subject.repair(test_observation)
+
+    # pre-condition of 'Could not figure out attribute name' the attribute is
+    # not set in the test observation, so the observation should remain
+    # unchanged
+    test_observation = mc.read_obs_from_file(
+        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml'))
+
+    test_subject._value_repair = {'chunk.observable.dependent': 'not_found'}
+    test_subject.repair(test_observation)
+
+    test_compare_observation = mc.read_obs_from_file(
+        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml'))
+    test_diff = get_differences(test_compare_observation, test_observation)
+    assert test_diff is None, 'expect no comparison error'
