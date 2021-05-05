@@ -307,7 +307,7 @@ class CaomExecute(object):
             f'{self.command_name} {self.logging_level_param} {conn} '
             f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
             f'--local ' f'{local_fqn} --plugin {plugin} --module {plugin} '
-            f'--lineage {self.lineage}'
+            f'--lineage {self._storage_name.lineage}'
         ).split()
         result = command.to_caom2()
         if result == -1:
