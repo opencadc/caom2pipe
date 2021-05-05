@@ -75,7 +75,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from caom2 import ProductType, ReleaseType, Artifact, ChecksumURI
-from caom2 import SimpleObservation, ObservationIntentType, Algorithm
+from caom2 import SimpleObservation, ObservationIntentType, get_differences
 from caom2pipe import manage_composable as mc
 
 import test_conf as tc
@@ -1254,9 +1254,8 @@ def test_value_repair_cache():
 
     with pytest.raises(mc.CadcException):
         # try to set an attribute that cannot be assigned
-        test_subject._value_repair = {
-            'observation.instrument.name': {'gmos': 'GMOS-N'},
-        }
+        test_subject._value_repair = \
+            {'observation.instrument.name': {'gmos': 'GMOS-N'}}
         test_subject.repair(test_observation)
 
     # pre-condition of 'Could not figure out attribute name' the attribute is

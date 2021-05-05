@@ -3211,9 +3211,7 @@ class ValueRepairCache(Cache):
             raise CadcException(e)
 
     def _fix(self, entity, attribute_name, attribute_value, original, fix):
-        if attribute_value == fix:
-            fixed = None
-        elif fix == 'none':
+        if fix == 'none':
             setattr(entity, attribute_name, None)
             self._logger.info(
                 f'Repair {self._key} from {original} to None')
