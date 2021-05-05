@@ -818,15 +818,16 @@ class LocalMetaUpdate(CaomExecute):
         super(LocalMetaUpdate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
             cadc_client, caom_repo_client, meta_visitors, observable)
-        self._define_local_dirs(storage_name)
         self.observation = observation
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
         self.logger.debug('Begin execute')
-        self.logger.debug('the steps:')
 
-        self.logger.debug('write the observation to disk for next step')
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
+
+        self.logger.debug('write the observation to disk for fits2caom2')
         self._write_model(self.observation)
 
         self.logger.debug('generate the xml, as the main_app will retrieve '
@@ -844,6 +845,9 @@ class LocalMetaUpdate(CaomExecute):
 
         self.logger.debug('store the xml')
         self._repo_cmd_update_client(self.observation)
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
 
         self.logger.debug('End execute')
 
