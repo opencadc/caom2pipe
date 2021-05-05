@@ -739,13 +739,12 @@ class LocalMetaCreate(CaomExecute):
 
 
 class LocalMetaDeleteCreate(CaomExecute):
-    """Defines the pipeline step for Collection ingestion of metadata into CAOM.
-    This requires access to only header information.
+    """Defines the pipeline step for Collection ingestion of metadata into
+    CAOM. This requires access to only header information.
 
     This pipeline step will execute a caom2-repo delete followed by
-    a create, because an update will not support a Simple->Composite
-    or Composite->Simple type change for the Observation
-    structure."""
+    a create, because an update will not support a Simple->Derived
+    or Derived->Simple type change for the Observation structure."""
 
     def __init__(self, config, storage_name, command_name, cred_param,
                  cadc_client, caom_repo_client, observation,
@@ -753,15 +752,16 @@ class LocalMetaDeleteCreate(CaomExecute):
         super(LocalMetaDeleteCreate, self).__init__(
             config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
             cadc_client, caom_repo_client, meta_visitors, observable)
-        self._define_local_dirs(storage_name)
         self.observation = observation
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
         self.logger.debug('Begin execute')
-        self.logger.debug('the steps:')
 
-        self.logger.debug('write the observation to disk for next step')
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
+
+        self.logger.debug('write the observation to disk for fits2caom2 step')
         self._write_model(self.observation)
 
         self.logger.debug('make a new observation from an existing '
@@ -782,6 +782,9 @@ class LocalMetaDeleteCreate(CaomExecute):
 
         self.logger.debug('store the xml')
         self._repo_cmd_create_client(observation)
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
 
         self.logger.debug('End execute')
 
