@@ -253,11 +253,12 @@ class CaomExecute(object):
         if not connected:
             conn = f'--not_connected'
         local_fqn = ' '.join(ii for ii in self._storage_name.source_names)
-        sys.argv = (f'{self.command_name} {self.logging_level_param} {conn} '
-                    f'{self.cred_param} --observation {self.collection} '
-                    f'{self.obs_id} --local {local_fqn} --out '
-                    f'{self.model_fqn} --plugin {plugin} --module {plugin} '
-                    f'--lineage {self._storage_name.lineage}').split()
+        sys.argv = (
+            f'{self.command_name} {self.logging_level_param} {conn} '
+            f'{self.cred_param} --observation {self.collection} {self.obs_id} '
+            f'--local {local_fqn} --out {self.model_fqn} --plugin {plugin} '
+            f'--module {plugin} --lineage {self._storage_name.lineage}'
+        ).split()
         result = command.to_caom2()
         if result == -1:
             raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
@@ -267,11 +268,12 @@ class CaomExecute(object):
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
         command = mc.load_module(plugin, 'to_caom2')
-        sys.argv = (f'{self.command_name} {self.logging_level_param} '
-                    f'{self.cred_param} --observation {self.collection} '
-                    f'{self.obs_id} --out {self.model_fqn} '
-                    f'{self.external_urls_param} --plugin {plugin} --module '
-                    f'{plugin} --lineage {self.lineage}').split()
+        sys.argv = (
+            f'{self.command_name} {self.logging_level_param} '
+            f'{self.cred_param} --observation {self.collection} {self.obs_id} '
+            f'--out {self.model_fqn} {self.external_urls_param} --plugin '
+            f'{plugin} --module {plugin} --lineage {self.lineage}'
+        ).split()
         result = command.to_caom2()
         if result == -1:
             raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
@@ -282,11 +284,12 @@ class CaomExecute(object):
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
         command = mc.load_module(plugin, 'to_caom2')
-        sys.argv = (f'{self.command_name} {self.logging_level_param} '
-                    f'{self.cred_param} --in {self.model_fqn} --out '
-                    f'{self.model_fqn} {self.external_urls_param} --plugin '
-                    f'{plugin} --module {plugin} --lineage '
-                    f'{self.lineage}').split()
+        sys.argv = (
+            f'{self.command_name} {self.logging_level_param} '
+            f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
+            f'{self.external_urls_param} --plugin {plugin} --module {plugin} '
+            f'--lineage {self.lineage}'
+        ).split()
         result = command.to_caom2()
         if result == -1:
             raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
@@ -300,11 +303,12 @@ class CaomExecute(object):
         conn = ''
         if not connected:
             conn = f'--not_connected'
-        sys.argv = (f'{self.command_name} {self.logging_level_param} {conn} '
-                    f'{self.cred_param} --in {self.model_fqn} --out '
-                    f'{self.model_fqn} --local ' f'{local_fqn} --plugin '
-                    f'{plugin} --module {plugin} --lineage '
-                    f'{self.lineage}').split()
+        sys.argv = (
+            f'{self.command_name} {self.logging_level_param} {conn} '
+            f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
+            f'--local ' f'{local_fqn} --plugin {plugin} --module {plugin} '
+            f'--lineage {self.lineage}'
+        ).split()
         result = command.to_caom2()
         if result == -1:
             raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
@@ -742,12 +746,29 @@ class LocalMetaDeleteCreate(CaomExecute):
     a create, because an update will not support a Simple->Derived
     or Derived->Simple type change for the Observation structure."""
 
-    def __init__(self, config, storage_name, command_name, cred_param,
-                 cadc_client, caom_repo_client, observation,
-                 meta_visitors, observable):
+    def __init__(
+            self,
+            config,
+            storage_name,
+            command_name,
+            cred_param,
+            cadc_client,
+            caom_repo_client,
+            observation,
+            meta_visitors,
+            observable,
+    ):
         super(LocalMetaDeleteCreate, self).__init__(
-            config, mc.TaskType.INGEST, storage_name, command_name, cred_param,
-            cadc_client, caom_repo_client, meta_visitors, observable)
+            config,
+            mc.TaskType.INGEST,
+            storage_name,
+            command_name,
+            cred_param,
+            cadc_client,
+            caom_repo_client,
+            meta_visitors,
+            observable,
+        )
         self.observation = observation
         self.logger = logging.getLogger(self.__class__.__name__)
 
