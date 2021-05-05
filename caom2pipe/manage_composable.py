@@ -3157,14 +3157,15 @@ class ValueRepairCache(Cache):
 
     def _recurse(self, entity, entity_name, bits):
         attribute_name = bits[0]
-        if not hasattr(entity, attribute_name):
-            raise CadcException(f'Could not find attribute {attribute_name} '
-                                f'in entity {entity_name}')
-        if len(bits) == 1:
-            self._repair_attribute(entity, attribute_name)
+        if hasattr(entity, attribute_name):
+            if len(bits) == 1:
+                self._repair_attribute(entity, attribute_name)
+            else:
+                new_entity = getattr(entity, attribute_name)
+                self._recurse(new_entity, attribute_name, bits[1:])
         else:
-            new_entity = getattr(entity, attribute_name)
-            self._recurse(new_entity, attribute_name, bits[1:])
+            logging.warning(f'No attribute {entity_name}.{attribute_name} '
+                            f'found to repair.')
 
     def _repair_attribute(self, entity, attribute_name):
         try:
@@ -3185,9 +3186,7 @@ class ValueRepairCache(Cache):
             raise CadcException(e)
 
     def _fix(self, entity, attribute_name, attribute_value, original, fix):
-        if attribute_value == fix:
-            fixed = None
-        elif fix == 'none':
+        if fix == 'none':
             setattr(entity, attribute_name, None)
             self._logger.info(
                 f'Repair {self._key} from {original} to None')
