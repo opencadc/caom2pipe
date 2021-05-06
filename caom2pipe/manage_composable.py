@@ -2638,6 +2638,14 @@ def make_time_tz(from_value):
 
     :param from_value a representation of time.
     :return the time as an offset-aware datetime
+
+    from_value accepted types:
+    - datetime, ensures timezone.utc is set
+    - str, attempts to use datetime.strptime with all the formats so far
+      encountered to convert it to a datetime, and then sets timezone.utc
+    - float, uses as if the parameter were the result of a datetime.timestamp()
+      operation, as well as setting timezone.utc
+    - datetime.date or datetime.time, sets timezone.utc
     """
     if isinstance(from_value, datetime):
         result = from_value
