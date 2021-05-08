@@ -107,8 +107,10 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
         for entry in file_list:
             stats = os.stat(entry)
             if prev_exec_time <= stats.st_mtime <= exec_time:
-                result.append(dsc.StateRunnerMeta(os.path.basename(entry),
-                                                  stats.st_mtime))
+                result.append(
+                    dsc.StateRunnerMeta(os.path.basename(entry),
+                    stats.st_mtime)
+                )
         return result
 
 
@@ -144,8 +146,9 @@ def test_run_state(data_mock, repo_mock):
     test_config.success_fqn = \
         f'{test_config.log_file_directory}/success_log.txt'
     test_config.tap_id = 'ivo://cadc.nrc.ca/sc2tap'
-    test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST,
-                              mc.TaskType.MODIFY]
+    test_config.task_types = [
+        mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY
+    ]
     test_config.features.use_file_names = True
     test_config.features.use_urls = False
     test_config.features.supports_latest_client = False
@@ -168,8 +171,9 @@ def test_run_state(data_mock, repo_mock):
         f.write('bookmarks:\n')
         f.write(f'  {caom2pipe_bookmark}:\n')
         f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(2021, 1, 7, 1, 15, 27, 965132,
-                             tzinfo=timezone.utc)
+    test_end_time = datetime(
+        2021, 1, 7, 1, 15, 27, 965132, tzinfo=timezone.utc
+    )
 
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content\n')
@@ -179,20 +183,23 @@ def test_run_state(data_mock, repo_mock):
     transferrer = TestTransfer()
 
     try:
-        test_result = rc.run_by_state(bookmark_name=caom2pipe_bookmark,
-                                      command_name='collection2caom2',
-                                      config=test_config,
-                                      end_time=test_end_time,
-                                      name_builder=test_builder,
-                                      source=test_data_source,
-                                      modify_transfer=None,
-                                      store_transfer=transferrer)
+        test_result = rc.run_by_state(
+            bookmark_name=caom2pipe_bookmark,
+            command_name='collection2caom2',
+            config=test_config,
+            end_time=test_end_time,
+            name_builder=test_builder,
+            source=test_data_source,
+            modify_transfer=None,
+            store_transfer=transferrer,
+        )
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
         assert data_mock.called, 'expect put call'
-        assert isinstance(data_mock.call_args.args[0], net.Subject), \
-            'wrong args'
+        assert (
+            isinstance(data_mock.call_args.args[0], net.Subject)
+        ), 'wrong args'
 
         # state file checking
         test_state = mc.State(test_config.state_fqn)
@@ -286,8 +293,9 @@ def test_run_state_v(client_mock, repo_mock):
     test_config.success_fqn = \
         f'{test_config.log_file_directory}/success_log.txt'
     test_config.tap_id = 'ivo://cadc.nrc.ca/sc2tap'
-    test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST,
-                              mc.TaskType.MODIFY]
+    test_config.task_types = [
+        mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY
+    ]
     test_config.features.use_file_names = True
     test_config.features.use_urls = False
     test_config.features.supports_latest_client = True
@@ -310,8 +318,9 @@ def test_run_state_v(client_mock, repo_mock):
         f.write('bookmarks:\n')
         f.write(f'  {caom2pipe_bookmark}:\n')
         f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(2021, 1, 7, 1, 15, 27, 965132,
-                             tzinfo=timezone.utc)
+    test_end_time = datetime(
+        2021, 1, 7, 1, 15, 27, 965132, tzinfo=timezone.utc
+    )
 
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content\n')
@@ -321,22 +330,26 @@ def test_run_state_v(client_mock, repo_mock):
     transferrer = TestTransfer()
 
     try:
-        test_result = rc.run_by_state(bookmark_name=caom2pipe_bookmark,
-                                      command_name='collection2caom2',
-                                      config=test_config,
-                                      end_time=test_end_time,
-                                      name_builder=test_builder,
-                                      source=test_data_source,
-                                      modify_transfer=None,
-                                      store_transfer=transferrer)
+        test_result = rc.run_by_state(
+            bookmark_name=caom2pipe_bookmark,
+            command_name='collection2caom2',
+            config=test_config,
+            end_time=test_end_time,
+            name_builder=test_builder,
+            source=test_data_source,
+            modify_transfer=None,
+            store_transfer=transferrer,
+        )
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
         assert client_mock.return_value.copy.called, 'expect put call'
         args, kwargs = client_mock.return_value.copy.call_args
         assert args[0] == 'ad:TEST/test_obs_id.fits.gz', 'wrong args[0]'
-        assert args[1] == '/usr/src/app/caom2pipe/int_test/test_obs_id/' \
-                          'test_obs_id.fits', 'wrong args[1]'
+        assert (
+            args[1] == '/usr/src/app/caom2pipe/int_test/test_obs_id/'
+                       'test_obs_id.fits'
+        ), 'wrong args[1]'
 
         # state file checking
         test_state = mc.State(test_config.state_fqn)

@@ -99,7 +99,8 @@ class ArtifactCleanupVisitor(object):
             for entry in artifact_delete_list:
                 self._logger.warning(
                     f'Removing artifact {entry} from observation '
-                    f'{observation.observation_id}, plane {plane.product_id}.')
+                    f'{observation.observation_id}, plane {plane.product_id}.'
+                )
                 artifact_count += 1
                 observation.planes[plane.product_id].artifacts.pop(entry)
 
@@ -108,17 +109,22 @@ class ArtifactCleanupVisitor(object):
 
         plane_delete_list = list(set(plane_temp))
         for entry in plane_delete_list:
-            self._logger.warning(f'Removing plane {entry} from observation '
-                                 f'{observation.observation_id}.')
+            self._logger.warning(
+                f'Removing plane {entry} from observation '
+                f'{observation.observation_id}.'
+            )
             plane_count += 1
             observation.planes.pop(entry)
 
-        self._logger.info(f'Completed artifact cleanup augmentation for '
-                          f'{observation.observation_id}. Removed '
-                          f'{artifact_count} artifacts, {plane_count} planes '
-                          f'from the observation.')
-        return {'artifacts': artifact_count,
-                'planes': plane_count}
+        self._logger.info(
+            f'Completed artifact cleanup augmentation for '
+            f'{observation.observation_id}. Removed {artifact_count} '
+            f'artifacts, {plane_count} planes from the observation.'
+        )
+        return {
+            'artifacts': artifact_count,
+            'planes': plane_count,
+        }
 
     def check_for_delete(self, uri, **kwargs):
         """
@@ -132,7 +138,8 @@ class ArtifactCleanupVisitor(object):
         """
         url = kwargs.get('url')
         if url is None:
-            raise mc.CadcException('Must have a "url" parameter for '
-                                   'ArtifactCleanupVisitor.')
+            raise mc.CadcException(
+                'Must have a "url" parameter for ArtifactCleanupVisitor.'
+            )
         candidate_uri = mc.build_uri(self._archive, url)
         return candidate_uri == uri
