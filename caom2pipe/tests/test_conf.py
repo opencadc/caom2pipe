@@ -111,8 +111,11 @@ class TestChooser(ec.OrganizeChooser):
 
 
 def mock_read(collection, obs_id):
-    return SimpleObservation(collection=collection, observation_id=obs_id,
-                             algorithm=Algorithm('exposure'))
+    return SimpleObservation(
+        collection=collection,
+        observation_id=obs_id,
+        algorithm=Algorithm('exposure'),
+    )
 
 
 def mock_get_file(collection, f_name, **kwargs):

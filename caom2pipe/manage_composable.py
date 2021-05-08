@@ -2794,6 +2794,7 @@ def query_endpoint_session(url, session, timeout=20):
     on the response.
     """
 
+    # Open the URL and fetch the JSON document for the observation
     try:
         response = session.get(url, timeout=timeout)
         response.raise_for_status()
@@ -2941,6 +2942,14 @@ def make_time_tz(from_value):
 
     :param from_value a representation of time.
     :return the time as an offset-aware datetime
+
+    from_value accepted types:
+    - datetime, ensures timezone.utc is set
+    - str, attempts to use datetime.strptime with all the formats so far
+      encountered to convert it to a datetime, and then sets timezone.utc
+    - float, uses as if the parameter were the result of a datetime.timestamp()
+      operation, as well as setting timezone.utc
+    - datetime.date or datetime.time, sets timezone.utc
     """
     if isinstance(from_value, datetime):
         result = from_value
@@ -2951,6 +2960,8 @@ def make_time_tz(from_value):
         result = None
         if temp is not None:
             result = datetime.fromtimestamp(temp, tz=timezone.utc)
+    elif isinstance(from_value, float):
+        result = datetime.fromtimestamp(from_value, tz=timezone.utc)
     else:
         result = from_value.fromtimestamp(from_value, tz=timezone.utc)
     return result
@@ -3427,7 +3438,9 @@ class ValueRepairCache(Cache):
             raise CadcException(e)
 
     def _fix(self, entity, attribute_name, attribute_value, original, fix):
-        if fix == 'none':
+        if attribute_value == fix:
+            fixed = None
+        elif fix == 'none':
             setattr(entity, attribute_name, None)
             self._logger.info(
                 f'Repair {self._key} from {original} to None'
@@ -3447,6 +3460,8 @@ class ValueRepairCache(Cache):
                 attribute_value_type = type(attribute_value)
                 fixed = re.sub(str(original), str(fix), str(attribute_value))
                 setattr(entity, attribute_name, attribute_value_type(fixed))
+        new_value = getattr(entity, attribute_name)
+        if attribute_value != new_value:
             self._logger.info(
                 f'Repair {self._key} from {attribute_value} to {fixed}'
             )

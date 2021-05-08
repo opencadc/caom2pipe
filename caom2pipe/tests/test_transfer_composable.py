@@ -87,7 +87,8 @@ def test_cadc_transfer(data_get_mock, caps_mock):
     test_config = mc.Config()
     test_config.rejected_fqn = '/tmp/rejected.yml'
     test_observable = mc.Observable(
-        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config))
+        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)
+    )
     test_subject.observable = test_observable
     test_subject.cadc_client = Mock()
     test_source = 'ad:TEST/test_file.fits'
@@ -149,7 +150,8 @@ def test_http_transfer(get_mock):
     test_config.netrc_file = 'test_netrc'
     test_config.rejected_fqn = '/tmp/rejected.yml'
     test_observable = mc.Observable(
-        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config))
+        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)
+    )
     test_subject = tc.HttpTransfer()
     assert test_subject is not None, 'expect a result'
     test_subject.observable = test_observable
@@ -174,7 +176,8 @@ def test_ftp_transfer(data_get_mock):
     test_config.netrc_file = 'test_netrc'
     test_config.rejected_fqn = '/tmp/rejected.yml'
     test_observable = mc.Observable(
-        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config))
+        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)
+    )
     test_subject = tc.FtpTransfer('localhost')
     assert test_subject is not None, 'expect a result'
     test_subject.observable = test_observable

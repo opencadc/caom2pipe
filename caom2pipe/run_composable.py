@@ -81,6 +81,7 @@ import logging
 import os
 import traceback
 
+from collections import deque
 from datetime import datetime, timezone
 
 from caom2pipe import astro_composable as ac
@@ -90,8 +91,16 @@ from caom2pipe import name_builder_composable
 from caom2pipe import data_source_composable
 from caom2pipe import transfer_composable
 
-__all__ = ['TodoRunner', 'StateRunner', 'StateRunnerTS', 'run_by_todo',
-           'run_by_state_ad', 'run_by_state', 'get_utc_now', 'get_utc_now_tz']
+__all__ = [
+    'get_utc_now',
+    'get_utc_now_tz',
+    'run_by_state',
+    'run_by_state_ad',
+    'run_by_todo',
+    'StateRunner',
+    'StateRunnerTS',
+    'TodoRunner',
+]
 
 
 class RunnerReport(object):
@@ -137,13 +146,22 @@ class RunnerReport(object):
         msg7 = f'   Number of Retries: {self._retry_sum}'
         msg8 = f'    Number of Errors: {self._errors_sum}'
         msg9 = f'Number of Rejections: {self._rejection_sum}'
-        max_length = max(len(msg1), len(msg2), len(msg3), len(msg4), len(msg5),
-                         len(msg6), len(msg7), len(msg8), len(msg9))
+        max_length = max(
+            len(msg1),
+            len(msg2),
+            len(msg3),
+            len(msg4),
+            len(msg5),
+            len(msg6),
+            len(msg7),
+            len(msg8),
+            len(msg9),
+        )
         msg_highlight = '*' * max_length
-        msg = f'\n\n{msg_highlight}\n' \
-              f'{msg1}\n{msg2}\n{msg3}\n{msg4}\n' \
-              f'{msg5}\n{msg6}\n{msg7}\n{msg8}\n' \
-              f'{msg9}\n{msg_highlight}\n\n'
+        msg = (
+            f'\n\n{msg_highlight}\n{msg1}\n{msg2}\n{msg3}\n{msg4}\n{msg5}\n'
+            f'{msg6}\n{msg7}\n{msg8}\n{msg9}\n{msg_highlight}\n\n'
+        )
         return msg
 
 
@@ -171,7 +189,8 @@ class TodoRunner(object):
         self._organizer.complete_record_count = len(self._todo_list)
         self._logger.info(
             f'Processing {self._organizer.complete_record_count} '
-            f'{self._organizer._command_name} records.')
+            f'{self._organizer._command_name} records.'
+        )
         self._logger.debug('End _build_todo_list.')
 
     def _finish_run(self):
@@ -179,9 +198,10 @@ class TodoRunner(object):
         self._organizer.observable.rejected.persist_state()
         self._organizer.observable.metrics.capture()
         self._logger.info('----------------------------------------')
-        self._logger.info(f'Done, processed {self._organizer.success_count} '
-                          f'of {self._organizer.complete_record_count} '
-                          f'correctly.')
+        self._logger.info(
+            f'Done, processed {self._organizer.success_count} of '
+            f'{self._organizer.complete_record_count} correctly.'
+        )
         self._logger.info('----------------------------------------')
 
     def _process_entry(self, entry):
@@ -195,21 +215,26 @@ class TodoRunner(object):
                 self._logger.error(
                     f'{storage_name.obs_id} failed naming validation check.')
                 self._organizer.capture_failure(
-                    storage_name, BaseException('Invalid name format'),
-                    'Invalid name format.')
+                    storage_name,
+                    BaseException('Invalid name format'),
+                    'Invalid name format.'
+                )
                 result = -1
         except Exception as e:
             if storage_name is None:
                 # keep going through storage name build failures
                 self._logger.debug(traceback.format_exc())
-                self._logger.warning(f'StorageName construction failed. Using '
-                                     f'a default instance for {entry}, for '
-                                     f'logging only.')
+                self._logger.warning(
+                    f'StorageName construction failed. Using a default '
+                    f'instance for {entry}, for logging only.'
+                )
                 storage_name = mc.StorageName(obs_id=entry)
-            self._organizer.capture_failure(storage_name, e,
-                                            traceback.format_exc())
+            self._organizer.capture_failure(
+                storage_name, e, traceback.format_exc()
+            )
             self._logger.info(
-                f'Execution failed for {storage_name.entry} with {e}')
+                f'Execution failed for {storage_name.entry} with {e}'
+            )
             self._logger.debug(traceback.format_exc())
             # keep processing the rest of the entries, so don't throw
             # this or any other exception at this point
@@ -231,7 +256,8 @@ class TodoRunner(object):
         # the log location changes for each retry
         self._organizer.set_log_location()
         self._data_source = data_source_composable.TodoFileDataSource(
-            self._config)
+            self._config
+        )
 
     def report(self):
         self._reporter.add_timeouts(self._organizer.timeouts)
@@ -256,14 +282,16 @@ class TodoRunner(object):
         if self._config.need_to_retry():
             for count in range(0, self._config.retry_count):
                 self._logger.warning(
-                    f'Beginning retry {count + 1} in {os.getcwd()}')
+                    f'Beginning retry {count + 1} in {os.getcwd()}'
+                )
                 self._reset_for_retry(count)
                 # make another file list
                 self._build_todo_list()
                 self._reporter.add_retries(
                     self._organizer.complete_record_count)
                 self._logger.warning(
-                    f'Retry {self._organizer.complete_record_count} entries')
+                    f'Retry {self._organizer.complete_record_count} entries'
+                )
                 result |= self._run_todo_list()
                 self._reporter.add_successes(self._organizer.success_count)
                 if not self._config.need_to_retry():
@@ -277,19 +305,29 @@ class TodoRunner(object):
 
 class StateRunner(TodoRunner):
 
-    def __init__(self, config, organizer, builder, data_source, bookmark_name,
-                 max_ts=None):
-        super(StateRunner, self).__init__(config, organizer, builder,
-                                          data_source)
+    def __init__(
+            self,
+            config,
+            organizer,
+            builder,
+            data_source,
+            bookmark_name,
+            max_ts=None,
+    ):
+        super(StateRunner, self).__init__(
+            config, organizer, builder, data_source
+        )
         self._bookmark_name = bookmark_name
         self._end_time = get_utc_now() if max_ts is None else max_ts
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _record_progress(self, count, cumulative_count, start_time, save_time):
         with open(self._config.progress_fqn, 'a') as progress:
-            progress.write(f'{datetime.now()} {self._organizer.command_name} '
-                           f'current:: {save_time} {count} since:: '
-                           f'{start_time}:: {cumulative_count}\n')
+            progress.write(
+                f'{datetime.now()} {self._organizer.command_name} current:: '
+                f'{save_time} {count} since:: {start_time}:: '
+                f'{cumulative_count}\n'
+            )
 
     def _wrap_state_save(self, state, save_time):
         save_str = save_time
@@ -323,27 +361,32 @@ class StateRunner(TodoRunner):
         prev_exec_time = mc.increment_time(start_time, 0)
         exec_time = min(
             mc.increment_time(prev_exec_time, self._config.interval),
-            self._end_time)
+            self._end_time,
+        )
 
-        self._logger.debug(f'Starting at {start_time}, ending at '
-                           f'{self._end_time}')
+        self._logger.debug(
+            f'Starting at {start_time}, ending at {self._end_time}'
+        )
         result = 0
         cumulative = 0
         cumulative_correct = 0
         if prev_exec_time == self._end_time:
             self._logger.info(
-                f'Start time is the same as end time {start_time}, stopping.')
+                f'Start time is the same as end time {start_time}, stopping.'
+            )
             exec_time = prev_exec_time
         else:
             cumulative = 0
             result = 0
             while exec_time <= self._end_time:
                 self._logger.info(
-                    f'Processing from {prev_exec_time} to {exec_time}')
+                    f'Processing from {prev_exec_time} to {exec_time}'
+                )
                 save_time = exec_time
                 self._organizer.success_count = 0
                 entries = self._data_source.get_time_box_work(
-                    prev_exec_time, exec_time)
+                    prev_exec_time, exec_time
+                )
                 num_entries = len(entries)
 
                 if num_entries > 0:
@@ -360,7 +403,8 @@ class StateRunner(TodoRunner):
                 cumulative += num_entries
                 cumulative_correct += self._organizer.success_count
                 self._record_progress(
-                    num_entries, cumulative, start_time, save_time)
+                    num_entries, cumulative, start_time, save_time
+                )
                 self._wrap_state_save(state, save_time)
 
                 if exec_time == self._end_time:
@@ -376,16 +420,20 @@ class StateRunner(TodoRunner):
                 prev_exec_time = exec_time
                 exec_time = min(
                     mc.increment_time(prev_exec_time, self._config.interval),
-                    self._end_time)
+                    self._end_time
+                )
 
         self._reporter.add_entries(cumulative)
         self._reporter.add_successes(cumulative_correct)
         self._wrap_state_save(state, exec_time)
         self._logger.info('==================================================')
         self._logger.info(
-            f'Done {self._organizer.command_name}, saved state is {exec_time}')
-        self._logger.info(f'{cumulative_correct} of {cumulative} records '
-                          f'processed correctly.')
+            f'Done {self._organizer.command_name}, saved state is {exec_time}'
+        )
+        self._logger.info(
+            f'{cumulative_correct} of {cumulative} records processed '
+            f'correctly.'
+        )
         self._logger.info('==================================================')
         return result
 
@@ -397,27 +445,39 @@ class StateRunnerTS(StateRunner):
     Eventually deprecate StateRunner in favour of this class.
     """
 
-    def __init__(self, config, organizer, builder, data_source, bookmark_name,
-                 max_ts=None):
-        super(StateRunnerTS, self).__init__(config, organizer, builder,
-                                            data_source, bookmark_name)
+    def __init__(
+            self,
+            config,
+            organizer,
+            builder,
+            data_source,
+            bookmark_name,
+            max_ts=None,
+    ):
+        super(StateRunnerTS, self).__init__(
+            config, organizer, builder, data_source, bookmark_name
+        )
         max_ts_in_s = None
         if max_ts is not None:
             max_ts_in_s = mc.convert_to_ts(max_ts)
         # end time is a datetime.timestamp
-        self._end_time = (get_utc_now_tz().timestamp() if max_ts_in_s is None
-                          else max_ts_in_s)
+        self._end_time = (
+            get_utc_now_tz().timestamp() if max_ts_in_s is None
+                          else max_ts_in_s
+        )
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _record_progress(self, count, cumulative_count, start_time, save_time):
         start_time_dt = datetime.utcfromtimestamp(start_time)
         save_time_dt = datetime.utcfromtimestamp(save_time)
         super(StateRunnerTS, self)._record_progress(
-            count, cumulative_count, start_time_dt, save_time_dt)
+            count, cumulative_count, start_time_dt, save_time_dt
+        )
 
     def _wrap_state_save(self, state, save_time):
         state.save_state(
-            self._bookmark_name, datetime.utcfromtimestamp(save_time))
+            self._bookmark_name, datetime.utcfromtimestamp(save_time)
+        )
 
     def run(self):
         """
@@ -439,19 +499,22 @@ class StateRunnerTS(StateRunner):
         # make sure prev_exec_time is offset-aware type datetime.timestamp
         prev_exec_time = start_time
         incremented_ts = mc.increment_time_tz(
-            prev_exec_time, self._config.interval).timestamp()
+            prev_exec_time, self._config.interval
+        ).timestamp()
         exec_time = min(incremented_ts, self._end_time)
 
-        self._logger.debug(f'Starting at '
-                           f'{datetime.utcfromtimestamp(start_time)}, ending '
-                           f'at {datetime.utcfromtimestamp(self._end_time)}')
+        self._logger.debug(
+            f'Starting at {datetime.utcfromtimestamp(start_time)}, ending at '
+            f'{datetime.utcfromtimestamp(self._end_time)}'
+        )
         result = 0
         cumulative = 0
         cumulative_correct = 0
         if prev_exec_time == self._end_time:
             self._logger.info(
                 f'Start time is the same as end time '
-                f'{datetime.utcfromtimestamp(start_time)}, stopping.')
+                f'{datetime.utcfromtimestamp(start_time)}, stopping.'
+            )
             exec_time = prev_exec_time
         else:
             cumulative = 0
@@ -460,30 +523,38 @@ class StateRunnerTS(StateRunner):
                 self._logger.info(
                     f'Processing from '
                     f'{datetime.utcfromtimestamp(prev_exec_time)} to '
-                    f'{datetime.utcfromtimestamp(exec_time)}')
+                    f'{datetime.utcfromtimestamp(exec_time)}'
+                )
                 save_time = exec_time
                 self._organizer.success_count = 0
                 entries = self._data_source.get_time_box_work(
-                    prev_exec_time, exec_time)
+                    prev_exec_time, exec_time
+                )
                 num_entries = len(entries)
 
                 if num_entries > 0:
                     self._logger.info(f'Processing {num_entries} entries.')
                     self._organizer.complete_record_count = num_entries
                     self._organizer.set_log_location()
+                    pop_action = entries.pop
+                    if isinstance(entries, deque):
+                        pop_action = entries.popleft
                     while len(entries) > 0:
-                        entry = entries.pop()
+                        entry = pop_action()
                         result |= self._process_entry(entry.entry_name)
-                        save_time = min(mc.convert_to_ts(entry.entry_ts),
-                                        exec_time)
+                        save_time = min(
+                            mc.convert_to_ts(entry.entry_ts), exec_time
+                        )
                     self._finish_run()
 
                 cumulative += num_entries
                 cumulative_correct += self._organizer.success_count
                 self._record_progress(
-                    num_entries, cumulative, start_time, save_time)
-                state.save_state(self._bookmark_name,
-                                 datetime.utcfromtimestamp(save_time))
+                    num_entries, cumulative, start_time, save_time
+                )
+                state.save_state(
+                    self._bookmark_name, datetime.utcfromtimestamp(save_time)
+                )
 
                 if exec_time == self._end_time:
                     # the last interval will always have the exec time
@@ -497,26 +568,32 @@ class StateRunnerTS(StateRunner):
                     break
                 prev_exec_time = exec_time
                 new_time = mc.increment_time_tz(
-                    prev_exec_time, self._config.interval).timestamp()
+                    prev_exec_time, self._config.interval
+                ).timestamp()
                 exec_time = min(new_time, self._end_time)
 
         self._reporter.add_entries(cumulative)
         self._reporter.add_successes(cumulative_correct)
-        state.save_state(self._bookmark_name,
-                         datetime.utcfromtimestamp(exec_time))
+        state.save_state(
+            self._bookmark_name, datetime.utcfromtimestamp(exec_time)
+        )
         self._logger.info('==================================================')
         self._logger.info(
             f'Done {self._organizer.command_name}, saved state is '
-            f'{datetime.utcfromtimestamp(exec_time)}')
-        self._logger.info(f'{cumulative_correct} of {cumulative} records '
-                          f'processed correctly.')
+            f'{datetime.utcfromtimestamp(exec_time)}'
+        )
+        self._logger.info(
+            f'{cumulative_correct} of {cumulative} records processed '
+            f'correctly.'
+        )
         self._logger.info('==================================================')
         return result
 
 
 def _set_logging(config):
     formatter = logging.Formatter(
-        '%(asctime)s:%(levelname)-8s:%(name)-36s:%(lineno)-4d:%(message)s')
+        '%(asctime)s:%(levelname)-8s:%(name)-36s:%(lineno)-4d:%(message)s'
+    )
     for handler in logging.getLogger().handlers:
         handler.setLevel(config.logging_level)
         handler.setFormatter(formatter)
@@ -546,9 +623,17 @@ def get_utc_now_tz():
     return datetime.now(tz=timezone.utc)
 
 
-def run_by_todo(config=None, name_builder=None, chooser=None,
-                command_name=None, source=None, meta_visitors=[],
-                data_visitors=[], modify_transfer=None, store_transfer=None):
+def run_by_todo(
+        config=None,
+        name_builder=None,
+        chooser=None,
+        command_name=None,
+        source=None,
+        meta_visitors=[],
+        data_visitors=[],
+        modify_transfer=None,
+        store_transfer=None,
+):
     """A default implementation for using the TodoRunner.
 
     :param config Config instance
@@ -580,7 +665,8 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
-            config.collection)
+            config.collection
+        )
 
     if source is None:
         if config.use_local_files:
@@ -591,8 +677,14 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
     modify_transfer = _set_modify_transfer(modify_transfer, config)
 
     organizer = ec.OrganizeExecutes(
-        config, command_name, meta_visitors, data_visitors, chooser,
-        store_transfer, modify_transfer)
+        config,
+        command_name,
+        meta_visitors,
+        data_visitors,
+        chooser,
+        store_transfer,
+        modify_transfer,
+    )
 
     runner = TodoRunner(config, organizer, name_builder, source)
     result = runner.run()
@@ -601,9 +693,18 @@ def run_by_todo(config=None, name_builder=None, chooser=None,
     return result
 
 
-def run_by_state_ad(config=None, name_builder=None, command_name=None,
-                    bookmark_name=None, meta_visitors=[], data_visitors=[],
-                    end_time=None, chooser=None, source=None, transferrer=None):
+def run_by_state_ad(
+        config=None,
+        name_builder=None,
+        command_name=None,
+        bookmark_name=None,
+        meta_visitors=[],
+        data_visitors=[],
+        end_time=None,
+        chooser=None,
+        source=None,
+        transferrer=None,
+):
     """A default implementation for using the StateRunner.
 
     :param config Config instance
@@ -632,7 +733,8 @@ def run_by_state_ad(config=None, name_builder=None, command_name=None,
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
-            config.collection)
+            config.collection
+        )
 
     if source is None:
         source = data_source_composable.QueryTimeBoxDataSource(config)
@@ -647,21 +749,36 @@ def run_by_state_ad(config=None, name_builder=None, command_name=None,
             transferrer = transfer_composable.CadcTransfer()
 
     organizer = ec.OrganizeExecutes(
-        config, command_name, meta_visitors, data_visitors, chooser,
-        transferrer)
+        config,
+        command_name,
+        meta_visitors,
+        data_visitors,
+        chooser,
+        transferrer,
+    )
 
-    runner = StateRunner(config, organizer, name_builder, source,
-                         bookmark_name, end_time)
+    runner = StateRunner(
+        config, organizer, name_builder, source, bookmark_name, end_time
+    )
     result = runner.run()
     result |= runner.run_retry()
     runner.report()
     return result
 
 
-def run_by_state(config=None, name_builder=None, command_name=None,
-                 bookmark_name=None, meta_visitors=[], data_visitors=[],
-                 end_time=None, chooser=None, source=None,
-                 modify_transfer=None, store_transfer=None):
+def run_by_state(
+        config=None,
+        name_builder=None,
+        command_name=None,
+        bookmark_name=None,
+        meta_visitors=[],
+        data_visitors=[],
+        end_time=None,
+        chooser=None,
+        source=None,
+        modify_transfer=None,
+        store_transfer=None,
+):
     """A default implementation for using the StateRunner.
 
     :param config Config instance
@@ -696,7 +813,8 @@ def run_by_state(config=None, name_builder=None, command_name=None,
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
-            config.collection)
+            config.collection
+        )
 
     if source is None:
         source = data_source_composable.QueryTimeBoxDataSourceTS(config)
@@ -707,20 +825,34 @@ def run_by_state(config=None, name_builder=None, command_name=None,
     modify_transfer = _set_modify_transfer(modify_transfer, config)
 
     organizer = ec.OrganizeExecutes(
-        config, command_name, meta_visitors, data_visitors, chooser,
-        store_transfer, modify_transfer)
+        config,
+        command_name,
+        meta_visitors,
+        data_visitors,
+        chooser,
+        store_transfer,
+        modify_transfer,
+    )
 
-    runner = StateRunnerTS(config, organizer, name_builder, source,
-                           bookmark_name, end_time)
+    runner = StateRunnerTS(
+        config, organizer, name_builder, source, bookmark_name, end_time
+    )
     result = runner.run()
     result |= runner.run_retry()
     runner.report()
     return result
 
 
-def run_single(config, storage_name, command_name, meta_visitors,
-               data_visitors, chooser=None, store_transfer=None,
-               modify_transfer=None):
+def run_single(
+        config,
+        storage_name,
+        command_name,
+        meta_visitors,
+        data_visitors,
+        chooser=None,
+        store_transfer=None,
+        modify_transfer=None,
+):
     """Process a single entry by StorageName detail.
 
     :param config mc.Config
@@ -746,8 +878,14 @@ def run_single(config, storage_name, command_name, meta_visitors,
     logging.debug(f'Begin run_single {config.work_fqn}')
     modify_transfer = _set_modify_transfer(modify_transfer, config)
     organizer = ec.OrganizeExecutes(
-        config, command_name, meta_visitors, data_visitors, chooser,
-        store_transfer, modify_transfer)
+        config,
+        command_name,
+        meta_visitors,
+        data_visitors,
+        chooser,
+        store_transfer,
+        modify_transfer,
+    )
     organizer.complete_record_count = 1
     organizer.choose(storage_name)
     result = organizer.do_one(storage_name)

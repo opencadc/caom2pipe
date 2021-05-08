@@ -69,8 +69,12 @@
 
 from caom2pipe import manage_composable as mc
 
-__all__ = ['FileNameBuilder', 'ObsIDBuilder', 'StorageNameInstanceBuilder',
-           'StorageNameBuilder']
+__all__ = [
+    'FileNameBuilder',
+    'ObsIDBuilder',
+    'StorageNameInstanceBuilder',
+    'StorageNameBuilder',
+]
 
 
 class StorageNameBuilder(object):
@@ -107,10 +111,12 @@ class StorageNameInstanceBuilder(StorageNameBuilder):
         self._collection = collection
 
     def build(self, entry):
-        return mc.StorageName(obs_id=mc.StorageName.remove_extensions(entry),
-                              collection=self._collection,
-                              fname_on_disk=entry,
-                              entry=entry)
+        return mc.StorageName(
+            obs_id=mc.StorageName.remove_extensions(entry),
+            collection=self._collection,
+            fname_on_disk=entry,
+            entry=entry,
+        )
 
 
 class FileNameBuilder(StorageNameBuilder):

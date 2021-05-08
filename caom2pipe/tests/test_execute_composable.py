@@ -541,7 +541,6 @@ def test_data_scrape_execute(test_config):
             observable=None,
         )
         test_executor.execute(None)
-
         assert mc.read_obs_from_file.called, 'read obs call missed'
 
     finally:
@@ -638,8 +637,7 @@ def test_organize_executes_client_visit(test_config):
     test_config.features.use_clients = True
     test_config.task_types = [mc.TaskType.VISIT]
     test_config.use_local_files = False
-    test_oe = ec.OrganizeExecutes(
-        test_config, 'command_name', [], [])
+    test_oe = ec.OrganizeExecutes(test_config, 'command_name', [], [])
     CadcDataClient.__init__ = Mock(return_value=None)
     CAOM2RepoClient.__init__ = Mock(return_value=None)
     executors = test_oe.choose(test_obs_id)
@@ -666,8 +664,11 @@ def test_do_one(test_config):
 
 
 def test_storage_name():
-    sn = mc.StorageName(obs_id='test_obs_id', collection='TEST',
-                        collection_pattern='T[\\w+-]+')
+    sn = mc.StorageName(
+        obs_id='test_obs_id',
+        collection='TEST',
+        collection_pattern='T[\\w+-]+',
+    )
     assert sn.file_uri == 'ad:TEST/test_obs_id.fits.gz'
     assert sn.file_name == 'test_obs_id.fits'
     assert sn.compressed_file_name == 'test_obs_id.fits.gz'
@@ -682,7 +683,9 @@ def test_storage_name():
     assert sn.fname_on_disk is None
     assert not sn.is_valid()
     sn = mc.StorageName(
-        obs_id='Test_obs_id', collection='TEST', collection_pattern='T[\\w+-]+'
+        obs_id='Test_obs_id',
+        collection='TEST',
+        collection_pattern='T[\\w+-]+',
     )
     assert sn.is_valid()
     x = mc.StorageName.remove_extensions('test_obs_id.fits.header.gz')
@@ -849,8 +852,7 @@ def test_organize_executes_client_do_one(test_config):
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 2
-        assert isinstance(
-            executors[0], ec.LocalMetaCreate)
+        assert isinstance(executors[0], ec.LocalMetaCreate)
         assert isinstance(executors[1], ec.LocalDataVisit)
         assert CadcDataClient.__init__.called, 'mock not called'
         assert CAOM2RepoClient.__init__.called, 'mock not called'
@@ -1209,9 +1211,11 @@ END
 
 
 def _get_test_metadata(subject, path):
-    return {'size': 37,
-            'md5sum': 'e330482de75d5c4c88ce6f6ef99035ea',
-            'type': 'applicaton/octect-stream'}
+    return {
+        'size': 37,
+        'md5sum': 'e330482de75d5c4c88ce6f6ef99035ea',
+        'type': 'applicaton/octect-stream',
+    }
 
 
 def _get_test_file_meta(path):
@@ -1271,8 +1275,7 @@ def to_caom2():
         '--local',
         '/usr/src/app/caom2pipe/caom2pipe/tests/data/test_file.fits.gz',
         '--out',
-        '/usr/src/app/caom2pipe/caom2pipe/tests/data/test_obs_id/'
-        'test_obs_id.fits.xml',
+        '/usr/src/app/caom2pipe/caom2pipe/tests/data/test_obs_id.fits.xml',
         '--plugin',
         f'{plugin}',
         '--module',
