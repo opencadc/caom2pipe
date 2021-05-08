@@ -100,26 +100,73 @@ from caom2 import ChecksumURI, ProductType, ReleaseType
 from caom2.diff import get_differences
 
 
-__all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
-           'client_put', 'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
-           'FileMeta',
-           'get_cadc_headers_client', 'get_cadc_meta',
-           'get_cadc_meta_client', 'get_endpoint_session', 'get_file_meta',
-           'decompose_lineage', 'check_param', 'read_csv_file',
-           'write_obs_to_file', 'read_obs_from_file',
-           'Features', 'write_to_file',
-           'read_from_file', 'read_file_list_from_archive', 'update_typed_set',
-           'get_cadc_headers', 'get_lineage', 'get_artifact_metadata',
-           'data_put', 'data_get', 'build_uri', 'make_seconds', 'make_time',
-           'make_time_tz',
-           'increment_time', 'increment_time_tz', 'ISO_8601_FORMAT',
-           'http_get', 'Rejected', 'look_pull_and_put', 'look_pull_and_put_v',
-           'Observable', 'Metrics', 'query_endpoint', 'query_endpoint_session',
-           'repo_create', 'repo_delete', 'repo_get', 'repo_update',
-           'reverse_lookup', 'ftp_get', 'ftp_get_timeout', 'VALIDATE_OUTPUT',
-           'Validator', 'Cache', 'CaomName', 'StorageName', 'to_float',
-           'to_int', 'to_str', 'load_module', 'compare_observations',
-           'convert_to_days', 'convert_to_ts', 'ValueRepairCache']
+__all__ = [
+    'build_uri',
+    'Cache',
+    'CadcException',
+    'CaomName',
+    'compare_observations',
+    'Config',
+    'check_param',
+    'client_get',
+    'client_put',
+    'convert_to_days',
+    'convert_to_ts',
+    'data_get',
+    'data_put',
+    'decompose_lineage',
+    'exec_cmd',
+    'exec_cmd_info',
+    'exec_cmd_redirect',
+    'Features',
+    'FileMeta',
+    'ftp_get',
+    'ftp_get_timeout',
+    'get_artifact_metadata',
+    'get_cadc_headers',
+    'get_cadc_headers_client',
+    'get_cadc_meta',
+    'get_cadc_meta_client',
+    'get_endpoint_session',
+    'get_file_meta',
+    'get_lineage',
+    'http_get',
+    'increment_time',
+    'increment_time_tz',
+    'ISO_8601_FORMAT',
+    'load_module',
+    'look_pull_and_put',
+    'look_pull_and_put_v',
+    'make_seconds',
+    'make_time',
+    'make_time_tz',
+    'Metrics',
+    'Observable',
+    'query_endpoint',
+    'query_endpoint_session',
+    'read_csv_file',
+    'read_file_list_from_archive',
+    'read_from_file',
+    'read_obs_from_file',
+    'Rejected',
+    'repo_create',
+    'repo_delete',
+    'repo_get',
+    'repo_update',
+    'reverse_lookup',
+    'StorageName',
+    'State',
+    'TaskType',
+    'to_float',
+    'to_int',
+    'to_str',
+    'update_typed_set',
+    'VALIDATE_OUTPUT',
+    'Validator',
+    'ValueRepairCache',
+    'write_obs_to_file',
+    'write_to_file',
+]
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
@@ -229,7 +276,8 @@ class Features(object):
 
     def __str__(self):
         return ' '.join(
-            '{} {}'.format(ii, getattr(self, ii)) for ii in vars(self))
+            '{} {}'.format(ii, getattr(self, ii)) for ii in vars(self)
+        )
 
 
 class TaskType(Enum):
@@ -316,13 +364,15 @@ class Rejected(object):
     NO_PREVIEW = 'no_preview'
 
     # A map to the logging message string representing acknowledged rejections
-    reasons = {BAD_DATA: 'Header missing END card',
-               BAD_METADATA: 'Cannot build an observation',
-               INVALID_FORMAT: 'Invalid observation ID',
-               MISSING: 'Could not find JSON record for',
-               NO_INSTRUMENT: 'Unknown value for instrument',
-               NO_PREVIEW: 'Internal Server Error for url: '
-                           'https://archive.gemini.edu/preview'}
+    reasons = {
+        BAD_DATA: 'Header missing END card',
+        BAD_METADATA: 'Cannot build an observation',
+        INVALID_FORMAT: 'Invalid observation ID',
+        MISSING: 'Could not find JSON record for',
+        NO_INSTRUMENT: 'Unknown value for instrument',
+        NO_PREVIEW: 'Internal Server Error for url: '
+                    'https://archive.gemini.edu/preview',
+    }
 
     def __init__(self, fqn):
         """
@@ -483,7 +533,8 @@ class Cache(object):
             self._cache = read_as_yaml(self._fqn)
         except Exception as e:
             raise CadcException(
-                f'Cache file {self._fqn} read failure {e}. Stopping pipeline.')
+                f'Cache file {self._fqn} read failure {e}. Stopping pipeline.'
+            )
 
     def add_to(self, key, values):
         """Add to or update the content of the cache. This is an over-write
@@ -637,7 +688,8 @@ class Config(object):
         self._work_file = value
         if self._working_directory is not None:
             self.work_fqn = os.path.join(
-                self._working_directory, self._work_file)
+                self._working_directory, self._work_file
+            )
 
     @property
     def data_sources(self):
@@ -736,10 +788,12 @@ class Config(object):
 
     @logging_level.setter
     def logging_level(self, value):
-        lookup = {'DEBUG': logging.DEBUG,
-                  'INFO': logging.INFO,
-                  'WARNING': logging.WARNING,
-                  'ERROR': logging.ERROR}
+        lookup = {
+            'DEBUG': logging.DEBUG,
+            'INFO': logging.INFO,
+            'WARNING': logging.WARNING,
+            'ERROR': logging.ERROR,
+        }
         if value in lookup:
             self._logging_level = lookup[value]
 
@@ -783,7 +837,8 @@ class Config(object):
         self._success_log_file_name = value
         if self._log_file_directory is not None:
             self.success_fqn = os.path.join(
-                self._log_file_directory, self._success_log_file_name)
+                self._log_file_directory, self._success_log_file_name
+            )
 
     @property
     def failure_log_file_name(self):
@@ -796,7 +851,8 @@ class Config(object):
         self._failure_log_file_name = value
         if self._log_file_directory is not None:
             self.failure_fqn = os.path.join(
-                self._log_file_directory, self._failure_log_file_name)
+                self._log_file_directory, self._failure_log_file_name
+            )
 
     @property
     def report_fqn(self):
@@ -813,7 +869,8 @@ class Config(object):
         self._retry_file_name = value
         if self._log_file_directory is not None:
             self.retry_fqn = os.path.join(
-                self._log_file_directory, self._retry_file_name)
+                self._log_file_directory, self._retry_file_name
+            )
 
     @property
     def retry_failures(self):
@@ -848,10 +905,12 @@ class Config(object):
         self._rejected_directory = value
         if self._rejected_directory is not None:
             self.rejected_fqn = os.path.join(
-                self._rejected_directory, self._rejected_file_name)
+                self._rejected_directory, self._rejected_file_name
+            )
         elif self._log_file_directory is not None:
             self.rejected_fqn = os.path.join(
-                self._log_file_directory, self._rejected_file_name)
+                self._log_file_directory, self._rejected_file_name
+            )
 
     @property
     def rejected_file_name(self):
@@ -864,10 +923,12 @@ class Config(object):
         self._rejected_file_name = value
         if self._rejected_directory is not None:
             self.rejected_fqn = os.path.join(
-                self._rejected_directory, self._rejected_file_name)
+                self._rejected_directory, self._rejected_file_name
+            )
         elif self._log_file_directory is not None:
             self.rejected_fqn = os.path.join(
-                self._log_file_directory, self._rejected_file_name)
+                self._log_file_directory, self._rejected_file_name
+            )
 
     @property
     def slack_channel(self):
@@ -905,7 +966,8 @@ class Config(object):
         self._progress_file_name = value
         if self._log_file_directory is not None:
             self.progress_fqn = os.path.join(
-                self._log_file_directory, self._progress_file_name)
+                self._log_file_directory, self._progress_file_name
+            )
 
     @property
     def proxy_file_name(self):
@@ -919,7 +981,8 @@ class Config(object):
         if (self._working_directory is not None and
                 self._proxy_file_name is not None):
             self.proxy_fqn = os.path.join(
-                self._working_directory, self._proxy_file_name)
+                self._working_directory, self._proxy_file_name
+            )
 
     @property
     def state_file_name(self):
@@ -930,10 +993,13 @@ class Config(object):
     @state_file_name.setter
     def state_file_name(self, value):
         self._state_file_name = value
-        if (self._working_directory is not None and
-                self._state_file_name is not None):
+        if (
+            self._working_directory is not None and
+                self._state_file_name is not None
+        ):
             self.state_fqn = os.path.join(
-                self._working_directory, self._state_file_name)
+                self._working_directory, self._state_file_name
+            )
 
     @property
     def cache_file_name(self):
@@ -944,10 +1010,13 @@ class Config(object):
     @cache_file_name.setter
     def cache_file_name(self, value):
         self._cache_file_name = value
-        if (self._working_directory is not None and
-                self._cache_file_name is not None):
+        if (
+            self._working_directory is not None and
+                self._cache_file_name is not None
+        ):
             self.cache_fqn = os.path.join(
-                self._working_directory, self._cache_file_name)
+                self._working_directory, self._cache_file_name
+            )
 
     @property
     def features(self):
@@ -1187,8 +1256,10 @@ class Config(object):
                 self.retry_failures and self.log_to_file):
             meta = get_file_meta(self.retry_fqn)
             if meta['size'] == 0:
-                logging.info(f'Checked the retry file {self.retry_fqn}. There '
-                             f'are no logged failures.')
+                logging.info(
+                    f'Checked the retry file {self.retry_fqn}. There are no '
+                    f'logged failures.'
+                )
                 result = False
         else:
             result = False
@@ -1221,10 +1292,12 @@ class Config(object):
         self.retry_file_name = self.retry_file_name
 
         logging.info(f'Retry work file is {self.work_fqn}')
-        logging.debug(f'Retry logging files are:\n  '
-                      f'success: {self.success_fqn}\n  '
-                      f'failure: {self.failure_fqn}\n  '
-                      f'retry:   {self.retry_fqn}')
+        logging.debug(
+            f'Retry logging files are:\n  '
+            f'success: {self.success_fqn}\n  '
+            f'failure: {self.failure_fqn}\n  '
+            f'retry:   {self.retry_fqn}'
+        )
 
     @staticmethod
     def load_config(config_fqn):
@@ -1261,7 +1334,10 @@ class Config(object):
                             feature_attribute = getattr(attribute, feature)
                         except TypeError:
                             pass
-                        if feature.startswith('_') or callable(feature_attribute):
+                        if (
+                            feature.startswith('_') or
+                                callable(feature_attribute)
+                        ):
                             continue
                         f.write(f'  {feature}: {feature_attribute}\n')
                 elif entry == 'task_types':
@@ -1309,7 +1385,8 @@ class PreviewVisitor(object):
         self._cadc_client = kwargs.get('cadc_client')
         if self._cadc_client is None:
             self._logger.warning(
-                'Visitor needs a cadc_client parameter to store previews.')
+                'Visitor needs a cadc_client parameter to store previews.'
+            )
         self._stream = kwargs.get('stream')
         if self._stream is None:
             raise CadcException('Visitor needs a stream parameter.')
@@ -1334,14 +1411,22 @@ class PreviewVisitor(object):
                 count += self._do_prev(plane, observation.observation_id)
             self._augment_artifacts(plane)
             self._delete_list_of_files()
-        logging.info(f'Completed preview augmentation for '
-                     f'{observation.observation_id}.')
+        logging.info(
+            f'Completed preview augmentation for {observation.observation_id}.'
+         )
         return {'artifacts': count}
 
-    def add_preview(self, uri, f_name, product_type, release_type=None,
-                    mime_type='image/jpeg'):
-        preview_meta = PreviewMeta(f_name, product_type, release_type,
-                                   mime_type)
+    def add_preview(
+            self,
+            uri,
+            f_name,
+            product_type,
+            release_type=None,
+            mime_type='image/jpeg',
+    ):
+        preview_meta = PreviewMeta(
+            f_name, product_type, release_type, mime_type
+        )
         self._previews[uri] = preview_meta
 
     def add_to_delete(self, fqn):
@@ -1360,7 +1445,8 @@ class PreviewVisitor(object):
                 release_type = entry.release_type
             fqn = os.path.join(self._working_dir, f_name)
             plane.artifacts[uri] = get_artifact_metadata(
-                fqn, product_type, release_type, uri, temp)
+                fqn, product_type, release_type, uri, temp
+            )
 
     def _delete_list_of_files(self):
         """Clean up files on disk after."""
@@ -1395,10 +1481,15 @@ class PreviewVisitor(object):
     def _store_smalls(self):
         if self._cadc_client is not None:
             for entry in self._previews.values():
-                data_put(self._cadc_client, self._working_dir, entry.f_name,
-                         self._archive, self._stream,
-                         mime_type=entry.mime_type,
-                         metrics=self._observable.metrics)
+                data_put(
+                    self._cadc_client,
+                    self._working_dir,
+                    entry.f_name,
+                    self._archive,
+                    self._stream,
+                    mime_type=entry.mime_type,
+                    metrics=self._observable.metrics,
+                )
 
 
 class StorageName(object):
@@ -1419,10 +1510,21 @@ class StorageName(object):
       Storage URI.
     """
 
-    def __init__(self, obs_id=None, collection=None, collection_pattern='.*',
-                 fname_on_disk=None, scheme='ad', archive=None, url=None,
-                 mime_encoding=None, mime_type='application/fits',
-                 compression='.gz', entry=None, source_names=[]):
+    def __init__(
+            self,
+            obs_id=None,
+            collection=None,
+            collection_pattern='.*',
+            fname_on_disk=None,
+            scheme='ad',
+            archive=None,
+            url=None,
+            mime_encoding=None,
+            mime_type='application/fits',
+            compression='.gz',
+            entry=None,
+            source_names=[],
+    ):
         """
 
         :param obs_id: string value for Observation.observationID
@@ -1642,8 +1744,13 @@ class Validator(object):
     The method 'read_from_source' must be implemented for validate to
     run to completion.
     """
-    def __init__(self, source_name, scheme='ad', preview_suffix='jpg',
-                 source_tz=timezone.utc):
+    def __init__(
+            self,
+            source_name,
+            scheme='ad',
+            preview_suffix='jpg',
+            source_tz=timezone.utc,
+    ):
         """
 
         :param source_name: String value used for logging
@@ -1749,22 +1856,24 @@ class Validator(object):
         self._filter_result()
 
         self._logger.info('Log the results.')
-        result = {f'{self._source_name}': self._source,
-                  'cadc': self._destination_meta,
-                  'timestamps': self._destination_data}
+        result = {
+            f'{self._source_name}': self._source,
+            'cadc': self._destination_meta,
+            'timestamps': self._destination_data,
+        }
         result_fqn = os.path.join(
             self._config.working_directory, VALIDATE_OUTPUT)
         write_as_yaml(result, result_fqn)
 
-        self._logger.info(f'Results:\n'
-                          f'  - {len(self._source)} files at '
-                          f'{self._source_name} that are not referenced by '
-                          f'CADC CAOM entries\n'
-                          f'  - {len(self._destination_meta)} CAOM entries at '
-                          f'CADC that do not reference {self._source_name} '
-                          f'files\n'
-                          f'  - {len(self._destination_data)} files that are '
-                          f'newer at {self._source_name} than in CADC storage')
+        self._logger.info(
+            f'Results:\n'
+            f'  - {len(self._source)} files at {self._source_name} that are '
+            f'not referenced by CADC CAOM entries\n'
+            f'  - {len(self._destination_meta)} CAOM entries at CADC that do '
+            f'not reference {self._source_name} files\n'
+            f'  - {len(self._destination_data)} files that are newer at '
+            f'{self._source_name} than in CADC storage'
+        )
         return self._source, self._destination_meta, self._destination_data
 
     def write_todo(self):
@@ -1788,8 +1897,10 @@ def compare_observations(actual_fqn, expected_fqn):
     msg = None
     if result:
         compare_text = '\n'.join([r for r in result])
-        msg = f'Differences found in observation {expected.observation_id}\n' \
-              f'{compare_text}'
+        msg = (
+            f'Differences found in observation {expected.observation_id}\n'
+            f'{compare_text}'
+        )
     return msg
 
 
@@ -1799,8 +1910,10 @@ def to_float(value):
     if value is not None:
         if isinstance(value, float): #  or isinstance(value, int):
             result = value
-        elif ((isinstance(value, str) and len(value.strip()) > 0) or
-              (isinstance(value, int))):
+        elif (
+            (isinstance(value, str) and len(value.strip()) > 0) or
+            (isinstance(value, int))
+        ):
             result = float(value)
     return result
 
@@ -1821,24 +1934,27 @@ def define_subject(config):
     subject = None
     if config.proxy_fqn is not None and os.path.exists(config.proxy_fqn):
         logging.debug(
-            f'Using proxy certificate {config.proxy_fqn} for credentials.')
-        subject = net.Subject(username=None,
-                              certificate=config.proxy_fqn)
+            f'Using proxy certificate {config.proxy_fqn} for credentials.'
+        )
+        subject = net.Subject(username=None, certificate=config.proxy_fqn)
     elif config.netrc_file is not None:
         netrc_fqn = os.path.join(config.working_directory, config.netrc_file)
         if os.path.exists(netrc_fqn):
-            logging.debug(
-                f'Using netrc file {netrc_fqn} for credentials.')
-            subject = net.Subject(username=None, certificate=None,
-                                  netrc=netrc_fqn)
+            logging.debug(f'Using netrc file {netrc_fqn} for credentials.')
+            subject = net.Subject(
+                username=None, certificate=None, netrc=netrc_fqn
+            )
         else:
             logging.warning(f'Cannot find netrc file {netrc_fqn}')
     else:
-        logging.warning(f'Proxy certificate is {config.proxy_fqn}, netrc file '
-                        f'is {config.netrc_file}.')
+        logging.warning(
+            f'Proxy certificate is {config.proxy_fqn}, netrc file is '
+            f'{config.netrc_file}.'
+        )
         raise CadcException(
             'No credentials provided (proxy certificate or netrc file). '
-            'Cannot create an anonymous subject.')
+            'Cannot create an anonymous subject.'
+        )
     return subject
 
 
@@ -1855,8 +1971,9 @@ def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
     logging.debug(cmd)
     cmd_array = cmd.split()
     try:
-        child = subprocess.Popen(cmd_array, stdout=subprocess.PIPE,
-                                 stderr=subprocess.PIPE)
+        child = subprocess.Popen(
+            cmd_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         try:
             output, outerr = child.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -1874,10 +1991,11 @@ def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
         if child.returncode != 0 and child.returncode != -9:
             # not killed due to a timeout
             logging.warning(f'Command {cmd} failed with {child.returncode}.')
-            raise CadcException(f'Command {cmd} ::\nreturncode '
-                                f'{child.returncode}, \nstdout '
-                                f'\'{output.decode("utf-8")}\' \nstderr '
-                                f'\'{outerr.decode("utf-8")}\'')
+            raise CadcException(
+                f'Command {cmd} ::\nreturncode {child.returncode}, \nstdout '
+                f'{output.decode("utf-8")}\' \nstderr '
+                f'{outerr.decode("utf-8")}\''
+            )
     except Exception as e:
         if isinstance(e, CadcException):
             raise e
@@ -1896,11 +2014,13 @@ def exec_cmd_info(cmd):
     logging.debug(cmd)
     cmd_array = cmd.split()
     try:
-        output, outerr = subprocess.Popen(cmd_array, stdout=subprocess.PIPE,
-                                          stderr=subprocess.PIPE).communicate()
+        output, outerr = subprocess.Popen(
+            cmd_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        ).communicate()
         if outerr is not None and len(outerr) > 0 and outerr[0] is not None:
             raise CadcException(
-                f'Command {cmd} had stderr {outerr.decode("utf-8")}')
+                f'Command {cmd} had stderr {outerr.decode("utf-8")}'
+            )
         if output is not None and len(output) > 0:
             return output.decode('utf-8')
     except Exception as e:
@@ -1924,14 +2044,18 @@ def exec_cmd_redirect(cmd, fqn):
     try:
         with open(fqn, 'wb') as outfile:
             outerr = subprocess.Popen(
-                cmd_array, stdout=outfile,
-                stderr=subprocess.PIPE).communicate()
-            if (outerr is not None and len(outerr) > 0 and
-                    outerr[0] is not None):
+                cmd_array, stdout=outfile, stderr=subprocess.PIPE
+            ).communicate()
+            if (
+                outerr is not None and len(outerr) > 0 and
+                    outerr[0] is not None
+            ):
                 logging.debug(
-                    f'Command {cmd} had stderr {outerr.decode("utf-8")}')
+                    f'Command {cmd} had stderr {outerr.decode("utf-8")}'
+                )
                 raise CadcException(
-                    f'Command {cmd} had outerr {outerr.decode("utf-8")}')
+                    f'Command {cmd} had outerr {outerr.decode("utf-8")}'
+                )
     except Exception as e:
         logging.debug(f'Error with command {cmd}:: {e}')
         logging.debug(traceback.format_exc())
@@ -1961,13 +2085,16 @@ def ftp_get(ftp_host_name, source_fqn, dest_fqn):
                 logging.info(f'Downloaded {source_fqn} from {ftp_host_name}')
             else:
                 os.unlink(dest_fqn)
-                raise CadcException(f'File size error when transferring '
-                                    f'{source_fqn} from {ftp_host_name}')
+                raise CadcException(
+                    f'File size error when transferring {source_fqn} from '
+                    f'{ftp_host_name}'
+                )
     except Exception as e:
         logging.error(e)
         logging.debug(traceback.format_exc())
         raise CadcException(
-            f'Could not transfer {source_fqn} from {ftp_host_name}')
+            f'Could not transfer {source_fqn} from {ftp_host_name}'
+        )
 
 
 def ftp_get_timeout(ftp_host_name, source_fqn, dest_fqn, timeout=20):
@@ -1997,13 +2124,16 @@ def ftp_get_timeout(ftp_host_name, source_fqn, dest_fqn, timeout=20):
                 logging.info(f'Downloaded {source_fqn} from {ftp_host_name}')
             else:
                 os.unlink(dest_fqn)
-                raise CadcException(f'File size error when transferring '
-                                    f'{source_fqn} from {ftp_host_name}')
+                raise CadcException(
+                    f'File size error when transferring {source_fqn} from '
+                    f'{ftp_host_name}'
+                )
     except Exception as e:
         logging.error(e)
         logging.debug(traceback.format_exc())
-        raise CadcException(f'Could not transfer {source_fqn} from '
-                            f'{ftp_host_name}')
+        raise CadcException(
+            f'Could not transfer {source_fqn} from {ftp_host_name}'
+        )
 
 
 def get_cadc_headers(uri):
@@ -2128,8 +2258,10 @@ def get_version(entry):
 def create_dir(dir_name):
     """Create the working area if it does not already exist."""
     if os.path.exists(dir_name):
-        if (not os.path.isdir(dir_name) or not
-                os.access(dir_name, os.W_OK | os.X_OK)):
+        if (
+            not os.path.isdir(dir_name) or not
+                os.access(dir_name, os.W_OK | os.X_OK)
+        ):
             raise CadcException(f'{dir_name} is not writeable.')
     else:
         os.makedirs(dir_name, mode=0o775)
@@ -2141,8 +2273,10 @@ def decompose_lineage(lineage):
         result = lineage.split('/', 1)
         return result[0], result[1]
     except Exception as e:
-        logging.debug(f'Lineage {lineage} caused error {e}. Expected '
-                      f'product_id/ad:ARCHIVE/FILE_NAME')
+        logging.debug(
+            f'Lineage {lineage} caused error {e}. Expected '
+            f'product_id/ad:ARCHIVE/FILE_NAME'
+        )
         logging.debug(traceback.format_exc())
         raise CadcException('Expected product_id/ad:ARCHIVE/FILE_NAME')
 
@@ -2160,8 +2294,9 @@ def decompose_uri(uri):
         file_name = temp1[1]
         return scheme, path, file_name
     except Exception as e:
-        logging.debug(f'URI {uri} caused error {e}. Expected '
-                      f'scheme:path/FILE_NAME')
+        logging.debug(
+            f'URI {uri} caused error {e}. Expected scheme:path/FILE_NAME'
+        )
         logging.debug(traceback.format_exc())
         raise CadcException(f'Expected scheme:path/FILE_NAME. Got {uri}.')
 
@@ -2281,8 +2416,9 @@ def get_lineage(archive, product_id, file_name, scheme='ad'):
     return f'{product_id}/{scheme}:{archive}/{file_name}'
 
 
-def get_artifact_metadata(fqn, product_type, release_type, uri=None,
-                          artifact=None):
+def get_artifact_metadata(
+        fqn, product_type, release_type, uri=None, artifact=None
+):
     """
     Build or update artifact content metadata using the CAOM2 objects, and
     with access to a file on disk.
@@ -2303,8 +2439,14 @@ def get_artifact_metadata(fqn, product_type, release_type, uri=None,
     if artifact is None:
         if uri is None:
             raise CadcException('Cannot build an Artifact without a URI.')
-        return Artifact(uri, product_type, release_type, local_meta['type'],
-                        local_meta['size'], md5uri)
+        return Artifact(
+            uri,
+            product_type,
+            release_type,
+            local_meta['type'],
+            local_meta['size'],
+            md5uri,
+        )
     else:
         artifact.product_type = product_type
         artifact.content_type = local_meta['type']
@@ -2314,8 +2456,15 @@ def get_artifact_metadata(fqn, product_type, release_type, uri=None,
         return artifact
 
 
-def get_artifact_metadata_client(client, file_name, product_type, release_type,
-                                 archive, uri=None, artifact=None):
+def get_artifact_metadata_client(
+        client,
+        file_name,
+        product_type,
+        release_type,
+        archive,
+        uri=None,
+        artifact=None,
+):
     """
     Build or update artifact content metadata using the CAOM2 objects, and
     with access to a file at CADC.
@@ -2338,8 +2487,14 @@ def get_artifact_metadata_client(client, file_name, product_type, release_type,
     if artifact is None:
         if uri is None:
             raise CadcException('Cannot build an Artifact without a URI.')
-        return Artifact(uri, product_type, release_type, meta.get('type'),
-                        meta.get('size'), md5uri)
+        return Artifact(
+            uri,
+            product_type,
+            release_type,
+            meta.get('type'),
+            meta.get('size'),
+            md5uri,
+        )
     else:
         artifact.product_type = product_type
         artifact.content_type = meta.get('type')
@@ -2384,8 +2539,16 @@ def sizeof(x):
     return sys.getsizeof(x)
 
 
-def data_put(client, working_directory, file_name, archive, stream='raw',
-             mime_type=None, mime_encoding=None, metrics=None):
+def data_put(
+        client,
+        working_directory,
+        file_name,
+        archive,
+        stream='raw',
+        mime_type=None,
+        mime_encoding=None,
+        metrics=None,
+):
     """
     Make a copy of a locally available file by writing it to CADC. Assumes
     file and directory locations are correct. Requires a checksum comparison
@@ -2406,9 +2569,14 @@ def data_put(client, working_directory, file_name, archive, stream='raw',
     cwd = os.getcwd()
     try:
         os.chdir(working_directory)
-        client.put_file(archive, file_name, archive_stream=stream,
-                        mime_type=mime_type, mime_encoding=mime_encoding,
-                        md5_check=True)
+        client.put_file(
+            archive,
+            file_name,
+            archive_stream=stream,
+            mime_type=mime_type,
+            mime_encoding=mime_encoding,
+            md5_check=True,
+        )
         file_size = os.stat(file_name).st_size
     except Exception as e:
         metrics.observe_failure('put', 'data', file_name)
@@ -2483,8 +2651,9 @@ def data_get(client, working_directory, file_name, archive, metrics):
     metrics.observe(start, end, file_size, 'get', 'data', file_name)
 
 
-def client_put(client, working_directory, file_name, storage_name,
-               metrics=None):
+def client_put(
+        client, working_directory, file_name, storage_name, metrics=None
+):
     """
     Make a copy of a locally available file by writing it to CADC. Assumes
     file and directory locations are correct.
@@ -2506,7 +2675,8 @@ def client_put(client, working_directory, file_name, storage_name,
         if stored_size != file_size:
             raise CadcException(
                 f'Stored file size {stored_size} != {file_size} at CADC for '
-                f'{storage_name}.')
+                f'{storage_name}.'
+            )
     except Exception as e:
         metrics.observe_failure('copy', 'vos', file_name)
         logging.debug(traceback.format_exc())
@@ -2567,7 +2737,8 @@ def client_get(client, working_directory, file_name, source, metrics):
         file_size = os.stat(fqn).st_size
         if retrieved_size != file_size:
             raise CadcException(
-                f'Wrong file size {retrieved_size} retrieved for {source}.')
+                f'Wrong file size {retrieved_size} retrieved for {source}.'
+            )
     except Exception as e:
         metrics.observe_failure('copy', 'vos', file_name)
         logging.debug(traceback.format_exc())
@@ -2589,8 +2760,9 @@ def query_endpoint(url, timeout=20):
     # Open the URL and fetch the JSON document for the observation
     session = requests.Session()
     retries = 10
-    retry = Retry(total=retries, read=retries, connect=retries,
-                  backoff_factor=0.5)
+    retry = Retry(
+        total=retries, read=retries, connect=retries, backoff_factor=0.5
+    )
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
@@ -2605,8 +2777,12 @@ def query_endpoint(url, timeout=20):
 
 def get_endpoint_session(retries=10, backoff_factor=0.5):
     session = requests.Session()
-    retry = Retry(total=retries, read=retries, connect=retries,
-                  backoff_factor=backoff_factor)
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+    )
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
@@ -2618,14 +2794,6 @@ def query_endpoint_session(url, session, timeout=20):
     on the response.
     """
 
-    # Open the URL and fetch the JSON document for the observation
-    # session = requests.Session()
-    # retries = 10
-    # retry = Retry(total=retries, read=retries, connect=retries,
-    #               backoff_factor=0.5)
-    # adapter = HTTPAdapter(max_retries=retry)
-    # session.mount('http://', adapter)
-    # session.mount('https://', adapter)
     try:
         response = session.get(url, timeout=timeout)
         response.raise_for_status()
@@ -2677,8 +2845,9 @@ def load_module(module, command_name):
         logging.debug(f'Looking for {command_name} in {module}.')
         result = importlib.import_module(mname)
         if not hasattr(result, command_name):
-            raise CadcException(f'Could not find command {command_name} in '
-                                f'module {module}.')
+            raise CadcException(
+                f'Could not find command {command_name} in module {module}.'
+            )
     except ImportError as e:
         logging.debug(f'Looking for {mname} in {pname}')
         raise e
@@ -2702,14 +2871,26 @@ def make_seconds(from_time):
     # OMM 2019/07/16 03:15:46
     # CADC Data Client Thu, 14 May 2020 20:29:02 GMT
     # NGVS Wed Mar 24 2010 16:10:36
-    for fmt in [ISO_8601_FORMAT, '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d %H:%M:%S.%f',
-                '%d-%b-%Y %H:%M', '%b %d %Y', '%b %d %H:%M', '%Y%m%d-%H%M%S',
-                '%Y-%m-%d', '%Y-%m-%dHST%H:%M:%S', '%a %b %d %H:%M:%S HST %Y',
-                '%Y/%m/%d %H:%M:%S', '%a, %d %b %Y %H:%M:%S GMT',
-                '%Y-%m-%dT%H:%M', '%a %b %d %Y %H:%M:%S']:
+    for fmt in [
+        ISO_8601_FORMAT,
+        '%Y-%m-%dT%H:%M:%S',
+        '%Y-%m-%d %H:%M:%S.%f',
+        '%d-%b-%Y %H:%M',
+        '%b %d %Y',
+        '%b %d %H:%M',
+        '%Y%m%d-%H%M%S',
+        '%Y-%m-%d',
+        '%Y-%m-%dHST%H:%M:%S',
+        '%a %b %d %H:%M:%S HST %Y',
+        '%Y/%m/%d %H:%M:%S',
+        '%a, %d %b %Y %H:%M:%S GMT',
+        '%Y-%m-%dT%H:%M',
+        '%a %b %d %Y %H:%M:%S',
+    ]:
         try:
             seconds_since_epoch = datetime.strptime(
-                from_time[:index], fmt).timestamp()
+                from_time[:index], fmt
+            ).timestamp()
             if fmt == '%b %d %H:%M':
                 # the format '%b %d %H:%M' results in a timestamp based on
                 # 1900, so need to set it to 'this' year
@@ -2717,9 +2898,12 @@ def make_seconds(from_time):
                 dt = f'{from_time[:index]} {year}'
                 dt_format = f'{fmt} %Y'
                 seconds_since_epoch = datetime.strptime(
-                    dt, dt_format).timestamp()
-            if (fmt == '%Y-%m-%dHST%H:%M:%S' or
-                    fmt == '%a %b %d %H:%M:%S HST %Y'):
+                    dt, dt_format
+                ).timestamp()
+            if (
+                    fmt == '%Y-%m-%dHST%H:%M:%S' or
+                    fmt == '%a %b %d %H:%M:%S HST %Y'
+            ):
                 # change timezone from HST to UTC - add 10 hours -
                 # accurate enough implementation for the CFHT
                 # provenance.lastExecuted value
@@ -2837,14 +3021,18 @@ def http_get(url, local_fqn):
             if length is not None:
                 file_meta = get_file_meta(local_fqn)
                 if file_meta['size'] != length:
-                    raise CadcException(f'Could not retrieve {local_fqn} from '
-                                        f'{url}. File size error.')
+                    raise CadcException(
+                        f'Could not retrieve {local_fqn} from {url}. File '
+                        f'size error.'
+                    )
             checksum = r.headers.get('Content-Checksum')
             if checksum is not None:
                 file_meta = get_file_meta(local_fqn)
                 if file_meta['md5sum'] != checksum:
-                    raise CadcException(f'Could not retrieve {local_fqn} from '
-                                        f'{url}. File checksum error.')
+                    raise CadcException(
+                        f'Could not retrieve {local_fqn} from {url}. File '
+                        f'checksum error.'
+                    )
         if not os.path.exists(local_fqn):
             raise CadcException(
                 f'Retrieve failed. {local_fqn} does not exist.')
@@ -2854,8 +3042,17 @@ def http_get(url, local_fqn):
             f'Could not retrieve {local_fqn} from {url}. Failed with {e}')
 
 
-def look_pull_and_put(f_name, working_dir, url, archive, stream, mime_type,
-                      cadc_client, checksum, metrics):
+def look_pull_and_put(
+        f_name,
+        working_dir,
+        url,
+        archive,
+        stream,
+        mime_type,
+        cadc_client,
+        checksum,
+        metrics,
+):
     """Checks to see if a file exists in ad. If yes, stop. If no,
     pull via https to local storage, then put to ad.
 
@@ -2878,8 +3075,9 @@ def look_pull_and_put(f_name, working_dir, url, archive, stream, mime_type,
     try:
         meta = cadc_client.get_file_info(archive, f_name)
         if checksum is not None and meta['md5sum'] != checksum:
-            logging.debug(f'Different checksums: CADC {meta["md5sum"]} '
-                          f'Source {checksum}')
+            logging.debug(
+                f'Different checksums: CADC {meta["md5sum"]} Source {checksum}'
+            )
             retrieve = True
         else:
             logging.info(f'{f_name} already exists at CADC/{archive}')
@@ -2890,12 +3088,21 @@ def look_pull_and_put(f_name, working_dir, url, archive, stream, mime_type,
         logging.info(f'Retrieving {f_name} for {archive}')
         fqn = os.path.join(working_dir, f_name)
         http_get(url, fqn)
-        data_put(cadc_client, working_dir, f_name, archive, stream,
-                 mime_type, mime_encoding=None, metrics=metrics)
+        data_put(
+            cadc_client,
+            working_dir,
+            f_name,
+            archive,
+            stream,
+            mime_type,
+            mime_encoding=None,
+            metrics=metrics,
+        )
 
 
-def look_pull_and_put_v(storage_name, f_name, working_dir, url,
-                        cadc_client, checksum, metrics):
+def look_pull_and_put_v(
+        storage_name, f_name, working_dir, url, cadc_client, checksum, metrics
+):
     """Checks to see if a file exists at CADC. If yes, stop. If no,
     pull via https to local storage, then put to CADC storage.
 
@@ -2916,8 +3123,9 @@ def look_pull_and_put_v(storage_name, f_name, working_dir, url,
     try:
         meta = _get_file_info(storage_name, cadc_client)
         if checksum is not None and meta.md5sum != checksum:
-            logging.debug(f'Different checksums: CADC {meta.md5sum} '
-                          f'Source {checksum}')
+            logging.debug(
+                f'Different checksums: CADC {meta.md5sum} Source {checksum}'
+            )
             retrieve = True
         else:
             logging.info(f'{f_name} already exists at CADC.')
@@ -2929,7 +3137,8 @@ def look_pull_and_put_v(storage_name, f_name, working_dir, url,
         fqn = os.path.join(working_dir, f_name)
         http_get(url, fqn)
         client_put(
-            cadc_client, working_dir, f_name, storage_name, metrics=metrics)
+            cadc_client, working_dir, f_name, storage_name, metrics=metrics
+        )
 
 
 @dataclass
@@ -2966,12 +3175,14 @@ def query_tap(query_string, proxy_fqn, resource_id):
     :returns an astropy votable instance."""
 
     logging.debug(
-        f'query_tap: execute query {query_string} against {resource_id}')
+        f'query_tap: execute query {query_string} against {resource_id}'
+    )
     subject = net.Subject(certificate=proxy_fqn)
     tap_client = CadcTapClient(subject, resource_id=resource_id)
     buffer = io.StringIO()
-    tap_client.query(query_string, output_file=buffer, data_only=True,
-                     response_format='csv')
+    tap_client.query(
+        query_string, output_file=buffer, data_only=True, response_format='csv'
+    )
     return Table.read(buffer.getvalue().split('\n'), format='csv')
 
 
@@ -2983,8 +3194,9 @@ def query_tap_client(query_string, tap_client):
 
     logging.debug(f'query_tap_client: execute query \n{query_string}')
     buffer = io.StringIO()
-    tap_client.query(query_string, output_file=buffer, data_only=True,
-                     response_format='csv')
+    tap_client.query(
+        query_string, output_file=buffer, data_only=True, response_format='csv'
+    )
     return Table.read(buffer.getvalue().split('\n'), format='csv')
 
 
@@ -2995,11 +3207,19 @@ def repo_create(client, observation, metrics):
     except Exception as e:
         metrics.observe_failure('create', 'caom2', observation.observation_id)
         logging.debug(traceback.format_exc())
-        raise CadcException(f'Could not create an observation record for '
-                            f'{observation.observation_id}. {e}')
+        raise CadcException(
+            f'Could not create an observation record for '
+            f'{observation.observation_id}. {e}'
+        )
     end = current()
-    metrics.observe(start, end, sizeof(observation), 'create', 'caom2',
-                    observation.observation_id)
+    metrics.observe(
+        start,
+        end,
+        sizeof(observation),
+        'create',
+        'caom2',
+        observation.observation_id,
+    )
 
 
 def repo_delete(client, collection, obs_id, metrics):
@@ -3010,7 +3230,8 @@ def repo_delete(client, collection, obs_id, metrics):
         metrics.observe_failure('delete', 'caom2', obs_id)
         logging.debug(traceback.format_exc())
         raise CadcException(
-            f'Could not delete the observation record for {obs_id}. {e}')
+            f'Could not delete the observation record for {obs_id}. {e}'
+        )
     end = current()
     metrics.observe(start, end, 0, 'delete', 'caom2', obs_id)
 
@@ -3025,10 +3246,12 @@ def repo_get(client, collection, obs_id, metrics):
         metrics.observe_failure('read', 'caom2', obs_id)
         logging.debug(traceback.format_exc())
         raise CadcException(
-            f'Could not retrieve an observation record for {obs_id}.')
+            f'Could not retrieve an observation record for {obs_id}.'
+        )
     end = current()
     metrics.observe(
-        start, end, sizeof(observation), 'read', 'caom2', obs_id)
+        start, end, sizeof(observation), 'read', 'caom2', obs_id
+    )
     return observation
 
 
@@ -3039,11 +3262,19 @@ def repo_update(client, observation, metrics):
     except Exception as e:
         metrics.observe_failure('update', 'caom2', observation.observation_id)
         logging.debug(traceback.format_exc())
-        raise CadcException(f'Could not update an observation record for '
-                            f'{observation.observation_id}. {e}')
+        raise CadcException(
+            f'Could not update an observation record for '
+            f'{observation.observation_id}. {e}'
+        )
     end = current()
-    metrics.observe(start, end, sizeof(observation), 'update', 'caom2',
-                    observation.observation_id)
+    metrics.observe(
+        start,
+        end,
+        sizeof(observation),
+        'update',
+        'caom2',
+        observation.observation_id
+    )
 
 
 def reverse_lookup(value_to_find, in_dict):
@@ -3164,8 +3395,9 @@ class ValueRepairCache(Cache):
                 new_entity = getattr(entity, attribute_name)
                 self._recurse(new_entity, attribute_name, bits[1:])
         else:
-            logging.warning(f'No attribute {entity_name}.{attribute_name} '
-                            f'found to repair.')
+            logging.warning(
+                f'No attribute {entity_name}.{attribute_name} found to repair.'
+            )
 
     def _repair_attribute(self, entity, attribute_name):
         try:
@@ -3173,13 +3405,22 @@ class ValueRepairCache(Cache):
             if attribute_value not in self._values.values():
                 for original, fix in self._values.items():
                     if attribute_value is None and original != 'none':
-                        self._logger.info(f'{attribute_name} value is None.'
-                                          f'This class only repairs values.')
+                        self._logger.info(
+                            f'{attribute_name} value is None. This class only '
+                            f'repairs values.'
+                        )
                     else:
-                        fixed = self._fix(entity, attribute_name,
-                                          attribute_value, original, fix)
-                        if (fixed is None or fixed == fix or
-                                fixed != attribute_value):
+                        fixed = self._fix(
+                            entity,
+                            attribute_name,
+                            attribute_value,
+                            original,
+                            fix,
+                        )
+                        if (
+                            fixed is None or fixed == fix or
+                                fixed != attribute_value
+                        ):
                             break
         except Exception as e:
             self._logger.debug(traceback.format_exc())
@@ -3189,12 +3430,14 @@ class ValueRepairCache(Cache):
         if fix == 'none':
             setattr(entity, attribute_name, None)
             self._logger.info(
-                f'Repair {self._key} from {original} to None')
+                f'Repair {self._key} from {original} to None'
+            )
             fixed = None
         elif original == 'any':
             setattr(entity, attribute_name, fix)
             self._logger.info(
-                f'Repair {self._key} from {attribute_value} to {fix}')
+                f'Repair {self._key} from {attribute_value} to {fix}'
+            )
             fixed = fix
         else:
             if attribute_value is None:
@@ -3205,5 +3448,6 @@ class ValueRepairCache(Cache):
                 fixed = re.sub(str(original), str(fix), str(attribute_value))
                 setattr(entity, attribute_name, attribute_value_type(fixed))
             self._logger.info(
-                f'Repair {self._key} from {attribute_value} to {fixed}')
+                f'Repair {self._key} from {attribute_value} to {fixed}'
+            )
         return fixed
