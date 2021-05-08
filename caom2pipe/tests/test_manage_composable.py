@@ -1253,9 +1253,25 @@ def test_value_repair_cache():
         test_subject.repair(test_observation)
 
     with pytest.raises(mc.CadcException):
+        # pre-condition of 'Could not figure out attribute name'
+        # the first part of the name is correct, the second is not
+        test_subject._value_repair = {'observation.unknown': 'unknown'}
+        test_subject.repair(test_observation)
+
+    with pytest.raises(mc.CadcException):
+        # the first part of a chunk name is correct, the succeeding bits are
+        # note
+        test_subject._value_repair = {
+            'chunk.position.axis.function.refCoord.coord1.pix':
+            {512.579594886106: 5.6}
+        }
+        test_subject.repair(test_observation)
+
+    with pytest.raises(mc.CadcException):
         # try to set an attribute that cannot be assigned
-        test_subject._value_repair = \
-            {'observation.instrument.name': {'gmos': 'GMOS-N'}}
+        test_subject._value_repair = {
+            'observation.instrument.name': {'gmos': 'GMOS-N'},
+        }
         test_subject.repair(test_observation)
 
     # pre-condition of 'Could not figure out attribute name' the attribute is

@@ -209,14 +209,16 @@ def test_run_todo_list_dir_data_source_invalid_fname_v(
 @patch('caom2pipe.execute_composable.CaomExecute._repo_cmd_read_client')
 @patch('cadcdata.core.net.BaseWsClient.post')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+@patch('caom2pipe.execute_composable.CAOM2RepoClient')
+@patch('caom2pipe.execute_composable.CadcDataClient')
 def test_run_todo_file_data_source(
-    caps_mock,
-    ad_mock,
-    data_client_mock,
-    set_clients_mock,
-    test_config
+        repo_get_mock,
+        repo_mock,
+        caps_mock,
+        ad_mock,
+        data_client_mock,
+        test_config
 ):
-    set_clients_mock.side_effect = _clients_mock
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     response = Mock()
     response.status_code = 200
@@ -251,10 +253,11 @@ def test_run_todo_file_data_source(
 
 @patch('caom2pipe.run_composable._set_clients')
 @patch('caom2pipe.execute_composable.CaomExecute._repo_cmd_read_client')
+@patch('caom2pipe.execute_composable.CAOM2RepoClient')
+@patch('caom2pipe.execute_composable.Client')
 def test_run_todo_file_data_source_v(
-    repo_read_mock, set_clients_mock, test_config
+        client_mock, repo_client_mock, repo_read_mock, test_config
 ):
-    set_clients_mock.side_effect = _clients_mock
     test_config.features.supports_latest_client = True
     test_cert_file = os.path.join(TEST_DIR, 'test_proxy.pem')
     test_config.proxy_fqn = test_cert_file
@@ -284,6 +287,15 @@ def test_run_todo_file_data_source_v(
         content = f.read()
         # the obs id and file name
         assert 'def def.fits' in content, 'wrong success message'
+    assert repo_client_mock.called, 'expect call'
+    assert repo_client_mock.call_args.args[1] == 10, 'wrong arg1'
+    assert (
+        repo_client_mock.call_args.args[2] == 'ivo://cadc.nrc.ca/sc2repo'
+    ), 'wrong resource_id'
+    assert client_mock.called, 'expect call'
+    client_mock.assert_called_with(
+        vospace_certfile=test_cert_file
+    ), 'wrong a args'
     assert repo_read_mock.called, 'expect e call'
     repo_read_mock.assert_called_with(), 'wrong e args'
 
@@ -405,7 +417,7 @@ def test_run_state_log_to_file_true(
         test_result = rc.run_by_state_ad(
             config=test_config,
             chooser=test_chooser,
-            command_name='collection2caom2',
+            command_name=TEST_COMMAND,
             bookmark_name=TEST_BOOKMARK,
             end_time=test_end_time,
         )

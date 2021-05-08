@@ -253,7 +253,7 @@ def test_local_meta_create_client_execute(test_config):
     test_executor = ec.LocalMetaCreate(
         test_config,
         tc.TestStorageName(),
-        __name__,
+        TEST_APP,
         test_cred,
         data_client_mock,
         repo_client_mock,
@@ -559,20 +559,21 @@ def test_organize_executes_chooser(test_config):
 
     try:
         ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
-        mc.exec_cmd_info = Mock(
-            return_value='INFO:cadc-data:info\n'
-                         'File C170324_0054_SCI_prev.jpg:\n'
-                         '    archive: OMM\n'
-                         '   encoding: None\n'
-                         '    lastmod: Mon, 25 Jun 2018 16:52:07 GMT\n'
-                         '     md5sum: f37d21c53055498d1b5cb7753e1c6d6f\n'
-                         '       name: C120902_sh2-132_J_old_'
-                         'SCIRED.fits.gz\n'
-                         '       size: 754408\n'
-                         '       type: image/jpeg\n'
-                         '    umd5sum: 704b494a972eed30b18b817e243ced7d\n'
-                         '      usize: 754408\n'.encode('utf-8')
-        )
+        mc.exec_cmd_info = \
+            Mock(
+                return_value='INFO:cadc-data:info\n'
+                             'File C170324_0054_SCI_prev.jpg:\n'
+                             '    archive: OMM\n'
+                             '   encoding: None\n'
+                             '    lastmod: Mon, 25 Jun 2018 16:52:07 GMT\n'
+                             '     md5sum: f37d21c53055498d1b5cb7753e1c6d6f\n'
+                             '       name: C120902_sh2-132_J_old_'
+                             'SCIRED.fits.gz\n'
+                             '       size: 754408\n'
+                             '       type: image/jpeg\n'
+                             '    umd5sum: 704b494a972eed30b18b817e243ced7d\n'
+                             '      usize: 754408\n'.encode('utf-8')
+            )
 
         test_config.task_types = [mc.TaskType.INGEST]
         test_chooser = tc.TestChooser()
@@ -788,21 +789,20 @@ def test_organize_executes_client_do_one(test_config):
 
     try:
         ec.CaomExecute.repo_cmd_get_client = Mock(return_value=None)
-        mc.exec_cmd_info = \
-            Mock(
-                return_value='INFO:cadc-data:info\n'
-                             'File C170324_0054_SCI_prev.jpg:\n'
-                             '    archive: OMM\n'
-                             '   encoding: None\n'
-                             '    lastmod: Mon, 25 Jun 2018 16:52:07 GMT\n'
-                             '     md5sum: f37d21c53055498d1b5cb7753e1c6d6f\n'
-                             '       name: C120902_sh2-132_J_old_'
-                             'SCIRED.fits.gz\n'
-                             '       size: 754408\n'
-                             '       type: image/jpeg\n'
-                             '    umd5sum: 704b494a972eed30b18b817e243ced7d\n'
-                             '      usize: 754408\n'.encode('utf-8')
-            )
+        mc.exec_cmd_info = Mock(
+            return_value='INFO:cadc-data:info\n'
+                         'File C170324_0054_SCI_prev.jpg:\n'
+                         '    archive: OMM\n'
+                         '   encoding: None\n'
+                         '    lastmod: Mon, 25 Jun 2018 16:52:07 GMT\n'
+                         '     md5sum: f37d21c53055498d1b5cb7753e1c6d6f\n'
+                         '       name: C120902_sh2-132_J_old_'
+                         'SCIRED.fits.gz\n'
+                         '       size: 754408\n'
+                         '       type: image/jpeg\n'
+                         '    umd5sum: 704b494a972eed30b18b817e243ced7d\n'
+                         '      usize: 754408\n'.encode('utf-8')
+        )
 
         test_config.task_types = [mc.TaskType.SCRAPE]
         test_oe = ec.OrganizeExecutes(
@@ -814,7 +814,7 @@ def test_organize_executes_client_do_one(test_config):
         assert isinstance(executors[0], ec.ScrapeUpdate)
 
         test_config.task_types = [
-            mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY,
+            mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY
         ]
         test_oe = ec.OrganizeExecutes(
             test_config, TEST_APP, [], [], chooser=None
@@ -822,9 +822,7 @@ def test_organize_executes_client_do_one(test_config):
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 3
-        assert (
-            isinstance(executors[0], ec.Store), type(executors[0])
-        )
+        assert isinstance(executors[0], ec.Store), type(executors[0])
         assert isinstance(executors[1], ec.LocalMetaCreate)
         assert isinstance(executors[2], ec.LocalDataVisit)
         assert repo_client_mock.read.called, 'mock should be called'
@@ -971,26 +969,24 @@ def test_store(test_config):
         test_transferrer,
     )
     assert test_subject is not None, 'expect construction'
-    assert test_subject.working_dir == os.path.join(
-        tc.TEST_DATA_DIR, 'test_obs_id'
+    assert (
+        test_subject.working_dir == '/test_files/caom2pipe/test_obs_id'
     ), 'wrong working directory'
-    assert len(test_subject._destination_uris) == 1, 'wrong file count'
+    assert len(test_subject.multiple_files) == 1, 'wrong file count'
     assert (
         len(test_subject._destination_f_names) == 1
     ), 'wrong destination file count'
     assert (
-        test_subject._destination_f_names[0] == 'nonexistent.fits.gz'
+        test_subject._destination_f_names[0] == 'test_obs_id.fits'
     ), 'wrong destination'
     test_subject.execute(None)
     assert test_data_client.put_file.called, 'data put not called'
     assert (
-        test_data_client.put_file.call_args.args[0] == 'TEST'
-    ), 'archive not set for test_config, is set for TestStorageName'
+        test_data_client.put_file.call_args.args[0] is None
+    ), 'archive not set for test_config'
     assert (
-        test_data_client.put_file.call_args.args[1] == os.path.join(
-            tc.TEST_DATA_DIR, 'test_obs_id/nonexistent.fits.gz',
-        )
-    ), 'expect a fully-qualified file name'
+        test_data_client.put_file.call_args.args[1] == 'test_obs_id.fits'
+    ), 'expect a file name'
     assert (
         test_data_client.put_file.call_args.kwargs['archive_stream'] == 'TEST'
     ), 'wrong archive stream'
@@ -1022,31 +1018,37 @@ def test_local_store(test_config):
     test_data_client = Mock(autospec=True)
     test_observable = Mock(autospec=True)
     test_subject = ec.LocalStore(
-        test_config, test_sn, test_command, test_data_client, test_observable,
+        test_config,
+        test_sn,
+        test_command,
+        test_data_client,
+        test_observable,
     )
     assert test_subject is not None, 'expect construction'
     test_subject.execute(None)
     # does the working directory get used if it's just a local store?
     assert (
-        test_subject.working_dir == os.path.join(
-            tc.TEST_DATA_DIR, 'test_obs_id')
+           test_subject.working_dir == '/test_files/caom2pipe'
     ), 'wrong working directory'
     # do one file at a time, so it doesn't matter how many files are
     # in the working directory
-    assert len(test_subject._destination_uris) == 1, 'wrong file count'
+    assert len(test_subject.multiple_files) == 1, 'wrong file count'
     assert (
         len(test_subject._destination_f_names) == 1
     ), 'wrong destination file count'
     assert (
-        test_subject._destination_f_names[0] == 'test_file.fits.gz'
+        test_subject._destination_f_names[0] == 'test_obs_id.fits'
     ), 'wrong destination'
     assert test_data_client.put_file.called, 'data put not called'
-    assert test_data_client.put_file.call_args.args[0] == 'TEST', 'archive'
     assert (
-        test_data_client.put_file.call_args.args[1] == test_sn.source_names[0]
+        test_data_client.put_file.call_args.args[0] == 'LOCAL_TEST'
+    ), 'expect an archive'
+    assert (
+        test_data_client.put_file.call_args.args[1] == 'test_obs_id.fits'
     ), 'expect a file name'
     assert (
-        test_data_client.put_file.call_args.kwargs['archive_stream'] == 'TEST'
+        test_data_client.put_file.call_args.kwargs['archive_stream'] ==
+        'TEST'
     ), 'wrong archive'
     assert (
         test_data_client.put_file.call_args.kwargs['mime_type'] ==
