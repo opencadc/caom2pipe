@@ -93,13 +93,24 @@ from caom2 import CoordBounds1D, CoordRange1D, RefCoord
 from caom2pipe import manage_composable as mc
 
 
-__all__ = ['convert_time', 'get_datetime', 'build_chunk_energy_bounds',
-           'build_plane_time', 'build_plane_time_interval',
-           'build_plane_time_sample', 'build_ra_dec_as_deg',
-           'get_geocentric_location', 'get_location', 'get_timedelta_in_s',
-           'make_headers_from_string', 'get_vo_table', 'read_fits_data',
-           'get_vo_table_session',
-           'read_fits_headers', 'SVO_URL', 'FilterMetadataCache']
+__all__ = [
+    'build_chunk_energy_bounds',
+    'build_plane_time',
+    'build_plane_time_interval',
+    'build_plane_time_sample',
+    'build_ra_dec_as_deg',
+    'convert_time',
+    'get_datetime',
+    'get_geocentric_location',
+    'get_location',
+    'get_timedelta_in_s',
+    'get_vo_table',
+    'FilterMetadataCache',
+    'make_headers_from_string',
+    'read_fits_data',
+    'read_fits_headers',
+    'SVO_URL',
+]
 
 SVO_URL = 'http://svo2.cab.inta-csic.es/svo/theory/fps3/fps.php?ID='
 
@@ -118,8 +129,9 @@ def convert_time(start_time, exposure):
     time."""
     logging.debug('Begin convert_time.')
     if start_time is not None and exposure is not None:
-        logging.debug(f'Use date {start_time} and exposure {exposure} to '
-                      f'convert time.')
+        logging.debug(
+            f'Use date {start_time} and exposure {exposure} to convert time.'
+        )
         if type(start_time) is float:
             t_start = Time(start_time, format='mjd')
         else:
@@ -131,7 +143,8 @@ def convert_time(start_time, exposure):
         mjd_start = t_start.value
         mjd_end = t_end.value
         logging.debug(
-            f'End convert_time mjd start {mjd_start} mjd end {mjd_end}.')
+            f'End convert_time mjd start {mjd_start} mjd end {mjd_end}.'
+        )
         return mjd_start, mjd_end
     return None, None
 
@@ -169,8 +182,10 @@ def get_datetime(from_value):
                         break
                     except ValueError:
                         pass
-        elif (isinstance(from_value, numpy.int32) or
-              isinstance(from_value, float)):
+        elif (
+            isinstance(from_value, numpy.int32) or
+            isinstance(from_value, float)
+        ):
             result = Time(dt_datetime.fromtimestamp(from_value))
     if result is None:
         logging.error(f'Cannot parse datetime {from_value}')
@@ -282,11 +297,13 @@ def build_plane_time(start_date, end_date, exposure_time):
     """Calculate the plane-level bounding box for time, with one sample."""
     sample = build_plane_time_sample(start_date, end_date)
     time_bounds = build_plane_time_interval(start_date, end_date, [sample])
-    return caom_Time(bounds=time_bounds,
-                     dimension=1,
-                     resolution=exposure_time.to('second').value,
-                     sample_size=exposure_time.to('day').value,
-                     exposure=exposure_time.to('second').value)
+    return caom_Time(
+        bounds=time_bounds,
+        dimension=1,
+        resolution=exposure_time.to('second').value,
+        sample_size=exposure_time.to('day').value,
+        exposure=exposure_time.to('second').value,
+    )
 
 
 def build_plane_time_interval(start_date, end_date, samples):
@@ -295,9 +312,11 @@ def build_plane_time_interval(start_date, end_date, samples):
     :param samples list of SubInterval instances
     :param start_date minimum SubInterval date
     :param end_date maximum SubInterval date. """
-    time_bounds = caom_Interval(mc.to_float(start_date.value),
-                                mc.to_float(end_date.value),
-                                samples=samples)
+    time_bounds = caom_Interval(
+        mc.to_float(start_date.value),
+        mc.to_float(end_date.value),
+        samples=samples,
+    )
     return time_bounds
 
 
@@ -310,7 +329,8 @@ def build_plane_time_sample(start_date, end_date):
     end_date.format = 'mjd'
     return caom_shape.SubInterval(
         mc.to_float(start_date.value),
-        mc.to_float(end_date.value))
+        mc.to_float(end_date.value),
+    )
 
 
 def build_ra_dec_as_deg(ra, dec, frame='icrs'):
@@ -318,8 +338,9 @@ def build_ra_dec_as_deg(ra, dec, frame='icrs'):
     Common code to go from units.hourangle, units.deg to both values in
     units.deg
     """
-    result = SkyCoord(ra, dec, frame=frame,
-                      unit=(units.hourangle, units.deg))
+    result = SkyCoord(
+        ra, dec, frame=frame, unit=(units.hourangle, units.deg)
+    )
     return result.ra.degree, result.dec.degree
 
 
@@ -330,7 +351,8 @@ def get_timedelta_in_s(from_value):
     """
     temp = dt_strptime(from_value, '%H:%M:%S')
     td = dt_timedelta(
-        hours=temp.tm_hour, minutes=temp.tm_min, seconds=temp.tm_sec)
+        hours=temp.tm_hour, minutes=temp.tm_min, seconds=temp.tm_sec
+    )
     return td.seconds
 
 
@@ -338,8 +360,7 @@ def make_headers_from_string(fits_header):
     """Create a list of fits.Header instances from a string.
     ":param fits_header a string of keyword/value pairs"""
     delim = '\nEND'
-    extensions = \
-        [e + delim for e in fits_header.split(delim) if e.strip()]
+    extensions = [e + delim for e in fits_header.split(delim) if e.strip()]
     headers = [fits.Header.fromstring(e, sep='\n') for e in extensions]
     return headers
 
@@ -375,9 +396,15 @@ class FilterMetadataCache(object):
     Units are Angstroms.
     """
 
-    def __init__(self, repair_filter_lookup, repair_instrument_lookup,
-                 telescope, cache=None, default_key='NONE',
-                 connected=True):
+    def __init__(
+            self,
+            repair_filter_lookup,
+            repair_instrument_lookup,
+            telescope,
+            cache=None,
+            default_key='NONE',
+            connected=True,
+    ):
         # a dict
         # key - the collection filter name
         # value - the filter name as used at SVO
@@ -398,9 +425,10 @@ class FilterMetadataCache(object):
         else:
             inst_r = self._repair_instrument_name(instrument)
         fn_r = self._repair_filter_name(filter_name, inst_r)
-        self._logger.debug(f'Looking for instrument {instrument}, '
-                           f'repaired instrument {inst_r}, filter '
-                           f'{filter_name} repaired filter {fn_r}.')
+        self._logger.debug(
+            f'Looking for instrument {instrument}, repaired instrument '
+            f'{inst_r}, filter {filter_name} repaired filter {fn_r}.'
+        )
         cache_key = f'{inst_r}.{fn_r}'
         if inst_r in fn_r:
             cache_key = fn_r
@@ -430,9 +458,14 @@ class FilterMetadataCache(object):
         :return: units are Angstroms
         """
         if self._connected:
-            if ((instrument is None or
-                 (isinstance(instrument, Enum) and
-                  instrument.value is None)) and filter_name is None):
+            if (
+                (
+                    instrument is None or (
+                        isinstance(instrument, Enum) and
+                        instrument.value is None
+                    )
+                ) and filter_name is None
+            ):
                 result = self._cache.get(self._default_key)
             else:
                 cache_key = self._get_cache_key(instrument, filter_name)
@@ -445,7 +478,8 @@ class FilterMetadataCache(object):
                     if vo_table is None:
                         self._logger.warning(
                             f'Unable to download SVO filter information '
-                            f'from {url} because {error_message}')
+                            f'from {url} because {error_message}'
+                        )
                         # identify missing SVO lookups as un-defined cache
                         # values
                         fwhm = -2
@@ -453,14 +487,16 @@ class FilterMetadataCache(object):
                     else:
                         fwhm = vo_table.get_field_by_id('FWHM').value
                         central_wl = vo_table.get_field_by_id(
-                            'WavelengthCen').value
+                            'WavelengthCen'
+                        ).value
                     result = {'cw': central_wl, 'fwhm': fwhm}
                     self._cache[cache_key] = result
         else:
             # some recognizably wrong value
             self._logger.warning(
                 f'Not connected - using default energy values for '
-                f'{instrument} and {filter_name}')
+                f'{instrument} and {filter_name}'
+            )
             result = {'cw': -0.1, 'fwhm': -0.1}
         return result
 

@@ -1425,6 +1425,8 @@ class OrganizeExecutes(object):
             chooser=None,
             store_transfer=None,
             modify_transfer=None,
+            cadc_client=None,
+            caom_client=None,
     ):
         """
         Why there is support for two transfer instances:

@@ -78,9 +78,16 @@ from dateutil import tz
 from cadctap import CadcTapClient
 from caom2pipe import manage_composable as mc
 
-__all__ = ['DataSource', 'ListDirDataSource', 'ListDirTimeBoxDataSource',
-           'QueryTimeBoxDataSource', 'QueryTimeBoxDataSourceTS',
-           'StateRunnerMeta', 'TodoFileDataSource', 'VaultListDirDataSource']
+__all__ = [
+    'DataSource',
+    'ListDirDataSource',
+    'ListDirTimeBoxDataSource',
+    'QueryTimeBoxDataSource',
+    'QueryTimeBoxDataSourceTS',
+    'StateRunnerMeta',
+    'TodoFileDataSource',
+    'VaultListDirDataSource',
+]
 
 
 class DataSource(object):
@@ -132,9 +139,10 @@ class ListDirDataSource(DataSource):
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_work(self):
-        self._logger.debug(f'Begin get_work from '
-                           f'{self._config.working_directory} in '
-                           f'{self.__class__.__name__}.')
+        self._logger.debug(
+            f'Begin get_work from {self._config.working_directory} in '
+            f'{self.__class__.__name__}.'
+        )
         file_list = os.listdir(self._config.working_directory)
         work = []
         for f in file_list:
@@ -191,9 +199,8 @@ class ListDirTimeBoxDataSource(DataSource):
     """
 
     def __init__(
-            self,
-            config,
-            recursive=True):
+            self, config, recursive=True
+    ):
         """
 
         :param config: manage_composable.Config
@@ -236,8 +243,10 @@ class ListDirTimeBoxDataSource(DataSource):
                     for extension in self._extensions:
                         if entry.name.endswith(extension):
                             entry_stats = entry.stat()
-                            if (exec_time >= entry_stats.st_mtime >=
-                                    prev_exec_time):
+                            if (
+                                exec_time >= entry_stats.st_mtime >=
+                                    prev_exec_time
+                            ):
                                 self._work.append(
                                     StateRunnerMeta(
                                         entry.path, entry_stats.st_mtime
@@ -257,8 +266,10 @@ class TodoFileDataSource(DataSource):
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_work(self):
-        self._logger.debug(f'Begin get_work from {self._config.work_fqn} in '
-                           f'{self.__class__.__name__}')
+        self._logger.debug(
+            f'Begin get_work from {self._config.work_fqn} in '
+            f'{self.__class__.__name__}'
+        )
         work = []
         with open(self._config.work_fqn) as f:
             for line in f:
@@ -296,9 +307,11 @@ class QueryTimeBoxDataSource(DataSource):
         # container timezone is UTC, ad timezone is Pacific
         db_fmt = '%Y-%m-%d %H:%M:%S.%f'
         prev_exec_time_pz = datetime.strftime(
-            prev_exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt)
+            prev_exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt
+        )
         exec_time_pz = datetime.strftime(
-            exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt)
+            exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt
+        )
         self._logger.debug(f'Begin get_work.')
         query = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
                 f"archiveName = '{self._config.archive}' " \
@@ -320,7 +333,6 @@ def is_offset_aware(dt):
     :param dt:
     :return: a datetime.timestamp with tzinfo set
     """
-    logging.error(dt.tzinfo)
     if dt.tzinfo is None:
         raise mc.CadcException(f'Expect tzinfo to be set for {dt}')
     return dt
@@ -364,11 +376,16 @@ class QueryTimeBoxDataSourceTS(DataSource):
         # container timezone is UTC, ad timezone is Pacific
         db_fmt = '%Y-%m-%d %H:%M:%S.%f'
         prev_exec_time_pz = datetime.strftime(
-            datetime.utcfromtimestamp(prev_exec_time).astimezone(
-                tz.gettz('US/Pacific')), db_fmt)
+            datetime.utcfromtimestamp(
+                prev_exec_time
+            ).astimezone(tz.gettz('US/Pacific')), db_fmt
+        )
         exec_time_pz = datetime.strftime(
-            datetime.utcfromtimestamp(exec_time).astimezone(
-                tz.gettz('US/Pacific')), db_fmt)
+            datetime.utcfromtimestamp(
+                exec_time
+            ).astimezone(
+                tz.gettz('US/Pacific')), db_fmt
+        )
         self._logger.debug(f'Begin get_work.')
         query = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
                 f"archiveName = '{self._config.archive}' " \

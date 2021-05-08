@@ -83,28 +83,41 @@ from caom2.diff import get_differences
 from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 
-__all__ = ['append_plane_provenance', 'append_plane_provenance_single',
-           'build_artifact_uri', 'build_chunk_energy_range',
-           'build_chunk_time', 'build_temporal_wcs_append_sample',
-           'build_temporal_wcs_bounds', 'change_to_simple',
-           'exec_footprintfinder', 'find_plane_and_artifact',
-           'find_keywords_in_header', 'find_keywords_in_headers',
-           'get_all_artifact_keys',
-           'get_obs_id_from_cadc',
-           'make_plane_uri',
-           'update_plane_provenance',
-           'update_observation_members', 'rename_parts',
-           'reset_energy', 'reset_position',
-           'reset_observable', 'is_composite', 'change_to_composite',
-           'compare', 'copy_artifact', 'copy_chunk', 'copy_instrument',
-           'copy_part', 'copy_provenance', 'undo_astropy_cdfix_call',
-           'update_observation_members_filtered',
-           'update_plane_provenance_from_values',
-           'update_plane_provenance_list']
+__all__ = [
+    'append_plane_provenance',
+    'append_plane_provenance_single',
+    'build_artifact_uri',
+    'build_chunk_energy_range',
+    'build_chunk_time',
+    'build_temporal_wcs_append_sample',
+    'build_temporal_wcs_bounds',
+    'change_to_simple',
+    'change_to_composite',
+    'compare',
+    'copy_artifact',
+    'copy_chunk',
+    'copy_instrument',
+    'copy_part',
+    'copy_provenance',
+    'exec_footprintfinder',
+    'find_plane_and_artifact',
+    'get_obs_id_from_cadc',
+    'is_composite',
+    'rename_parts',
+    'reset_energy',
+    'reset_observable',
+    'reset_position',
+    'undo_astropy_cdfix_call',
+    'update_observation_members',
+    'update_observation_members_filtered',
+    'update_plane_provenance',
+    'update_plane_provenance_list',
+]
 
 
-def append_plane_provenance(plane, headers, lookup, collection,
-                            repair, obs_id):
+def append_plane_provenance(
+        plane, headers, lookup, collection, repair, obs_id
+):
     """Append inputs to Planes, based on a particular keyword prefix.
     This function is NOT for removing inputs that have been previously added.
 
@@ -119,12 +132,14 @@ def append_plane_provenance(plane, headers, lookup, collection,
     """
     plane_inputs = TypedSet(PlaneURI,)
     _update_plane_provenance(
-        headers, lookup, collection, repair, obs_id, plane_inputs)
+        headers, lookup, collection, repair, obs_id, plane_inputs
+    )
     plane.provenance.inputs.update(plane_inputs)
 
 
-def append_plane_provenance_single(plane, headers, lookup, collection, repair,
-                                   obs_id):
+def append_plane_provenance_single(
+        plane, headers, lookup, collection, repair, obs_id
+):
     """Append inputs to Planes, based on a particular keyword prefix. This
     differs from update_plane_provenance because all the values are in a
     single keyword, such as COMMENT or HISTORY. It differs from
@@ -141,13 +156,15 @@ def append_plane_provenance_single(plane, headers, lookup, collection, repair,
     :param obs_id String value for logging only.
     """
     plane_inputs = TypedSet(PlaneURI,)
-    _find_plane_provenance_single(plane_inputs, headers, lookup, collection,
-                                  repair, obs_id)
+    _find_plane_provenance_single(
+        plane_inputs, headers, lookup, collection, repair, obs_id
+    )
     plane.provenance.inputs.update(plane_inputs)
 
 
-def _find_plane_provenance_single(plane_inputs, headers, lookup, collection,
-                                  repair, obs_id):
+def _find_plane_provenance_single(
+        plane_inputs, headers, lookup, collection, repair, obs_id
+):
     """
     :param plane_inputs TypedSet instance to add inputs to
     :param headers FITS keyword headers that have lookup values.
@@ -168,10 +185,12 @@ def _find_plane_provenance_single(plane_inputs, headers, lookup, collection,
                     # 1 - plane
                     obs_member_uri_str = \
                         mc.CaomName.make_obs_uri_from_obs_id(
-                            collection, entry[0])
+                            collection, entry[0]
+                        )
                     obs_member_uri = ObservationURI(obs_member_uri_str)
                     plane_uri = PlaneURI.get_plane_uri(
-                        obs_member_uri, entry[1])
+                        obs_member_uri, entry[1]
+                    )
                     plane_inputs.add(plane_uri)
                     logging.debug(f'Adding PlaneURI {plane_uri}')
                 # because all the content gets processed with one
@@ -212,12 +231,14 @@ def build_chunk_energy_range(chunk, filter_name, filter_md):
         ref_coord2 = RefCoord(1.5, cw + fwhm / 2.0)
         axis.range = CoordRange1D(ref_coord1, ref_coord2)
 
-        energy = SpectralWCS(axis=axis,
-                             specsys='TOPOCENT',
-                             ssyssrc=None,
-                             ssysobs=None,
-                             bandpass_name=filter_name,
-                             resolving_power=resolving_power)
+        energy = SpectralWCS(
+            axis=axis,
+            specsys='TOPOCENT',
+            ssyssrc=None,
+            ssysobs=None,
+            bandpass_name=filter_name,
+            resolving_power=resolving_power,
+        )
         chunk.energy = energy
         # PD - in general, do not set the energy_axis, unless the energy axis
         # was really in the fits header
@@ -243,13 +264,15 @@ def build_chunk_time(chunk, header, name):
         if chunk.time is None:
             coord_error = CoordError(syser=1e-07, rnder=1e-07)
             time_axis = CoordAxis1D(axis=Axis('TIME', 'd'), error=coord_error)
-            chunk.time = TemporalWCS(axis=time_axis,
-                                     timesys='UTC')
+            chunk.time = TemporalWCS(
+                axis=time_axis, timesys='UTC'
+            )
         ref_coord = RefCoord(pix=0.5, val=mjd_obs)
         chunk.time.axis.function = CoordFunction1D(
             naxis=1,
             delta=mc.convert_to_days(exp_time),
-            ref_coord=ref_coord)
+            ref_coord=ref_coord,
+        )
         chunk.time.exposure = exp_time
         chunk.time.resolution = mc.convert_to_days(exp_time)
     logging.debug(f'End build_chunk_time.')
@@ -286,9 +309,13 @@ def build_temporal_wcs_append_sample(temporal_wcs, lower, upper):
     if temporal_wcs is None:
         samples = TypedList(CoordRange1D,)
         bounds = CoordBounds1D(samples=samples)
-        temporal_wcs = TemporalWCS(axis=CoordAxis1D(axis=Axis('TIME', 'd'),
-                                                    bounds=bounds),
-                                   timesys='UTC')
+        temporal_wcs = TemporalWCS(
+            axis=CoordAxis1D(
+                axis=Axis('TIME', 'd'),
+                bounds=bounds,
+            ),
+            timesys='UTC',
+        )
     start_ref_coord = RefCoord(pix=0.5, val=lower)
     end_ref_coord = RefCoord(pix=1.5, val=upper)
     sample = CoordRange1D(start_ref_coord, end_ref_coord)
@@ -337,9 +364,11 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
                 if row['cunit'] == 'd' and row['naxis'] == 1:
                     inputs.append([row['val'], row['delta']])
                 else:
-                    logging.warning(f'Could not make use of values for '
-                                    f'{product_id}.NAXISi is {row["naxis"]} '
-                                    f'and CUNITi is {row["cunit"]}')
+                    logging.warning(
+                        f'Could not make use of values for '
+                        f'{product_id}.NAXISi is {row["naxis"]} and CUNITi '
+                        f'is {row["cunit"]}'
+                    )
         else:
             logging.warning(f'No CAOM record for {product_id} found at CADC.')
     logging.info(f'Building temporal bounds for {len(inputs)} inputs.')
@@ -347,14 +376,17 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
     temporal_wcs = None
     for ip in inputs:
         temporal_wcs = build_temporal_wcs_append_sample(
-            temporal_wcs, lower=ip[0], upper=(ip[0] + ip[1]))
+            temporal_wcs, lower=ip[0], upper=(ip[0] + ip[1])
+        )
 
     for artifact in plane.artifacts.values():
         for part in artifact.parts.values():
             if part.product_type == ProductType.SCIENCE:
                 for chunk in part.chunks:
-                    logging.debug(f'Adding TemporalWCS to chunks in artifact '
-                                  f'{artifact.uri}, part {part.name}.')
+                    logging.debug(
+                        f'Adding TemporalWCS to chunks in artifact '
+                        f'{artifact.uri}, part {part.name}.'
+                    )
                     chunk.time = temporal_wcs
     logging.debug(f'End build_temporal_wcs_bounds.')
 
@@ -363,21 +395,23 @@ def change_to_composite(observation, algorithm_name='composite',
                         collection=None, features=None):
     """For the case where a SimpleObservation needs to become a
     DerivedObservation."""
-    temp = DerivedObservation(observation.collection,
-                              observation.observation_id,
-                              Algorithm(algorithm_name),
-                              observation.sequence_number,
-                              observation.intent,
-                              observation.type,
-                              observation.proposal,
-                              observation.telescope,
-                              observation.instrument,
-                              observation.target,
-                              observation.meta_release,
-                              observation.meta_read_groups,
-                              observation.planes,
-                              observation.environment,
-                              observation.target_position)
+    temp = DerivedObservation(
+        observation.collection,
+        observation.observation_id,
+        Algorithm(algorithm_name),
+        observation.sequence_number,
+        observation.intent,
+        observation.type,
+        observation.proposal,
+        observation.telescope,
+        observation.instrument,
+        observation.target,
+        observation.meta_release,
+        observation.meta_read_groups,
+        observation.planes,
+        observation.environment,
+        observation.target_position,
+    )
     temp.meta_producer = observation.meta_producer
     temp.last_modified = datetime.utcnow()
     temp._id = observation._id
@@ -387,21 +421,23 @@ def change_to_composite(observation, algorithm_name='composite',
 def change_to_simple(observation):
     """For the case where a DerivedObservation needs to become a
     SimpleObservation."""
-    temp = SimpleObservation(observation.collection,
-                             observation.observation_id,
-                             Algorithm('exposure'),
-                             observation.sequence_number,
-                             observation.intent,
-                             observation.type,
-                             observation.proposal,
-                             observation.telescope,
-                             observation.instrument,
-                             observation.target,
-                             observation.meta_release,
-                             observation.meta_read_groups,
-                             observation.planes,
-                             observation.environment,
-                             observation.target_position)
+    temp = SimpleObservation(
+        observation.collection,
+        observation.observation_id,
+        Algorithm('exposure'),
+        observation.sequence_number,
+        observation.intent,
+        observation.type,
+        observation.proposal,
+        observation.telescope,
+        observation.instrument,
+        observation.target,
+        observation.meta_release,
+        observation.meta_read_groups,
+        observation.planes,
+        observation.environment,
+        observation.target_position,
+    )
     temp.last_modified = datetime.utcnow()
     temp._id = observation._id
     return temp
@@ -420,9 +456,10 @@ def compare(ex_fqn, act_fqn, entry):
     result = get_differences(ex, act, 'Observation')
     if result:
         result_str = '\n'.join([r for r in result])
-        msg = f'Differences found obs id {ex.observation_id} ' \
-              f'file id {entry} ' \
-              f'instr {ex.instrument.name}\n{result_str}'
+        msg = (
+            f'Differences found obs id {ex.observation_id} file id {entry} '
+            f'instr {ex.instrument.name}\n{result_str}'
+        )
         return msg
     return None
 
@@ -439,23 +476,27 @@ def copy_artifact(from_artifact, features=None):
     :return a copy of the from_artifact, with parts set to None
     """
     if features is not None and features.supports_latest_caom:
-        copy = Artifact(uri=from_artifact.uri,
-                        product_type=from_artifact.product_type,
-                        release_type=from_artifact.release_type,
-                        content_type=from_artifact.content_type,
-                        content_length=from_artifact.content_length,
-                        content_checksum=from_artifact.content_checksum,
-                        content_release=from_artifact.content_release,
-                        content_read_groups=from_artifact.content_read_groups,
-                        parts=None)
+        copy = Artifact(
+            uri=from_artifact.uri,
+            product_type=from_artifact.product_type,
+            release_type=from_artifact.release_type,
+            content_type=from_artifact.content_type,
+            content_length=from_artifact.content_length,
+            content_checksum=from_artifact.content_checksum,
+            content_release=from_artifact.content_release,
+            content_read_groups=from_artifact.content_read_groups,
+            parts=None,
+        )
     else:
-        copy = Artifact(uri=from_artifact.uri,
-                        product_type=from_artifact.product_type,
-                        release_type=from_artifact.release_type,
-                        content_type=from_artifact.content_type,
-                        content_length=from_artifact.content_length,
-                        content_checksum=from_artifact.content_checksum,
-                        parts=None)
+        copy = Artifact(
+            uri=from_artifact.uri,
+            product_type=from_artifact.product_type,
+            release_type=from_artifact.release_type,
+            content_type=from_artifact.content_type,
+            content_length=from_artifact.content_length,
+            content_checksum=from_artifact.content_checksum,
+            parts=None,
+        )
     return copy
 
 
@@ -470,36 +511,40 @@ def copy_chunk(from_chunk, features=None):
     :return a copy of the from_chunk
     """
     if features is not None and features.supports_latest_caom:
-        copy = Chunk(product_type=from_chunk.product_type,
-                     naxis=from_chunk.naxis,
-                     position_axis_1=from_chunk.position_axis_1,
-                     position_axis_2=from_chunk.position_axis_2,
-                     position=from_chunk.position,
-                     energy_axis=from_chunk.energy_axis,
-                     energy=from_chunk.energy,
-                     time_axis=from_chunk.time_axis,
-                     time=from_chunk.time,
-                     custom_axis=from_chunk.custom_axis,
-                     custom=from_chunk.custom,
-                     polarization_axis=from_chunk.polarization_axis,
-                     polarization=from_chunk.polarization,
-                     observable_axis=from_chunk.observable_axis,
-                     observable=from_chunk.observable)
+        copy = Chunk(
+            product_type=from_chunk.product_type,
+            naxis=from_chunk.naxis,
+            position_axis_1=from_chunk.position_axis_1,
+            position_axis_2=from_chunk.position_axis_2,
+            position=from_chunk.position,
+            energy_axis=from_chunk.energy_axis,
+            energy=from_chunk.energy,
+            time_axis=from_chunk.time_axis,
+            time=from_chunk.time,
+            custom_axis=from_chunk.custom_axis,
+            custom=from_chunk.custom,
+            polarization_axis=from_chunk.polarization_axis,
+            polarization=from_chunk.polarization,
+            observable_axis=from_chunk.observable_axis,
+            observable=from_chunk.observable,
+        )
         copy.meta_producer = from_chunk.meta_producer
     else:
-        copy = Chunk(product_type=from_chunk.product_type,
-                     naxis=from_chunk.naxis,
-                     position_axis_1=from_chunk.position_axis_1,
-                     position_axis_2=from_chunk.position_axis_2,
-                     position=from_chunk.position,
-                     energy_axis=from_chunk.energy_axis,
-                     energy=from_chunk.energy,
-                     time_axis=from_chunk.time_axis,
-                     time=from_chunk.time,
-                     polarization_axis=from_chunk.polarization_axis,
-                     polarization=from_chunk.polarization,
-                     observable_axis=from_chunk.observable_axis,
-                     observable=from_chunk.observable)
+        copy = Chunk(
+            product_type=from_chunk.product_type,
+            naxis=from_chunk.naxis,
+            position_axis_1=from_chunk.position_axis_1,
+            position_axis_2=from_chunk.position_axis_2,
+            position=from_chunk.position,
+            energy_axis=from_chunk.energy_axis,
+            energy=from_chunk.energy,
+            time_axis=from_chunk.time_axis,
+            time=from_chunk.time,
+            polarization_axis=from_chunk.polarization_axis,
+            polarization=from_chunk.polarization,
+            observable_axis=from_chunk.observable_axis,
+            observable=from_chunk.observable,
+        )
     return copy
 
 
@@ -527,9 +572,11 @@ def copy_part(from_part, features=None):
     :param features which version of CAOM to use
     :return a copy of the from_part, with chunks set to None
     """
-    copy = Part(name=from_part.name,
-                product_type=from_part.product_type,
-                chunks=None)
+    copy = Part(
+        name=from_part.name,
+        product_type=from_part.product_type,
+        chunks=None,
+    )
     if features is not None and features.supports_latest_caom:
         copy.meta_producer = from_part.meta_producer
     return copy
@@ -540,13 +587,15 @@ def copy_provenance(from_provenance):
     :param from_provenance Provenance of which to make a shallow copy
     :return a copy of the from_provenance, with keywords set to None
     """
-    copy = Provenance(name=from_provenance.name,
-                      version=from_provenance.version,
-                      project=from_provenance.project,
-                      producer=from_provenance.producer,
-                      run_id=from_provenance.run_id,
-                      reference=from_provenance.reference,
-                      last_executed=from_provenance.last_executed)
+    copy = Provenance(
+        name=from_provenance.name,
+        version=from_provenance.version,
+        project=from_provenance.project,
+        producer=from_provenance.producer,
+        run_id=from_provenance.run_id,
+        reference=from_provenance.reference,
+        last_executed=from_provenance.last_executed,
+    )
     for entry in from_provenance.inputs:
         copy.inputs.add(entry)
     for entry in from_provenance.keywords:
@@ -554,8 +603,9 @@ def copy_provenance(from_provenance):
     return copy
 
 
-def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
-                         params='-f'):
+def exec_footprintfinder(
+        chunk, science_fqn, log_file_directory, obs_id, params='-f'
+):
     """Execute the footprintfinder on a file. All preconditions for successful
     execution should be in place i.e. the file exists, and is unzipped (because
     that is faster).
@@ -578,10 +628,12 @@ def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
     # installed, which is not declared as a caom2pipe dependency
     import footprintfinder
 
-    if (chunk.position is not None
-            and chunk.position.axis is not None):
+    if (
+        chunk.position is not None and chunk.position.axis is not None
+    ):
         logging.debug(
-            f'position exists, calculate footprints for {science_fqn}.')
+            f'position exists, calculate footprints for {science_fqn}.'
+        )
         for parameters in [params, f'{params} -m 0.2', '-f']:
             # try in decreasing fidelity to get a Polygon that is supported
             # by CAOM's Polygon/MultiPolygon structures
@@ -591,12 +643,14 @@ def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
 
             full_area, footprint_xc, footprint_yc, ra_bary, dec_bary, \
                 footprintstring, stc = footprintfinder.main(
-                    f'-r {parameters} {science_fqn}')
-            logging.debug(f'footprintfinder result: full area {full_area} '
-                          f'footprint xc {footprint_xc} footprint yc '
-                          f'{footprint_yc} ra bary {ra_bary} dec_bary '
-                          f'{dec_bary} footprintstring {footprintstring} '
-                          f'stc {stc}')
+                    f'-r {parameters} {science_fqn}'
+            )
+            logging.debug(
+                f'footprintfinder result: full area {full_area} footprint xc '
+                f'{footprint_xc} footprint yc {footprint_yc} ra bary '
+                f'{ra_bary} dec_bary {dec_bary} footprintstring '
+                f'{footprintstring} stc {stc}'
+            )
             coords = None
             fp_results = stc.split('Polygon FK5')
             if len(fp_results) > 1:
@@ -615,8 +669,10 @@ def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id,
         bounds = CoordPolygon2D()
         index = 0
         while index < len(coords):
-            vertex = ValueCoord2D(mc.to_float(coords[index]),
-                                  mc.to_float(coords[index + 1]))
+            vertex = ValueCoord2D(
+                mc.to_float(coords[index]),
+                mc.to_float(coords[index + 1]),
+            )
             bounds.vertices.append(vertex)
             index += 2
             logging.debug(f'Adding vertex\n{vertex}')
@@ -641,8 +697,9 @@ def _handle_footprint_logs(log_file_directory, log_file):
         if os.path.exists(orig_log_fqn):
             log_fqn = os.path.join(log_file_directory, log_file)
             os.rename(orig_log_fqn, log_fqn)
-            logging.debug(f'Moving footprint log file from {orig_log_fqn} '
-                          f'to {log_fqn}')
+            logging.debug(
+                f'Moving footprint log file from {orig_log_fqn} to {log_fqn}'
+            )
     else:
         logging.debug(f'Removing footprint log file {orig_log_fqn}')
         os.unlink(orig_log_fqn)
@@ -765,8 +822,9 @@ def rename_parts(observation, headers):
                 artifact.parts.add(part)
 
 
-def _update_plane_provenance(headers, lookup, collection, repair, obs_id,
-                             plane_inputs):
+def _update_plane_provenance(
+        headers, lookup, collection, repair, obs_id, plane_inputs
+):
     """Add inputs to a collection, based on a particular keyword prefix.
 
     :param headers FITS keyword headers that have lookup values.
@@ -785,15 +843,21 @@ def _update_plane_provenance(headers, lookup, collection, repair, obs_id,
                 value = header.get(keyword)
                 prov_obs_id, prov_prod_id = repair(value, obs_id)
                 if prov_obs_id is not None and prov_prod_id is not None:
-                    obs_member_uri_ignore, plane_uri = make_plane_uri(
-                        prov_obs_id, prov_prod_id, collection
+                    obs_member_uri_str = \
+                        mc.CaomName.make_obs_uri_from_obs_id(
+                            collection, prov_obs_id
+                        )
+                    obs_member_uri = ObservationURI(obs_member_uri_str)
+                    plane_uri = PlaneURI.get_plane_uri(
+                        obs_member_uri, prov_prod_id
                     )
                     plane_inputs.add(plane_uri)
                     logging.debug(f'Adding PlaneURI {plane_uri}')
 
 
-def update_plane_provenance(plane, headers, lookup, collection,
-                            repair, obs_id):
+def update_plane_provenance(
+        plane, headers, lookup, collection, repair, obs_id
+):
     """Add inputs to Planes, based on a particular keyword prefix.
 
     :param plane Plane instance to add inputs to
@@ -807,27 +871,14 @@ def update_plane_provenance(plane, headers, lookup, collection,
     """
     plane_inputs = TypedSet(PlaneURI,)
     _update_plane_provenance(
-        headers, lookup, collection, repair, obs_id, plane_inputs)
+        headers, lookup, collection, repair, obs_id, plane_inputs
+    )
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
-def update_plane_provenance_from_values(
-    plane, repair, values, collection, obs_id
+def update_plane_provenance_list(
+        plane, headers, lookups, collection, repair, obs_id
 ):
-    plane_inputs = TypedSet(PlaneURI,)
-    for value in values:
-        prov_obs_id, prov_prod_id = repair(value, obs_id)
-        if prov_obs_id is not None and prov_prod_id is not None:
-            obs_member_uri_ignore, plane_uri = make_plane_uri(
-                prov_obs_id, prov_prod_id, collection
-            )
-            plane_inputs.add(plane_uri)
-            logging.debug(f'Adding PlaneURI {plane_uri}')
-    mc.update_typed_set(plane.provenance.inputs, plane_inputs)
-
-
-def update_plane_provenance_list(plane, headers, lookups, collection,
-                                 repair, obs_id):
     """Add inputs to Planes, based on a particular keyword prefix.
 
     :param plane Plane instance to add inputs to
@@ -843,12 +894,14 @@ def update_plane_provenance_list(plane, headers, lookups, collection,
 
     for entry in lookups:
         _update_plane_provenance(
-            headers, entry, collection, repair, obs_id, plane_inputs)
+            headers, entry, collection, repair, obs_id, plane_inputs
+        )
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
-def update_plane_provenance_single(plane, headers, lookup, collection, repair,
-                                   obs_id):
+def update_plane_provenance_single(
+        plane, headers, lookup, collection, repair, obs_id
+):
     """Replace inputs in Planes, based on a particular keyword prefix. This
     differs from update_plane_provenance because all the values are in a
     single keyword, such as COMMENT or HISTORY.
@@ -863,8 +916,9 @@ def update_plane_provenance_single(plane, headers, lookup, collection, repair,
     :param obs_id String value for logging only.
     """
     plane_inputs = TypedSet(PlaneURI,)
-    _find_plane_provenance_single(plane_inputs, headers, lookup, collection,
-                                  repair, obs_id)
+    _find_plane_provenance_single(
+        plane_inputs, headers, lookup, collection, repair, obs_id
+    )
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
@@ -875,12 +929,15 @@ def update_observation_members(observation):
     """
     members_inputs = TypedSet(ObservationURI,)
     for plane in observation.planes.values():
-        if (plane.provenance is not None and
-                plane.provenance.inputs is not None):
+        if (
+            plane.provenance is not None and
+                plane.provenance.inputs is not None
+        ):
             for inpt in plane.provenance.inputs:
                 members_inputs.add(inpt.get_observation_uri())
                 logging.debug(
-                    f'Adding Observation URI {inpt.get_observation_uri()}')
+                    f'Adding Observation URI {inpt.get_observation_uri()}'
+                )
     mc.update_typed_set(observation.members, members_inputs)
 
 
@@ -896,8 +953,10 @@ def update_observation_members_filtered(observation, filter_fn):
     inputs = []
     members_inputs = TypedSet(ObservationURI,)
     for plane in observation.planes.values():
-        if (plane.provenance is not None and
-                plane.provenance.inputs is not None):
+        if (
+            plane.provenance is not None and
+                plane.provenance.inputs is not None
+        ):
             inputs = filter(filter_fn, plane.provenance.inputs)
 
     for entry in inputs:
@@ -944,8 +1003,10 @@ def undo_astropy_cdfix_call(chunk, time_delta):
     https://docs.astropy.org/en/stable/api/astropy.
     wc.Wcsprm.html#astropy.wcs.Wcsprm.cdfix
     """
-    if (time_delta == 0.0 and chunk.time is not None and
-            chunk.time.axis is not None and
-            chunk.time.axis.function is not None and
-            chunk.time.axis.function.delta == 1.0):
+    if (
+        time_delta == 0.0 and chunk.time is not None and
+        chunk.time.axis is not None and
+        chunk.time.axis.function is not None and
+        chunk.time.axis.function.delta == 1.0
+    ):
         chunk.time.axis.function.delta = 0.0

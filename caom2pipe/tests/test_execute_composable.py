@@ -80,6 +80,8 @@ from hashlib import md5
 
 from caom2 import SimpleObservation, Algorithm
 
+from cadcdata import CadcDataClient
+from caom2repo import CAOM2RepoClient
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable
@@ -317,7 +319,8 @@ def test_client_visit(test_config):
     with patch('caom2pipe.manage_composable.write_obs_to_file') as write_mock:
         test_executor = ec.MetaVisit(
             test_config,
-            tc.TestStorageName(), test_cred,
+            tc.TestStorageName(),
+            test_cred,
             data_client_mock,
             repo_client_mock,
             meta_visitors=None,
@@ -344,7 +347,6 @@ def test_data_execute(test_config):
             os.mkdir(test_dir, mode=0o755)
         precondition = open(test_fits_fqn, 'w')
         precondition.close()
-        logging.error(test_fits_fqn)
 
         test_data_visitors = [TestVisit]
         repo_client_mock = Mock()
@@ -455,7 +457,7 @@ def test_data_local_execute(test_config):
         data_client_mock,
         repo_client_mock,
         test_data_visitors,
-        observable=test_observer
+        observable=test_observer,
     )
     test_executor.execute(None)
 
@@ -553,7 +555,7 @@ def test_organize_executes_chooser(test_config):
     test_config.features.supports_composite = True
     exec_cmd_orig = mc.exec_cmd_info
     caom_client = Mock(autospec=True)
-    caom_client.read.side_effect = _read_obs2
+    # caom_client.read.side_effect = _read_obs2
 
     try:
         ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
@@ -607,23 +609,25 @@ def test_organize_executes_chooser(test_config):
 def test_organize_executes_client_existing(test_config):
     test_obs_id = tc.TestStorageName()
     test_config.features.use_clients = True
-    repo_client_mock = Mock(autospec=True)
-    repo_client_mock.read.side_effect = _read_obs2
-    test_config.task_types = [mc.TaskType.INGEST]
-    test_config.use_local_files = False
-    test_oe = ec.OrganizeExecutes(
-        test_config,
-        'command_name',
-        [],
-        [],
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
-    )
-    executors = test_oe.choose(test_obs_id)
-    assert executors is not None
-    assert len(executors) == 1
-    assert isinstance(executors[0], ec.MetaUpdate)
-    assert repo_client_mock.read.called, 'mock not called'
+    repo_cmd_orig = ec.CaomExecute.repo_cmd_get_client
+    CadcDataClient.__init__ = Mock(return_value=None)
+    CAOM2RepoClient.__init__ = Mock(return_value=None)
+    try:
+
+        ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
+        test_config.task_types = [mc.TaskType.INGEST]
+        test_config.use_local_files = False
+        test_oe = ec.OrganizeExecutes(
+            test_config, 'command_name', [], []
+        )
+        executors = test_oe.choose(test_obs_id)
+        assert executors is not None
+        assert len(executors) == 1
+        assert isinstance(executors[0], ec.MetaUpdate)
+        assert CadcDataClient.__init__.called, 'mock not called'
+        assert CAOM2RepoClient.__init__.called, 'mock not called'
+    finally:
+        ec.CaomExecute.repo_cmd_get_client = repo_cmd_orig
 
 
 def test_organize_executes_client_visit(test_config):
@@ -632,7 +636,7 @@ def test_organize_executes_client_visit(test_config):
     test_config.task_types = [mc.TaskType.VISIT]
     test_config.use_local_files = False
     repo_client_mock = Mock(autospec=True)
-    repo_client_mock.read.side_effect = _read_obs2
+    # repo_client_mock.read.side_effect = _read_obs2
     test_oe = ec.OrganizeExecutes(
         test_config,
         'command_name',
@@ -759,9 +763,7 @@ def test_storage_name_failure(test_config):
     assert not os.path.exists(test_config.success_fqn)
     assert not os.path.exists(test_config.failure_fqn)
     assert not os.path.exists(test_config.retry_fqn)
-    test_organizer = ec.OrganizeExecutes(
-        test_config, 'command name', [], []
-    )
+    test_organizer = ec.OrganizeExecutes(test_config, 'command name', [], [])
     test_organizer.choose(TestStorageNameFails())
     assert os.path.exists(test_config.success_fqn)
     assert os.path.exists(test_config.failure_fqn)
@@ -785,30 +787,26 @@ def test_organize_executes_client_do_one(test_config):
     repo_client_mock.read.return_value = None
 
     try:
-        mc.exec_cmd_info = Mock(
-            return_value='INFO:cadc-data:info\n'
-                         'File C170324_0054_SCI_prev.jpg:\n'
-                         '    archive: OMM\n'
-                         '   encoding: None\n'
-                         '    lastmod: Mon, 25 Jun 2018 16:52:07 GMT\n'
-                         '     md5sum: f37d21c53055498d1b5cb7753e1c6d6f\n'
-                         '       name: C120902_sh2-132_J_old_'
-                         'SCIRED.fits.gz\n'
-                         '       size: 754408\n'
-                         '       type: image/jpeg\n'
-                         '    umd5sum: 704b494a972eed30b18b817e243ced7d\n'
-                         '      usize: 754408\n'.encode('utf-8')
-        )
+        ec.CaomExecute.repo_cmd_get_client = Mock(return_value=None)
+        mc.exec_cmd_info = \
+            Mock(
+                return_value='INFO:cadc-data:info\n'
+                             'File C170324_0054_SCI_prev.jpg:\n'
+                             '    archive: OMM\n'
+                             '   encoding: None\n'
+                             '    lastmod: Mon, 25 Jun 2018 16:52:07 GMT\n'
+                             '     md5sum: f37d21c53055498d1b5cb7753e1c6d6f\n'
+                             '       name: C120902_sh2-132_J_old_'
+                             'SCIRED.fits.gz\n'
+                             '       size: 754408\n'
+                             '       type: image/jpeg\n'
+                             '    umd5sum: 704b494a972eed30b18b817e243ced7d\n'
+                             '      usize: 754408\n'.encode('utf-8')
+            )
 
         test_config.task_types = [mc.TaskType.SCRAPE]
         test_oe = ec.OrganizeExecutes(
-            test_config,
-            TEST_APP,
-            [],
-            [],
-            chooser=None,
-            cadc_client=Mock(autospec=True),
-            caom_client=repo_client_mock,
+            test_config, TEST_APP, [], [], chooser=None
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -816,21 +814,17 @@ def test_organize_executes_client_do_one(test_config):
         assert isinstance(executors[0], ec.ScrapeUpdate)
 
         test_config.task_types = [
-            mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY
+            mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY,
         ]
         test_oe = ec.OrganizeExecutes(
-            test_config,
-            TEST_APP,
-            [],
-            [],
-            chooser=None,
-            cadc_client=Mock(autospec=True),
-            caom_client=repo_client_mock,
+            test_config, TEST_APP, [], [], chooser=None
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 3
-        assert isinstance(executors[0], ec.Store), type(executors[0])
+        assert (
+            isinstance(executors[0], ec.Store), type(executors[0])
+        )
         assert isinstance(executors[1], ec.LocalMetaCreate)
         assert isinstance(executors[2], ec.LocalDataVisit)
         assert repo_client_mock.read.called, 'mock should be called'
@@ -839,13 +833,7 @@ def test_organize_executes_client_do_one(test_config):
         test_config.use_local_files = False
         test_config.task_types = [mc.TaskType.INGEST, mc.TaskType.MODIFY]
         test_oe = ec.OrganizeExecutes(
-            test_config,
-            TEST_APP,
-            [],
-            [],
-            chooser=None,
-            cadc_client=Mock(autospec=True),
-            caom_client=repo_client_mock,
+            test_config, TEST_APP, [], [], chooser=None
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -857,13 +845,7 @@ def test_organize_executes_client_do_one(test_config):
         test_config.use_local_files = True
         test_config.task_types = [mc.TaskType.INGEST, mc.TaskType.MODIFY]
         test_oe = ec.OrganizeExecutes(
-            test_config,
-            TEST_APP,
-            [],
-            [],
-            chooser=None,
-            cadc_client=Mock(autospec=True),
-            caom_client=repo_client_mock,
+            test_config, TEST_APP, [], [], chooser=None
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -872,18 +854,12 @@ def test_organize_executes_client_do_one(test_config):
         assert isinstance(executors[1], ec.LocalDataVisit)
         assert repo_client_mock.read.called, 'mock should be called'
         assert repo_client_mock.read.reset()
-        repo_client_mock.read.side_effect = _read_obs2
+        # repo_client_mock.read.side_effect = _read_obs2
 
         test_config.task_types = [mc.TaskType.SCRAPE, mc.TaskType.MODIFY]
         test_config.use_local_files = True
         test_oe = ec.OrganizeExecutes(
-            test_config,
-            TEST_APP,
-            [],
-            [],
-            chooser=None,
-            cadc_client=Mock(autospec=True),
-            caom_client=repo_client_mock,
+            test_config, TEST_APP, [], [], chooser=None
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -898,13 +874,7 @@ def test_organize_executes_client_do_one(test_config):
         test_chooser = tc.TestChooser()
         ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
         test_oe = ec.OrganizeExecutes(
-            test_config,
-            TEST_APP,
-            [],
-            [],
-            chooser=test_chooser,
-            cadc_client=Mock(autospec=True),
-            caom_client=repo_client_mock,
+            test_config, TEST_APP, [], [], chooser=test_chooser
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -918,14 +888,7 @@ def test_organize_executes_client_do_one(test_config):
         ec.CaomExecute.repo_cmd_get_client = Mock(
             return_value=_read_obs(test_obs_id)
         )
-        test_oe = ec.OrganizeExecutes(
-            test_config,
-            TEST_APP,
-            [],
-            [],
-            cadc_client=Mock(autospec=True),
-            caom_client=repo_client_mock,
-        )
+        test_oe = ec.OrganizeExecutes(test_config, TEST_APP, [], [])
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
@@ -1012,8 +975,9 @@ def test_store(test_config):
         tc.TEST_DATA_DIR, 'test_obs_id'
     ), 'wrong working directory'
     assert len(test_subject._destination_uris) == 1, 'wrong file count'
-    assert len(test_subject._destination_f_names) == 1, \
-        'wrong destination file count'
+    assert (
+        len(test_subject._destination_f_names) == 1
+    ), 'wrong destination file count'
     assert (
         test_subject._destination_f_names[0] == 'nonexistent.fits.gz'
     ), 'wrong destination'
@@ -1128,7 +1092,8 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     test_sn = FlagStorageName(test_f_name, sn)
     observable_mock = Mock(autospec=True)
     client_mock.get_file_info.return_value = {
-        'lastmod': 'Mon, 4 Mar 2019 19:05:41 GMT'}
+        'lastmod': 'Mon, 4 Mar 2019 19:05:41 GMT',
+    }
 
     test_subject = ec.LocalStore(
         test_config, test_sn, 'TEST_STORE', client_mock, observable_mock,
@@ -1258,10 +1223,6 @@ def _read_obs(arg1):
         observation_id='test_obs_id',
         algorithm=Algorithm(str('exposure')),
     )
-
-
-def _read_obs2(arg1, arg2):
-    return _read_obs(None)
 
 
 def _get_fname():
