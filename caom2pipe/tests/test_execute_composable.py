@@ -518,12 +518,10 @@ def test_organize_executes_chooser(test_config):
     test_config.log_file_directory = log_file_directory
     test_config.features.supports_composite = True
     exec_cmd_orig = mc.exec_cmd_info
-    repo_cmd_orig = ec.CaomExecute.repo_cmd_get_client
-    CadcDataClient.__init__ = Mock(return_value=None)
-    CAOM2RepoClient.__init__ = Mock(return_value=None)
+    caom_client = Mock(autospec=True)
+    caom_client.read.side_effect = _read_obs2
 
     try:
-        ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
         mc.exec_cmd_info = \
             Mock(
                 return_value='INFO:cadc-data:info\n'
@@ -543,7 +541,13 @@ def test_organize_executes_chooser(test_config):
         test_config.task_types = [mc.TaskType.INGEST]
         test_chooser = tc.TestChooser()
         test_oe = ec.OrganizeExecutes(
-            test_config, 'command_name', [], [], test_chooser
+            test_config,
+            'command_name',
+            [],
+            [],
+            test_chooser,
+            cadc_client=Mock(autospec=True, return_value=None),
+            caom_client=caom_client,
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -552,21 +556,27 @@ def test_organize_executes_chooser(test_config):
         assert executors[0].fname == 'test_obs_id.fits', 'file name'
         assert executors[0].stream == 'TEST', 'stream'
         assert executors[0].working_dir == tc.THIS_DIR, 'working_dir'
+        assert caom_client.read.called, 'read should be called'
+        caom_client.read.reset_mock()
 
         test_config.use_local_files = False
         test_config.task_types = [mc.TaskType.INGEST]
         test_oe = ec.OrganizeExecutes(
-            test_config, 'command_name', [], [], test_chooser
+            test_config,
+            'command_name',
+            [],
+            [],
+            test_chooser,
+            cadc_client=Mock(autospec=True, return_value=None),
+            caom_client=caom_client,
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
         assert isinstance(executors[0], ec.MetaDeleteCreate)
-        assert CadcDataClient.__init__.called, 'mock not called'
-        assert CAOM2RepoClient.__init__.called, 'mock not called'
+        assert caom_client.read.called, 'read should be called'
     finally:
         mc.exec_cmd_orig = exec_cmd_orig
-        ec.CaomExecute.repo_cmd_get_client = repo_cmd_orig
 
 
 def test_organize_executes_client_existing(test_config):
@@ -1234,6 +1244,10 @@ def _read_obs(arg1):
         observation_id='test_obs_id',
         algorithm=Algorithm(str('exposure')),
     )
+
+
+def _read_obs2(arg1, arg2):
+    return _read_obs(None)
 
 
 def _get_fname():

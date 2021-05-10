@@ -90,6 +90,7 @@ from caom2pipe import manage_composable as mc
 from caom2pipe import name_builder_composable
 from caom2pipe import data_source_composable
 from caom2pipe import transfer_composable
+from caom2repo import CAOM2RepoClient
 
 __all__ = [
     'get_utc_now',
@@ -590,6 +591,15 @@ class StateRunnerTS(StateRunner):
         return result
 
 
+def _set_clients(config):
+    subject = mc.define_subject(config)
+    caom_client = CAOM2RepoClient(
+        subject, config.logging_level, config.resource_id
+    )
+    cadc_client = mc.declare_client(config)
+    return cadc_client, caom_client
+
+
 def _set_logging(config):
     formatter = logging.Formatter(
         '%(asctime)s:%(levelname)-8s:%(name)-36s:%(lineno)-4d:%(message)s'
@@ -730,6 +740,7 @@ def run_by_state_ad(
         config = mc.Config()
         config.get_executors()
     _set_logging(config)
+    cadc_client, caom_client = _set_clients(config)
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
@@ -747,7 +758,6 @@ def run_by_state_ad(
             transferrer = transfer_composable.Transfer()
         else:
             transferrer = transfer_composable.CadcTransfer()
-
     organizer = ec.OrganizeExecutes(
         config,
         command_name,
@@ -755,6 +765,8 @@ def run_by_state_ad(
         data_visitors,
         chooser,
         transferrer,
+        cadc_client,
+        caom_client,
     )
 
     runner = StateRunner(
@@ -810,6 +822,7 @@ def run_by_state(
         config = mc.Config()
         config.get_executors()
     _set_logging(config)
+    cadc_client, caom_client = _set_clients(config)
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
@@ -832,6 +845,8 @@ def run_by_state(
         chooser,
         store_transfer,
         modify_transfer,
+        cadc_client,
+        caom_client,
     )
 
     runner = StateRunnerTS(
@@ -876,6 +891,7 @@ def run_single(
     # missing the metrics and the reporting
     #
     logging.debug(f'Begin run_single {config.work_fqn}')
+    cadc_client, caom_client = _set_clients(config)
     modify_transfer = _set_modify_transfer(modify_transfer, config)
     organizer = ec.OrganizeExecutes(
         config,
@@ -885,6 +901,8 @@ def run_single(
         chooser,
         store_transfer,
         modify_transfer,
+        cadc_client,
+        caom_client,
     )
     organizer.complete_record_count = 1
     organizer.choose(storage_name)
