@@ -672,6 +672,7 @@ def run_by_todo(
         config = mc.Config()
         config.get_executors()
     _set_logging(config)
+    cadc_client, caom_client = _set_clients(config)
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
@@ -694,6 +695,8 @@ def run_by_todo(
         chooser,
         store_transfer,
         modify_transfer,
+        cadc_client=cadc_client,
+        caom_client=caom_client,
     )
 
     runner = TodoRunner(config, organizer, name_builder, source)
@@ -765,8 +768,8 @@ def run_by_state_ad(
         data_visitors,
         chooser,
         transferrer,
-        cadc_client,
-        caom_client,
+        cadc_client=cadc_client,
+        caom_client=caom_client,
     )
 
     runner = StateRunner(
