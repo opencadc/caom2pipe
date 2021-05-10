@@ -2512,7 +2512,7 @@ def get_artifact_metadata_client(
             product_type,
             release_type,
             meta.get('type'),
-            meta.get('size'),
+            to_int(meta.get('size')),
             md5uri,
         )
     else:

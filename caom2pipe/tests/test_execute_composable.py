@@ -555,10 +555,9 @@ def test_organize_executes_chooser(test_config):
     test_config.features.supports_composite = True
     exec_cmd_orig = mc.exec_cmd_info
     caom_client = Mock(autospec=True)
-    # caom_client.read.side_effect = _read_obs2
+    caom_client.read.side_effect = _read_obs2
 
     try:
-        ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
         mc.exec_cmd_info = \
             Mock(
                 return_value='INFO:cadc-data:info\n'
@@ -578,7 +577,13 @@ def test_organize_executes_chooser(test_config):
         test_config.task_types = [mc.TaskType.INGEST]
         test_chooser = tc.TestChooser()
         test_oe = ec.OrganizeExecutes(
-            test_config, 'command_name', [], [], test_chooser
+            test_config,
+            'command_name',
+            [],
+            [],
+            test_chooser,
+            cadc_client=Mock(autospec=True, return_value=None),
+            caom_client=caom_client,
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
@@ -595,14 +600,19 @@ def test_organize_executes_chooser(test_config):
         test_config.use_local_files = False
         test_config.task_types = [mc.TaskType.INGEST]
         test_oe = ec.OrganizeExecutes(
-            test_config, 'command_name', [], [], test_chooser
+            test_config,
+            'command_name',
+            [],
+            [],
+            test_chooser,
+            cadc_client=Mock(autospec=True, return_value=None),
+            caom_client=caom_client,
         )
         executors = test_oe.choose(test_obs_id)
         assert executors is not None
         assert len(executors) == 1
         assert isinstance(executors[0], ec.MetaDeleteCreate)
-        assert CadcDataClient.__init__.called, 'mock not called'
-        assert CAOM2RepoClient.__init__.called, 'mock not called'
+        assert caom_client.read.called, 'read should be called'
     finally:
         mc.exec_cmd_orig = exec_cmd_orig
 
@@ -1225,6 +1235,10 @@ def _read_obs(arg1):
         observation_id='test_obs_id',
         algorithm=Algorithm(str('exposure')),
     )
+
+
+def _read_obs2(arg1, arg2):
+    return _read_obs(None)
 
 
 def _get_fname():
