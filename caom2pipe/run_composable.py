@@ -771,8 +771,8 @@ def run_by_state_ad(
         data_visitors,
         chooser,
         transferrer,
-        cadc_client,
-        caom_client,
+        cadc_client=cadc_client,
+        caom_client=caom_client,
     )
 
     runner = StateRunner(
