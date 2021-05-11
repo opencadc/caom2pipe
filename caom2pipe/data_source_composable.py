@@ -70,6 +70,7 @@
 import logging
 import os
 
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from dateutil import tz
@@ -235,7 +236,11 @@ class QueryTimeBoxDataSource(DataSource):
                 f"AND ingestDate <= '{exec_time_pz}' " \
                 "ORDER BY ingestDate ASC "
         self._logger.debug(query)
-        return mc.query_tap_client(query, self._client)
+        result = deque()
+        rows = mc.query_tap_client(query, self._client)
+        for row in rows:
+            result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
+        return result
 
 
 def is_offset_aware(dt):
@@ -302,7 +307,7 @@ class QueryTimeBoxDataSourceTS(DataSource):
                 "ORDER BY ingestDate ASC "
         self._logger.debug(query)
         rows = mc.query_tap_client(query, self._client)
-        result = []
+        result = deque()
         for row in rows:
             result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
         return result

@@ -394,10 +394,13 @@ class StateRunner(TodoRunner):
                     self._logger.info(f'Processing {num_entries} entries.')
                     self._organizer.complete_record_count = num_entries
                     self._organizer.set_log_location()
-                    for entry in entries:
-                        entry_name = entry[0]
-                        entry_time = ac.get_datetime(entry[1])
-                        result |= self._process_entry(entry_name)
+                    pop_action = entries.pop
+                    if isinstance(entries, deque):
+                        pop_action = entries.popleft
+                    while len(entries) > 0:
+                        entry = pop_action()
+                        entry_time = ac.get_datetime(entry.entry_ts)
+                        result |= self._process_entry(entry.entry_name)
                         save_time = min(entry_time, exec_time)
                     self._finish_run()
 

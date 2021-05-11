@@ -178,7 +178,7 @@ def test_storage_time_box_query(query_mock):
         assert test_result is not None, 'expect result'
         assert len(test_result) == 3, 'wrong number of results'
         assert (
-            test_result[0][0] == 'NEOS_SCI_2015347000000_clean.fits'
+            test_result[0].entry_name == 'NEOS_SCI_2015347000000_clean.fits'
         ), 'wrong results'
     finally:
         os.getcwd = getcwd_orig

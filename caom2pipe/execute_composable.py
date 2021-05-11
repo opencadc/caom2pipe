@@ -1464,7 +1464,8 @@ class OrganizeExecutes(object):
                     else:
                         executors.append(MetaCreate(
                             self.config, storage_name, self._command_name,
-                            self._cred_param, self._cadc_client, self._caom_client,
+                            self._cred_param, self._cadc_client,
+                            self._caom_client,
                             self._meta_visitors, self.observable))
                 else:
                     if self.config.use_local_files:
