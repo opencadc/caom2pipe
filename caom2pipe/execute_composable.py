@@ -1756,17 +1756,24 @@ class OrganizeExecutes(object):
                 if self.config.use_local_files:
                     executors.append(
                         LocalStore(
-                            self.config, storage_name, self._command_name,
-                            self._cred_param, self._cadc_client,
-                            self._caom_client, self.observable,
-                            self._store_transfer))
+                            self.config,
+                            storage_name,
+                            self._command_name,
+                            self._cadc_client,
+                            self.observable,
+                        )
+                    )
                 else:
                     executors.append(
                         Store(
-                            self.config, storage_name, self._command_name,
-                            self._cred_param, self._cadc_client,
-                            self._caom_client, self.observable,
-                            self._store_transfer))
+                            self.config,
+                            storage_name,
+                            self._command_name,
+                            self._cadc_client,
+                            self.observable,
+                            self._store_transfer,
+                        )
+                    )
             elif task_type == mc.TaskType.INGEST:
                 observation = CaomExecute.repo_cmd_get_client(
                     self._caom_client, self.config.collection,
