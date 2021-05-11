@@ -1762,11 +1762,8 @@ class OrganizeExecutes(object):
                             self.config,
                             storage_name,
                             self._command_name,
-                            self._cred_param,
                             self._cadc_client,
-                            self._caom_client,
                             self.observable,
-                            self._store_transfer,
                         )
                     )
                 else:
@@ -1775,9 +1772,7 @@ class OrganizeExecutes(object):
                             self.config,
                             storage_name,
                             self._command_name,
-                            self._cred_param,
                             self._cadc_client,
-                            self._caom_client,
                             self.observable,
                             self._store_transfer,
                         )
