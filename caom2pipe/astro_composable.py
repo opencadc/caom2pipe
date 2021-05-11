@@ -100,12 +100,13 @@ __all__ = [
     'build_plane_time_sample',
     'build_ra_dec_as_deg',
     'convert_time',
+    'FilterMetadataCache',
     'get_datetime',
     'get_geocentric_location',
     'get_location',
     'get_timedelta_in_s',
     'get_vo_table',
-    'FilterMetadataCache',
+    'get_vo_table_session',
     'make_headers_from_string',
     'read_fits_data',
     'read_fits_headers',
@@ -235,6 +236,32 @@ def get_vo_table(url):
         error_message = str(e)
     if response:
         response.close()
+    return vo_table, error_message
+
+
+def get_vo_table_session(url, session):
+    """
+    Download the VOTable XML for the given url and return a astropy.io.votable
+    object.
+
+    :param url: query url for the SVO service
+    :param session: Session
+    :return: astropy.io.votable of the first table and
+             an error_message if there was an error downloading the data
+    """
+    vo_table = None
+    response = None
+    error_message = None
+    try:
+        response = session.get(url)
+        fh = io.BytesIO(bytes(response.text, 'utf-8'))
+        response.close()
+        vo_table = parse_single_table(fh)
+    except Exception as e:
+        error_message = str(e)
+    finally:
+        if response:
+            response.close()
     return vo_table, error_message
 
 
