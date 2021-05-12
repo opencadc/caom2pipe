@@ -147,7 +147,6 @@ def test_meta_create_client_execute(test_config):
     try:
         test_executor.execute(None)
         assert repo_client_mock.create.called, 'create call missed'
-        assert test_executor.url == 'https://test_url/', 'url'
         assert test_observer.metrics.observe.called, 'observe not called'
     finally:
         mc.read_obs_from_file = read_obs_orig
@@ -184,7 +183,6 @@ def test_meta_create_client_execute_failed_update(
         with pytest.raises(mc.CadcException):
             test_executor.execute(None)
         assert not repo_client_mock.create.called, 'should have no create call'
-        assert test_executor.url == 'https://test_url/', 'url'
     finally:
         mc.read_obs_from_file = read_obs_orig
 
@@ -565,7 +563,6 @@ def test_organize_executes_chooser(test_config):
     assert executors is not None
     assert len(executors) == 1
     assert isinstance(executors[0], ec.LocalMetaDeleteCreate)
-    assert executors[0].fname == 'test_obs_id.fits', 'file name'
     assert executors[0].stream == 'TEST', 'stream'
     assert (
         executors[0].working_dir == os.path.join(
@@ -907,10 +904,7 @@ def test_organize_executes_client_do_one(test_config):
     assert len(executors) == 1
     assert isinstance(executors[0], ec.MetaUpdateObservation)
     assert repo_client_mock.read.called, 'mock should be called'
-    assert executors[0].url == 'https://test_url/', 'url'
-    assert executors[0].fname is None, 'file name'
     assert executors[0].stream == 'TEST', 'stream'
-    assert executors[0].lineage is None, 'lineage'
     assert executors[0].external_urls_param == '', 'external_url_params'
     assert (
         executors[0].working_dir == f'{tc.THIS_DIR}/test_obs_id'

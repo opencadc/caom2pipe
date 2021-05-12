@@ -163,14 +163,11 @@ class CaomExecute(object):
             handler.setFormatter(formatter)
         self.logging_level_param, self.log_level_as = \
             self._specify_logging_level_param(config.logging_level)
-        self.obs_id = storage_name.obs_id
-        self.uri = storage_name.file_uri
-        self.fname = storage_name.file_name
         self.command_name = command_name
         self.root_dir = config.working_directory
         self.collection = config.collection
         self.archive = config.archive
-        self.working_dir = os.path.join(self.root_dir, self.obs_id)
+        self.working_dir = os.path.join(self.root_dir, storage_name.obs_id)
 
         if config.log_to_file:
             self.model_fqn = os.path.join(config.log_file_directory,
@@ -185,17 +182,10 @@ class CaomExecute(object):
         self.meta_visitors = meta_visitors
         self.task_type = task_type
         self.cred_param = cred_param
-        self.url = storage_name.url
-        self.lineage = storage_name.lineage
         self.external_urls_param = self._specify_external_urls_param(
             storage_name.external_urls)
         self.observable = observable
-        self.mime_encoding = storage_name.mime_encoding
-        self.mime_type = storage_name.mime_type
         self._storage_name = storage_name
-        self._fqn = None
-        if self.working_dir and self.fname:
-            self._fqn = os.path.join(self.working_dir, self.fname)
         self.log_file_directory = None
         self.data_visitors = []
         self.supports_latest_client = config.features.supports_latest_client
@@ -205,7 +195,6 @@ class CaomExecute(object):
         else:
             # do nothing different, if flag is missing from config
             self.store_newer_files_only = False
-        self._storage_name = storage_name
 
     def _cleanup(self):
         """Remove a directory and all its contents."""
@@ -252,7 +241,8 @@ class CaomExecute(object):
         local_fqn = ' '.join(ii for ii in self._storage_name.source_names)
         sys.argv = (
             f'{self.command_name} {self.logging_level_param} {conn} '
-            f'{self.cred_param} --observation {self.collection} {self.obs_id} '
+            f'{self.cred_param} --observation {self.collection} '
+            f'{self._storage_name.obs_id} '
             f'--local {local_fqn} --out {self.model_fqn} --plugin {plugin} '
             f'--module {plugin} --lineage {self._storage_name.lineage}'
         ).split()
@@ -267,9 +257,11 @@ class CaomExecute(object):
         command = mc.load_module(plugin, 'to_caom2')
         sys.argv = (
             f'{self.command_name} {self.logging_level_param} '
-            f'{self.cred_param} --observation {self.collection} {self.obs_id} '
+            f'{self.cred_param} --observation {self.collection} '
+            f'{self._storage_name.obs_id} '
             f'--out {self.model_fqn} {self.external_urls_param} --plugin '
-            f'{plugin} --module {plugin} --lineage {self.lineage}'
+            f'{plugin} --module {plugin} --lineage '
+            f'{self._storage_name.lineage}'
         ).split()
         result = command.to_caom2()
         if result == -1:
@@ -285,7 +277,7 @@ class CaomExecute(object):
             f'{self.command_name} {self.logging_level_param} '
             f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
             f'{self.external_urls_param} --plugin {plugin} --module {plugin} '
-            f'--lineage {self.lineage}'
+            f'--lineage {self._storage_name.lineage}'
         ).split()
         result = command.to_caom2()
         if result == -1:
@@ -328,7 +320,7 @@ class CaomExecute(object):
         return mc.repo_get(
             self.caom_repo_client,
             self.collection,
-            self.obs_id,
+            self._storage_name.obs_id,
             self.observable.metrics,
         )
 
@@ -365,7 +357,9 @@ class CaomExecute(object):
                 cadc_timestamp = cadc_meta.props.get('date')
             else:
                 cadc_meta = mc.get_cadc_meta_client(
-                    self.cadc_client, self.archive, self.fname
+                    self.cadc_client,
+                    self.archive,
+                    self._storage_name.file_name,
                 )
                 cadc_timestamp = cadc_meta.get('lastmod')
 
@@ -374,12 +368,13 @@ class CaomExecute(object):
             cadc_utc = mc.make_time_tz(cadc_timestamp)
             if local_utc > cadc_utc:
                 self.logger.debug(
-                    f'Transferring. {self.fname} has CADC timestamp '
-                    f'{cadc_utc}.'
+                    f'Transferring. {self._storage_name.file_name} has CADC '
+                    f'timestamp {cadc_utc}.'
                 )
             else:
                 self.logger.warning(
-                    f'{self.fname} newer at CADC. Not transferring.'
+                    f'{self._storage_name.file_name} newer at CADC. Not '
+                    f'transferring.'
                 )
                 transfer_data = False
 
@@ -388,19 +383,6 @@ class CaomExecute(object):
                 self._client_put(source_name, destination_name)
             else:
                 self._cadc_data_put_client_fqn(source_name)
-
-    def _cadc_data_put_client(self):
-        """Store a collection file."""
-        mc.data_put(
-            self.cadc_client,
-            self.working_dir,
-            self.fname,
-            self.archive,
-            self.stream,
-            self.mime_type,
-            self.mime_encoding,
-            metrics=self.observable.metrics,
-        )
 
     def _cadc_data_put_client_fqn(self, source_name):
         """Store a collection file."""
@@ -433,7 +415,7 @@ class CaomExecute(object):
                 'working_directory': self.working_dir,
                 'cadc_client': self.cadc_client,
                 'stream': self.stream,
-                'url': self.url,
+                'url': self._storage_name.url,
                 'observable': self.observable,
             }
             for visitor in self.meta_visitors:
@@ -1088,7 +1070,7 @@ class DataVisit(CaomExecute):
         of a file."""
         kwargs = {
             'working_directory': self.working_dir,
-            'science_file': self.fname,
+            'science_file': self._storage_name.file_name,
             'log_file_directory': self._log_file_directory,
             'cadc_client': self.cadc_client,
             'caom_repo_client': self.caom_repo_client,
