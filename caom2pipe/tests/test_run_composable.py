@@ -97,8 +97,13 @@ TEST_SOURCE = f'{distutils.sysconfig.get_python_lib()}/test_command/' \
 @patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local')
 @patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out_local')
 @patch('caom2pipe.manage_composable.read_obs_from_file')
+@patch('caom2pipe.manage_composable.write_obs_to_file')
 def test_run_todo_list_dir_data_source(
-        read_obs_mock, fits2caom2_in_out_mock, fits2caom2_mock, test_config
+    write_obs_mock,
+    read_obs_mock,
+    fits2caom2_in_out_mock,
+    fits2caom2_mock,
+    test_config,
 ):
     read_obs_mock.side_effect = _mock_read
     test_config.working_directory = tc.TEST_FILES_DIR
@@ -115,13 +120,16 @@ def test_run_todo_list_dir_data_source(
         fits2caom2_mock.assert_called_with(connected=False)
     else:
         assert fits2caom2_in_out_mock.called, 'expect fits2caom2 in/out call'
+    assert write_obs_mock.called, 'expect write call'
 
 
 @patch('caom2pipe.run_composable._set_clients')
 @patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local')
 @patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out_local')
 @patch('caom2pipe.manage_composable.read_obs_from_file')
+@patch('caom2pipe.manage_composable.write_obs_to_file')
 def test_run_todo_list_dir_data_source_v(
+    write_obs_mock,
     read_obs_mock,
     fits2caom2_in_out_mock,
     fits2caom2_mock,
@@ -142,6 +150,7 @@ def test_run_todo_list_dir_data_source_v(
     else:
         assert fits2caom2_in_out_mock.called, 'expect fits2caom2 in/out call'
     assert read_obs_mock.called, 'read_obs not called'
+    assert write_obs_mock.called, 'write_obs mock not called'
 
 
 @patch('caom2pipe.run_composable._set_clients')
