@@ -1117,7 +1117,7 @@ class Config(object):
         if key in config:
             for ii in config[key]:
                 result.append(ii)
-        return result
+        return list(set(result))
 
     @staticmethod
     def _obtain_task_types(config, default=None):
@@ -1163,9 +1163,11 @@ class Config(object):
             )
             self.work_file = config.get('todo_file_name', 'todo.txt')
             self.netrc_file = config.get('netrc_filename', None)
-            self.data_sources = Config._obtain_list('data_sources', [])
+            self.data_sources = Config._obtain_list(
+                'data_sources', config, []
+            )
             self.data_source_extensions = Config._obtain_list(
-                'data_source_extensions', ['.fits']
+                'data_source_extensions', config, ['.fits']
             )
             self.resource_id = config.get(
                 'resource_id', 'ivo://cadc.nrc.ca/sc2repo'
