@@ -223,7 +223,7 @@ def test_run_state(data_mock, repo_mock):
         log_file = f'{test_config.log_file_directory}/test_obs_id.log'
         actual = glob.glob(f'{test_config.log_file_directory}/**')
         assert os.path.exists(log_file), f'specific log file {actual}'
-        xml_file = f'{test_config.log_file_directory}/test_obs_id.fits.xml'
+        xml_file = f'{test_config.log_file_directory}/test_obs_id.xml'
         assert os.path.exists(xml_file), f'xml file {actual}'
 
         # reporting testing
@@ -372,7 +372,7 @@ def test_run_state_v(client_mock, repo_mock):
         log_file = f'{test_config.log_file_directory}/test_obs_id.log'
         actual = glob.glob(f'{test_config.log_file_directory}/**')
         assert os.path.exists(log_file), f'specific log file {actual}'
-        xml_file = f'{test_config.log_file_directory}/test_obs_id.fits.xml'
+        xml_file = f'{test_config.log_file_directory}/test_obs_id.xml'
         assert os.path.exists(xml_file), f'xml file {actual}'
 
         # reporting testing

@@ -1599,7 +1599,7 @@ class StorageName(object):
     def model_file_name(self):
         """The file name used on local disk that holds the CAOM2 Observation
         XML."""
-        return f'{self.obs_id}.fits.xml'
+        return f'{self.obs_id}.xml'
 
     @property
     def prev(self):
