@@ -199,6 +199,15 @@ class CaomExecute(object):
             # do nothing different, if flag is missing from config
             self.store_newer_files_only = False
 
+    def __str__(self):
+        return f'\n' \
+               f'       command: {self.command_name}\n' \
+               f'        obs_id: {self._storage_name.obs_id}\n' \
+               f'  source_names: {self._storage_name.source_names}\n' \
+               f'     model_fqn: {self.model_fqn}\n' \
+               f'       lineage: {self._storage_name.lineage}\n' \
+               f'   working_dir: {self.working_dir}\n'
+
     def _cleanup(self):
         """Remove a directory and all its contents."""
         if os.path.exists(self.working_dir):
@@ -526,8 +535,8 @@ class MetaCreate(CaomExecute):
 
 
 class MetaUpdate(CaomExecute):
-    """Defines the pipeline step for Collection ingestion of metadata into CAOM.
-    This requires access to only header information.
+    """Defines the pipeline step for Collection ingestion of metadata into
+    CAOM. This requires access to only header information.
 
     This pipeline step will execute a caom2-repo update."""
 
@@ -1677,8 +1686,8 @@ class OrganizeExecutes(object):
         """The logic that decides which descendants of CaomExecute to
         instantiate. This is based on the content of the config.yml file
         for an application.
-        :destination_name StorageName extension that handles the naming rules for
-            a file.
+        :destination_name StorageName extension that handles the naming rules
+            for a file.
         """
         executors = []
         if mc.TaskType.SCRAPE not in self.task_types:

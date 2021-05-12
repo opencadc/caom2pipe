@@ -81,6 +81,7 @@ from caom2pipe import manage_composable as mc
 __all__ = [
     'DataSource',
     'ListDirDataSource',
+    'ListDirSeparateDataSource',
     'ListDirTimeBoxDataSource',
     'QueryTimeBoxDataSource',
     'QueryTimeBoxDataSourceTS',
@@ -184,6 +185,43 @@ class ListDirDataSource(DataSource):
         return temp
 
 
+class ListDirSeparateDataSource(DataSource):
+    """
+    Implement the identification of the work to be done, by doing a directory
+    listing for a collection of directories.
+
+    This specialization is meant to imitate the behaviour of the original
+    "ListDirDataSource", with different assumptions about which directories
+    to use as a source of files, and how to identify files of interest.
+    """
+
+    def __init__(self, config, recursive=True):
+        super(ListDirSeparateDataSource, self).__init__(config)
+        self._source_directories = config.data_sources
+        self._extensions = config.data_source_extensions
+        self._recursive = recursive
+        self._work = []
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def get_work(self):
+        self._logger.debug(f'Begin get_work.')
+        for source in self._source_directories:
+            self._append_work(source)
+        self._logger.debug('End get_work')
+        return self._work
+
+    def _append_work(self, entry):
+        with os.scandir(entry) as dir_listing:
+            for entry in dir_listing:
+                if entry.is_dir() and self._recursive:
+                    self._append_work(entry.path)
+                else:
+                    for extension in self._extensions:
+                        if entry.name.endswith(extension):
+                            self._work.append(entry.path)
+                            break
+
+
 class ListDirTimeBoxDataSource(DataSource):
     """
     A time-boxed directory listing of all .fits* and .hdf5 files. The time-box
@@ -207,7 +245,7 @@ class ListDirTimeBoxDataSource(DataSource):
         :param recursive: True if sub-directories should also be checked
         """
         super(ListDirTimeBoxDataSource, self).__init__(config)
-        self._source_directories = config.data_source
+        self._source_directories = config.data_sources
         self._extensions = config.data_source_extensions
         self._recursive = recursive
         self._work = []

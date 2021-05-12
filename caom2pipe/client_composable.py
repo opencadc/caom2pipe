@@ -1,0 +1,145 @@
+# -*- coding: utf-8 -*-
+# ***********************************************************************
+# ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
+# *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
+#
+#  (c) 2021.                            (c) 2021.
+#  Government of Canada                 Gouvernement du Canada
+#  National Research Council            Conseil national de recherches
+#  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
+#  All rights reserved                  Tous droits réservés
+#
+#  NRC disclaims any warranties,        Le CNRC dénie toute garantie
+#  expressed, implied, or               énoncée, implicite ou légale,
+#  statutory, of any kind with          de quelque nature que ce
+#  respect to the software,             soit, concernant le logiciel,
+#  including without limitation         y compris sans restriction
+#  any warranty of merchantability      toute garantie de valeur
+#  or fitness for a particular          marchande ou de pertinence
+#  purpose. NRC shall not be            pour un usage particulier.
+#  liable in any event for any          Le CNRC ne pourra en aucun cas
+#  damages, whether direct or           être tenu responsable de tout
+#  indirect, special or general,        dommage, direct ou indirect,
+#  consequential or incidental,         particulier ou général,
+#  arising from the use of the          accessoire ou fortuit, résultant
+#  software.  Neither the name          de l'utilisation du logiciel. Ni
+#  of the National Research             le nom du Conseil National de
+#  Council of Canada nor the            Recherches du Canada ni les noms
+#  names of its contributors may        de ses  participants ne peuvent
+#  be used to endorse or promote        être utilisés pour approuver ou
+#  products derived from this           promouvoir les produits dérivés
+#  software without specific prior      de ce logiciel sans autorisation
+#  written permission.                  préalable et particulière
+#                                       par écrit.
+#
+#  This file is part of the             Ce fichier fait partie du projet
+#  OpenCADC project.                    OpenCADC.
+#
+#  OpenCADC is free software:           OpenCADC est un logiciel libre ;
+#  you can redistribute it and/or       vous pouvez le redistribuer ou le
+#  modify it under the terms of         modifier suivant les termes de
+#  the GNU Affero General Public        la “GNU Affero General Public
+#  License as published by the          License” telle que publiée
+#  Free Software Foundation,            par la Free Software Foundation
+#  either version 3 of the              : soit la version 3 de cette
+#  License, or (at your option)         licence, soit (à votre gré)
+#  any later version.                   toute version ultérieure.
+#
+#  OpenCADC is distributed in the       OpenCADC est distribué
+#  hope that it will be useful,         dans l’espoir qu’il vous
+#  but WITHOUT ANY WARRANTY;            sera utile, mais SANS AUCUNE
+#  without even the implied             GARANTIE : sans même la garantie
+#  warranty of MERCHANTABILITY          implicite de COMMERCIALISABILITÉ
+#  or FITNESS FOR A PARTICULAR          ni d’ADÉQUATION À UN OBJECTIF
+#  PURPOSE.  See the GNU Affero         PARTICULIER. Consultez la Licence
+#  General Public License for           Générale Publique GNU Affero
+#  more details.                        pour plus de détails.
+#
+#  You should have received             Vous devriez avoir reçu une
+#  a copy of the GNU Affero             copie de la Licence Générale
+#  General Public License along         Publique GNU Affero avec
+#  with OpenCADC.  If not, see          OpenCADC ; si ce n’est
+#  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
+#                                       <http://www.gnu.org/licenses/>.
+#
+#  : 4 $
+#
+# ***********************************************************************
+#
+
+import logging
+import os
+
+from cadcdata import CadcDataClient
+from cadctap import CadcTapClient
+from caom2pipe import manage_composable as mc
+from caom2repo import CAOM2RepoClient
+from vos import Client
+
+__all__ = ['ClientCollection']
+
+
+class ClientCollection(object):
+    """
+    This class initializes and provides accessors to known HTTP clients
+    for CADC services.
+
+    This is time-dependent cohesiveness. The clients should all be declared
+    at approximately the same time, will live as long as the pipeline
+    instance, and require the same AAI credential information, even though
+    there is one per not-related-at-all CADC service.
+
+    Eventually session retries, etc, might be configurable, but that need has
+    not yet been demonstrated.
+    """
+
+    def __init__(self, config):
+        self._metadata_client = None
+        self._data_client = None
+        self._query_client = None
+        self._metrics = None
+        self._init(config)
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    @property
+    def data_client(self):
+        return self._data_client
+
+    @property
+    def metadata_client(self):
+        return self._metadata_client
+
+    @property
+    def metrics(self):
+        return self._metrics
+
+    @property
+    def query_client(self):
+        return self._query_client
+
+    def _init(self, config):
+        subject = mc.define_subject(config)
+
+        self._metadata_client = CAOM2RepoClient(
+            subject, config.logging_level, config.resource_id
+        )
+
+        if config.features.supports_latest_client:
+            logging.warning('Using vos.Client for storage.')
+            cert_file = config.proxy_fqn
+            if cert_file is not None and os.path.exists(cert_file):
+                self._data_client = Client(vospace_certfile=cert_file)
+            else:
+                raise mc.CadcException(
+                    'No credentials configured or found. Stopping.'
+                )
+        else:
+            logging.warning('Using cadcdata.CadcDataClient for storage.')
+            self._data_client = CadcDataClient(subject)
+
+        if config.tap_id is not None:
+            self._query_client = CadcTapClient(
+                subject=subject, resource_id=config.tap_id
+            )
+
+        self._metrics = mc.Metrics(config)

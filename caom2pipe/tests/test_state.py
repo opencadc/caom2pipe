@@ -124,11 +124,10 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
         return result
 
 
-@patch('caom2pipe.run_composable.CAOM2RepoClient')
-@patch('caom2pipe.manage_composable.CadcDataClient')
-def test_run_state(data_mock, repo_mock):
-    repo_mock.return_value.read.side_effect = tc.mock_read
-    data_mock.return_value.get_file.side_effect = tc.mock_get_file
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+def test_run_state(client_mock):
+    client_mock.return_value.metadata_client.read.side_effect = tc.mock_read
+    client_mock.return_value.data_client.get_file.side_effect = tc.mock_get_file
 
     test_wd = '/usr/src/app/caom2pipe/int_test'
     caom2pipe_bookmark = 'caom2_timestamp'
@@ -267,14 +266,11 @@ def test_run_state(data_mock, repo_mock):
             except OSError as e:
                 logging.error(f'failed to delete {e}')
 
-
-@patch('caom2pipe.run_composable.CAOM2RepoClient')
-@patch('caom2pipe.manage_composable.Client')
-def test_run_state_v(client_mock, repo_mock):
-    repo_mock.return_value.read.side_effect = tc.mock_read
-    client_mock.get_node.side_effect = tc.mock_get_node
-    # the test file is length 0
-    client_mock.return_value.copy.return_value = 48
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+def test_run_state_v(client_mock):
+    client_mock.return_value.metadata_client.read.side_effect = tc.mock_read
+    client_mock.return_value.data_client.get_node.side_effect = tc.mock_get_node
+    client_mock.return_value.data_client.copy.return_value = 48
 
     test_wd = '/usr/src/app/caom2pipe/int_test'
     caom2pipe_bookmark = 'caom2_timestamp'
@@ -351,13 +347,13 @@ def test_run_state_v(client_mock, repo_mock):
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
-        assert client_mock.return_value.copy.called, 'expect put call'
-        args, kwargs = client_mock.return_value.copy.call_args
-        assert args[0] == 'ad:TEST/test_obs_id.fits.gz', 'wrong args[0]'
         assert (
-            args[1] == '/usr/src/app/caom2pipe/int_test/test_obs_id/'
-                       'test_obs_id.fits'
-        ), 'wrong args[1]'
+            client_mock.return_value.data_client.copy.called
+        ), 'expect put call'
+        client_mock.return_value.data_client.copy.assert_called_with(
+            '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz',
+            destination='ad:TEST/test_file.fits.gz'
+        ), 'wrong call args'
 
         # state file checking
         test_state = mc.State(test_config.state_fqn)

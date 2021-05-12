@@ -203,7 +203,7 @@ def test_vault_list_dir_data_source():
 
 def test_list_dir_time_box_data_source():
     test_config = mc.Config()
-    test_config.data_source = ['/test_files']
+    test_config.data_sources = ['/test_files']
     test_config.data_source_extensions = [
         '.fits', '.fits.gz', '.fits.fz', '.hdf5'
     ]
@@ -231,3 +231,27 @@ def test_list_dir_time_box_data_source():
     x = [ii.entry_name for ii in test_result]
     assert '/test_files/sub_directory/abc.fits' not in x, \
         'recursive result should not be present'
+
+
+def test_list_dir_separate_data_source():
+    test_config = mc.Config()
+    test_config.data_sources = ['/test_files']
+    test_config.data_source_extensions = [
+        '.fits', '.fits.gz', '.fits.fz', '.hdf5'
+    ]
+    test_subject = dsc.ListDirSeparateDataSource(test_config)
+    assert test_subject is not None, 'ctor is broken'
+    test_result = test_subject.get_work()
+    assert test_result is not None, 'expect a result'
+    assert len(test_result) == 18, 'expect contents in the result'
+    assert (
+        '/test_files/sub_directory/abc.fits' in test_result
+    ), 'wrong entry'
+
+    test_subject = dsc.ListDirSeparateDataSource(test_config, recursive=False)
+    test_result = test_subject.get_work()
+    assert test_result is not None, 'expect a non-recursive result'
+    assert len(test_result) == 16, 'expect contents in non-recursive result'
+    assert (
+        '/test_files/sub_directory/abc.fits' not in test_result
+    ), 'recursive result should not be present'

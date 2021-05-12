@@ -2,7 +2,7 @@ archive: NEOSS
 cache_file_name: cache.yml
 cache_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/cache.yml
 collection: NEOSSAT
-data_source_extensions: []
+data_source_extensions: ['.fits']
 data_sources: []
 failure_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/failure_log.txt
 failure_log_file_name: failure_log.txt
