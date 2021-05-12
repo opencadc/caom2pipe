@@ -1164,7 +1164,10 @@ class DataScrape(DataVisit):
     operations that require access to the file on disk, with no update to the
     service at the end. This class assumes it has access to the files on disk.
     The organization of this class assumes the 'Scrape' task has been done
-    previously, so the model instance exists on disk."""
+    previously, so the model instance exists on disk.
+
+    This executor requires manage_composable.Config.log_to_file to be True.
+    """
 
     def __init__(self, config, storage_name, data_visitors, observable):
         super(DataScrape, self).__init__(
@@ -1177,11 +1180,6 @@ class DataScrape(DataVisit):
             observable=observable,
             transferrer=tc.Transfer()
         )
-        self._define_local_dirs(storage_name)
-        self.fname = storage_name.fname_on_disk
-        self.log_file_directory = config.log_file_directory
-        self.prev_fname = storage_name.prev
-        self.thumb_fname = storage_name.thumb
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):
@@ -1376,10 +1374,6 @@ class ScrapeUpdate(CaomExecute):
             meta_visitors=meta_visitors,
             observable=observable,
         )
-        self._define_local_dirs(storage_name)
-        self.fname = storage_name.fname_on_disk
-        if self.fname is None:
-            self.fname = storage_name.file_name
         self.logger = logging.getLogger(self.__class__.__name__)
 
     def execute(self, context):

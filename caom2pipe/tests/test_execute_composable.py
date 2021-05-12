@@ -527,24 +527,20 @@ def test_scrape(test_config):
     test_executor.execute(None)
 
 
-def test_data_scrape_execute(test_config):
+@patch('caom2pipe.manage_composable.read_obs_from_file')
+def test_data_scrape_execute(read_obs_mock, test_config):
+    test_config.log_to_file = True
     test_data_visitors = [TestVisit]
-    read_orig = mc.read_obs_from_file
-    mc.read_obs_from_file = Mock(side_effect=_read_obs)
-    try:
-
-        # run the test
-        test_executor = ec.DataScrape(
-            test_config,
-            tc.TestStorageName(),
-            test_data_visitors,
-            observable=None,
-        )
-        test_executor.execute(None)
-        assert mc.read_obs_from_file.called, 'read obs call missed'
-
-    finally:
-        mc.read_obs_from_file = read_orig
+    read_obs_mock.side_effect = _read_obs
+    # run the test
+    test_executor = ec.DataScrape(
+        test_config,
+        tc.TestStorageName(),
+        test_data_visitors,
+        observable=None,
+    )
+    test_executor.execute(None)
+    assert read_obs_mock.called, 'read obs call missed'
 
 
 def test_organize_executes_chooser(test_config):
