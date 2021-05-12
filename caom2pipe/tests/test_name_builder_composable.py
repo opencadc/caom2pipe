@@ -76,8 +76,9 @@ import test_conf as tc
 def test_storage_name_builder():
     test_subject = nbc.StorageNameBuilder()
     test_storage_name = tc.TestStorageName()
-    assert test_subject.build(test_storage_name) == test_storage_name, \
-        'build wrong result'
+    assert (
+        test_subject.build(test_storage_name) == test_storage_name
+    ), 'build wrong result'
 
 
 def test_storage_name_instance_builder():

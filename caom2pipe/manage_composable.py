@@ -98,10 +98,13 @@ from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact, Observation
 from caom2 import ChecksumURI, ProductType, ReleaseType
 from caom2.diff import get_differences
+from vos import Client
 
 
 __all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
-           'client_put', 'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
+           'client_put',
+           'declare_client',
+           'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
            'FileMeta',
            'get_cadc_headers_client', 'get_cadc_meta',
            'get_cadc_meta_client', 'get_endpoint_session', 'get_file_meta',
@@ -1772,6 +1775,25 @@ def to_str(value):
     return str(value) if value is not None else None
 
 
+def declare_client(config):
+    """Common code to set the client used for interacting with CADC
+    storage."""
+    if config.features.supports_latest_client:
+        logging.warning('Using vos.Client for storage.')
+        cert_file = config.proxy_fqn
+        if cert_file is not None and os.path.exists(cert_file):
+            cadc_client = Client(vospace_certfile=cert_file)
+        else:
+            raise CadcException(
+                'No credentials configured or found. Stopping.'
+            )
+    else:
+        logging.warning('Using cadcdata.CadcDataClient for storage.')
+        subject = define_subject(config)
+        cadc_client = CadcDataClient(subject)
+    return cadc_client
+
+
 def define_subject(config):
     """Common code to figure out which credentials to use based on the
     content of a Config instance."""
@@ -2296,11 +2318,11 @@ def get_artifact_metadata_client(client, file_name, product_type, release_type,
         if uri is None:
             raise CadcException('Cannot build an Artifact without a URI.')
         return Artifact(uri, product_type, release_type, meta.get('type'),
-                        meta.get('size'), md5uri)
+                        to_int(meta.get('size')), md5uri)
     else:
         artifact.product_type = product_type
         artifact.content_type = meta.get('type')
-        artifact.content_length = meta.get('size')
+        artifact.content_length = to_int(meta.get('size'))
         artifact.content_checksum = md5uri
         return artifact
 
