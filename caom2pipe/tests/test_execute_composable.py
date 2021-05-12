@@ -441,7 +441,7 @@ def test_data_local_execute(test_config):
     repo_client_mock.read.return_value = _read_obs(None)
     test_observer = Mock()
 
-    test_model_fqn = os.path.join(tc.TEST_DATA_DIR, 'test_obs_id.fits.xml')
+    test_model_fqn = os.path.join(tc.TEST_DATA_DIR, 'test_obs_id.xml')
     # check that a file is written to disk
     if os.path.exists(test_model_fqn):
         os.unlink(test_model_fqn)
@@ -658,7 +658,7 @@ def test_storage_name():
     assert sn.file_uri == 'ad:TEST/test_obs_id.fits.gz'
     assert sn.file_name == 'test_obs_id.fits'
     assert sn.compressed_file_name == 'test_obs_id.fits.gz'
-    assert sn.model_file_name == 'test_obs_id.fits.xml'
+    assert sn.model_file_name == 'test_obs_id.xml'
     assert sn.prev == 'test_obs_id_prev.jpg'
     assert sn.thumb == 'test_obs_id_prev_256.jpg'
     assert sn.prev_uri == 'ad:TEST/test_obs_id_prev.jpg'
@@ -1262,8 +1262,7 @@ def to_caom2():
         '--local',
         f'{tc.TEST_DATA_DIR}/test_file.fits.gz',
         '--out',
-        f'{tc.THIS_DIR}/test_obs_id/'
-        'test_obs_id.fits.xml',
+        f'{tc.THIS_DIR}/test_obs_id/test_obs_id.xml',
         '--plugin',
         f'{plugin}',
         '--module',
@@ -1281,7 +1280,7 @@ def to_caom2():
         '--local',
         f'{tc.TEST_DATA_DIR}/test_file.fits.gz',
         '--out',
-        f'{tc.TEST_DATA_DIR}/test_obs_id/test_obs_id.fits.xml',
+        f'{tc.TEST_DATA_DIR}/test_obs_id/test_obs_id.xml',
         '--plugin',
         f'{plugin}',
         '--module',

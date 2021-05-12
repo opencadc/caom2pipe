@@ -918,7 +918,7 @@ def _mock_do_one(arg1):
 
 def _mock_write():
     fqn = f'{tc.THIS_DIR}/NEOS_SCI_2015347000000_clean/' \
-          f'NEOS_SCI_2015347000000_clean.fits.xml'
+          f'NEOS_SCI_2015347000000_clean.xml'
     mc.write_obs_to_file(
         SimpleObservation(
             collection='test_collection',
