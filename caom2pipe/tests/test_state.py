@@ -82,6 +82,7 @@ from caom2pipe import run_composable as rc
 from caom2pipe import transfer_composable
 
 import test_conf as tc
+import test_run_composable
 
 
 class TestTransfer(transfer_composable.Transfer):

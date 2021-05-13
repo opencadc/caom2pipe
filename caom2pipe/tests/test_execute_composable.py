@@ -335,9 +335,7 @@ def test_client_visit(test_config):
 def test_data_execute(test_config):
     test_obs_id = 'test_obs_id'
     test_dir = os.path.join(tc.THIS_DIR, test_obs_id)
-    test_fits_fqn = os.path.join(
-        test_dir, tc.TestStorageName().file_name
-    )
+    test_fits_fqn = os.path.join(test_dir, tc.TestStorageName().file_name)
     try:
         if not os.path.exists(test_dir):
             os.mkdir(test_dir, mode=0o755)
@@ -382,8 +380,7 @@ def test_data_execute_v(test_config):
     test_config.features.supports_latest_client = True
     test_obs_id = 'test_obs_id'
     test_dir = os.path.join(tc.THIS_DIR, test_obs_id)
-    fqn = os.path.join(test_dir, tc.TestStorageName().file_name)
-    test_fits_fqn = f'{fqn}.gz'
+    test_fits_fqn = os.path.join(test_dir, tc.TestStorageName().file_name)
     try:
         if not os.path.exists(test_dir):
             os.mkdir(test_dir, mode=0o755)
@@ -1029,7 +1026,7 @@ def test_local_store(test_config):
     test_data_client = Mock(autospec=True)
     test_observable = Mock(autospec=True)
     test_subject = ec.LocalStore(
-        test_config, test_sn, test_command, test_data_client, test_observable,
+        test_config, test_sn, test_command, test_data_client, test_observable
     )
     assert test_subject is not None, 'expect construction'
     test_subject.execute(None)
