@@ -204,10 +204,11 @@ def test_build_temporal_wcs(query_mock):
     test_part = test_plane.artifacts['cadc:GEMINI/test.fits'].parts['0']
     assert test_part.chunks[0].time is None, 'temporal wcs ic'
     test_collection = 'TEST'
-    test_result = cc.build_temporal_wcs_bounds(
-        test_tap_client, test_header, test_lookups, test_collection
+    cc.build_temporal_wcs_bounds(
+        test_tap_client, test_plane, test_collection
     )
-    assert test_result is not None, 'expect a result'
+    assert test_part.chunks[0].time is not None, 'temporal wcs ic change'
+    test_result = test_part.chunks[0].time
     assert test_result.axis is not None, 'expect axis'
     assert test_result.axis.bounds is not None, 'expect bounds'
     assert len(test_result.axis.bounds.samples) == 2, 'expect two samples'
