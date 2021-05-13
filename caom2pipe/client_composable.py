@@ -98,8 +98,8 @@ class ClientCollection(object):
         self._data_client = None
         self._query_client = None
         self._metrics = None
-        self._init(config)
         self._logger = logging.getLogger(self.__class__.__name__)
+        self._init(config)
 
     @property
     def data_client(self):
@@ -125,7 +125,7 @@ class ClientCollection(object):
         )
 
         if config.features.supports_latest_client:
-            logging.warning('Using vos.Client for storage.')
+            self._logger.warning('Using vos.Client for storage.')
             cert_file = config.proxy_fqn
             if cert_file is not None and os.path.exists(cert_file):
                 self._data_client = Client(vospace_certfile=cert_file)
@@ -134,7 +134,7 @@ class ClientCollection(object):
                     'No credentials configured or found. Stopping.'
                 )
         else:
-            logging.warning('Using cadcdata.CadcDataClient for storage.')
+            self._logger.warning('Using cadcdata.CadcDataClient for storage.')
             self._data_client = CadcDataClient(subject)
 
         if config.tap_id is not None:
