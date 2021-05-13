@@ -384,8 +384,9 @@ def test_data_execute_v(test_config):
     test_config.features.supports_latest_client = True
     test_obs_id = 'test_obs_id'
     test_dir = os.path.join(tc.THIS_DIR, test_obs_id)
-    fqn = os.path.join(test_dir, tc.TestStorageName().file_name)
-    test_fits_fqn = f'{fqn}.gz'
+    test_fits_fqn = os.path.join(
+        test_dir, f'{tc.TestStorageName().file_name}.gz'
+    )
     try:
         if not os.path.exists(test_dir):
             os.mkdir(test_dir, mode=0o755)
