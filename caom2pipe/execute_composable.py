@@ -300,7 +300,7 @@ class CaomExecute(object):
 
     def _invoke_to_caom2(self, cmd_str, plugin):
         """The common bits of call 'to_caom2.'"""
-        self.logger.error(cmd_str)
+        self.logger.debug(cmd_str)
         sys.argv = cmd_str.split()
         command = mc.load_module(plugin, 'to_caom2')
         result = command.to_caom2()
