@@ -210,6 +210,9 @@ class CaomExecute(object):
 
     def _cleanup(self):
         """Remove a directory and all its contents."""
+        self.logger.debug(
+            f'Remove working directory {self.working_dir} and contents.'
+        )
         if os.path.exists(self.working_dir):
             for ii in os.listdir(self.working_dir):
                 os.remove(os.path.join(self.working_dir, ii))
@@ -217,6 +220,7 @@ class CaomExecute(object):
 
     def _create_dir(self):
         """Create the working area if it does not already exist."""
+        self.logger.debug(f'Create working directory {self.working_dir}')
         mc.create_dir(self.working_dir)
 
     def _define_local_dirs(self, storage_name):
@@ -434,6 +438,7 @@ class CaomExecute(object):
 
     def _write_model(self, observation):
         """Write an observation to disk from memory, represented in XML."""
+        self.logger.debug(f'Write model to {self.model_fqn}.')
         mc.write_obs_to_file(observation, self.model_fqn)
 
     @staticmethod
