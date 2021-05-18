@@ -206,6 +206,7 @@ class ListDirSeparateDataSource(DataSource):
     def get_work(self):
         self._logger.debug(f'Begin get_work.')
         for source in self._source_directories:
+            self._logger.debug(f'Look in {source} for work.')
             self._append_work(source)
         self._logger.debug('End get_work')
         return self._work

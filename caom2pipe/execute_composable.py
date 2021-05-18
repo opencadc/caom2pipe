@@ -242,74 +242,70 @@ class CaomExecute(object):
         Execute fits2caom with a credential parameter and a --local parameter.
         """
         plugin = self._find_fits2caom2_plugin()
-        command = mc.load_module(plugin, 'to_caom2')
         # so far, the plugin is also the module :)
         conn = ''
         if not connected:
             conn = f'--not_connected'
         local_fqn = ' '.join(ii for ii in self._storage_name.source_names)
-        sys.argv = (
+        temp = (
             f'{self.command_name} {self.logging_level_param} {conn} '
             f'{self.cred_param} --observation {self.collection} '
-            f'{self._storage_name.obs_id} '
-            f'--local {local_fqn} --out {self.model_fqn} --plugin {plugin} '
-            f'--module {plugin} --lineage {self._storage_name.lineage}'
-        ).split()
-        result = command.to_caom2()
-        if result == -1:
-            raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
+            f'{self._storage_name.obs_id} --local {local_fqn} --out '
+            f'{self.model_fqn} --plugin {plugin} --module {plugin} '
+            f'--lineage {self._storage_name.lineage}'
+        )
+        self._invoke_to_caom2(temp, plugin)
 
     def _fits2caom2_cmd(self):
         """Execute fits2caom with a --cert parameter."""
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
-        command = mc.load_module(plugin, 'to_caom2')
-        sys.argv = (
+        temp = (
             f'{self.command_name} {self.logging_level_param} '
             f'{self.cred_param} --observation {self.collection} '
-            f'{self._storage_name.obs_id} '
-            f'--out {self.model_fqn} {self.external_urls_param} --plugin '
-            f'{plugin} --module {plugin} --lineage '
-            f'{self._storage_name.lineage}'
-        ).split()
-        result = command.to_caom2()
-        if result == -1:
-            raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
+            f'{self._storage_name.obs_id} --out {self.model_fqn} '
+            f'{self.external_urls_param} --plugin {plugin} --module {plugin} '
+            f'--lineage {self._storage_name.lineage}'
+        )
+        self._invoke_to_caom2(temp, plugin)
 
     def _fits2caom2_cmd_in_out(self):
         """Execute fits2caom with a --in, a --external_url and a --cert
         parameter."""
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
-        command = mc.load_module(plugin, 'to_caom2')
-        sys.argv = (
+        temp = (
             f'{self.command_name} {self.logging_level_param} '
             f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
-            f'{self.external_urls_param} --plugin {plugin} --module {plugin} '
-            f'--lineage {self._storage_name.lineage}'
-        ).split()
-        result = command.to_caom2()
-        if result == -1:
-            raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
+            f'{self.external_urls_param} --plugin {plugin} --module '
+            f'{plugin} --lineage {self._storage_name.lineage}'
+        )
+        self._invoke_to_caom2(temp, plugin)
 
     def _fits2caom2_cmd_in_out_local(self, connected=True):
         """Execute fits2caom with a --in, --local and a --cert parameter."""
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
-        command = mc.load_module(plugin, 'to_caom2')
         local_fqn = ' '.join(ii for ii in self._storage_name.source_names)
         conn = ''
         if not connected:
             conn = f'--not_connected'
-        sys.argv = (
+        temp = (
             f'{self.command_name} {self.logging_level_param} {conn} '
             f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
             f'--local ' f'{local_fqn} --plugin {plugin} --module {plugin} '
             f'--lineage {self._storage_name.lineage}'
-        ).split()
+        )
+        self._invoke_to_caom2(temp, plugin)
+
+    def _invoke_to_caom2(self, cmd_str, plugin):
+        """The common bits of call 'to_caom2.'"""
+        self.logger.error(cmd_str)
+        sys.argv = cmd_str.split()
+        command = mc.load_module(plugin, 'to_caom2')
         result = command.to_caom2()
         if result == -1:
-            raise mc.CadcException(f'Error executing to_caom2 with {sys.argv}')
+            raise mc.CadcException(f'Error executing to_caom2 with {cmd_str}')
 
     def _repo_cmd_create_client(self, observation):
         """Create an observation instance from the input parameter."""

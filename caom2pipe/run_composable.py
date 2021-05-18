@@ -628,15 +628,16 @@ def get_utc_now_tz():
 
 
 def run_by_todo(
-        config=None,
-        name_builder=None,
-        chooser=None,
-        command_name=None,
-        source=None,
-        meta_visitors=[],
-        data_visitors=[],
-        modify_transfer=None,
-        store_transfer=None,
+    config=None,
+    name_builder=None,
+    chooser=None,
+    command_name=None,
+    source=None,
+    meta_visitors=[],
+    data_visitors=[],
+    modify_transfer=None,
+    store_transfer=None,
+    clients=None,
 ):
     """A default implementation for using the TodoRunner.
 
@@ -661,12 +662,14 @@ def run_by_todo(
     :param store_transfer Transfer extension that identifies hot to retrieve
         data from a source for storage at CADC, probably an HTTP or FTP site.
         Don't try to guess what this one is.
+    :param clients instance of ClientsCollection, if one was required
     """
     if config is None:
         config = mc.Config()
         config.get_executors()
     _set_logging(config)
-    clients = cc.ClientCollection(config)
+    if clients is None:
+        clients = cc.ClientCollection(config)
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
@@ -675,7 +678,9 @@ def run_by_todo(
 
     if source is None:
         if config.use_local_files:
-            source = data_source_composable.ListDirDataSource(config, chooser)
+            source = data_source_composable.ListDirSeparateDataSource(
+                config
+            )
         else:
             source = data_source_composable.TodoFileDataSource(config)
 
@@ -745,7 +750,14 @@ def run_by_state_ad(
         )
 
     if source is None:
-        source = data_source_composable.QueryTimeBoxDataSource(config)
+        if config.use_local_files:
+            # recursive = False, because this is deprecated functionality
+            # and the original implementation was not recursive
+            source = data_source_composable.ListDirTimeBoxDataSource(
+                config, recursive=False
+            )
+        else:
+            source = data_source_composable.QueryTimeBoxDataSource(config)
 
     if end_time is None:
         end_time = get_utc_now()
@@ -776,17 +788,18 @@ def run_by_state_ad(
 
 
 def run_by_state(
-        config=None,
-        name_builder=None,
-        command_name=None,
-        bookmark_name=None,
-        meta_visitors=[],
-        data_visitors=[],
-        end_time=None,
-        chooser=None,
-        source=None,
-        modify_transfer=None,
-        store_transfer=None,
+    config=None,
+    name_builder=None,
+    command_name=None,
+    bookmark_name=None,
+    meta_visitors=[],
+    data_visitors=[],
+    end_time=None,
+    chooser=None,
+    source=None,
+    modify_transfer=None,
+    store_transfer=None,
+    clients=None,
 ):
     """A default implementation for using the StateRunner.
 
@@ -814,12 +827,14 @@ def run_by_state(
     :param store_transfer Transfer extension that identifies hot to retrieve
         data from a source for storage at CADC, probably an HTTP or FTP site.
         Don't try to guess what this one is.
+    :param clients instance of ClientsCollection, if one was required
     """
     if config is None:
         config = mc.Config()
         config.get_executors()
     _set_logging(config)
-    clients = cc.ClientCollection(config)
+    if clients is None:
+        clients = cc.ClientCollection(config)
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
@@ -827,7 +842,10 @@ def run_by_state(
         )
 
     if source is None:
-        source = data_source_composable.QueryTimeBoxDataSourceTS(config)
+        if config.use_local_files:
+            source = data_source_composable.ListDirTimeBoxDataSource(config)
+        else:
+            source = data_source_composable.QueryTimeBoxDataSourceTS(config)
 
     if end_time is None:
         end_time = get_utc_now_tz()
