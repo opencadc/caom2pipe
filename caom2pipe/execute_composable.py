@@ -120,6 +120,7 @@ from datetime import datetime
 from dateutil import tz
 from shutil import move
 
+from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
 
@@ -313,20 +314,20 @@ class CaomExecute(object):
 
     def _repo_cmd_create_client(self, observation):
         """Create an observation instance from the input parameter."""
-        mc.repo_create(
+        clc.repo_create(
             self.caom_repo_client, observation, self.observable.metrics
         )
 
     def _repo_cmd_update_client(self, observation):
         """Update an existing observation instance.  Assumes the obs_id
         values are set correctly."""
-        mc.repo_update(
+        clc.repo_update(
             self.caom_repo_client, observation, self.observable.metrics
         )
 
     def _repo_cmd_read_client(self):
         """Retrieve the existing observation model metadata."""
-        return mc.repo_get(
+        return clc.repo_get(
             self.caom_repo_client,
             self.collection,
             self._storage_name.obs_id,
@@ -335,7 +336,7 @@ class CaomExecute(object):
 
     def _repo_cmd_delete_client(self, observation):
         """Delete an observation instance based on an input parameter."""
-        mc.repo_delete(
+        clc.repo_delete(
             self.caom_repo_client,
             observation.collection,
             observation.observation_id,
@@ -365,7 +366,7 @@ class CaomExecute(object):
                 )
                 cadc_timestamp = cadc_meta.props.get('date')
             else:
-                cadc_meta = mc.get_cadc_meta_client(
+                cadc_meta = clc.get_cadc_meta_client(
                     self.cadc_client,
                     self.archive,
                     self._storage_name.file_name,
@@ -395,7 +396,7 @@ class CaomExecute(object):
 
     def _cadc_data_put_client_fqn(self, source_name):
         """Store a collection file."""
-        mc.data_put_fqn(
+        clc.data_put_fqn(
             self.cadc_client,
             source_name,
             self._storage_name,
@@ -405,7 +406,7 @@ class CaomExecute(object):
 
     def _client_put(self, source_name, destination_name):
         """Store a collection file using VOS."""
-        mc.client_put_fqn(
+        clc.client_put_fqn(
             self.cadc_client,
             source_name,
             destination_name,
@@ -466,7 +467,7 @@ class CaomExecute(object):
         from this class.
         :return an Observation instance, or None, if the observation id
         does not exist."""
-        return mc.repo_get(
+        return clc.repo_get(
             caom_repo_client, collection, observation_id, metrics
         )
 
