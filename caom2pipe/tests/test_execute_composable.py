@@ -1134,7 +1134,7 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     assert client_mock.put_file.called, 'expect put call, file time irrelevant'
 
 
-@patch('caom2pipe.manage_composable.client_put_fqn')
+@patch('caom2pipe.client_composable.client_put_fqn')
 @patch('vos.Client')
 def test_store_newer_files_only_flag_client(
         client_mock, put_mock, test_config
