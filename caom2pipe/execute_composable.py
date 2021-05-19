@@ -1328,7 +1328,7 @@ class Scrape(CaomExecute):
         self.logger.debug('get observation for the existing model from disk')
         observation = self._read_model()
 
-        self.logger.error('the metadata visitors')
+        self.logger.debug('the metadata visitors')
         self._visit_meta(observation)
 
         self.logger.debug('write the updated xml to disk for debugging')
@@ -1542,12 +1542,8 @@ class OrganizeExecutes(object):
                     ):
                         retry.write(f'{storage_name.entry}\n')
                     else:
-                        if self.config.use_local_files:
-                            retry.write(f'{storage_name.fname_on_disk}\n')
-                        elif self.config.features.use_file_names:
-                            retry.write(f'{storage_name.file_name}\n')
-                        else:
-                            retry.write(f'{storage_name.obs_id}\n')
+                        for entry in storage_name.source_names:
+                            retry.write(f'{entry}\n')
         else:
             self.observable.rejected.record(reason, storage_name.obs_id)
             self._rejected_count += 1
@@ -1610,25 +1606,39 @@ class OrganizeExecutes(object):
     def _define_cred_param(self):
         """Common code to figure out which credentials to use when
         creating instances clients for CADC services."""
-        if (self.config.proxy_fqn is not None and os.path.exists(
-                self.config.proxy_fqn)):
-            logging.debug(f'Using proxy certificate {self.config.proxy_fqn} '
-                          f'for credentials.')
-            cred_param = f'--cert {self.config.proxy_fqn}'
-        elif (
-            self.config.netrc_file is not None and
-                os.path.exists(self.config.netrc_file)
-        ):
-            logging.debug(
-                f'Using netrc file {self.config.netrc_file} for credentials.'
+        if mc.TaskType.SCRAPE in self.config.task_types:
+            logging.info(
+                f'SCRAPE\'ing data - no credential parameter will be '
+                f'initialized.'
             )
-            cred_param = f'--netrc {self.config.netrc_file}'
-        else:
             cred_param = ''
-            logging.warning(
-                'No credentials provided (proxy certificate or netrc file).')
-            logging.warning(f'Proxy certificate is {self.config.proxy_fqn}, '
-                            f'netrc file is {self.config.netrc_file}.')
+        else:
+            if (
+                self.config.proxy_fqn is not None and
+                    os.path.exists(self.config.proxy_fqn)
+            ):
+                logging.debug(
+                    f'Using proxy certificate {self.config.proxy_fqn} for '
+                    f'credentials.'
+                )
+                cred_param = f'--cert {self.config.proxy_fqn}'
+            elif (
+                self.config.netrc_file is not None and
+                    os.path.exists(self.config.netrc_file)
+            ):
+                logging.debug(
+                    f'Using netrc file {self.config.netrc_file} for credentials.'
+                )
+                cred_param = f'--netrc {self.config.netrc_file}'
+            else:
+                cred_param = ''
+                logging.warning(
+                    'No credentials provided (proxy certificate or netrc file).'
+                )
+                logging.warning(
+                    f'Proxy certificate is {self.config.proxy_fqn}, netrc file '
+                    f'is {self.config.netrc_file}.'
+                )
         return cred_param
 
     @staticmethod
@@ -1699,11 +1709,19 @@ class OrganizeExecutes(object):
         for task_type in self.task_types:
             self._logger.debug(task_type)
             if task_type == mc.TaskType.SCRAPE:
-                model_fqn = os.path.join(
+                model_fqn_1 = os.path.join(
                     self.config.working_directory,
                     storage_name.model_file_name,
                 )
-                exists = os.path.exists(model_fqn)
+                model_fqn_2 = os.path.join(
+                    self.config.log_file_directory,
+                    storage_name.model_file_name,
+                )
+                for model_fqn in [model_fqn_1, model_fqn_2]:
+                    exists = os.path.exists(model_fqn)
+                    if exists:
+                        break
+
                 if exists:
                     if self.config.use_local_files:
                         executors.append(

@@ -97,7 +97,9 @@ def test_list_dir_data_source():
         stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
     )
 
-    for entry in ['TEST.fits.gz', 'TEST1.fits', 'TEST2.fits.fz', 'TEST3.hdf5']:
+    for entry in [
+        'TEST.fits.gz', 'TEST1.fits', 'TEST2.fits.fz', 'TEST3.hdf5'
+    ]:
         if not os.path.exists(f'{test_config.working_directory}/{entry}'):
             with open(f'{test_config.working_directory}/{entry}', 'w') as f:
                 f.write('test content')
@@ -202,35 +204,73 @@ def test_vault_list_dir_data_source():
 
 
 def test_list_dir_time_box_data_source():
-    test_config = mc.Config()
-    test_config.data_sources = ['/test_files']
-    test_config.data_source_extensions = [
-        '.fits', '.fits.gz', '.fits.fz', '.hdf5'
-    ]
-    test_subject = dsc.ListDirTimeBoxDataSource(test_config)
-    assert test_subject is not None, 'ctor is broken'
-    test_prev_exec_time = datetime(
-        year=2021, month=2, day=4, hour=20
-    ).timestamp()
-    test_exec_time = datetime(year=2021, month=4, day=30).timestamp()
-    test_result = test_subject.get_time_box_work(
-        test_prev_exec_time, test_exec_time
-    )
-    assert test_result is not None, 'expect a result'
-    assert len(test_result) == 14, 'expect contents in the result'
-    test_entry = test_result.pop()
-    assert test_entry.entry_name == '/test_files/sub_directory/abc.fits', \
-        'wrong entry'
+    test_prev_exec_time_dt = datetime.utcnow()
 
-    test_subject = dsc.ListDirTimeBoxDataSource(test_config, recursive=False)
-    test_result = test_subject.get_time_box_work(
-        test_prev_exec_time, test_exec_time
-    )
-    assert test_result is not None, 'expect a non-recursive result'
-    assert len(test_result) == 13, 'expect contents in non-recursive result'
-    x = [ii.entry_name for ii in test_result]
-    assert '/test_files/sub_directory/abc.fits' not in x, \
-        'recursive result should not be present'
+    test_dir = '/test_files/1'
+    import time
+    time.sleep(1)
+    test_sub_dir = '/test_files/1/sub_directory'
+    test_file_1 = os.path.join(test_dir, 'abc1.fits')
+    test_file_2 = os.path.join(test_sub_dir, 'abc2.fits')
+
+    # so the timestamps are correct, delete then re-create the test
+    # directory structure
+    if os.path.exists(test_file_2):
+        os.unlink(test_file_2)
+        os.rmdir(test_sub_dir)
+    if os.path.exists(test_file_1):
+        os.unlink(test_file_1)
+        os.rmdir(test_dir)
+
+    for entry in [test_dir, test_sub_dir]:
+        os.mkdir(entry)
+
+    for entry in [test_file_1, test_file_2]:
+        with open(entry, 'w') as f:
+            f.write('test content')
+
+    test_config = mc.Config()
+    test_config.working_directory = tc.TEST_DATA_DIR
+    test_config.data_sources = [test_dir]
+    test_config.data_source_extensions = ['.fits']
+
+    try:
+        test_subject = dsc.ListDirTimeBoxDataSource(test_config)
+        assert test_subject is not None, 'ctor is broken'
+        test_prev_exec_time = test_prev_exec_time_dt.timestamp()
+        test_exec_time_dt = datetime.utcnow()
+        test_exec_time = test_exec_time_dt.timestamp() + 3600.0
+        test_result = test_subject.get_time_box_work(
+            test_prev_exec_time, test_exec_time
+        )
+        assert test_result is not None, 'expect a result'
+        assert len(test_result) == 2, 'expect contents in the result'
+        test_entry = test_result.popleft()
+        assert (
+            test_entry.entry_name == test_file_1
+        ), 'wrong expected file, order matters since should be sorted deque'
+
+        test_subject = dsc.ListDirTimeBoxDataSource(
+            test_config, recursive=False
+        )
+        test_result = test_subject.get_time_box_work(
+            test_prev_exec_time, test_exec_time
+        )
+        assert test_result is not None, 'expect a non-recursive result'
+        assert (
+            len(test_result) == 1
+        ), 'expect contents in non-recursive result'
+        x = [ii.entry_name for ii in test_result]
+        assert (
+            test_file_2 not in x
+        ), 'recursive result should not be present'
+    finally:
+        if os.path.exists(test_file_2):
+            os.unlink(test_file_2)
+            os.rmdir(test_sub_dir)
+        if os.path.exists(test_file_1):
+            os.unlink(test_file_1)
+            os.rmdir(test_dir)
 
 
 def test_list_dir_separate_data_source():
@@ -243,7 +283,7 @@ def test_list_dir_separate_data_source():
     assert test_subject is not None, 'ctor is broken'
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a result'
-    assert len(test_result) == 18, 'expect contents in the result'
+    assert len(test_result) == 65, 'expect contents in the result'
     assert (
         '/test_files/sub_directory/abc.fits' in test_result
     ), 'wrong entry'
@@ -251,7 +291,7 @@ def test_list_dir_separate_data_source():
     test_subject = dsc.ListDirSeparateDataSource(test_config, recursive=False)
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a non-recursive result'
-    assert len(test_result) == 16, 'expect contents in non-recursive result'
+    assert len(test_result) == 63, 'expect contents in non-recursive result'
     assert (
         '/test_files/sub_directory/abc.fits' not in test_result
     ), 'recursive result should not be present'

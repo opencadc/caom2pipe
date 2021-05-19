@@ -70,7 +70,7 @@
 import logging
 import os
 
-from collections import deque
+from collections import deque, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from dateutil import tz
@@ -206,6 +206,7 @@ class ListDirSeparateDataSource(DataSource):
     def get_work(self):
         self._logger.debug(f'Begin get_work.')
         for source in self._source_directories:
+            self._logger.info(f'Look in {source} for work.')
             self._append_work(source)
         self._logger.debug('End get_work')
         return self._work
@@ -218,6 +219,9 @@ class ListDirSeparateDataSource(DataSource):
                 else:
                     for extension in self._extensions:
                         if entry.name.endswith(extension):
+                            self._logger.debug(
+                                f'Adding {entry.path} to work list.'
+                            )
                             self._work.append(entry.path)
                             break
 
@@ -248,22 +252,32 @@ class ListDirTimeBoxDataSource(DataSource):
         self._source_directories = config.data_sources
         self._extensions = config.data_source_extensions
         self._recursive = recursive
-        self._work = []
+        self._work = deque()
+        self._temp = defaultdict(list)
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         """
         :param prev_exec_time datetime start of the timestamp chunk
         :param exec_time datetime end of the timestamp chunk
-        :return: a list of StateRunnerMeta instances, with
-            prev_exec_time <= os.stat.mtime <= exec_time
+        :return: a deque of StateRunnerMeta instances, with
+            prev_exec_time <= os.stat.mtime <= exec_time, and sorted by
+            os.stat.mtime
         """
         self._logger.debug(
             f'Begin get_time_box_work from {prev_exec_time} to {exec_time}.'
         )
         for source in self._source_directories:
             self._append_work(prev_exec_time, exec_time, source)
+        # ensure the result returned is sorted by timestamp in ascending
+        # order
+        for mtime in sorted(self._temp):
+            for entry in self._temp[mtime]:
+                self._work.append(
+                    StateRunnerMeta(entry_name=entry, entry_ts=mtime)
+                )
         self._logger.debug('End get_time_box_work')
+        self._temp = defaultdict(list)
         return self._work
 
     def _append_work(self, prev_exec_time, exec_time, entry):
@@ -285,10 +299,8 @@ class ListDirTimeBoxDataSource(DataSource):
                                 exec_time >= entry_stats.st_mtime >=
                                     prev_exec_time
                             ):
-                                self._work.append(
-                                    StateRunnerMeta(
-                                        entry.path, entry_stats.st_mtime
-                                    )
+                                self._temp[entry_stats.st_mtime].append(
+                                    entry.path
                                 )
                                 break
 
