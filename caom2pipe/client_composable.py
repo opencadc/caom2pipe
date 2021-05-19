@@ -120,26 +120,32 @@ class ClientCollection(object):
     def _init(self, config):
         subject = mc.define_subject(config)
 
-        self._metadata_client = CAOM2RepoClient(
-            subject, config.logging_level, config.resource_id
-        )
-
-        if config.features.supports_latest_client:
-            self._logger.warning('Using vos.Client for storage.')
-            cert_file = config.proxy_fqn
-            if cert_file is not None and os.path.exists(cert_file):
-                self._data_client = Client(vospace_certfile=cert_file)
-            else:
-                raise mc.CadcException(
-                    'No credentials configured or found. Stopping.'
-                )
+        if mc.TaskType.SCRAPE in config.task_types:
+            self._logger.info(
+                f'SCRAPE\'ing data - no clients will be initialized.'
+            )
         else:
-            self._logger.warning('Using cadcdata.CadcDataClient for storage.')
-            self._data_client = CadcDataClient(subject)
-
-        if config.tap_id is not None:
-            self._query_client = CadcTapClient(
-                subject=subject, resource_id=config.tap_id
+            self._metadata_client = CAOM2RepoClient(
+                subject, config.logging_level, config.resource_id
             )
 
+            if config.features.supports_latest_client:
+                self._logger.warning('Using vos.Client for storage.')
+                cert_file = config.proxy_fqn
+                if cert_file is not None and os.path.exists(cert_file):
+                    self._data_client = Client(vospace_certfile=cert_file)
+                else:
+                    raise mc.CadcException(
+                        'No credentials configured or found. Stopping.'
+                    )
+            else:
+                self._logger.warning(
+                    'Using cadcdata.CadcDataClient for storage.'
+                )
+                self._data_client = CadcDataClient(subject)
+
+            if config.tap_id is not None:
+                self._query_client = CadcTapClient(
+                    subject=subject, resource_id=config.tap_id
+                )
         self._metrics = mc.Metrics(config)
