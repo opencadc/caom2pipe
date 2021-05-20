@@ -76,6 +76,7 @@ from datetime import datetime
 from dateutil import tz
 
 from cadctap import CadcTapClient
+from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 
 __all__ = [
@@ -341,7 +342,7 @@ class QueryTimeBoxDataSource(DataSource):
     def __init__(self, config, preview_suffix='jpg'):
         super(QueryTimeBoxDataSource, self).__init__(config)
         self._preview_suffix = preview_suffix
-        subject = mc.define_subject(config)
+        subject = clc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -371,7 +372,7 @@ class QueryTimeBoxDataSource(DataSource):
                 "ORDER BY ingestDate ASC "
         self._logger.debug(query)
         result = deque()
-        rows = mc.query_tap_client(query, self._client)
+        rows = clc.query_tap_client(query, self._client)
         for row in rows:
             result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
         return result
@@ -409,7 +410,7 @@ class QueryTimeBoxDataSourceTS(DataSource):
     def __init__(self, config, preview_suffix='jpg'):
         super(QueryTimeBoxDataSourceTS, self).__init__(config)
         self._preview_suffix = preview_suffix
-        subject = mc.define_subject(config)
+        subject = clc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -444,7 +445,7 @@ class QueryTimeBoxDataSourceTS(DataSource):
                 f"AND ingestDate <= '{exec_time_pz}' " \
                 "ORDER BY ingestDate ASC "
         self._logger.debug(query)
-        rows = mc.query_tap_client(query, self._client)
+        rows = clc.query_tap_client(query, self._client)
         result = deque()
         for row in rows:
             result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))

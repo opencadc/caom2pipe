@@ -70,6 +70,7 @@
 import logging
 import os
 
+from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 
 
@@ -136,7 +137,7 @@ class CadcTransfer(Transfer):
         working_dir = os.path.dirname(dest_fqn)
         f_name = os.path.basename(dest_fqn)
         scheme_ignore, archive, f_name_ignore = mc.decompose_uri(source)
-        mc.data_get(
+        clc.data_get(
             self._cadc_client,
             working_dir,
             f_name,

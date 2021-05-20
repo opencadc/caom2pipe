@@ -81,6 +81,7 @@ from caom2 import CoordBounds1D, TypedList, ProductType
 from caom2.diff import get_differences
 
 from caom2pipe import astro_composable as ac
+from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 
 __all__ = [
@@ -347,7 +348,7 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
         AND O.collection = '{collection}'
         """
 
-        table_result = mc.query_tap_client(query_string, tap_client)
+        table_result = clc.query_tap_client(query_string, tap_client)
         if len(table_result) > 0:
             for row in table_result:
                 if row['cunit'] == 'd' and row['naxis'] == 1:

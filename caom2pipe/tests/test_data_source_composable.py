@@ -151,7 +151,7 @@ def test_todo_file():
             os.unlink(todo_fqn)
 
 
-@patch('caom2pipe.manage_composable.query_tap_client')
+@patch('caom2pipe.client_composable.query_tap_client')
 def test_storage_time_box_query(query_mock):
     def _mock_query(arg1, arg2):
         return Table.read(

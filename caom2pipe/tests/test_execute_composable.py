@@ -911,7 +911,7 @@ def test_organize_executes_client_do_one(test_config):
     assert test_oe.todo_fqn == f'{tc.THIS_DIR}/todo.txt', 'wrong todo'
 
 
-@patch('caom2pipe.manage_composable.data_get')
+@patch('caom2pipe.client_composable.data_get')
 def test_data_visit(get_mock, test_config):
     get_mock.side_effect = Mock(autospec=True)
     test_data_client = Mock(autospec=True)

@@ -78,7 +78,7 @@ import test_conf
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-@patch('caom2pipe.manage_composable.data_get')
+@patch('caom2pipe.client_composable.data_get')
 def test_cadc_transfer(data_get_mock, caps_mock):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     data_get_mock.side_effect = Mock(autospec=True)

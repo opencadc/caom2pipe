@@ -178,7 +178,7 @@ def test_reset():
     assert test_chunk.observable_axis is None, 'observable axis not expected'
 
 
-@patch('caom2pipe.manage_composable.query_tap_client')
+@patch('caom2pipe.client_composable.query_tap_client')
 def test_build_temporal_wcs(query_mock):
     def _mock_query(arg1, arg2):
         if 'N20160102S0296' in arg1:
