@@ -325,7 +325,7 @@ def test_run_todo_file_data_source_v(
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.data_source_composable.CadcTapClient')
-@patch('caom2pipe.manage_composable.query_tap_client')
+@patch('caom2pipe.client_composable.query_tap_client')
 @patch(
     'caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out',
     autospec=True,
@@ -405,7 +405,7 @@ def test_run_state(
 
 @patch('caom2pipe.data_source_composable.CadcTapClient')
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-@patch('caom2pipe.manage_composable.query_tap_client')
+@patch('caom2pipe.client_composable.query_tap_client')
 @patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd')
 def test_run_state_log_to_file_true(
     fits2caom2_mock,

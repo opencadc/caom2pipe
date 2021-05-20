@@ -98,7 +98,6 @@ from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact, Observation
 from caom2 import ChecksumURI, ProductType, ReleaseType
 from caom2.diff import get_differences
-from vos import Client
 
 
 __all__ = [
@@ -109,12 +108,8 @@ __all__ = [
     'compare_observations',
     'Config',
     'check_param',
-    'client_get',
-    'client_put',
     'convert_to_days',
     'convert_to_ts',
-    'data_get',
-    'data_put',
     'decompose_lineage',
     'exec_cmd',
     'exec_cmd_info',
@@ -125,9 +120,7 @@ __all__ = [
     'ftp_get_timeout',
     'get_artifact_metadata',
     'get_cadc_headers',
-    'get_cadc_headers_client',
     'get_cadc_meta',
-    'get_cadc_meta_client',
     'get_endpoint_session',
     'get_file_meta',
     'get_lineage',
@@ -136,8 +129,6 @@ __all__ = [
     'increment_time_tz',
     'ISO_8601_FORMAT',
     'load_module',
-    'look_pull_and_put',
-    'look_pull_and_put_v',
     'make_seconds',
     'make_time',
     'make_time_tz',
@@ -150,10 +141,6 @@ __all__ = [
     'read_from_file',
     'read_obs_from_file',
     'Rejected',
-    'repo_create',
-    'repo_delete',
-    'repo_get',
-    'repo_update',
     'reverse_lookup',
     'StorageName',
     'State',
@@ -1931,55 +1918,6 @@ def to_str(value):
     return str(value) if value is not None else None
 
 
-def declare_client(config):
-    """Common code to set the client used for interacting with CADC
-    storage."""
-    if config.features.supports_latest_client:
-        logging.warning('Using vos.Client for storage.')
-        cert_file = config.proxy_fqn
-        if cert_file is not None and os.path.exists(cert_file):
-            cadc_client = Client(vospace_certfile=cert_file)
-        else:
-            raise CadcException(
-                'No credentials configured or found. Stopping.'
-            )
-    else:
-        logging.warning('Using cadcdata.CadcDataClient for storage.')
-        subject = define_subject(config)
-        cadc_client = CadcDataClient(subject)
-    return cadc_client
-
-
-def define_subject(config):
-    """Common code to figure out which credentials to use based on the
-    content of a Config instance."""
-    subject = None
-    if config.proxy_fqn is not None and os.path.exists(config.proxy_fqn):
-        logging.debug(
-            f'Using proxy certificate {config.proxy_fqn} for credentials.'
-        )
-        subject = net.Subject(username=None, certificate=config.proxy_fqn)
-    elif config.netrc_file is not None:
-        netrc_fqn = os.path.join(config.working_directory, config.netrc_file)
-        if os.path.exists(netrc_fqn):
-            logging.debug(f'Using netrc file {netrc_fqn} for credentials.')
-            subject = net.Subject(
-                username=None, certificate=None, netrc=netrc_fqn
-            )
-        else:
-            logging.warning(f'Cannot find netrc file {netrc_fqn}')
-    else:
-        logging.warning(
-            f'Proxy certificate is {config.proxy_fqn}, netrc file is '
-            f'{config.netrc_file}.'
-        )
-        raise CadcException(
-            'No credentials provided (proxy certificate or netrc file). '
-            'Cannot create an anonymous subject.'
-        )
-    return subject
-
-
 def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
     """
     This does command execution as a subprocess call.
@@ -2551,11 +2489,6 @@ def convert_to_ts(value):
     return result
 
 
-def current():
-    """Encapsulate returning UTC now in microsecond resolution."""
-    return datetime.utcnow().timestamp()
-
-
 def sizeof(x):
     """Encapsulate returning the memory size in bytes."""
     return sys.getsizeof(x)
@@ -2587,7 +2520,7 @@ def data_put(
         fits file.
     :param metrics: Tracking success execution times, and failure counts.
     """
-    start = current()
+    start = datetime.utcnow().timestamp()
     cwd = os.getcwd()
     try:
         os.chdir(working_directory)
@@ -2606,167 +2539,8 @@ def data_put(
         raise CadcException(f'Failed to store data with {e}')
     finally:
         os.chdir(cwd)
-    end = current()
+    end = datetime.utcnow().timestamp()
     metrics.observe(start, end, file_size, 'put', 'data', file_name)
-
-
-def data_put_fqn(
-        client,
-        source_name,
-        storage_name,
-        stream='raw',
-        metrics=None,
-):
-    """
-    Make a copy of a locally available file by writing it to CADC. Assumes
-    file and directory locations are correct. Requires a checksum comparison
-    by the client.
-
-    :param client: The CadcDataClient for write access to CADC storage.
-    :param source_name: str fully-qualified
-    :param storage_name: StorageName instance
-    :param stream: str A relic of the old CADC storage.
-    :param metrics: Tracking success execution times, and failure counts.
-    """
-    start = current()
-    try:
-        client.put_file(
-            storage_name.archive,
-            source_name,
-            archive_stream=stream,
-            mime_type=storage_name.mime_type,
-            mime_encoding=storage_name.mime_encoding,
-            md5_check=True,
-        )
-        file_size = os.stat(source_name).st_size
-    except Exception as e:
-        metrics.observe_failure('put', 'data', source_name)
-        logging.debug(traceback.format_exc())
-        raise CadcException(f'Failed to store data with {e}')
-    end = current()
-    metrics.observe(start, end, file_size, 'put', 'data', source_name)
-
-
-def data_get(client, working_directory, file_name, archive, metrics):
-    """
-    Retrieve a local copy of a file available from CADC. Assumes the working
-    directory location exists and is writeable.
-
-    :param client: The CadcDataClient for read access to CADC storage.
-    :param working_directory: Where 'file_name' will be written.
-    :param file_name: What to copy from CADC storage.
-    :param archive: Which archive to retrieve the file from.
-    :param metrics: track success execution times, and failure counts.
-    """
-    start = current()
-    fqn = os.path.join(working_directory, file_name)
-    try:
-        client.get_file(archive, file_name, destination=fqn)
-        if not os.path.exists(fqn):
-            raise CadcException(f'ad retrieve failed. {fqn} does not exist.')
-    except Exception as e:
-        metrics.observe_failure('get', 'data', file_name)
-        logging.debug(traceback.format_exc())
-        raise CadcException(f'Did not retrieve {fqn} because {e}')
-    end = current()
-    file_size = os.stat(fqn).st_size
-    metrics.observe(start, end, file_size, 'get', 'data', file_name)
-
-
-def client_put(
-        client, working_directory, file_name, storage_name, metrics=None
-):
-    """
-    Make a copy of a locally available file by writing it to CADC. Assumes
-    file and directory locations are correct.
-
-    Will check that the size of the file stored is the same as the size of
-    the file on disk.
-
-    :param client: Client for write access to CADC storage.
-    :param working_directory: Where 'file_name' exists locally.
-    :param file_name: What to copy to CADC storage.
-    :param storage_name: Where to write the file.
-    :param metrics: Tracking success execution times, and failure counts.
-    """
-    start = current()
-    try:
-        fqn = os.path.join(working_directory, file_name)
-        stored_size = client.copy(fqn, destination=storage_name)
-        file_size = os.stat(fqn).st_size
-        if stored_size != file_size:
-            raise CadcException(
-                f'Stored file size {stored_size} != {file_size} at CADC for '
-                f'{storage_name}.'
-            )
-    except Exception as e:
-        metrics.observe_failure('copy', 'vos', file_name)
-        logging.debug(traceback.format_exc())
-        raise CadcException(f'Failed to store data with {e}')
-    end = current()
-    metrics.observe(start, end, file_size, 'copy', 'vos', file_name)
-
-
-def client_put_fqn(client, source_name, destination_name, metrics=None):
-    """
-    Make a copy of a locally available file by writing it to CADC. Assumes
-    file and directory locations are correct.
-
-    Will check that the size of the file stored is the same as the size of
-    the file on disk.
-
-    :param client: Client for write access to CADC storage.
-    :param source_name: fully-qualified file name on local storage
-    :param destination_name: Where to write the file.
-    :param metrics: Tracking success execution times, and failure counts.
-    """
-    start = current()
-    try:
-        stored_size = client.copy(source_name, destination=destination_name)
-        file_size = os.stat(source_name).st_size
-        if stored_size != file_size:
-            raise CadcException(
-                f'Stored file size {stored_size} != {file_size} at CADC for '
-                f'{destination_name}.'
-            )
-    except Exception as e:
-        metrics.observe_failure('copy', 'vos', os.path.basename(source_name))
-        logging.debug(traceback.format_exc())
-        raise CadcException(f'Failed to store data with {e}')
-    end = current()
-    metrics.observe(
-        start, end, file_size, 'copy', 'vos', os.path.basename(source_name)
-    )
-
-
-def client_get(client, working_directory, file_name, source, metrics):
-    """
-    Retrieve a local copy of a file available from CADC. Assumes the working
-    directory location exists and is writeable.
-
-    :param client: The Client for read access to CADC storage.
-    :param working_directory: Where 'file_name' will be written.
-    :param file_name: What to copy from CADC storage.
-    :param source: Where to retrieve the file from.
-    :param metrics: track success execution times, and failure counts.
-    """
-    start = current()
-    fqn = os.path.join(working_directory, file_name)
-    try:
-        retrieved_size = client.copy(source, destination=fqn)
-        if not os.path.exists(fqn):
-            raise CadcException(f'Retrieve failed. {fqn} does not exist.')
-        file_size = os.stat(fqn).st_size
-        if retrieved_size != file_size:
-            raise CadcException(
-                f'Wrong file size {retrieved_size} retrieved for {source}.'
-            )
-    except Exception as e:
-        metrics.observe_failure('copy', 'vos', file_name)
-        logging.debug(traceback.format_exc())
-        raise CadcException(f'Did not retrieve {fqn} because {e}')
-    end = current()
-    metrics.observe(start, end, file_size, 'copy', 'vos', file_name)
 
 
 def build_uri(archive, file_name, scheme='ad'):
@@ -3074,105 +2848,6 @@ def http_get(url, local_fqn):
             f'Could not retrieve {local_fqn} from {url}. Failed with {e}')
 
 
-def look_pull_and_put(
-        f_name,
-        working_dir,
-        url,
-        archive,
-        stream,
-        mime_type,
-        cadc_client,
-        checksum,
-        metrics,
-):
-    """Checks to see if a file exists in ad. If yes, stop. If no,
-    pull via https to local storage, then put to ad.
-
-    TODO - stream
-
-    :param f_name file name on disk for caching between the
-        pull and the put
-    :param working_dir together with f_name, location for caching
-    :param url for retrieving the file externally, if it does not exist
-    :param archive for storing in ad
-    :param stream for storing in ad
-    :param mime_type because libmagic is not always available
-    :param cadc_client access to the data web service
-    :param checksum what the CAOM observation says the checksum should be -
-        just the checksum part of ChecksumURI please, or the comparison will
-        always fail.
-    :param metrics track how long operations take
-    """
-    retrieve = False
-    try:
-        meta = cadc_client.get_file_info(archive, f_name)
-        if checksum is not None and meta['md5sum'] != checksum:
-            logging.debug(
-                f'Different checksums: CADC {meta["md5sum"]} Source {checksum}'
-            )
-            retrieve = True
-        else:
-            logging.info(f'{f_name} already exists at CADC/{archive}')
-    except exceptions.NotFoundException:
-        retrieve = True
-
-    if retrieve:
-        logging.info(f'Retrieving {f_name} for {archive}')
-        fqn = os.path.join(working_dir, f_name)
-        http_get(url, fqn)
-        data_put(
-            cadc_client,
-            working_dir,
-            f_name,
-            archive,
-            stream,
-            mime_type,
-            mime_encoding=None,
-            metrics=metrics,
-        )
-
-
-def look_pull_and_put_v(
-        storage_name, f_name, working_dir, url, cadc_client, checksum, metrics
-):
-    """Checks to see if a file exists at CADC. If yes, stop. If no,
-    pull via https to local storage, then put to CADC storage.
-
-    TODO - stream
-
-    :param storage_name The file name as it appears at CADC
-    :param f_name file name on disk for caching between the
-        pull and the put
-    :param working_dir together with f_name, location for caching
-    :param url for retrieving the file externally, if it does not exist
-    :param cadc_client access to the storage service
-    :param checksum what the CAOM observation says the checksum should be -
-        just the checksum part of ChecksumURI please, or the comparison will
-        always fail.
-    :param metrics track how long operations take
-    """
-    retrieve = False
-    try:
-        meta = _get_file_info(storage_name, cadc_client)
-        if checksum is not None and meta.md5sum != checksum:
-            logging.debug(
-                f'Different checksums: CADC {meta.md5sum} Source {checksum}'
-            )
-            retrieve = True
-        else:
-            logging.info(f'{f_name} already exists at CADC.')
-    except exceptions.NotFoundException:
-        retrieve = True
-
-    if retrieve:
-        logging.info(f'Retrieving {f_name}')
-        fqn = os.path.join(working_dir, f_name)
-        http_get(url, fqn)
-        client_put(
-            cadc_client, working_dir, f_name, storage_name, metrics=metrics
-        )
-
-
 @dataclass
 class FileMeta:
     """The bits of information about a file that are used to decide whether
@@ -3216,97 +2891,6 @@ def query_tap(query_string, proxy_fqn, resource_id):
         query_string, output_file=buffer, data_only=True, response_format='csv'
     )
     return Table.read(buffer.getvalue().split('\n'), format='csv')
-
-
-def query_tap_client(query_string, tap_client):
-    """
-    :param query_string ADQL
-    :param tap_client which client to query the service with
-    :returns an astropy votable instance."""
-
-    logging.debug(f'query_tap_client: execute query \n{query_string}')
-    buffer = io.StringIO()
-    tap_client.query(
-        query_string, output_file=buffer, data_only=True, response_format='csv'
-    )
-    return Table.read(buffer.getvalue().split('\n'), format='csv')
-
-
-def repo_create(client, observation, metrics):
-    start = current()
-    try:
-        client.create(observation)
-    except Exception as e:
-        metrics.observe_failure('create', 'caom2', observation.observation_id)
-        logging.debug(traceback.format_exc())
-        raise CadcException(
-            f'Could not create an observation record for '
-            f'{observation.observation_id}. {e}'
-        )
-    end = current()
-    metrics.observe(
-        start,
-        end,
-        sizeof(observation),
-        'create',
-        'caom2',
-        observation.observation_id,
-    )
-
-
-def repo_delete(client, collection, obs_id, metrics):
-    start = current()
-    try:
-        client.delete(collection, obs_id)
-    except Exception as e:
-        metrics.observe_failure('delete', 'caom2', obs_id)
-        logging.debug(traceback.format_exc())
-        raise CadcException(
-            f'Could not delete the observation record for {obs_id}. {e}'
-        )
-    end = current()
-    metrics.observe(start, end, 0, 'delete', 'caom2', obs_id)
-
-
-def repo_get(client, collection, obs_id, metrics):
-    start = current()
-    try:
-        observation = client.read(collection, obs_id)
-    except exceptions.NotFoundException:
-        observation = None
-    except Exception:
-        metrics.observe_failure('read', 'caom2', obs_id)
-        logging.debug(traceback.format_exc())
-        raise CadcException(
-            f'Could not retrieve an observation record for {obs_id}.'
-        )
-    end = current()
-    metrics.observe(
-        start, end, sizeof(observation), 'read', 'caom2', obs_id
-    )
-    return observation
-
-
-def repo_update(client, observation, metrics):
-    start = current()
-    try:
-        client.update(observation)
-    except Exception as e:
-        metrics.observe_failure('update', 'caom2', observation.observation_id)
-        logging.debug(traceback.format_exc())
-        raise CadcException(
-            f'Could not update an observation record for '
-            f'{observation.observation_id}. {e}'
-        )
-    end = current()
-    metrics.observe(
-        start,
-        end,
-        sizeof(observation),
-        'update',
-        'caom2',
-        observation.observation_id
-    )
 
 
 def reverse_lookup(value_to_find, in_dict):

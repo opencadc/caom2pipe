@@ -102,12 +102,14 @@ __all__ = [
     'ClientCollection',
     'current',
     'data_get',
-    'data_put',
     'data_put_fqn',
+    'declare_client',
     'define_subject',
     'get_cadc_headers_client',
     'get_cadc_meta_client',
     'get_cadc_meta_client_v',
+    'look_pull_and_put',
+    'look_pull_and_put_v',
     'query_tap_client',
     'repo_create',
     'repo_delete',
@@ -155,7 +157,7 @@ class ClientCollection(object):
         return self._query_client
 
     def _init(self, config):
-        subject = mc.define_subject(config)
+        subject = define_subject(config)
 
         if mc.TaskType.SCRAPE in config.task_types:
             self._logger.info(
@@ -317,55 +319,6 @@ def data_get(client, working_directory, file_name, archive, metrics):
     metrics.observe(start, end, file_size, 'get', 'data', file_name)
 
 
-def data_put(
-    client,
-    working_directory,
-    file_name,
-    archive,
-    stream='raw',
-    mime_type=None,
-    mime_encoding=None,
-    metrics=None,
-):
-    """
-    Make a copy of a locally available file by writing it to CADC. Assumes
-    file and directory locations are correct. Requires a checksum comparison
-    by the client.
-
-    :param client: The CadcDataClient for write access to CADC storage.
-    :param working_directory: Where 'file_name' exists locally.
-    :param file_name: What to copy to CADC storage.
-    :param archive: Which archive to associate the file with.
-    :param stream: Defaults to raw - use is deprecated, however necessary it
-        may be at the current moment to the 'put_file' call.
-    :param mime_type: Because libmagic can't see inside a zipped fits file.
-    :param mime_encoding: Also because libmagic can't see inside a zipped
-        fits file.
-    :param metrics: Tracking success execution times, and failure counts.
-    """
-    start = current()
-    cwd = os.getcwd()
-    try:
-        os.chdir(working_directory)
-        client.put_file(
-            archive,
-            file_name,
-            archive_stream=stream,
-            mime_type=mime_type,
-            mime_encoding=mime_encoding,
-            md5_check=True,
-        )
-        file_size = os.stat(file_name).st_size
-    except Exception as e:
-        metrics.observe_failure('put', 'data', file_name)
-        logging.debug(traceback.format_exc())
-        raise mc.CadcException(f'Failed to store data with {e}')
-    finally:
-        os.chdir(cwd)
-    end = current()
-    metrics.observe(start, end, file_size, 'put', 'data', file_name)
-
-
 def data_put_fqn(
     client,
     source_name,
@@ -401,6 +354,25 @@ def data_put_fqn(
         raise mc.CadcException(f'Failed to store data with {e}')
     end = current()
     metrics.observe(start, end, file_size, 'put', 'data', source_name)
+
+
+def declare_client(config):
+    """Common code to set the client used for interacting with CADC
+    storage."""
+    if config.features.supports_latest_client:
+        logging.warning('Using vos.Client for storage.')
+        cert_file = config.proxy_fqn
+        if cert_file is not None and os.path.exists(cert_file):
+            cadc_client = Client(vospace_certfile=cert_file)
+        else:
+            raise mc.CadcException(
+                'No credentials configured or found. Stopping.'
+            )
+    else:
+        logging.warning('Using cadcdata.CadcDataClient for storage.')
+        subject = define_subject(config)
+        cadc_client = CadcDataClient(subject)
+    return cadc_client
 
 
 def define_subject(config):
@@ -492,6 +464,107 @@ def get_cadc_meta_client_v(storage_name, cadc_client):
     f_size = node.props.get('length')
     f_md5sum = node.props.get('MD5')
     return FileMeta(f_size, f_md5sum)
+
+
+def look_pull_and_put(
+    f_name,
+    working_dir,
+    url,
+    archive,
+    stream,
+    mime_type,
+    cadc_client,
+    checksum,
+    metrics,
+):
+    """Checks to see if a file exists in ad. If yes, stop. If no,
+    pull via https to local storage, then put to ad.
+
+    TODO - stream
+    TODO - refactor to work with a single http session for archive.gemini.edu
+
+    :param f_name file name on disk for caching between the
+        pull and the put
+    :param working_dir together with f_name, location for caching
+    :param url for retrieving the file externally, if it does not exist
+    :param archive for storing in ad
+    :param stream for storing in ad
+    :param mime_type because libmagic is not always available
+    :param cadc_client access to the data web service
+    :param checksum what the CAOM observation says the checksum should be -
+        just the checksum part of ChecksumURI please, or the comparison will
+        always fail.
+    :param metrics track how long operations take
+    """
+    retrieve = False
+    try:
+        meta = cadc_client.get_file_info(archive, f_name)
+        if checksum is not None and meta['md5sum'] != checksum:
+            logging.debug(
+                f'Different checksums: CADC {meta["md5sum"]} Source {checksum}'
+            )
+            retrieve = True
+        else:
+            logging.info(f'{f_name} already exists at CADC/{archive}')
+    except exceptions.NotFoundException:
+        retrieve = True
+
+    if retrieve:
+        logging.info(f'Retrieving {f_name} for {archive}')
+        fqn = os.path.join(working_dir, f_name)
+        mc.http_get(url, fqn)
+        mc.data_put(
+            cadc_client,
+            working_dir,
+            f_name,
+            archive,
+            stream,
+            mime_type,
+            mime_encoding=None,
+            metrics=metrics,
+        )
+
+
+def look_pull_and_put_v(
+    storage_name, f_name, working_dir, url, cadc_client, checksum, metrics
+):
+    """Checks to see if a file exists at CADC. If yes, stop. If no,
+    pull via https to local storage, then put to CADC storage.
+
+    TODO - stream
+    TODO - refactor to work with a single http session for archive.gemini.edu
+
+    :param storage_name The file name as it appears at CADC
+    :param f_name file name on disk for caching between the
+        pull and the put
+    :param working_dir together with f_name, location for caching
+    :param url for retrieving the file externally, if it does not exist
+    :param cadc_client access to the storage service
+    :param checksum what the CAOM observation says the checksum should be -
+        just the checksum part of ChecksumURI please, or the comparison will
+        always fail.
+    :param metrics track how long operations take
+    """
+    retrieve = False
+    try:
+        meta = mc._get_file_info(storage_name, cadc_client)
+        if checksum is not None and meta.md5sum != checksum:
+            logging.debug(
+                f'Different checksums: CADC {meta.md5sum} Source {checksum}'
+            )
+            retrieve = True
+        else:
+            logging.info(f'{f_name} already exists at CADC.')
+    except exceptions.NotFoundException:
+        retrieve = True
+
+    if retrieve:
+        logging.info(f'Retrieving {f_name}')
+        fqn = os.path.join(working_dir, f_name)
+        mc.http_get(url, fqn)
+        client_put(
+            cadc_client, working_dir, f_name, storage_name, metrics=metrics
+        )
 
 
 def query_tap_client(query_string, tap_client):

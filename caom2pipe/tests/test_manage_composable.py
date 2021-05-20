@@ -399,23 +399,6 @@ def test_data_put(mock_metrics, mock_client):
     assert args[5] == 'TEST.fits', 'wrong id'
 
 
-@patch('cadcdata.core.CadcDataClient')
-def test_data_get(mock_client):
-    test_config = mc.Config()
-    test_config.observe_execution = True
-    test_metrics = mc.Metrics(test_config)
-    with pytest.raises(mc.CadcException):
-        mc.data_get(
-            mock_client,
-            tc.TEST_DATA_DIR,
-            'TEST_get.fits',
-            'TEST',
-            test_metrics,
-        )
-    assert len(test_metrics.failures) == 1, 'wrong failures'
-    assert test_metrics.failures['data']['get']['TEST_get.fits'] == 1, 'count'
-
-
 def test_state():
     if os.path.exists(TEST_STATE_FILE):
         os.unlink(TEST_STATE_FILE)
@@ -500,87 +483,6 @@ def test_increment_time():
 
     with pytest.raises(NotImplementedError):
         mc.increment_time_tz(t2_dt, 23, '%f')
-
-
-@patch('cadcdata.core.CadcDataClient')
-@patch('caom2pipe.manage_composable.http_get')
-def test_look_pull_and_put(http_mock, mock_client):
-    stat_orig = os.stat
-    os.stat = Mock()
-    os.stat.return_value = Mock(st_size=1234)
-    try:
-        f_name = 'test_f_name.fits'
-        url = f'https://localhost/{f_name}'
-        test_config = mc.Config()
-        test_config.observe_execution = True
-        test_metrics = mc.Metrics(test_config)
-        assert len(test_metrics.history) == 0, 'initial history conditions'
-        assert len(test_metrics.failures) == 0, 'initial failure conditions'
-        mc.look_pull_and_put(
-            f_name,
-            tc.TEST_DATA_DIR,
-            url,
-            'TEST',
-            'default',
-            'application/fits',
-            mock_client,
-            'md5:01234',
-            test_metrics,
-        )
-        mock_client.put_file.assert_called_with(
-            'TEST',
-            f_name,
-            archive_stream='default',
-            md5_check=True,
-            mime_encoding=None,
-            mime_type='application/fits',
-        ), 'mock not called'
-        http_mock.assert_called_with(
-            url, os.path.join(tc.TEST_DATA_DIR, f_name)
-        ), 'http mock not called'
-        assert len(test_metrics.history) == 1, 'history conditions'
-        assert len(test_metrics.failures) == 0, 'failure conditions'
-    finally:
-        os.stat = stat_orig
-
-
-@patch('vos.vos.Client')
-@patch('caom2pipe.manage_composable.http_get')
-def test_look_pull_and_put_v(http_mock, mock_client):
-    stat_orig = os.stat
-    os.stat = Mock()
-    os.stat.return_value = Mock(st_size=1234)
-    try:
-        test_storage_name = 'cadc:GEMINI/TEST.fits'
-        f_name = 'test_f_name.fits'
-        url = f'https://localhost/{f_name}'
-        test_config = mc.Config()
-        test_config.observe_execution = True
-        test_metrics = mc.Metrics(test_config)
-        mock_client.get_node.side_effect = tc.mock_get_node
-        mock_client.copy.return_value = 1234
-        assert len(test_metrics.history) == 0, 'initial history conditions'
-        assert len(test_metrics.failures) == 0, 'initial failure conditions'
-        mc.look_pull_and_put_v(
-            test_storage_name,
-            f_name,
-            tc.TEST_DATA_DIR,
-            url,
-            mock_client,
-            'md5:01234',
-            test_metrics,
-        )
-        test_fqn = os.path.join(tc.TEST_DATA_DIR, f_name)
-        mock_client.copy.assert_called_with(
-            test_fqn, destination=test_storage_name
-        ), 'mock not called'
-        http_mock.assert_called_with(
-            url, os.path.join(tc.TEST_DATA_DIR, f_name)
-        ), 'http mock not called'
-        assert len(test_metrics.history) == 1, 'history conditions'
-        assert len(test_metrics.failures) == 0, 'failure conditions'
-    finally:
-        os.stat = stat_orig
 
 
 @patch('requests.get')

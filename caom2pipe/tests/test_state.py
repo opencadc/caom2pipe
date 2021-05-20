@@ -126,8 +126,8 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 def test_run_state(client_mock):
-    client_mock.return_value.metadata_client.read.side_effect = tc.mock_read
-    client_mock.return_value.data_client.get_file.side_effect = tc.mock_get_file
+    client_mock.metadata_client.read.side_effect = tc.mock_read
+    client_mock.data_client.get_file.side_effect = tc.mock_get_file
 
     test_wd = '/usr/src/app/caom2pipe/int_test'
     caom2pipe_bookmark = 'caom2_timestamp'
@@ -174,13 +174,13 @@ def test_run_state(client_mock):
     # this timestamp is 15 minutes earlier than the timestamp of the
     # file in /caom2pipe_test
     #
-    test_start_time = '2021-05-08 02:25:09'
+    test_start_time = '2021-05-17 19:55:09'
     with open(test_config.state_fqn, 'w') as f:
         f.write('bookmarks:\n')
         f.write(f'  {caom2pipe_bookmark}:\n')
         f.write(f'    last_record: {test_start_time}\n')
     test_end_time = datetime(
-        2021, 5, 8, 2, 41, 27, 965132, tzinfo=timezone.utc
+        2021, 5, 17, 20, 15, 27, 965132, tzinfo=timezone.utc
     )
 
     with open(test_config.proxy_fqn, 'w') as f:
@@ -200,6 +200,7 @@ def test_run_state(client_mock):
             source=test_data_source,
             modify_transfer=None,
             store_transfer=transferrer,
+            clients=client_mock,
         )
 
         assert test_result is not None, 'expect a result'
@@ -221,7 +222,8 @@ def test_run_state(client_mock):
         assert os.path.exists(test_config.progress_fqn), 'progress fqn'
         log_file = f'{test_config.log_file_directory}/test_obs_id.log'
         actual = glob.glob(f'{test_config.log_file_directory}/**')
-        assert os.path.exists(log_file), f'specific log file {actual}'
+        actual_str = '\n'.join(ii for ii in actual)
+        assert os.path.exists(log_file), f'specific log file {actual_str}'
         xml_file = f'{test_config.log_file_directory}/test_obs_id.xml'
         assert os.path.exists(xml_file), f'xml file {actual}'
 
@@ -268,9 +270,9 @@ def test_run_state(client_mock):
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 def test_run_state_v(client_mock):
-    client_mock.return_value.metadata_client.read.side_effect = tc.mock_read
-    client_mock.return_value.data_client.get_node.side_effect = tc.mock_get_node
-    client_mock.return_value.data_client.copy.return_value = 48
+    client_mock.metadata_client.read.side_effect = tc.mock_read
+    client_mock.data_client.get_node.side_effect = tc.mock_get_node
+    client_mock.data_client.copy.return_value = 48
 
     test_wd = '/usr/src/app/caom2pipe/int_test'
     caom2pipe_bookmark = 'caom2_timestamp'
@@ -317,13 +319,13 @@ def test_run_state_v(client_mock):
     # this timestamp is 15 minutes earlier than the timestamp of the
     # file in /caom2pipe_test
     #
-    test_start_time = '2021-05-08 02:25:09'
+    test_start_time = '2021-05-17 19:55:09'
     with open(test_config.state_fqn, 'w') as f:
         f.write('bookmarks:\n')
         f.write(f'  {caom2pipe_bookmark}:\n')
         f.write(f'    last_record: {test_start_time}\n')
     test_end_time = datetime(
-        2021, 5, 8, 2, 41, 27, 965132, tzinfo=timezone.utc
+        2021, 5, 17, 20, 15, 27, 965132, tzinfo=timezone.utc
     )
 
     with open(test_config.proxy_fqn, 'w') as f:
@@ -343,14 +345,13 @@ def test_run_state_v(client_mock):
             source=test_data_source,
             modify_transfer=None,
             store_transfer=transferrer,
+            clients=client_mock,
         )
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
-        assert (
-            client_mock.return_value.data_client.copy.called
-        ), 'expect put call'
-        client_mock.return_value.data_client.copy.assert_called_with(
+        assert client_mock.data_client.copy.called, 'expect put call'
+        client_mock.data_client.copy.assert_called_with(
             '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz',
             destination='ad:TEST/test_file.fits.gz'
         ), 'wrong call args'
