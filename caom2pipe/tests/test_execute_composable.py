@@ -117,7 +117,9 @@ class LocalTestVisit:
         ), 'wrong working directory'
         y = kwargs['science_file']
         assert y is not None, 'science file'
-        assert y == 'test_obs_id.fits', 'wrong science file'
+        assert (
+            y == f'{tc.TEST_DATA_DIR}/test_file.fits.gz'
+        ), 'wrong science file'
         z = kwargs['log_file_directory']
         assert z is not None, 'log file directory'
         assert z == tc.TEST_DATA_DIR, 'wrong log dir'
@@ -954,7 +956,9 @@ def test_data_visit(get_mock, test_config):
 
     args, kwargs = dv_mock.visit.call_args
     assert kwargs.get('working_directory') == f'{tc.THIS_DIR}/test_obs_id'
-    assert kwargs.get('science_file') == 'test_obs_id.fits'
+    assert (
+        kwargs.get('science_file') == test_sn.source_names[0]
+    ), 'wrong science file parameter'
     assert kwargs.get('log_file_directory') == tc.TEST_DATA_DIR
     assert kwargs.get('stream') == 'TEST'
 

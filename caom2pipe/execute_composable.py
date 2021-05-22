@@ -1079,21 +1079,22 @@ class DataVisit(CaomExecute):
     def _visit_data(self, observation):
         """Execute the visitors that require access to the full data content
         of a file."""
-        kwargs = {
-            'working_directory': self.working_dir,
-            'science_file': self._storage_name.file_name,
-            'log_file_directory': self._log_file_directory,
-            'cadc_client': self.cadc_client,
-            'caom_repo_client': self.caom_repo_client,
-            'stream': self.stream,
-            'observable': self.observable,
-        }
-        for visitor in self._data_visitors:
-            try:
-                self.logger.debug(f'Visit for {visitor}')
-                visitor.visit(observation, **kwargs)
-            except Exception as e:
-                raise mc.CadcException(e)
+        for entry in self._storage_name.source_names:
+            kwargs = {
+                'working_directory': self.working_dir,
+                'science_file': entry,
+                'log_file_directory': self._log_file_directory,
+                'cadc_client': self.cadc_client,
+                'caom_repo_client': self.caom_repo_client,
+                'stream': self.stream,
+                'observable': self.observable,
+            }
+            for visitor in self._data_visitors:
+                try:
+                    self.logger.debug(f'Visit for {visitor}')
+                    visitor.visit(observation, **kwargs)
+                except Exception as e:
+                    raise mc.CadcException(e)
 
 
 class LocalDataVisit(DataVisit):
