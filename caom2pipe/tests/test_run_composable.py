@@ -215,22 +215,6 @@ def test_run_todo_list_dir_data_source_invalid_fname_v(
         )
         assert test_result is not None, 'expect a result'
         assert test_result == -1, 'expect failure, because of file naming'
-        assert (
-            not os.path.exists(test_config.failure_fqn)
-        ), 'no logging, no failure file'
-        assert (
-            not os.path.exists(test_config.retry_fqn)
-        ), 'no logging, no retry file'
-        test_config.log_to_file = True
-
-        test_result = rc.run_by_todo(
-            config=test_config,
-            chooser=test_chooser,
-            command_name=TEST_COMMAND,
-            name_builder=test_builder,
-        )
-        assert test_result is not None, 'expect a result'
-        assert test_result == -1, 'expect failure, because of file naming'
         assert os.path.exists(test_config.failure_fqn), 'expect failure file'
         assert os.path.exists(test_config.retry_fqn), 'expect retry file'
         assert (
@@ -353,10 +337,15 @@ def test_run_state(
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.state_fqn = STATE_FILE
     test_config.interval = 10
+    individual_log_file = (
+        f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
+    )
     if os.path.exists(test_config.progress_fqn):
         os.unlink(test_config.progress_fqn)
     if os.path.exists(test_config.success_fqn):
         os.unlink(test_config.success_fqn)
+    if os.path.exists(individual_log_file):
+        os.unlink(individual_log_file)
 
     test_chooser = ec.OrganizeChooser()
     # use_local_files set so run_by_state chooses QueryTimeBoxDataSourceTS
@@ -380,8 +369,11 @@ def test_run_state(
     assert test_bookmark == test_end_time, 'wrong time'
     assert os.path.exists(test_config.progress_fqn), 'expect progress file'
     assert (
-        not os.path.exists(test_config.success_fqn)
+        os.path.exists(test_config.success_fqn)
     ), 'log_to_file set to false, no success file'
+    assert (
+        not os.path.exists(individual_log_file)
+    ), f'log_to_file is False, no entry log'
 
     # test that runner does nothing when times haven't changed
     start_time = test_end_time

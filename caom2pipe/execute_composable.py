@@ -1510,40 +1510,34 @@ class OrganizeExecutes(object):
         list. The rejected list will be saved to disk when the execute method
         completes.
 
-        If log_to_file is set to False, don't track the failure log file or
-        the retry log file entries, because the application should leave no
-        logging trace.
-
         :obs_id observation ID being processed
         :file_name file name being processed
         :e Exception to log - the entire stack trace, which, if logging
             level is not set to debug, will be lost for debugging purposes.
         """
         self._count_timeouts(stack_trace)
-        if self.config.log_to_file:
-            with open(self.failure_fqn, 'a') as failure:
-                if e.args is not None and len(e.args) > 1:
-                    min_error = e.args[0]
-                else:
-                    min_error = str(e)
-                failure.write(
-                    f'{datetime.now()} {storage_name.obs_id} '
-                    f'{storage_name.file_name} {min_error}\n'
-                )
+        with open(self.failure_fqn, 'a') as failure:
+            if e.args is not None and len(e.args) > 1:
+                min_error = e.args[0]
+            else:
+                min_error = str(e)
+            failure.write(
+                f'{datetime.now()} {storage_name.obs_id} '
+                f'{storage_name.file_name} {min_error}\n'
+            )
 
         # only retry entries that are not permanently marked as rejected
         reason = mc.Rejected.known_failure(stack_trace)
         if reason == mc.Rejected.NO_REASON:
-            if self.config.log_to_file:
-                with open(self.retry_fqn, 'a') as retry:
-                    if (
-                        hasattr(storage_name, '_entry') and
-                            storage_name.entry is not None
-                    ):
-                        retry.write(f'{storage_name.entry}\n')
-                    else:
-                        for entry in storage_name.source_names:
-                            retry.write(f'{entry}\n')
+            with open(self.retry_fqn, 'a') as retry:
+                if (
+                    hasattr(storage_name, '_entry') and
+                        storage_name.entry is not None
+                ):
+                    retry.write(f'{storage_name.entry}\n')
+                else:
+                    for entry in storage_name.source_names:
+                        retry.write(f'{entry}\n')
         else:
             self.observable.rejected.record(reason, storage_name.obs_id)
             self._rejected_count += 1
@@ -1557,16 +1551,14 @@ class OrganizeExecutes(object):
         """
         self.success_count += 1
         execution_s = datetime.utcnow().timestamp() - start_time
-        # if log_to_file is set to False, leave no logging trace
-        if self.config.log_to_file:
-            success = open(self.success_fqn, 'a')
-            try:
-                success.write(
-                    f'{datetime.now()} {obs_id} {file_name} '
-                    f'{execution_s:.2f}\n'
-                )
-            finally:
-                success.close()
+        success = open(self.success_fqn, 'a')
+        try:
+            success.write(
+                f'{datetime.now()} {obs_id} {file_name} '
+                f'{execution_s:.2f}\n'
+            )
+        finally:
+            success.close()
         logging.debug('******************************************************')
         logging.info(
             f'Progress - record {self.success_count} of '
@@ -1577,11 +1569,10 @@ class OrganizeExecutes(object):
 
     def set_log_location(self):
         self.set_log_files(self.config)
-        if self.config.log_to_file:
-            mc.create_dir(self.config.log_file_directory)
-            now_s = datetime.utcnow().timestamp()
-            for fqn in [self.success_fqn, self.failure_fqn, self.retry_fqn]:
-                OrganizeExecutes.init_log_file(fqn, now_s)
+        mc.create_dir(self.config.log_file_directory)
+        now_s = datetime.utcnow().timestamp()
+        for fqn in [self.success_fqn, self.failure_fqn, self.retry_fqn]:
+            OrganizeExecutes.init_log_file(fqn, now_s)
         self._success_count = 0
 
     def is_rejected(self, storage_name):
@@ -1668,7 +1659,13 @@ class OrganizeExecutes(object):
 
     def _set_up_file_logging(self, storage_name):
         """Configure logging to a separate file for each entry being
-        processed."""
+        processed.
+
+        If log_to_file is set to False, don't create a separate log file for
+        each entry, because the application should leave as small a logging
+        trace as possible.
+
+        """
         if self.config.log_to_file:
             log_fqn = os.path.join(
                 self.config.working_directory, storage_name.log_file
