@@ -123,6 +123,7 @@ __all__ = [
     'get_cadc_meta',
     'get_endpoint_session',
     'get_file_meta',
+    'get_keyword',
     'get_lineage',
     'http_get',
     'increment_time',
@@ -133,6 +134,7 @@ __all__ = [
     'make_time',
     'make_time_tz',
     'Metrics',
+    'minimize_on_keyword',
     'Observable',
     'query_endpoint',
     'query_endpoint_session',
@@ -481,6 +483,16 @@ class Metrics(object):
 
             fqn = os.path.join(self.observable_dir, f'{now}.fail.yml')
             write_as_yaml(self.failures, fqn)
+
+
+def minimize_on_keyword(x, candidate):
+    result = x
+    if candidate is not None:
+        if x is None:
+            result = candidate
+        else:
+            result = min(x, candidate)
+    return result
 
 
 class Observable(object):
@@ -2362,6 +2374,13 @@ def read_file_list_from_archive(config, app_name, prev_exec_date, exec_date):
     logging.debug(f'Query is {query}')
     temp = query_tap(query, config.proxy_fqn, config.resource_id)
     return [ii for ii in temp['fileName']]
+
+
+def get_keyword(headers, keyword):
+    result = headers[0].get(keyword)
+    if result is None and len(headers) > 1:
+        result = headers[1].get(keyword)
+    return result
 
 
 def get_lineage(archive, product_id, file_name, scheme='ad'):
