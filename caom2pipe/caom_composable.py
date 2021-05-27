@@ -88,6 +88,7 @@ __all__ = ['append_plane_provenance', 'append_plane_provenance_single',
            'build_chunk_time', 'build_temporal_wcs_append_sample',
            'build_temporal_wcs_bounds', 'change_to_simple',
            'exec_footprintfinder', 'find_plane_and_artifact',
+           'get_all_artifact_keys',
            'get_obs_id_from_cadc', 'update_plane_provenance',
            'update_observation_members', 'rename_parts',
            'reset_energy', 'reset_position',
@@ -654,6 +655,18 @@ def find_plane_and_artifact(observation, product_id, uri):
             # return all assigned a value, or all None
             plane = None
     return plane, artifact
+
+
+def get_all_artifact_keys(observation):
+    """
+    :param observation: Observation
+    :return: a list of all Artifact keys in the Observation
+    """
+    all_artifact_keys = []
+    for plane in observation.planes.values():
+        for key in plane.artifacts.keys():
+            all_artifact_keys.append(key)
+    return all_artifact_keys
 
 
 def get_obs_id_from_cadc(artifact_uri, tap_client):
