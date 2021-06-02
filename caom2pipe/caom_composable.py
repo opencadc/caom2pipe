@@ -88,6 +88,7 @@ __all__ = ['append_plane_provenance', 'append_plane_provenance_single',
            'build_chunk_time', 'build_temporal_wcs_append_sample',
            'build_temporal_wcs_bounds', 'change_to_simple',
            'exec_footprintfinder', 'find_plane_and_artifact',
+           'find_keywords_in_header', 'find_keywords_in_headers',
            'get_all_artifact_keys',
            'get_obs_id_from_cadc', 'update_plane_provenance',
            'update_observation_members', 'rename_parts',
@@ -96,6 +97,7 @@ __all__ = ['append_plane_provenance', 'append_plane_provenance_single',
            'compare', 'copy_artifact', 'copy_chunk', 'copy_instrument',
            'copy_part', 'copy_provenance', 'undo_astropy_cdfix_call',
            'update_observation_members_filtered',
+           'update_plane_provenance_from_values',
            'update_plane_provenance_list']
 
 
@@ -251,7 +253,18 @@ def build_chunk_time(chunk, header, name):
     logging.debug(f'End build_chunk_time.')
 
 
-def _find_keywords_in_header(header, lookups):
+def find_keywords_in_headers(headers, lookups):
+    """
+    Common code to find all the values for a list of keywords with a common
+    prefix in a FITS header.
+    """
+    values = []
+    for header in headers:
+        values += find_keywords_in_header(header, lookups)
+    return values
+
+
+def find_keywords_in_header(header, lookups):
     """
     Common code to find all the values for a list of keywords with a common
     prefix in a FITS header.
@@ -779,6 +792,24 @@ def update_plane_provenance(plane, headers, lookup, collection,
     plane_inputs = TypedSet(PlaneURI,)
     _update_plane_provenance(
         headers, lookup, collection, repair, obs_id, plane_inputs)
+    mc.update_typed_set(plane.provenance.inputs, plane_inputs)
+
+
+def update_plane_provenance_from_values(
+    plane, repair, values, collection, obs_id
+):
+    plane_inputs = TypedSet(PlaneURI,)
+    for value in values:
+        prov_obs_id, prov_prod_id = repair(value, obs_id)
+        if prov_obs_id is not None and prov_prod_id is not None:
+            obs_member_uri_str = \
+                mc.CaomName.make_obs_uri_from_obs_id(
+                    collection, prov_obs_id)
+            obs_member_uri = ObservationURI(obs_member_uri_str)
+            plane_uri = PlaneURI.get_plane_uri(
+                obs_member_uri, prov_prod_id)
+            plane_inputs.add(plane_uri)
+            logging.debug(f'Adding PlaneURI {plane_uri}')
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
