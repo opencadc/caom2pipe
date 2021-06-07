@@ -136,8 +136,13 @@ class CadcTransfer(Transfer):
         working_dir = os.path.dirname(dest_fqn)
         f_name = os.path.basename(dest_fqn)
         scheme_ignore, archive, f_name_ignore = mc.decompose_uri(source)
-        mc.data_get(self._cadc_client, working_dir, f_name, archive,
-                    self._observable.metrics)
+        mc.data_get(
+            self._cadc_client,
+            working_dir,
+            f_name,
+            archive,
+            self._observable.metrics,
+        )
 
     def check(self, dest_fqn):
         """Assumes fits files at this time. Returns true because the
@@ -198,12 +203,14 @@ class FitsTransfer(Transfer):
             hdulist.close()
         except (fits.VerifyError, OSError) as e:
             if self._observable is not None:
-                self._observable.rejected.record(mc.Rejected.BAD_DATA,
-                                                 os.path.basename(dest_fqn))
+                self._observable.rejected.record(
+                    mc.Rejected.BAD_DATA, os.path.basename(dest_fqn)
+                )
             if os.path.exists(dest_fqn):
                 os.unlink(dest_fqn)
                 raise mc.CadcException(
-                    f'astropy verify error {dest_fqn} when reading {e}')
+                    f'astropy verify error {dest_fqn} when reading {e}'
+                )
         # a second check that fails for some NEOSSat cases - if this works,
         # the file might have been correctly retrieved
         try:
@@ -212,12 +219,14 @@ class FitsTransfer(Transfer):
             fits.getdata(dest_fqn, ext=0)
         except (TypeError, OSError) as e:
             if self._observable is not None:
-                self._observable.rejected.record(mc.Rejected.BAD_DATA,
-                                                 os.path.basename(dest_fqn))
+                self._observable.rejected.record(
+                    mc.Rejected.BAD_DATA, os.path.basename(dest_fqn)
+                )
             if os.path.exists(dest_fqn):
                 os.unlink(dest_fqn)
             raise mc.CadcException(
-                f'astropy getdata error {dest_fqn} when reading {e}')
+                f'astropy getdata error {dest_fqn} when reading {e}'
+            )
 
 
 class HttpTransfer(FitsTransfer):

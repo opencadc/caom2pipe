@@ -98,10 +98,13 @@ from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact, Observation
 from caom2 import ChecksumURI, ProductType, ReleaseType
 from caom2.diff import get_differences
+from vos import Client
 
 
 __all__ = ['CadcException', 'Config', 'State', 'TaskType', 'client_get',
-           'client_put', 'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
+           'client_put',
+           'declare_client',
+           'exec_cmd', 'exec_cmd_redirect', 'exec_cmd_info',
            'FileMeta',
            'get_cadc_headers_client', 'get_cadc_meta',
            'get_cadc_meta_client', 'get_endpoint_session', 'get_file_meta',
@@ -1772,6 +1775,25 @@ def to_str(value):
     return str(value) if value is not None else None
 
 
+def declare_client(config):
+    """Common code to set the client used for interacting with CADC
+    storage."""
+    if config.features.supports_latest_client:
+        logging.warning('Using vos.Client for storage.')
+        cert_file = config.proxy_fqn
+        if cert_file is not None and os.path.exists(cert_file):
+            cadc_client = Client(vospace_certfile=cert_file)
+        else:
+            raise CadcException(
+                'No credentials configured or found. Stopping.'
+            )
+    else:
+        logging.warning('Using cadcdata.CadcDataClient for storage.')
+        subject = define_subject(config)
+        cadc_client = CadcDataClient(subject)
+    return cadc_client
+
+
 def define_subject(config):
     """Common code to figure out which credentials to use based on the
     content of a Config instance."""
@@ -2296,11 +2318,11 @@ def get_artifact_metadata_client(client, file_name, product_type, release_type,
         if uri is None:
             raise CadcException('Cannot build an Artifact without a URI.')
         return Artifact(uri, product_type, release_type, meta.get('type'),
-                        meta.get('size'), md5uri)
+                        to_int(meta.get('size')), md5uri)
     else:
         artifact.product_type = product_type
         artifact.content_type = meta.get('type')
-        artifact.content_length = meta.get('size')
+        artifact.content_length = to_int(meta.get('size'))
         artifact.content_checksum = md5uri
         return artifact
 
@@ -2507,13 +2529,6 @@ def query_endpoint_session(url, session, timeout=20):
     """
 
     # Open the URL and fetch the JSON document for the observation
-    # session = requests.Session()
-    # retries = 10
-    # retry = Retry(total=retries, read=retries, connect=retries,
-    #               backoff_factor=0.5)
-    # adapter = HTTPAdapter(max_retries=retry)
-    # session.mount('http://', adapter)
-    # session.mount('https://', adapter)
     try:
         response = session.get(url, timeout=timeout)
         response.raise_for_status()
@@ -2645,6 +2660,14 @@ def make_time_tz(from_value):
 
     :param from_value a representation of time.
     :return the time as an offset-aware datetime
+
+    from_value accepted types:
+    - datetime, ensures timezone.utc is set
+    - str, attempts to use datetime.strptime with all the formats so far
+      encountered to convert it to a datetime, and then sets timezone.utc
+    - float, uses as if the parameter were the result of a datetime.timestamp()
+      operation, as well as setting timezone.utc
+    - datetime.date or datetime.time, sets timezone.utc
     """
     if isinstance(from_value, datetime):
         result = from_value
@@ -2655,6 +2678,8 @@ def make_time_tz(from_value):
         result = None
         if temp is not None:
             result = datetime.fromtimestamp(temp, tz=timezone.utc)
+    elif isinstance(from_value, float):
+        result = datetime.fromtimestamp(from_value, tz=timezone.utc)
     else:
         result = from_value.fromtimestamp(from_value, tz=timezone.utc)
     return result
@@ -3074,7 +3099,9 @@ class ValueRepairCache(Cache):
             raise CadcException(e)
 
     def _fix(self, entity, attribute_name, attribute_value, original, fix):
-        if fix == 'none':
+        if attribute_value == fix:
+            fixed = None
+        elif fix == 'none':
             setattr(entity, attribute_name, None)
             self._logger.info(
                 f'Repair {self._key} from {original} to None')
@@ -3092,6 +3119,8 @@ class ValueRepairCache(Cache):
                 attribute_value_type = type(attribute_value)
                 fixed = re.sub(str(original), str(fix), str(attribute_value))
                 setattr(entity, attribute_name, attribute_value_type(fixed))
+        new_value = getattr(entity, attribute_name)
+        if attribute_value != new_value:
             self._logger.info(
-                f'Repair {self._key} from {attribute_value} to {fixed}')
+                f'Repair {self._key} from {attribute_value} to {new_value}')
         return fixed

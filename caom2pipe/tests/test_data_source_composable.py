@@ -92,8 +92,10 @@ def test_list_dir_data_source():
 
     if not os.path.exists(test_config.working_directory):
         os.mkdir(test_config.working_directory)
-    os.chmod(test_config.working_directory,
-             stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+    os.chmod(
+        test_config.working_directory,
+        stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
+    )
 
     for entry in ['TEST.fits.gz', 'TEST1.fits', 'TEST2.fits.fz', 'TEST3.hdf5']:
         if not os.path.exists(f'{test_config.working_directory}/{entry}'):
@@ -154,8 +156,11 @@ def test_storage_time_box_query(query_mock):
             'fileName,ingestDate\n'
             'NEOS_SCI_2015347000000_clean.fits,2019-10-23T16:27:19.000\n'
             'NEOS_SCI_2015347000000.fits,2019-10-23T16:27:27.000\n'
-            'NEOS_SCI_2015347002200_clean.fits,2019-10-23T16:27:33.000\n'.split('\n'),
-            format='csv')
+            'NEOS_SCI_2015347002200_clean.fits,2019-10-23T16:27:33.000\n'.split(
+                '\n'
+            ),
+            format='csv',
+        )
 
     query_mock.side_effect = _mock_query
     getcwd_orig = os.getcwd
@@ -172,8 +177,9 @@ def test_storage_time_box_query(query_mock):
         test_result = test_subject.get_time_box_work(prev_exec_date, exec_date)
         assert test_result is not None, 'expect result'
         assert len(test_result) == 3, 'wrong number of results'
-        assert test_result[0][0] == 'NEOS_SCI_2015347000000_clean.fits', \
-            'wrong results'
+        assert (
+            test_result[0].entry_name == 'NEOS_SCI_2015347000000_clean.fits'
+        ), 'wrong results'
     finally:
         os.getcwd = getcwd_orig
         CadcTapClient.__init__ = tap_client_ctor_orig

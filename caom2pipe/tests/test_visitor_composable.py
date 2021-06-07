@@ -77,7 +77,8 @@ def test_cleanup():
     test_subject = vc.ArtifactCleanupVisitor(archive='VLASS')
     assert test_subject is not None, 'expect construction'
     test_obs = mc.read_obs_from_file(
-        f'{test_conf.TEST_DATA_DIR}/fpf_start_obs.xml')
+        f'{test_conf.TEST_DATA_DIR}/fpf_start_obs.xml'
+    )
     test_product_id = 'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
     assert len(test_obs.planes[test_product_id].artifacts) == 2, 'initial'
     test_f_name = 'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.' \

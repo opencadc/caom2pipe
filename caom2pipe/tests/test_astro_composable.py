@@ -128,8 +128,9 @@ def test_build_plane_time():
     result = ac.build_plane_time(start, end, exposure)
     assert result is not None, 'expected a value'
     assert result.bounds is not None, 'expected a bounds value'
-    assert math.isclose(result.exposure, 7199.999999999994), \
-        'wrong exposure value'
+    assert (
+        math.isclose(result.exposure, 7199.999999999994)
+    ), 'wrong exposure value'
 
 
 def test_get_time_delta_in_s():
@@ -170,45 +171,57 @@ def test_filter_md_cache(query_mock):
     fn_repair = {'collection': 'repaired'}
     inst_repair = {'collection': 'repaired'}
     test_cache = {'repaired': {'cw': 4444.2043, 'fwhm': 333.9806}}
-    test_subject = ac.FilterMetadataCache(fn_repair, inst_repair,
-                                          telescope=None, cache=test_cache)
+    test_subject = ac.FilterMetadataCache(
+        fn_repair, inst_repair, telescope=None, cache=test_cache
+    )
     assert 'unrepaired_fn' not in test_subject._cache, 'cache broken'
 
     # uncached, unrepaired
     test_result = test_subject.get_svo_filter(
         'unrepaired_inst', 'unrepaired_fn')
     assert test_result is not None, 'expect a result'
-    assert ac.FilterMetadataCache.get_central_wavelength(
-        test_result) == 3740.2043404255, 'wrong cw'
-    assert ac.FilterMetadataCache.get_fwhm(test_result) == 414.98068085106, \
-        'wrong fwhm'
+    assert (
+           ac.FilterMetadataCache.get_central_wavelength(test_result) ==
+           3740.2043404255
+    ), 'wrong cw'
+    assert (
+        ac.FilterMetadataCache.get_fwhm(test_result) == 414.98068085106
+    ), 'wrong fwhm'
     assert call_count == 1, 'wrong execution path'
-    assert 'unrepaired_inst.unrepaired_fn' in test_subject._cache, \
-        'cache broken'
+    assert (
+        'unrepaired_inst.unrepaired_fn' in test_subject._cache
+    ), 'cache broken'
 
     # cached, unrepaired
     test_result = test_subject.get_svo_filter(
-        'unrepaired_inst', 'unrepaired_fn')
+        'unrepaired_inst', 'unrepaired_fn'
+    )
     assert test_result is not None, 'expect a result'
-    assert ac.FilterMetadataCache.get_central_wavelength(
-        test_result) == 3740.2043404255, 'wrong cw'
-    assert ac.FilterMetadataCache.get_fwhm(test_result) == 414.98068085106, \
-        'wrong fwhm'
+    assert (
+           ac.FilterMetadataCache.get_central_wavelength(test_result) ==
+           3740.2043404255
+    ), 'wrong cw'
+    assert (
+        ac.FilterMetadataCache.get_fwhm(test_result) == 414.98068085106
+    ), 'wrong fwhm'
     assert call_count == 1, 'wrong execution path'
 
     # uncached, repaired
-    test_result = test_subject.get_svo_filter(
-        'collection', 'collection')
+    test_result = test_subject.get_svo_filter('collection', 'collection')
     assert test_result is not None, 'expect a result'
-    assert ac.FilterMetadataCache.get_central_wavelength(
-        test_result) == 4444.2043, 'wrong cw'
-    assert ac.FilterMetadataCache.get_fwhm(test_result) == 333.9806, \
-        'wrong fwhm'
+    assert (
+        ac.FilterMetadataCache.get_central_wavelength(test_result) == 4444.2043
+    ), 'wrong cw'
+    assert (
+        ac.FilterMetadataCache.get_fwhm(test_result) == 333.9806
+    ), 'wrong fwhm'
 
     # unfound
     test_result = test_subject.get_svo_filter('undefined', 'undefined')
     assert test_result is not None, 'expect result'
-    assert ac.FilterMetadataCache.get_central_wavelength(
-        test_result) == -2, 'wrong cw'
-    assert ac.FilterMetadataCache.get_fwhm(test_result) == -2, \
-        'wrong fwhm'
+    assert (
+       ac.FilterMetadataCache.get_central_wavelength(test_result) == -2
+    ), 'wrong cw'
+    assert (
+        ac.FilterMetadataCache.get_fwhm(test_result) == -2
+    ), 'wrong fwhm'

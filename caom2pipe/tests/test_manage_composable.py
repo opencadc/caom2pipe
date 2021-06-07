@@ -134,40 +134,58 @@ def test_config_class():
         assert test_config.features is not None
         assert test_config.features.supports_composite is False
         assert test_config.working_directory == tc.TEST_DATA_DIR, 'wrong dir'
-        assert test_config.work_fqn == f'{tc.TEST_DATA_DIR}/todo.txt', 'work_fqn'
+        assert (
+            test_config.work_fqn == f'{tc.TEST_DATA_DIR}/todo.txt'
+        ), 'work_fqn'
         assert test_config.netrc_file == 'test_netrc', 'netrc'
         assert test_config.archive == 'NEOSS', 'archive'
         assert test_config.collection == 'NEOSSAT', 'collection'
         assert test_config.log_file_directory == tc.TEST_DATA_DIR, 'logging dir'
-        assert test_config.success_fqn == f'{tc.TEST_DATA_DIR}/success_log.txt', \
-            'success fqn'
-        assert test_config.success_log_file_name == 'success_log.txt', \
-            'success file'
-        assert test_config.failure_fqn == f'{tc.TEST_DATA_DIR}/failure_log.txt', \
-            'failure fqn'
-        assert test_config.failure_log_file_name == 'failure_log.txt', \
-            'failure file'
+        assert (
+            test_config.success_fqn == f'{tc.TEST_DATA_DIR}/success_log.txt'
+        ), 'success fqn'
+        assert (
+            test_config.success_log_file_name == 'success_log.txt'
+        ), 'success file'
+        assert (
+            test_config.failure_fqn == f'{tc.TEST_DATA_DIR}/failure_log.txt'
+        ), 'failure fqn'
+        assert (
+            test_config.failure_log_file_name == 'failure_log.txt'
+        ), 'failure file'
         assert test_config.retry_file_name == 'retries.txt', 'retry file'
-        assert test_config.retry_fqn == f'{tc.TEST_DATA_DIR}/retries.txt', \
-            'retry fqn'
-        assert test_config.proxy_file_name == 'test_proxy.pem', 'proxy file name'
-        assert test_config.proxy_fqn == f'{tc.TEST_DATA_DIR}/test_proxy.pem', \
-            'proxy fqn'
+        assert (
+            test_config.retry_fqn == f'{tc.TEST_DATA_DIR}/retries.txt'
+        ), 'retry fqn'
+        assert (
+            test_config.proxy_file_name == 'test_proxy.pem'
+        ), 'proxy file name'
+        assert (
+            test_config.proxy_fqn == f'{tc.TEST_DATA_DIR}/test_proxy.pem'
+        ), 'proxy fqn'
         assert test_config.state_file_name == 'state.yml', 'state file name'
-        assert test_config.state_fqn == f'{tc.TEST_DATA_DIR}/state.yml', \
-            'state fqn'
-        assert test_config.rejected_directory == tc.TEST_DATA_DIR, \
-            'wrong rejected dir'
-        assert test_config.rejected_file_name == 'rejected.yml', \
-            'wrong rejected file'
-        assert test_config.rejected_fqn == f'{tc.TEST_DATA_DIR}/rejected.yml', \
-            'wrong rejected fqn'
-        assert test_config.features.run_in_airflow is True, 'wrong runs in airflow'
-        assert test_config.features.supports_catalog is True, \
-            'wrong supports catalog'
+        assert (
+            test_config.state_fqn == f'{tc.TEST_DATA_DIR}/state.yml'
+        ), 'state fqn'
+        assert (
+            test_config.rejected_directory == tc.TEST_DATA_DIR
+        ), 'wrong rejected dir'
+        assert (
+            test_config.rejected_file_name == 'rejected.yml'
+        ), 'wrong rejected file'
+        assert (
+            test_config.rejected_fqn == f'{tc.TEST_DATA_DIR}/rejected.yml'
+        ), 'wrong rejected fqn'
+        assert (
+            test_config.features.run_in_airflow is True
+        ), 'wrong runs in airflow'
+        assert (
+            test_config.features.supports_catalog is True
+        ), 'wrong supports catalog'
         test_config.features.supports_catalog = False
-        assert test_config.features.supports_catalog is False, \
-            'modified supports catalog'
+        assert (
+            test_config.features.supports_catalog is False
+        ), 'modified supports catalog'
     finally:
         os.getcwd = getcwd_orig
 
@@ -175,8 +193,9 @@ def test_config_class():
 def test_config_class_feature_true():
     getcwd_orig = os.getcwd
     try:
-        os.getcwd = Mock(return_value=os.path.join(tc.TEST_DATA_DIR,
-                                                   'features_test'))
+        os.getcwd = Mock(
+            return_value=os.path.join(tc.TEST_DATA_DIR, 'features_test')
+        )
         test_config = mc.Config()
         test_config.get_executors()
         assert test_config is not None
@@ -226,8 +245,9 @@ def test_decompose_uri():
     scheme, path, f_name = mc.decompose_uri(test_uri)
     assert scheme == 'vos', 'expected vos'
     assert path == 'ngvs/merge', 'expected ngvs/merge'
-    assert f_name == 'NGVS-2-4.m.z.Mg002.weight.fits.fz', \
-        f'wrong f_name {f_name}'
+    assert (
+        f_name == 'NGVS-2-4.m.z.Mg002.weight.fits.fz'
+    ), f'wrong f_name {f_name}'
 
     with pytest.raises(mc.CadcException):
         mc.decompose_uri('')
@@ -276,9 +296,12 @@ def test_read_file_list_from_archive(caps_mock, ad_mock):
     test_config = mc.Config()
     test_config.resource_id = 'ivo://cadc.nrc.ca/sc2tap'
 
-    result = mc.read_file_list_from_archive(test_config, 'test_app_name',
-                                            '2018-11-18T22:39:56.186443+00:00',
-                                            '2018-11-19T22:39:56.186443+00:00')
+    result = mc.read_file_list_from_archive(
+        test_config,
+        'test_app_name',
+        '2018-11-18T22:39:56.186443+00:00',
+        '2018-11-19T22:39:56.186443+00:00',
+    )
     assert result is not None
     assert type(result) is list
     assert len(result) == 0
@@ -295,8 +318,9 @@ def test_write_to_file():
 
 
 def test_get_lineage():
-    result = mc.get_lineage('TEST_COLLECTION', 'TEST_PRODUCT_ID',
-                            'TEST_FILE_NAME.fits')
+    result = mc.get_lineage(
+        'TEST_COLLECTION', 'TEST_PRODUCT_ID', 'TEST_FILE_NAME.fits'
+    )
     assert result == 'TEST_PRODUCT_ID/ad:TEST_COLLECTION/TEST_FILE_NAME.fits'
 
 
@@ -306,27 +330,32 @@ def test_get_artifact_metadata():
 
     # wrong command line parameters
     with pytest.raises(mc.CadcException):
-        mc.get_artifact_metadata(test_fqn, ProductType.WEIGHT,
-                                 ReleaseType.META)
+        mc.get_artifact_metadata(
+            test_fqn, ProductType.WEIGHT, ReleaseType.META
+        )
 
     # create action
-    result = mc.get_artifact_metadata(test_fqn, ProductType.WEIGHT,
-                                      ReleaseType.META, uri=test_uri)
+    result = mc.get_artifact_metadata(
+        test_fqn, ProductType.WEIGHT, ReleaseType.META, uri=test_uri
+    )
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.product_type == ProductType.WEIGHT, 'wrong product type'
     assert result.content_length == 373, 'wrong length'
-    assert result.content_checksum.uri == \
-        'md5:2d770260e5b7a88d6c943184912d6609', 'wrong checksum'
+    assert (
+        result.content_checksum.uri == 'md5:2d770260e5b7a88d6c943184912d6609'
+    ), 'wrong checksum'
 
     # update action
     result.content_checksum = ChecksumURI('md5:abc')
-    result = mc.get_artifact_metadata(test_fqn, ProductType.WEIGHT,
-                                      ReleaseType.META, artifact=result)
+    result = mc.get_artifact_metadata(
+        test_fqn, ProductType.WEIGHT, ReleaseType.META, artifact=result
+    )
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
-    assert result.content_checksum.uri == \
-        'md5:2d770260e5b7a88d6c943184912d6609', 'wrong checksum'
+    assert (
+        result.content_checksum.uri == 'md5:2d770260e5b7a88d6c943184912d6609'
+    ), 'wrong checksum'
 
 
 @patch('cadcdata.core.CadcDataClient')
@@ -336,11 +365,22 @@ def test_data_put(mock_metrics, mock_client):
         with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
             f.write('test content')
 
-    mc.data_put(mock_client, tc.TEST_FILES_DIR, 'TEST.fits', 'TEST', 'default',
-                metrics=mock_metrics)
+    mc.data_put(
+        mock_client,
+        tc.TEST_FILES_DIR,
+        'TEST.fits',
+        'TEST',
+        'default',
+        metrics=mock_metrics,
+    )
     mock_client.put_file.assert_called_with(
-        'TEST', 'TEST.fits', archive_stream='default',
-        md5_check=True, mime_encoding=None, mime_type=None), 'mock not called'
+        'TEST',
+        'TEST.fits',
+        archive_stream='default',
+        md5_check=True,
+        mime_encoding=None,
+        mime_type=None,
+    ), 'mock not called'
     assert mock_metrics.observe.called, 'mock not called'
     args, kwargs = mock_metrics.observe.call_args
     assert args[2] == 12, 'wrong size'
@@ -355,8 +395,13 @@ def test_data_get(mock_client):
     test_config.observe_execution = True
     test_metrics = mc.Metrics(test_config)
     with pytest.raises(mc.CadcException):
-        mc.data_get(mock_client, tc.TEST_DATA_DIR, 'TEST_get.fits', 'TEST',
-                    test_metrics)
+        mc.data_get(
+            mock_client,
+            tc.TEST_DATA_DIR,
+            'TEST_get.fits',
+            'TEST',
+            test_metrics,
+        )
     assert len(test_metrics.failures) == 1, 'wrong failures'
     assert test_metrics.failures['data']['get']['TEST_get.fits'] == 1, 'count'
 
@@ -370,11 +415,17 @@ def test_client_put(mock_metrics, mock_client):
 
     test_destination = 'TBD'
     mock_client.copy.return_value = 12
-    mc.client_put(mock_client, tc.TEST_FILES_DIR, 'TEST.fits',
-                  test_destination, metrics=mock_metrics)
+    mc.client_put(
+        mock_client,
+        tc.TEST_FILES_DIR,
+        'TEST.fits',
+        test_destination,
+        metrics=mock_metrics,
+    )
     test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
     mock_client.copy.assert_called_with(
-        test_fqn, destination=test_destination), 'mock not called'
+        test_fqn, destination=test_destination
+    ), 'mock not called'
     assert mock_metrics.observe.called, 'mock not called'
     args, kwargs = mock_metrics.observe.call_args
     assert args[2] == 12, 'wrong size'
@@ -394,11 +445,17 @@ def test_client_put_failure(mock_metrics, mock_client):
     test_destination = 'cadc:GEMINI/TEST.fits'
     mock_client.copy.return_value = 120
     with pytest.raises(mc.CadcException):
-        mc.client_put(mock_client, tc.TEST_FILES_DIR, 'TEST.fits',
-                      test_destination, metrics=mock_metrics)
+        mc.client_put(
+            mock_client,
+            tc.TEST_FILES_DIR,
+            'TEST.fits',
+            test_destination,
+            metrics=mock_metrics,
+        )
     test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
     mock_client.copy.assert_called_with(
-        test_fqn, destination=test_destination), 'mock not called'
+        test_fqn, destination=test_destination
+    ), 'mock not called'
     assert mock_metrics.observe_failure.called, 'mock not called'
 
 
@@ -408,8 +465,13 @@ def test_client_get_failure(mock_client):
     test_config.observe_execution = True
     test_metrics = mc.Metrics(test_config)
     with pytest.raises(mc.CadcException):
-        mc.client_get(mock_client, tc.TEST_DATA_DIR, 'TEST_get.fits', 'TEST',
-                      test_metrics)
+        mc.client_get(
+            mock_client,
+            tc.TEST_DATA_DIR,
+            'TEST_get.fits',
+            'TEST',
+            test_metrics,
+        )
     assert len(test_metrics.failures) == 1, 'wrong failures'
     assert test_metrics.failures['vos']['copy']['TEST_get.fits'] == 1, 'count'
 
@@ -423,10 +485,16 @@ def test_client_get(mock_metrics, mock_client):
 
     test_source = 'gemini:GEMINI/TEST.fits'
     mock_client.copy.side_effect = tc.mock_copy
-    mc.client_get(mock_client, tc.TEST_FILES_DIR, 'TEST.fits',
-                  test_source, metrics=mock_metrics)
+    mc.client_get(
+        mock_client,
+        tc.TEST_FILES_DIR,
+        'TEST.fits',
+        test_source,
+        metrics=mock_metrics,
+    )
     mock_client.copy.assert_called_with(
-        test_source, destination=test_fqn), 'mock not called'
+        test_source, destination=test_fqn
+    ), 'mock not called'
     assert mock_metrics.observe.called, 'mock not called'
     args, kwargs = mock_metrics.observe.call_args
     assert args[2] == 12, 'wrong size'
@@ -439,13 +507,15 @@ def test_state():
     if os.path.exists(TEST_STATE_FILE):
         os.unlink(TEST_STATE_FILE)
     with open(TEST_STATE_FILE, 'w') as f:
-        f.write('bookmarks:\n'
-                '  gemini_timestamp:\n'
-                '    last_record: 2019-07-23 20:52:03.524443\n'
-                'context:\n'
-                '  neossat_context:\n'
-                '    - NEOSS\n'
-                '    - 2020\n')
+        f.write(
+            'bookmarks:\n'
+            '  gemini_timestamp:\n'
+            '    last_record: 2019-07-23 20:52:03.524443\n'
+            'context:\n'
+            '  neossat_context:\n'
+            '    - NEOSS\n'
+            '    - 2020\n'
+        )
 
     with pytest.raises(mc.CadcException):
         test_subject = mc.State('nonexistent')
@@ -463,8 +533,9 @@ def test_state():
     assert 'NEOSS' in test_context, 'wrong content'
     test_context.append('2019')
 
-    test_subject.save_state('gemini_timestamp',
-                            test_result + timedelta(3))
+    test_subject.save_state(
+        'gemini_timestamp', test_result + timedelta(3)
+    )
     test_subject.save_state('neossat_context', test_context)
 
     with open(TEST_STATE_FILE, 'r') as f:
@@ -496,20 +567,23 @@ def test_increment_time():
     t1_dt = datetime.strptime(t1, mc.ISO_8601_FORMAT)
     result = mc.increment_time_tz(t1_dt, 10)
     assert result is not None, 'expect a result'
-    assert result == datetime(2017, 6, 26, 17, 17, 21, 527000),\
-        'wrong result'
+    assert (
+        result == datetime(2017, 6, 26, 17, 17, 21, 527000)
+    ), 'wrong result'
 
     t2 = '2017-07-26T17:07:21.527'
     t2_dt = datetime.strptime(t2, mc.ISO_8601_FORMAT)
     result = mc.increment_time_tz(t2_dt, 5)
     assert result is not None, 'expect a result'
-    assert result == datetime(2017, 7, 26, 17, 12, 21, 527000),\
-        'wrong result'
+    assert (
+        result == datetime(2017, 7, 26, 17, 12, 21, 527000)
+    ), 'wrong result'
 
     t3 = 1571595618.0
     result = mc.increment_time_tz(t3, 15)
-    assert result == datetime(2019, 10, 20, 18, 35, 18, tzinfo=timezone.utc), \
-        'wrong t3 result'
+    assert (
+        result == datetime(2019, 10, 20, 18, 35, 18, tzinfo=timezone.utc)
+    ), 'wrong t3 result'
 
     with pytest.raises(NotImplementedError):
         mc.increment_time_tz(t2_dt, 23, '%f')
@@ -529,15 +603,28 @@ def test_look_pull_and_put(http_mock, mock_client):
         test_metrics = mc.Metrics(test_config)
         assert len(test_metrics.history) == 0, 'initial history conditions'
         assert len(test_metrics.failures) == 0, 'initial failure conditions'
-        mc.look_pull_and_put(f_name, tc.TEST_DATA_DIR, url, 'TEST', 'default',
-                             'application/fits', mock_client, 'md5:01234',
-                             test_metrics)
+        mc.look_pull_and_put(
+            f_name,
+            tc.TEST_DATA_DIR,
+            url,
+            'TEST',
+            'default',
+            'application/fits',
+            mock_client,
+            'md5:01234',
+            test_metrics,
+        )
         mock_client.put_file.assert_called_with(
-            'TEST', f_name, archive_stream='default', md5_check=True,
+            'TEST',
+            f_name,
+            archive_stream='default',
+            md5_check=True,
             mime_encoding=None,
-            mime_type='application/fits'), 'mock not called'
+            mime_type='application/fits',
+        ), 'mock not called'
         http_mock.assert_called_with(
-            url, os.path.join(tc.TEST_DATA_DIR, f_name)), 'http mock not called'
+            url, os.path.join(tc.TEST_DATA_DIR, f_name)
+        ), 'http mock not called'
         assert len(test_metrics.history) == 1, 'history conditions'
         assert len(test_metrics.failures) == 0, 'failure conditions'
     finally:
@@ -561,13 +648,22 @@ def test_look_pull_and_put_v(http_mock, mock_client):
         mock_client.copy.return_value = 1234
         assert len(test_metrics.history) == 0, 'initial history conditions'
         assert len(test_metrics.failures) == 0, 'initial failure conditions'
-        mc.look_pull_and_put_v(test_storage_name, f_name, tc.TEST_DATA_DIR,
-                               url, mock_client, 'md5:01234', test_metrics)
+        mc.look_pull_and_put_v(
+            test_storage_name,
+            f_name,
+            tc.TEST_DATA_DIR,
+            url,
+            mock_client,
+            'md5:01234',
+            test_metrics,
+        )
         test_fqn = os.path.join(tc.TEST_DATA_DIR, f_name)
         mock_client.copy.assert_called_with(
-            test_fqn, destination=test_storage_name), 'mock not called'
+            test_fqn, destination=test_storage_name
+        ), 'mock not called'
         http_mock.assert_called_with(
-            url, os.path.join(tc.TEST_DATA_DIR, f_name)), 'http mock not called'
+            url, os.path.join(tc.TEST_DATA_DIR, f_name)
+        ), 'http mock not called'
         assert len(test_metrics.history) == 1, 'history conditions'
         assert len(test_metrics.failures) == 0, 'failure conditions'
     finally:
@@ -609,8 +705,9 @@ def test_repo_get(mock_client):
 
     mc.repo_get(mock_client, 'collection', 'test_obs_id', test_metrics)
 
-    mock_client.read.assert_called_with('collection', 'test_obs_id'), \
-        'mock not called'
+    mock_client.read.assert_called_with(
+        'collection', 'test_obs_id'
+    ), 'mock not called'
     assert len(test_metrics.history) == 1, 'history conditions'
     assert len(test_metrics.failures) == 0, 'failure conditions'
     assert 'caom2' in test_metrics.history, 'history'
@@ -679,15 +776,17 @@ def test_http_get(mock_req):
     class Object(object):
 
         def __init__(self):
-            self.headers = {'Date': 'Thu, 25 Jul 2019 16:10:02 GMT',
-                            'Server': 'Apache',
-                            'Content-Length': '4',
-                            'Cache-Control': 'no-cache',
-                            'Expired': '-1',
-                            'Content-Disposition':
-                                'attachment; filename="S20080610S0045.fits"',
-                            'Connection': 'close',
-                            'Content-Type': 'application/fits'}
+            self.headers = {
+                'Date': 'Thu, 25 Jul 2019 16:10:02 GMT',
+                'Server': 'Apache',
+                'Content-Length': '4',
+                'Cache-Control': 'no-cache',
+                'Expired': '-1',
+                'Content-Disposition':
+                'attachment; filename="S20080610S0045.fits"',
+                'Connection': 'close',
+                'Content-Type': 'application/fits',
+            }
 
         def raise_for_status(self):
             pass
@@ -753,7 +852,8 @@ class TestValidator(mc.Validator):
 
     def __init__(self, source_name, preview_suffix):
         super(TestValidator, self).__init__(
-            source_name, preview_suffix=preview_suffix)
+            source_name, preview_suffix=preview_suffix
+        )
 
     def read_from_source(self):
         return {}
@@ -769,11 +869,12 @@ def test_validator(caps_mock, ad_mock, tap_mock):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     tap_response = Mock()
     tap_response.status_code = 200
-    tap_response.iter_content.return_value = \
-        [b'uri\n'
-         b'ad:NEOSS/NEOS_SCI_2019213215700_cord.fits\n'
-         b'ad:NEOSS/NEOS_SCI_2019213215700_cor.fits\n'
-         b'ad:NEOSS/NEOS_SCI_2019213215700.fits\n']
+    tap_response.iter_content.return_value = [
+        b'uri\n'
+        b'ad:NEOSS/NEOS_SCI_2019213215700_cord.fits\n'
+        b'ad:NEOSS/NEOS_SCI_2019213215700_cor.fits\n'
+        b'ad:NEOSS/NEOS_SCI_2019213215700.fits\n'
+    ]
 
     tap_mock.return_value.__enter__.return_value = tap_response
     ad_response = Mock()
@@ -794,10 +895,10 @@ def test_validator(caps_mock, ad_mock, tap_mock):
         test_destination_meta = test_subject._read_list_from_destination_meta()
         assert test_destination_meta is not None, 'expected result'
         assert len(test_destination_meta) == 3, 'wrong number of results'
-        assert test_destination_meta[0] == \
-            'NEOS_SCI_2019213215700_cord.fits', \
-            f'wrong value format, should be just a file name, ' \
-            f'{test_destination_meta[0]}'
+        assert (
+            test_destination_meta[0] == 'NEOS_SCI_2019213215700_cord.fits'
+        ), f'wrong value format, should be just a file name, ' \
+           f'{test_destination_meta[0]}'
 
         test_listing_fqn = f'{tc.TEST_DATA_DIR}/{mc.VALIDATE_OUTPUT}'
         if os.path.exists(test_listing_fqn):
@@ -821,13 +922,14 @@ def test_validator2(caps_mock, ad_mock):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     response = Mock()
     response.status_code = 200
-    response.iter_content.return_value = \
-        [b'ingestDate,fileName\n'
-         b'2019-10-23T16:27:19.000,NEOS_SCI_2015347000000_clean.fits\n'
-         b'2019-10-23T16:27:27.000,NEOS_SCI_2015347000000.fits\n'
-         b'2019-10-23T16:27:33.000,NEOS_SCI_2015347002200_clean.fits\n'
-         b'2019-10-23T16:27:40.000,NEOS_SCI_2015347002200.fits\n'
-         b'2019-10-23T16:27:47.000,NEOS_SCI_2015347002500_clean.fits\n']
+    response.iter_content.return_value = [
+        b'ingestDate,fileName\n'
+        b'2019-10-23T16:27:19.000,NEOS_SCI_2015347000000_clean.fits\n'
+        b'2019-10-23T16:27:27.000,NEOS_SCI_2015347000000.fits\n'
+        b'2019-10-23T16:27:33.000,NEOS_SCI_2015347002200_clean.fits\n'
+        b'2019-10-23T16:27:40.000,NEOS_SCI_2015347002200.fits\n'
+        b'2019-10-23T16:27:47.000,NEOS_SCI_2015347002500_clean.fits\n'
+    ]
     ad_mock.return_value.__enter__.return_value = response
     getcwd_orig = os.getcwd
     os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
@@ -837,12 +939,14 @@ def test_validator2(caps_mock, ad_mock):
         assert test_destination_data is not None, 'expected data result'
         assert len(test_destination_data) == 5, 'wrong number of data results'
         test_result = test_destination_data[1]
-        assert test_result['fileName'] == 'NEOS_SCI_2015347000000.fits', \
-            f'wrong value format, should be just a file name, ' \
-            f'{test_result["fileName"]}'
-        assert test_result['ingestDate'] == '2019-10-23T16:27:27.000', \
-            f'wrong value format, should be a datetime value, ' \
-            f'{test_result["ingestDate"]}'
+        assert (
+            test_result['fileName'] == 'NEOS_SCI_2015347000000.fits'
+        ), f'wrong value format, should be just a file name, ' \
+           f'{test_result["fileName"]}'
+        assert (
+            test_result['ingestDate'] == '2019-10-23T16:27:27.000'
+        ), f'wrong value format, should be a datetime value, ' \
+           f'{test_result["ingestDate"]}'
     finally:
         os.getcwd = getcwd_orig
 
@@ -857,12 +961,14 @@ def test_define_subject():
         test_config.get_executors()
         test_config.proxy_fqn = None
         test_config.netrc_file = 'test_netrc'
-        test_netrc_fqn = os.path.join(test_config.working_directory,
-                                      test_config.netrc_file)
+        test_netrc_fqn = os.path.join(
+            test_config.working_directory, test_config.netrc_file
+        )
         if not os.path.exists(test_netrc_fqn):
             with open(test_netrc_fqn, 'w') as f:
                 f.write(
-                    'machine www.example.com login userid password userpass')
+                    'machine www.example.com login userid password userpass'
+                )
 
         test_subject = mc.define_subject(test_config)
         assert test_subject is not None, 'expect a netrc subject'
@@ -896,13 +1002,17 @@ def test_query_tap(caps_mock, base_mock, test_config):
     caps_mock.return_value = 'https://localhost'
     response = Mock()
     response.status_code = 200
-    response.iter_content.return_value = \
-        [b'count\n'
-         b'3212556\n']
+    response.iter_content.return_value = [
+        b'count\n'
+         b'3212556\n'
+    ]
     base_mock.return_value.__enter__.return_value = response
     test_config.tap_id = 'https://cadc.nrc.ca/sc2tap'
-    result = mc.query_tap('select count(*) from caom2.Observation',
-                          test_config.proxy_fqn, test_config.resource_id)
+    result = mc.query_tap(
+        'select count(*) from caom2.Observation',
+        test_config.proxy_fqn,
+        test_config.resource_id,
+    )
     assert result is not None, 'expect a result'
     assert len(result) == 1, 'wrong amount of test data'
     assert result['count'] == 3212556, 'wrong test data'
@@ -921,9 +1031,12 @@ def test_visit(ad_put_mock):
             with open(fqn, 'w') as f:
                 f.write('test content')
 
-            self.add_preview(self._storage_name.prev_uri,
-                             self._storage_name.prev,
-                             ProductType.THUMBNAIL, ReleaseType.META)
+            self.add_preview(
+                self._storage_name.prev_uri,
+                self._storage_name.prev,
+                ProductType.THUMBNAIL,
+                ReleaseType.META,
+            )
             return 1
 
     class VisitStorageName(tc.TestStorageName):
@@ -948,11 +1061,13 @@ def test_visit(ad_put_mock):
     test_file_name = 'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.' \
                      'image.pbcor.tt0.subim.fits'
 
-    kwargs = {'working_directory': tc.TEST_FILES_DIR,
-              'cadc_client': cadc_client_mock,
-              'stream': 'stream',
-              'observable': test_observable,
-              'science_file': test_file_name}
+    kwargs = {
+        'working_directory': tc.TEST_FILES_DIR,
+        'cadc_client': cadc_client_mock,
+        'stream': 'stream',
+        'observable': test_observable,
+        'science_file': test_file_name,
+    }
 
     obs = mc.read_obs_from_file(f'{tc.TEST_DATA_DIR}/fpf_start_obs.xml')
     assert len(obs.planes[test_product_id].artifacts) == 2, 'initial condition'
@@ -974,16 +1089,19 @@ def test_visit(ad_put_mock):
     end_artifact_count = 3
     expected_call_count = 1
     assert test_result['artifacts'] == check_number, 'artifact not added'
-    assert len(obs.planes[test_product_id].artifacts) == \
-        end_artifact_count, f'new artifacts'
+    assert (
+        len(obs.planes[test_product_id].artifacts) == end_artifact_count
+    ), f'new artifacts'
 
     test_preview_uri = 'ad:TEST/test_obs_id_prev.jpg'
-    assert test_preview_uri in obs.planes[test_product_id].artifacts.keys(), \
-        'no preview'
+    assert (
+        test_preview_uri in obs.planes[test_product_id].artifacts.keys()
+    ), 'no preview'
 
     assert ad_put_mock.called, 'ad put mock not called'
-    assert ad_put_mock.call_count == expected_call_count, \
-        'ad put called wrong number of times'
+    assert (
+        ad_put_mock.call_count == expected_call_count
+    ), 'ad put called wrong number of times'
     # assert False
 
 
@@ -1022,11 +1140,13 @@ def test_reverse_lookup():
 
 
 def test_make_time():
-    test_dict = {'2012-12-12T12:13:15': datetime(2012, 12, 12, 12, 13, 15),
-                 # %b %d %H:%M
-                 'Mar 12 12:12': datetime(2021, 3, 12, 12, 12),
-                 # %Y-%m-%dHST%H:%M:%S
-                 '2020-12-12HST12:12:12': datetime(2020, 12, 12, 22, 12, 12)}
+    test_dict = {
+        '2012-12-12T12:13:15': datetime(2012, 12, 12, 12, 13, 15),
+        # %b %d %H:%M
+        'Mar 12 12:12': datetime(2021, 3, 12, 12, 12),
+        # %Y-%m-%dHST%H:%M:%S
+        '2020-12-12HST12:12:12': datetime(2020, 12, 12, 22, 12, 12),
+    }
 
     for key, value in test_dict.items():
         test_result = mc.make_time(key)
@@ -1057,7 +1177,8 @@ def test_value_repair_cache():
     assert test_subject is not None, 'expect a result'
 
     test_observation = mc.read_obs_from_file(
-        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml'))
+        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
+    )
     test_product_id = 'GN2001BQ013-04'
     test_artifact_uri = 'gemini:GEM/GN2001BQ013-04.fits'
     test_part = '0'
@@ -1068,10 +1189,15 @@ def test_value_repair_cache():
     test_chunk = test_part.chunks[test_chunk_index]
     assert test_observation.type == 'Dark', 'repair initial condition'
     assert test_observation.proposal.pi_name == 'jjk', 'pi name ic'
-    assert test_plane.meta_release == datetime(1990, 1, 1, 0, 0), \
-        'plane meta release ic'
-    assert math.isclose(test_chunk.position.axis.function.ref_coord.coord1.pix,
-                        512.579594886106), 'position pix ic'
+    assert (
+        test_plane.meta_release == datetime(1990, 1, 1, 0, 0)
+    ), 'plane meta release ic'
+    assert (
+        math.isclose(
+            test_chunk.position.axis.function.ref_coord.coord1.pix,
+            512.579594886106
+        )
+    ), 'position pix ic'
     assert test_artifact.uri == test_artifact_uri, 'artifact uri ic'
     assert test_part.product_type is ProductType.CALIBRATION, 'part ic'
     assert test_chunk.position.coordsys == 'ICRS', 'un-changed ic'
@@ -1082,24 +1208,33 @@ def test_value_repair_cache():
     test_subject.repair(test_observation)
 
     assert test_observation.type == 'DARK', 'repair failed'
-    assert test_observation.proposal.pi_name == 'JJ Kavelaars', \
-        'proposal pi name repair failed'
-    assert test_plane.meta_release == datetime(2000, 1, 1, 0, 0), \
-        'plane meta release repair failed'
-    assert math.isclose(test_chunk.position.axis.function.ref_coord.coord1.pix,
-                        512.57959987654321), 'position pix repair failed'
-    assert test_artifact.uri == 'cadc:GEMINI/GN2001BQ013-04.fits', \
-        f'uri repair failed {test_artifact.uri}'
+    assert (
+        test_observation.proposal.pi_name == 'JJ Kavelaars'
+    ), 'proposal pi name repair failed'
+    assert (
+        test_plane.meta_release == datetime(2000, 1, 1, 0, 0)
+    ), 'plane meta release repair failed'
+    assert (
+        math.isclose(
+            test_chunk.position.axis.function.ref_coord.coord1.pix,
+            512.57959987654321
+        )
+    ), 'position pix repair failed'
+    assert (
+        test_artifact.uri == 'cadc:GEMINI/GN2001BQ013-04.fits'
+    ), f'uri repair failed {test_artifact.uri}'
     assert test_part.product_type is None, 'product type repair failed'
 
     # check that values that do not match are un-changed
     assert test_chunk.position.coordsys == 'ICRS', 'should be un-changed'
     # check that None values are not set - it's a _repair_ function, after
     # all, and the code cannot repair something that does not exist
-    assert test_observation.intent == ObservationIntentType.SCIENCE, \
-        'None value should be set, since "none" was the original type'
-    assert test_observation.environment.seeing is None, \
-        'None remains None because the original is a specific value'
+    assert (
+        test_observation.intent == ObservationIntentType.SCIENCE
+    ), 'None value should be set, since "none" was the original type'
+    assert (
+        test_observation.environment.seeing is None
+    ), 'None remains None because the original is a specific value'
     assert test_chunk.position.axis.axis1.ctype == 'RA---TAN', 'unchanged post'
 
     with pytest.raises(mc.CadcException):
@@ -1109,8 +1244,9 @@ def test_value_repair_cache():
 
     with pytest.raises(mc.CadcException):
         # try to set an attribute that cannot be assigned
-        test_subject._value_repair = \
-            {'observation.instrument.name': {'gmos': 'GMOS-N'}}
+        test_subject._value_repair = {
+            'observation.instrument.name': {'gmos': 'GMOS-N'},
+        }
         test_subject.repair(test_observation)
 
     # pre-condition of 'Could not figure out attribute name' the attribute is
