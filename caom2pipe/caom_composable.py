@@ -90,7 +90,9 @@ __all__ = ['append_plane_provenance', 'append_plane_provenance_single',
            'exec_footprintfinder', 'find_plane_and_artifact',
            'find_keywords_in_header', 'find_keywords_in_headers',
            'get_all_artifact_keys',
-           'get_obs_id_from_cadc', 'update_plane_provenance',
+           'get_obs_id_from_cadc',
+           'make_plane_uri',
+           'update_plane_provenance',
            'update_observation_members', 'rename_parts',
            'reset_energy', 'reset_position',
            'reset_observable', 'is_composite', 'change_to_composite',
@@ -722,6 +724,23 @@ def is_composite(headers, keyword_prefix='IMCMB'):
     return result
 
 
+def make_plane_uri(obs_id, product_id, collection):
+    """
+    Common code to construction a PlaneURI.
+
+    :param obs_id: str Observation.observationID for a CADC collection.
+    :param product_id: str Plane.productID for a CADC collection.
+    :param collection: str CADC collection.
+    :return: tuple with ObservationURI, PlaneURI instance
+    """
+    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(
+        collection, obs_id
+    )
+    obs_member_uri = ObservationURI(obs_member_uri_str)
+    plane_uri = PlaneURI.get_plane_uri(obs_member_uri, product_id)
+    return obs_member_uri, plane_uri
+
+
 def rename_parts(observation, headers):
     """
     By default, the values for part.name are extension numbers. Replace those
@@ -766,12 +785,9 @@ def _update_plane_provenance(headers, lookup, collection, repair, obs_id,
                 value = header.get(keyword)
                 prov_obs_id, prov_prod_id = repair(value, obs_id)
                 if prov_obs_id is not None and prov_prod_id is not None:
-                    obs_member_uri_str = \
-                        mc.CaomName.make_obs_uri_from_obs_id(
-                            collection, prov_obs_id)
-                    obs_member_uri = ObservationURI(obs_member_uri_str)
-                    plane_uri = PlaneURI.get_plane_uri(
-                        obs_member_uri, prov_prod_id)
+                    obs_member_uri_ignore, plane_uri = make_plane_uri(
+                        prov_obs_id, prov_prod_id, collection
+                    )
                     plane_inputs.add(plane_uri)
                     logging.debug(f'Adding PlaneURI {plane_uri}')
 
@@ -802,12 +818,9 @@ def update_plane_provenance_from_values(
     for value in values:
         prov_obs_id, prov_prod_id = repair(value, obs_id)
         if prov_obs_id is not None and prov_prod_id is not None:
-            obs_member_uri_str = \
-                mc.CaomName.make_obs_uri_from_obs_id(
-                    collection, prov_obs_id)
-            obs_member_uri = ObservationURI(obs_member_uri_str)
-            plane_uri = PlaneURI.get_plane_uri(
-                obs_member_uri, prov_prod_id)
+            obs_member_uri_ignore, plane_uri = make_plane_uri(
+                prov_obs_id, prov_prod_id, collection
+            )
             plane_inputs.add(plane_uri)
             logging.debug(f'Adding PlaneURI {plane_uri}')
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
