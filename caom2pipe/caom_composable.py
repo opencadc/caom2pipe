@@ -104,6 +104,7 @@ __all__ = [
     'find_plane_and_artifact',
     'get_obs_id_from_cadc',
     'is_composite',
+    'make_plane_uri',
     'rename_parts',
     'reset_energy',
     'reset_observable',
@@ -112,7 +113,9 @@ __all__ = [
     'update_observation_members',
     'update_observation_members_filtered',
     'update_plane_provenance',
+    'update_plane_provenance_from_values',
     'update_plane_provenance_list',
+    'update_plane_provenance_single',
 ]
 
 
@@ -279,7 +282,18 @@ def build_chunk_time(chunk, header, name):
     logging.debug(f'End build_chunk_time.')
 
 
-def _find_keywords_in_header(header, lookups):
+def find_keywords_in_headers(headers, lookups):
+    """
+    Common code to find all the values for a list of keywords with a common
+    prefix in a FITS header.
+    """
+    values = []
+    for header in headers:
+        values += find_keywords_in_header(header, lookups)
+    return values
+
+
+def find_keywords_in_header(header, lookups):
     """
     Common code to find all the values for a list of keywords with a common
     prefix in a FITS header.
@@ -719,6 +733,18 @@ def find_plane_and_artifact(observation, product_id, uri):
     return plane, artifact
 
 
+def get_all_artifact_keys(observation):
+    """
+    :param observation: Observation
+    :return: a list of all Artifact keys in the Observation
+    """
+    all_artifact_keys = []
+    for plane in observation.planes.values():
+        for key in plane.artifacts.keys():
+            all_artifact_keys.append(key)
+    return all_artifact_keys
+
+
 def get_obs_id_from_cadc(artifact_uri, tap_client):
     """
     Query CAOM using TAP for the observation ID, given a file ID.
@@ -757,6 +783,23 @@ def is_composite(headers, keyword_prefix='IMCMB'):
             result = True
             break
     return result
+
+
+def make_plane_uri(obs_id, product_id, collection):
+    """
+    Common code to construction a PlaneURI.
+
+    :param obs_id: str Observation.observationID for a CADC collection.
+    :param product_id: str Plane.productID for a CADC collection.
+    :param collection: str CADC collection.
+    :return: tuple with ObservationURI, PlaneURI instance
+    """
+    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(
+        collection, obs_id
+    )
+    obs_member_uri = ObservationURI(obs_member_uri_str)
+    plane_uri = PlaneURI.get_plane_uri(obs_member_uri, product_id)
+    return obs_member_uri, plane_uri
 
 
 def rename_parts(observation, headers):
@@ -804,13 +847,8 @@ def _update_plane_provenance(
                 value = header.get(keyword)
                 prov_obs_id, prov_prod_id = repair(value, obs_id)
                 if prov_obs_id is not None and prov_prod_id is not None:
-                    obs_member_uri_str = \
-                        mc.CaomName.make_obs_uri_from_obs_id(
-                            collection, prov_obs_id
-                        )
-                    obs_member_uri = ObservationURI(obs_member_uri_str)
-                    plane_uri = PlaneURI.get_plane_uri(
-                        obs_member_uri, prov_prod_id
+                    obs_member_uri_ignore, plane_uri = make_plane_uri(
+                        prov_obs_id, prov_prod_id, collection
                     )
                     plane_inputs.add(plane_uri)
                     logging.debug(f'Adding PlaneURI {plane_uri}')
@@ -837,9 +875,23 @@ def update_plane_provenance(
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
-def update_plane_provenance_list(
-        plane, headers, lookups, collection, repair, obs_id
+def update_plane_provenance_from_values(
+    plane, repair, values, collection, obs_id
 ):
+    plane_inputs = TypedSet(PlaneURI,)
+    for value in values:
+        prov_obs_id, prov_prod_id = repair(value, obs_id)
+        if prov_obs_id is not None and prov_prod_id is not None:
+            obs_member_uri_ignore, plane_uri = make_plane_uri(
+                prov_obs_id, prov_prod_id, collection
+            )
+            plane_inputs.add(plane_uri)
+            logging.debug(f'Adding PlaneURI {plane_uri}')
+    mc.update_typed_set(plane.provenance.inputs, plane_inputs)
+
+
+def update_plane_provenance_list(plane, headers, lookups, collection,
+                                 repair, obs_id):
     """Add inputs to Planes, based on a particular keyword prefix.
 
     :param plane Plane instance to add inputs to

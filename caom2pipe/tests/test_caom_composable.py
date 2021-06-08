@@ -177,6 +177,9 @@ def test_reset():
     assert test_chunk.observable is None, 'observable not expected'
     assert test_chunk.observable_axis is None, 'observable axis not expected'
 
+    all_archive_keys = cc.get_all_artifact_keys(test_obs)
+    assert len(all_archive_keys) == 2, 'wrong artifact count'
+
 
 @patch('caom2pipe.client_composable.query_tap_client')
 def test_build_temporal_wcs(query_mock):
