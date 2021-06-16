@@ -70,6 +70,7 @@
 from caom2pipe import manage_composable as mc
 
 __all__ = [
+    'EntryBuilder',
     'FileNameBuilder',
     'ObsIDBuilder',
     'StorageNameInstanceBuilder',
@@ -117,6 +118,20 @@ class StorageNameInstanceBuilder(StorageNameBuilder):
             fname_on_disk=entry,
             entry=entry,
         )
+
+
+class EntryBuilder(StorageNameBuilder):
+    """
+    A class that assumes constructing the StorageName instance requires a
+    single positional parameter.
+    """
+
+    def __init__(self, storage_name):
+        super(EntryBuilder, self).__init__()
+        self._storage_name = storage_name
+
+    def build(self, entry):
+        return self._storage_name(entry)
 
 
 class FileNameBuilder(StorageNameBuilder):
