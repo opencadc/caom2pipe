@@ -210,7 +210,11 @@ class CaomExecute(object):
                f'   working_dir: {self.working_dir}\n'
 
     def _cleanup(self):
-        """Remove a directory and all its contents."""
+        """Remove a directory and all its contents. Only do this if there
+        is not a 'SCRAPE' task type, since the point of scraping is to
+        be able to look at the pipeline execution artefacts once the
+        processing is done.
+        """
         self.logger.debug(
             f'Remove working directory {self.working_dir} and contents.'
         )
