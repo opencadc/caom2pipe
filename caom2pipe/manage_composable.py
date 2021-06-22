@@ -662,6 +662,7 @@ class Config(object):
         self.cache_fqn = None
         self._data_sources = []
         self._data_source_extensions = ['.fits']
+        self._recurse_data_sources = True
         self._features = Features()
 
     @property
@@ -796,6 +797,15 @@ class Config(object):
         }
         if value in lookup:
             self._logging_level = lookup[value]
+
+    @property
+    def recurse_data_sources(self):
+        """If true, will do a recursive search through `data_sources`."""
+        return self._recurse_data_sources
+
+    @recurse_data_sources.setter
+    def recurse_data_sources(self, value):
+        self._recurse_data_sources = value
 
     @property
     def stream(self):
@@ -1085,6 +1095,7 @@ class Config(object):
                f'  progress_fqn:: {self.progress_fqn}\n' \
                f'  proxy_file_name:: {self.proxy_file_name}\n' \
                f'  proxy_fqn:: {self.proxy_fqn}\n' \
+               f'  recurse_data_sources:: {self.recurse_data_sources}\n' \
                f'  rejected_directory:: {self.rejected_directory}\n' \
                f'  rejected_file_name:: {self.rejected_file_name}\n' \
                f'  rejected_fqn:: {self.rejected_fqn}\n' \
@@ -1209,6 +1220,9 @@ class Config(object):
             self.observe_execution = config.get('observe_execution', False)
             self.observable_directory = config.get(
                 'observable_directory', None
+            )
+            self.recurse_data_sources = config.get(
+                'recurse_data_sources', False
             )
             self.slack_channel = config.get('slack_channel', None)
             self.slack_token = config.get('slack_token', None)

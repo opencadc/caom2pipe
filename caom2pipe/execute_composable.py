@@ -196,6 +196,9 @@ class CaomExecute(object):
         else:
             # do nothing different, if flag is missing from config
             self.store_newer_files_only = False
+        self._delete_cleanup_directory = (
+            mc.TaskType.SCRAPE not in config.task_types
+        )
 
     def __str__(self):
         return f'\n' \
@@ -211,7 +214,10 @@ class CaomExecute(object):
         self.logger.debug(
             f'Remove working directory {self.working_dir} and contents.'
         )
-        if os.path.exists(self.working_dir):
+        if (
+            os.path.exists(self.working_dir) and
+            self._delete_cleanup_directory
+        ):
             for ii in os.listdir(self.working_dir):
                 os.remove(os.path.join(self.working_dir, ii))
             os.rmdir(self.working_dir)
@@ -1176,6 +1182,9 @@ class DataScrape(DataVisit):
     def execute(self, context):
         self.logger.debug('Begin execute')
 
+        self.logger.debug('create the work space, if it does not exist')
+        self._create_dir()
+
         self.logger.debug('get observation for the existing model from disk')
         observation = self._read_model()
 
@@ -1184,6 +1193,9 @@ class DataScrape(DataVisit):
 
         self.logger.debug('output the updated xml')
         self._write_model(observation)
+
+        self.logger.debug('clean up the workspace')
+        self._cleanup()
 
         self.logger.debug('End execute')
 

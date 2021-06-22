@@ -679,7 +679,7 @@ def run_by_todo(
     if source is None:
         if config.use_local_files:
             source = data_source_composable.ListDirSeparateDataSource(
-                config
+                config, recursive=config.recurse_data_sources
             )
         else:
             source = data_source_composable.TodoFileDataSource(config)
@@ -843,7 +843,9 @@ def run_by_state(
 
     if source is None:
         if config.use_local_files:
-            source = data_source_composable.ListDirTimeBoxDataSource(config)
+            source = data_source_composable.ListDirTimeBoxDataSource(
+                config, recursive=config.recurse_data_sources
+            )
         else:
             source = data_source_composable.QueryTimeBoxDataSourceTS(config)
 
