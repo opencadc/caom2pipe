@@ -100,6 +100,7 @@ __all__ = [
     'copy_instrument',
     'copy_part',
     'copy_provenance',
+    'do_something_to_chunks',
     'exec_footprintfinder',
     'find_plane_and_artifact',
     'get_obs_id_from_cadc',
@@ -280,6 +281,15 @@ def build_chunk_time(chunk, header, name):
         chunk.time.exposure = exp_time
         chunk.time.resolution = mc.convert_to_days(exp_time)
     logging.debug(f'End build_chunk_time.')
+
+
+def do_something_to_chunks(observation, do_something, headers, file_uri):
+    for plane in observation.planes.values():
+        for artifact in plane.artifacts.values():
+            if artifact.uri == file_uri:
+                for part in artifact.parts.values():
+                    for chunk in part.chunks:
+                        do_something(chunk, headers)
 
 
 def find_keywords_in_headers(headers, lookups):
