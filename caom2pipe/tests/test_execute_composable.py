@@ -117,9 +117,7 @@ class LocalTestVisit:
         ), 'wrong working directory'
         y = kwargs['science_file']
         assert y is not None, 'science file'
-        assert (
-            y == 'cadc:TEST/test_file.fits.gz'
-        ), 'wrong science file'
+        assert y == 'cadc:TEST/test_file.fits.gz', 'wrong science file'
         z = kwargs['log_file_directory']
         assert z is not None, 'log file directory'
         assert z == tc.TEST_DATA_DIR, 'wrong log dir'
