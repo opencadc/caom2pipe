@@ -114,6 +114,7 @@ __all__ = [
     'exec_cmd',
     'exec_cmd_info',
     'exec_cmd_redirect',
+    'extract_file_name_from_uri',
     'Features',
     'FileMeta',
     'ftp_get',
@@ -1973,6 +1974,10 @@ def to_int(value):
 def to_str(value):
     """Cast to str, without throwing an exception."""
     return str(value) if value is not None else None
+
+
+def extract_file_name_from_uri(uri_str):
+    return parse.urlparse(uri_str).path.split('/')[-1]
 
 
 def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
