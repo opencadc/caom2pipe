@@ -108,6 +108,7 @@ class RunnerReport(object):
     """
     This class contains metrics for reporting on pipeline runs.
     """
+
     def __init__(self, location):
         self._location = os.path.basename(location)
         self._start_time = get_utc_now_tz().timestamp()
@@ -173,6 +174,7 @@ class TodoRunner(object):
     translating a list of work into a collection-specific name
     (StorageNameBuilder extensions).
     """
+
     def __init__(self, config, organizer, builder, data_source):
         self._builder = builder
         self._data_source = data_source
@@ -214,11 +216,12 @@ class TodoRunner(object):
                 result = self._organizer.do_one(storage_name)
             else:
                 self._logger.error(
-                    f'{storage_name.obs_id} failed naming validation check.')
+                    f'{storage_name.obs_id} failed naming validation check.'
+                )
                 self._organizer.capture_failure(
                     storage_name,
                     BaseException('Invalid name format'),
-                    'Invalid name format.'
+                    'Invalid name format.',
                 )
                 result = -1
         except Exception as e:
@@ -289,7 +292,8 @@ class TodoRunner(object):
                 # make another file list
                 self._build_todo_list()
                 self._reporter.add_retries(
-                    self._organizer.complete_record_count)
+                    self._organizer.complete_record_count
+                )
                 self._logger.warning(
                     f'Retry {self._organizer.complete_record_count} entries'
                 )
@@ -305,15 +309,14 @@ class TodoRunner(object):
 
 
 class StateRunner(TodoRunner):
-
     def __init__(
-            self,
-            config,
-            organizer,
-            builder,
-            data_source,
-            bookmark_name,
-            max_ts=None,
+        self,
+        config,
+        organizer,
+        builder,
+        data_source,
+        bookmark_name,
+        max_ts=None,
     ):
         super(StateRunner, self).__init__(
             config, organizer, builder, data_source
@@ -334,6 +337,7 @@ class StateRunner(TodoRunner):
         save_str = save_time
         if not isinstance(save_time, str):
             from astropy.time import Time as astro_Time
+
             if isinstance(save_time, datetime):
                 save_str = save_time
             elif isinstance(save_time, astro_Time):
@@ -424,7 +428,7 @@ class StateRunner(TodoRunner):
                 prev_exec_time = exec_time
                 exec_time = min(
                     mc.increment_time(prev_exec_time, self._config.interval),
-                    self._end_time
+                    self._end_time,
                 )
 
         self._reporter.add_entries(cumulative)
@@ -450,13 +454,13 @@ class StateRunnerTS(StateRunner):
     """
 
     def __init__(
-            self,
-            config,
-            organizer,
-            builder,
-            data_source,
-            bookmark_name,
-            max_ts=None,
+        self,
+        config,
+        organizer,
+        builder,
+        data_source,
+        bookmark_name,
+        max_ts=None,
     ):
         super(StateRunnerTS, self).__init__(
             config, organizer, builder, data_source, bookmark_name
@@ -466,8 +470,9 @@ class StateRunnerTS(StateRunner):
             max_ts_in_s = mc.convert_to_ts(max_ts)
         # end time is a datetime.timestamp
         self._end_time = (
-            get_utc_now_tz().timestamp() if max_ts_in_s is None
-                          else max_ts_in_s
+            get_utc_now_tz().timestamp()
+            if max_ts_in_s is None
+            else max_ts_in_s
         )
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -703,16 +708,16 @@ def run_by_todo(
 
 
 def run_by_state_ad(
-        config=None,
-        name_builder=None,
-        command_name=None,
-        bookmark_name=None,
-        meta_visitors=[],
-        data_visitors=[],
-        end_time=None,
-        chooser=None,
-        source=None,
-        transferrer=None,
+    config=None,
+    name_builder=None,
+    command_name=None,
+    bookmark_name=None,
+    meta_visitors=[],
+    data_visitors=[],
+    end_time=None,
+    chooser=None,
+    source=None,
+    transferrer=None,
 ):
     """A default implementation for using the StateRunner.
 
@@ -863,14 +868,14 @@ def run_by_state(
 
 
 def run_single(
-        config,
-        storage_name,
-        command_name,
-        meta_visitors,
-        data_visitors,
-        chooser=None,
-        store_transfer=None,
-        modify_transfer=None,
+    config,
+    storage_name,
+    command_name,
+    meta_visitors,
+    data_visitors,
+    chooser=None,
+    store_transfer=None,
+    modify_transfer=None,
 ):
     """Process a single entry by StorageName detail.
 

@@ -92,7 +92,7 @@ def test_read_write_obs_with_file():
         SimpleObservation(
             collection='test_collection',
             observation_id='test_obs_id',
-            algorithm=Algorithm(str('exposure'))
+            algorithm=Algorithm(str('exposure')),
         ),
         TEST_OBS_FILE,
     )
@@ -150,7 +150,9 @@ def test_config_class():
         assert test_config.netrc_file == 'test_netrc', 'netrc'
         assert test_config.archive == 'NEOSS', 'archive'
         assert test_config.collection == 'NEOSSAT', 'collection'
-        assert test_config.log_file_directory == tc.TEST_DATA_DIR, 'logging dir'
+        assert (
+            test_config.log_file_directory == tc.TEST_DATA_DIR
+        ), 'logging dir'
         assert (
             test_config.success_fqn == f'{tc.TEST_DATA_DIR}/success_log.txt'
         ), 'success fqn'
@@ -429,9 +431,7 @@ def test_state():
     assert 'NEOSS' in test_context, 'wrong content'
     test_context.append('2019')
 
-    test_subject.save_state(
-        'gemini_timestamp', test_result + timedelta(3)
-    )
+    test_subject.save_state('gemini_timestamp', test_result + timedelta(3))
     test_subject.save_state('neossat_context', test_context)
 
     with open(TEST_STATE_FILE, 'r') as f:
@@ -463,22 +463,18 @@ def test_increment_time():
     t1_dt = datetime.strptime(t1, mc.ISO_8601_FORMAT)
     result = mc.increment_time_tz(t1_dt, 10)
     assert result is not None, 'expect a result'
-    assert (
-        result == datetime(2017, 6, 26, 17, 17, 21, 527000)
-    ), 'wrong result'
+    assert result == datetime(2017, 6, 26, 17, 17, 21, 527000), 'wrong result'
 
     t2 = '2017-07-26T17:07:21.527'
     t2_dt = datetime.strptime(t2, mc.ISO_8601_FORMAT)
     result = mc.increment_time_tz(t2_dt, 5)
     assert result is not None, 'expect a result'
-    assert (
-        result == datetime(2017, 7, 26, 17, 12, 21, 527000)
-    ), 'wrong result'
+    assert result == datetime(2017, 7, 26, 17, 12, 21, 527000), 'wrong result'
 
     t3 = 1571595618.0
     result = mc.increment_time_tz(t3, 15)
-    assert (
-        result == datetime(2019, 10, 20, 18, 35, 18, tzinfo=timezone.utc)
+    assert result == datetime(
+        2019, 10, 20, 18, 35, 18, tzinfo=timezone.utc
     ), 'wrong t3 result'
 
     with pytest.raises(NotImplementedError):
@@ -489,7 +485,6 @@ def test_increment_time():
 def test_http_get(mock_req):
     # Response mock
     class Object(object):
-
         def __init__(self):
             self.headers = {
                 'Date': 'Thu, 25 Jul 2019 16:10:02 GMT',
@@ -497,8 +492,7 @@ def test_http_get(mock_req):
                 'Content-Length': '4',
                 'Cache-Control': 'no-cache',
                 'Expired': '-1',
-                'Content-Disposition':
-                'attachment; filename="S20080610S0045.fits"',
+                'Content-Disposition': 'attachment; filename="S20080610S0045.fits"',
                 'Connection': 'close',
                 'Content-Type': 'application/fits',
             }
@@ -536,8 +530,9 @@ def test_http_get(mock_req):
     mock_req.reset_mock()
 
     # checks succeed
-    test_object.headers['Content-Checksum'] = \
-        '6547436690a26a399603a7096e876a2d'
+    test_object.headers[
+        'Content-Checksum'
+    ] = '6547436690a26a399603a7096e876a2d'
     mc.http_get('https://localhost/index.html', '/tmp/abc')
     assert mock_req.called, 'mock not called'
 
@@ -564,7 +559,6 @@ def test_create_dir():
 
 
 class TestValidator(mc.Validator):
-
     def __init__(self, source_name, preview_suffix):
         super(TestValidator, self).__init__(
             source_name, preview_suffix=preview_suffix
@@ -612,8 +606,10 @@ def test_validator(caps_mock, ad_mock, tap_mock):
         assert len(test_destination_meta) == 3, 'wrong number of results'
         assert (
             test_destination_meta[0] == 'NEOS_SCI_2019213215700_cord.fits'
-        ), f'wrong value format, should be just a file name, ' \
-           f'{test_destination_meta[0]}'
+        ), (
+            f'wrong value format, should be just a file name, '
+            f'{test_destination_meta[0]}'
+        )
 
         test_listing_fqn = f'{tc.TEST_DATA_DIR}/{mc.VALIDATE_OUTPUT}'
         if os.path.exists(test_listing_fqn):
@@ -654,14 +650,14 @@ def test_validator2(caps_mock, ad_mock):
         assert test_destination_data is not None, 'expected data result'
         assert len(test_destination_data) == 5, 'wrong number of data results'
         test_result = test_destination_data[1]
-        assert (
-            test_result['fileName'] == 'NEOS_SCI_2015347000000.fits'
-        ), f'wrong value format, should be just a file name, ' \
-           f'{test_result["fileName"]}'
-        assert (
-            test_result['ingestDate'] == '2019-10-23T16:27:27.000'
-        ), f'wrong value format, should be a datetime value, ' \
-           f'{test_result["ingestDate"]}'
+        assert test_result['fileName'] == 'NEOS_SCI_2015347000000.fits', (
+            f'wrong value format, should be just a file name, '
+            f'{test_result["fileName"]}'
+        )
+        assert test_result['ingestDate'] == '2019-10-23T16:27:27.000', (
+            f'wrong value format, should be a datetime value, '
+            f'{test_result["ingestDate"]}'
+        )
     finally:
         os.getcwd = getcwd_orig
 
@@ -672,10 +668,7 @@ def test_query_tap(caps_mock, base_mock, test_config):
     caps_mock.return_value = 'https://localhost'
     response = Mock()
     response.status_code = 200
-    response.iter_content.return_value = [
-        b'count\n'
-         b'3212556\n'
-    ]
+    response.iter_content.return_value = [b'count\n' b'3212556\n']
     base_mock.return_value.__enter__.return_value = response
     test_config.tap_id = 'https://cadc.nrc.ca/sc2tap'
     result = mc.query_tap(
@@ -690,9 +683,7 @@ def test_query_tap(caps_mock, base_mock, test_config):
 
 @patch('caom2pipe.manage_composable.data_put')
 def test_visit(ad_put_mock):
-
     class TestVisitor(mc.PreviewVisitor):
-
         def __init__(self, **kwargs):
             super(TestVisitor, self).__init__(archive='VLASS', **kwargs)
 
@@ -710,7 +701,6 @@ def test_visit(ad_put_mock):
             return 1
 
     class VisitStorageName(tc.TestStorageName):
-
         def __init__(self):
             super(VisitStorageName, self).__init__()
 
@@ -728,8 +718,10 @@ def test_visit(ad_put_mock):
     cadc_client_mock = Mock()
 
     test_product_id = 'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
-    test_file_name = 'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.' \
-                     'image.pbcor.tt0.subim.fits'
+    test_file_name = (
+        'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
+        'image.pbcor.tt0.subim.fits'
+    )
 
     kwargs = {
         'working_directory': tc.TEST_FILES_DIR,
@@ -748,8 +740,10 @@ def test_visit(ad_put_mock):
         test_result = test_subject.visit(obs, storage_name)
     except Exception as e:
         import logging
+
         logging.error(e)
         import traceback
+
         logging.error(traceback.format_exc())
         assert False, f'{str(e)}'
 
@@ -859,14 +853,12 @@ def test_value_repair_cache():
     test_chunk = test_part.chunks[test_chunk_index]
     assert test_observation.type == 'Dark', 'repair initial condition'
     assert test_observation.proposal.pi_name == 'jjk', 'pi name ic'
-    assert (
-        test_plane.meta_release == datetime(1990, 1, 1, 0, 0)
+    assert test_plane.meta_release == datetime(
+        1990, 1, 1, 0, 0
     ), 'plane meta release ic'
-    assert (
-        math.isclose(
-            test_chunk.position.axis.function.ref_coord.coord1.pix,
-            512.579594886106
-        )
+    assert math.isclose(
+        test_chunk.position.axis.function.ref_coord.coord1.pix,
+        512.579594886106,
     ), 'position pix ic'
     assert test_artifact.uri == test_artifact_uri, 'artifact uri ic'
     assert test_part.product_type is ProductType.CALIBRATION, 'part ic'
@@ -881,14 +873,12 @@ def test_value_repair_cache():
     assert (
         test_observation.proposal.pi_name == 'JJ Kavelaars'
     ), 'proposal pi name repair failed'
-    assert (
-        test_plane.meta_release == datetime(2000, 1, 1, 0, 0)
+    assert test_plane.meta_release == datetime(
+        2000, 1, 1, 0, 0
     ), 'plane meta release repair failed'
-    assert (
-        math.isclose(
-            test_chunk.position.axis.function.ref_coord.coord1.pix,
-            512.57959987654321
-        )
+    assert math.isclose(
+        test_chunk.position.axis.function.ref_coord.coord1.pix,
+        512.57959987654321,
     ), 'position pix repair failed'
     assert (
         test_artifact.uri == 'cadc:GEMINI/GN2001BQ013-04.fits'
@@ -944,6 +934,7 @@ def test_value_repair_cache():
     test_subject.repair(test_observation)
 
     test_compare_observation = mc.read_obs_from_file(
-        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml'))
+        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
+    )
     test_diff = get_differences(test_compare_observation, test_observation)
     assert test_diff is None, 'expect no comparison error'

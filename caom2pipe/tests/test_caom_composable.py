@@ -82,6 +82,7 @@ import test_conf as tc
 
 try:
     import footprintfinder
+
     no_footprintfinder = False
 except ImportError:
     no_footprintfinder = True
@@ -92,23 +93,29 @@ except ImportError:
 )
 def test_exec_footprintfinder():
     test_obs_file = 'fpf_start_obs.xml'
-    test_obs = mc.read_obs_from_file(os.path.join(
-        tc.TEST_DATA_DIR, test_obs_file))
-    test_chunk = \
-        test_obs.planes[
-            'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
-        ].artifacts[
+    test_obs = mc.read_obs_from_file(
+        os.path.join(tc.TEST_DATA_DIR, test_obs_file)
+    )
+    test_chunk = (
+        test_obs.planes['VLASS1.2.T07t14.J084202-123000.quicklook.v1']
+        .artifacts[
             'ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
             'image.pbcor.tt0.subim.fits'
-        ].parts[
-            '0'
-        ].chunks.pop()
-    test_file_id = 'VLASS1.2.ql.T24t07.J065836+563000.10.2048.v1.I.iter1.' \
-                   'image.pbcor.tt0.subim'
+        ]
+        .parts['0']
+        .chunks.pop()
+    )
+    test_file_id = (
+        'VLASS1.2.ql.T24t07.J065836+563000.10.2048.v1.I.iter1.'
+        'image.pbcor.tt0.subim'
+    )
     test_file = os.path.join(tc.TEST_FILES_DIR, f'{test_file_id}.fits')
     if not os.path.exists(test_file):
-        shutil.copy(f'/usr/src/app/vlass2caom2/int_test/test_files/'
-                    f'{test_file_id}.fits', test_file)
+        shutil.copy(
+            f'/usr/src/app/vlass2caom2/int_test/test_files/'
+            f'{test_file_id}.fits',
+            test_file,
+        )
     test_log_dir = os.path.join(tc.TEST_DATA_DIR, 'logs')
     assert test_chunk is not None, 'chunk expected'
     assert test_chunk.position is not None, 'position expected'
@@ -125,17 +132,11 @@ def test_exec_footprintfinder():
     assert (
         len(test_chunk.position.axis.bounds.vertices) == 17
     ), 'wrong number of vertices'
-    assert (
-        test_chunk.position.axis.bounds.vertices[0] ==
-        ValueCoord2D(
-            coord1=105.188421, coord2=55.98216
-        )
+    assert test_chunk.position.axis.bounds.vertices[0] == ValueCoord2D(
+        coord1=105.188421, coord2=55.98216
     ), 'wrong first vertex'
-    assert (
-        test_chunk.position.axis.bounds.vertices[16] ==
-        ValueCoord2D(
-            coord1=105.165491, coord2=56.050318
-        )
+    assert test_chunk.position.axis.bounds.vertices[16] == ValueCoord2D(
+        coord1=105.165491, coord2=56.050318
     ), 'wrong last vertex'
 
     if os.path.exists(test_file):
@@ -147,15 +148,15 @@ def test_reset():
     test_obs = mc.read_obs_from_file(
         os.path.join(tc.TEST_DATA_DIR, test_obs_file)
     )
-    test_chunk = \
-        test_obs.planes[
-            'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
-        ].artifacts[
+    test_chunk = (
+        test_obs.planes['VLASS1.2.T07t14.J084202-123000.quicklook.v1']
+        .artifacts[
             'ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
             'image.pbcor.tt0.subim.fits'
-        ].parts[
-            '0'
-        ].chunks.pop()
+        ]
+        .parts['0']
+        .chunks.pop()
+    )
 
     assert test_chunk is not None, 'chunk expected'
     assert test_chunk.position is not None, 'position expected'
@@ -188,13 +189,13 @@ def test_build_temporal_wcs(query_mock):
             return Table.read(
                 'val,delta,cunit,naxis\n'
                 '57389.66314699074,0.000115798611111111,d,1\n'.split('\n'),
-                format='csv'
+                format='csv',
             )
         else:
             return Table.read(
                 'val,delta,cunit,naxis\n'
                 '57389.66342476852,0.000115798611111111,d,1\n'.split('\n'),
-                format='csv'
+                format='csv',
             )
 
     query_mock.side_effect = _mock_query
@@ -207,9 +208,7 @@ def test_build_temporal_wcs(query_mock):
     test_part = test_plane.artifacts['cadc:GEMINI/test.fits'].parts['0']
     assert test_part.chunks[0].time is None, 'temporal wcs ic'
     test_collection = 'TEST'
-    cc.build_temporal_wcs_bounds(
-        test_tap_client, test_plane, test_collection
-    )
+    cc.build_temporal_wcs_bounds(test_tap_client, test_plane, test_collection)
     assert test_part.chunks[0].time is not None, 'temporal wcs ic change'
     test_result = test_part.chunks[0].time
     assert test_result.axis is not None, 'expect axis'

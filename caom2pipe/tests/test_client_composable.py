@@ -411,9 +411,7 @@ def test_repo_delete(mock_client):
 
     clc.repo_delete(mock_client, 'coll', 'test_id', test_metrics)
 
-    mock_client.delete.assert_called_with(
-        'coll', 'test_id'
-    ), 'mock not called'
+    mock_client.delete.assert_called_with('coll', 'test_id'), 'mock not called'
     assert len(test_metrics.history) == 1, 'history conditions'
     assert len(test_metrics.failures) == 0, 'failure conditions'
     assert 'caom2' in test_metrics.history, 'history'

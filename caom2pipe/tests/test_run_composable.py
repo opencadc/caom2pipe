@@ -91,8 +91,9 @@ STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')
 TEST_BOOKMARK = 'test_bookmark'
 TEST_COMMAND = 'test_command'
 TEST_DIR = f'{tc.TEST_DATA_DIR}/run_composable'
-TEST_SOURCE = f'{distutils.sysconfig.get_python_lib()}/test_command/' \
-              f'test_command.py'
+TEST_SOURCE = (
+    f'{distutils.sysconfig.get_python_lib()}/test_command/' f'test_command.py'
+)
 
 
 @patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local')
@@ -232,17 +233,15 @@ def test_run_todo_list_dir_data_source_invalid_fname_v(
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_run_todo_file_data_source(
-    clients_mock,
-    test_config
-):
+def test_run_todo_file_data_source(clients_mock, test_config):
     clients_mock.return_value.data_client.get_file_info.return_value = None
-    clients_mock.return_value.metadata_client.read.return_value = \
+    clients_mock.return_value.metadata_client.read.return_value = (
         SimpleObservation(
             collection=test_config.collection,
             observation_id='def',
             algorithm=Algorithm(str('test')),
         )
+    )
 
     if os.path.exists(test_config.success_fqn):
         os.unlink(test_config.success_fqn)
@@ -266,9 +265,7 @@ def test_run_todo_file_data_source(
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_run_todo_file_data_source_v(
-    clients_mock, test_config
-):
+def test_run_todo_file_data_source_v(clients_mock, test_config):
     test_config.features.supports_latest_client = True
     test_cert_file = os.path.join(TEST_DIR, 'test_proxy.pem')
     test_config.proxy_fqn = test_cert_file
@@ -276,7 +273,7 @@ def test_run_todo_file_data_source_v(
         return_value=SimpleObservation(
             collection=test_config.collection,
             observation_id='def',
-            algorithm=Algorithm(str('test'))
+            algorithm=Algorithm(str('test')),
         )
     )
 
@@ -321,7 +318,7 @@ def test_run_state(
     tap_query_mock,
     tap_mock,
     clients_mock,
-    test_config
+    test_config,
 ):
     # tap_mock is used by the data_source_composable class
     fits2caom2_mock.side_effect = _mock_write
@@ -368,11 +365,11 @@ def test_run_state(
     test_bookmark = test_state.get_bookmark(TEST_BOOKMARK)
     assert test_bookmark == test_end_time, 'wrong time'
     assert os.path.exists(test_config.progress_fqn), 'expect progress file'
-    assert (
-        os.path.exists(test_config.success_fqn)
+    assert os.path.exists(
+        test_config.success_fqn
     ), 'log_to_file set to false, no success file'
-    assert (
-        not os.path.exists(individual_log_file)
+    assert not os.path.exists(
+        individual_log_file
     ), f'log_to_file is False, no entry log'
 
     # test that runner does nothing when times haven't changed
@@ -415,7 +412,7 @@ def test_run_state_log_to_file_true(
             return_value=SimpleObservation(
                 collection=test_config.collection,
                 observation_id='def',
-                algorithm=Algorithm(str('test'))
+                algorithm=Algorithm(str('test')),
             )
         )
         fits2caom2_mock.side_effect = _mock_write
@@ -516,8 +513,11 @@ def test_run_todo_list_dir_data_source_exception(
 
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 def test_run_todo_retry(do_one_mock, test_config):
-    retry_success_fqn, retry_failure_fqn, retry_retry_fqn = \
-        _clean_up_log_files(test_config)
+    (
+        retry_success_fqn,
+        retry_failure_fqn,
+        retry_retry_fqn,
+    ) = _clean_up_log_files(test_config)
 
     do_one_mock.side_effect = _mock_do_one
 
@@ -526,9 +526,7 @@ def test_run_todo_retry(do_one_mock, test_config):
     test_config.retry_failures = True
     _write_todo(test_config)
 
-    test_result = rc.run_by_todo(
-        config=test_config, command_name=TEST_COMMAND
-    )
+    test_result = rc.run_by_todo(config=test_config, command_name=TEST_COMMAND)
 
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect failure'
@@ -543,8 +541,11 @@ def test_run_todo_retry(do_one_mock, test_config):
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 def test_run_todo_retry_v(do_one_mock, clients_mock, test_config):
     test_config.features.supports_latest_client = True
-    retry_success_fqn, retry_failure_fqn, retry_retry_fqn = \
-        _clean_up_log_files(test_config)
+    (
+        retry_success_fqn,
+        retry_failure_fqn,
+        retry_retry_fqn,
+    ) = _clean_up_log_files(test_config)
 
     do_one_mock.side_effect = _mock_do_one
 
@@ -553,9 +554,7 @@ def test_run_todo_retry_v(do_one_mock, clients_mock, test_config):
     test_config.retry_failures = True
     _write_todo(test_config)
 
-    test_result = rc.run_by_todo(
-        config=test_config, command_name=TEST_COMMAND
-    )
+    test_result = rc.run_by_todo(config=test_config, command_name=TEST_COMMAND)
 
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect failure'
@@ -575,13 +574,18 @@ def test_run_todo_retry_v(do_one_mock, clients_mock, test_config):
 
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 @patch('caom2pipe.data_source_composable.CadcTapClient')
-@patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource.'
-       'get_time_box_work')
+@patch(
+    'caom2pipe.data_source_composable.QueryTimeBoxDataSource.'
+    'get_time_box_work'
+)
 @pytest.mark.skip('')
 def test_run_state_retry(get_work_mock, tap_mock, do_one_mock, test_config):
     _write_state(rc.get_utc_now_tz())
-    retry_success_fqn, retry_failure_fqn, retry_retry_fqn = \
-        _clean_up_log_files(test_config)
+    (
+        retry_success_fqn,
+        retry_failure_fqn,
+        retry_retry_fqn,
+    ) = _clean_up_log_files(test_config)
     global call_count
     call_count = 0
     # get_work_mock.return_value.get_time_box_work.side_effect = _mock_get_work
@@ -681,9 +685,7 @@ def test_capture_failure(test_config):
     if os.path.exists(test_config.rejected_fqn):
         os.remove(test_config.rejected_fqn)
 
-    test_oe = ec.OrganizeExecutesWithDoOne(
-        test_config, 'command', [], []
-    )
+    test_oe = ec.OrganizeExecutesWithDoOne(test_config, 'command', [], [])
     test_sname = tc.TestStorageName(obs_id=test_obs_id_2)
     test_oe.capture_failure(test_sname, 'Cannot build an observation')
     test_sname = tc.TestStorageName(obs_id=test_obs_id)
@@ -703,10 +705,8 @@ def test_capture_failure(test_config):
     retry_content = open(test_config.retry_fqn).read()
     assert retry_content == 'test_obs_id\n'
     failure_content = open(test_config.failure_fqn).read()
-    assert (
-        failure_content.endswith(
-            'Unknown error. Check specific log.\n'
-        )
+    assert failure_content.endswith(
+        'Unknown error. Check specific log.\n'
     ), failure_content
     assert os.path.exists(test_config.rejected_fqn), test_config.rejected_fqn
     rejected_content = mc.read_as_yaml(test_config.rejected_fqn)
@@ -863,10 +863,12 @@ def test_time_box_once_through(test_config):
 
 
 def _clean_up_log_files(test_config):
-    retry_success_fqn = f'{tc.TEST_DATA_DIR}_0/' \
-                        f'{test_config.success_log_file_name}'
-    retry_failure_fqn = f'{tc.TEST_DATA_DIR}_0/' \
-                        f'{test_config.failure_log_file_name}'
+    retry_success_fqn = (
+        f'{tc.TEST_DATA_DIR}_0/' f'{test_config.success_log_file_name}'
+    )
+    retry_failure_fqn = (
+        f'{tc.TEST_DATA_DIR}_0/' f'{test_config.failure_log_file_name}'
+    )
     retry_retry_fqn = f'{tc.TEST_DATA_DIR}_0/{test_config.retry_file_name}'
     for ii in [
         test_config.success_fqn,
@@ -882,10 +884,7 @@ def _clean_up_log_files(test_config):
 
 
 def _check_log_files(
-        test_config,
-        retry_success_fqn,
-        retry_failure_fqn,
-        retry_retry_fqn
+    test_config, retry_success_fqn, retry_failure_fqn, retry_retry_fqn
 ):
     assert os.path.exists(test_config.success_fqn), 'empty success file'
     success_size = mc.get_file_size(test_config.success_fqn)
@@ -937,13 +936,11 @@ def _mock_query(arg1, arg2, arg3):
             'fileName,ingestDate\n'
             'NEOS_SCI_2015347000000_clean.fits,'
             '2019-10-23T16:27:19.000\n'.split('\n'),
-            format='csv'
+            format='csv',
         )
     else:
         logging.error('returning empty list')
-        return Table.read(
-            'fileName,ingestDate\n'.split('\n'), format='csv'
-        )
+        return Table.read('fileName,ingestDate\n'.split('\n'), format='csv')
 
 
 def _mock_do_one(arg1):
@@ -964,13 +961,15 @@ def _mock_do_one(arg1):
 
 
 def _mock_write():
-    fqn = f'{tc.THIS_DIR}/NEOS_SCI_2015347000000_clean/' \
-          f'NEOS_SCI_2015347000000_clean.xml'
+    fqn = (
+        f'{tc.THIS_DIR}/NEOS_SCI_2015347000000_clean/'
+        f'NEOS_SCI_2015347000000_clean.xml'
+    )
     mc.write_obs_to_file(
         SimpleObservation(
             collection='test_collection',
             observation_id='ghi',
-            algorithm=Algorithm(str('test'))
+            algorithm=Algorithm(str('test')),
         ),
         fqn,
     )

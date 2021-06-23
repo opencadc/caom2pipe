@@ -132,9 +132,18 @@ class CaomExecute(object):
     """Abstract class that defines the operations common to all Execute
     classes."""
 
-    def __init__(self, config, task_type, storage_name, command_name,
-                 cred_param, cadc_client, caom_repo_client,
-                 meta_visitors, observable):
+    def __init__(
+        self,
+        config,
+        task_type,
+        storage_name,
+        command_name,
+        cred_param,
+        cadc_client,
+        caom_repo_client,
+        meta_visitors,
+        observable,
+    ):
         """
         :param config: Configurable parts of execution, as stored in
             manage_composable.Config.
@@ -159,12 +168,15 @@ class CaomExecute(object):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(config.logging_level)
         formatter = logging.Formatter(
-            '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s')
+            '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s'
+        )
         for handler in self.logger.handlers:
             handler.setLevel(config.logging_level)
             handler.setFormatter(formatter)
-        self.logging_level_param, self.log_level_as = \
-            self._specify_logging_level_param(config.logging_level)
+        (
+            self.logging_level_param,
+            self.log_level_as,
+        ) = self._specify_logging_level_param(config.logging_level)
         self.command_name = command_name
         self.root_dir = config.working_directory
         self.collection = config.collection
@@ -172,11 +184,13 @@ class CaomExecute(object):
         self.working_dir = os.path.join(self.root_dir, storage_name.obs_id)
 
         if config.log_to_file:
-            self.model_fqn = os.path.join(config.log_file_directory,
-                                          storage_name.model_file_name)
+            self.model_fqn = os.path.join(
+                config.log_file_directory, storage_name.model_file_name
+            )
         else:
-            self.model_fqn = os.path.join(self.working_dir,
-                                          storage_name.model_file_name)
+            self.model_fqn = os.path.join(
+                self.working_dir, storage_name.model_file_name
+            )
         self.resource_id = config.resource_id
         self.cadc_client = cadc_client
         self.caom_repo_client = caom_repo_client
@@ -185,15 +199,17 @@ class CaomExecute(object):
         self.task_type = task_type
         self.cred_param = cred_param
         self.external_urls_param = self._specify_external_urls_param(
-            storage_name.external_urls)
+            storage_name.external_urls
+        )
         self.observable = observable
         self._storage_name = storage_name
         self.log_file_directory = None
         self.data_visitors = []
         self.supports_latest_client = config.features.supports_latest_client
         if hasattr(config, 'store_newer_files_only'):
-            self.store_newer_files_only = (config.store_newer_files_only and
-                                           config.use_local_files)
+            self.store_newer_files_only = (
+                config.store_newer_files_only and config.use_local_files
+            )
         else:
             # do nothing different, if flag is missing from config
             self.store_newer_files_only = False
@@ -202,13 +218,15 @@ class CaomExecute(object):
         )
 
     def __str__(self):
-        return f'\n' \
-               f'       command: {self.command_name}\n' \
-               f'        obs_id: {self._storage_name.obs_id}\n' \
-               f'  source_names: {self._storage_name.source_names}\n' \
-               f'     model_fqn: {self.model_fqn}\n' \
-               f'       lineage: {self._storage_name.lineage}\n' \
-               f'   working_dir: {self.working_dir}\n'
+        return (
+            f'\n'
+            f'       command: {self.command_name}\n'
+            f'        obs_id: {self._storage_name.obs_id}\n'
+            f'  source_names: {self._storage_name.source_names}\n'
+            f'     model_fqn: {self.model_fqn}\n'
+            f'       lineage: {self._storage_name.lineage}\n'
+            f'   working_dir: {self.working_dir}\n'
+        )
 
     def _cleanup(self):
         """Remove a directory and all its contents. Only do this if there
@@ -219,10 +237,7 @@ class CaomExecute(object):
         self.logger.debug(
             f'Remove working directory {self.working_dir} and contents.'
         )
-        if (
-            os.path.exists(self.working_dir) and
-            self._delete_cleanup_directory
-        ):
+        if os.path.exists(self.working_dir) and self._delete_cleanup_directory:
             for ii in os.listdir(self.working_dir):
                 os.remove(os.path.join(self.working_dir, ii))
             os.rmdir(self.working_dir)
@@ -251,7 +266,8 @@ class CaomExecute(object):
         """
         packages = distutils.sysconfig.get_python_lib()
         return os.path.join(
-            packages, f'{self.command_name}/{self.command_name}.py')
+            packages, f'{self.command_name}/{self.command_name}.py'
+        )
 
     def _fits2caom2_cmd_local(self, connected=True):
         """
@@ -308,8 +324,9 @@ class CaomExecute(object):
         temp = (
             f'{self.command_name} {self.logging_level_param} {conn} '
             f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
-            f'--local ' f'{local_fqn} --plugin {plugin} --module {plugin} '
-            f'--lineage {self.lineage}'
+            f'--local '
+            f'{local_fqn} --plugin {plugin} --module {plugin} '
+            f'--lineage {self._storage_name.lineage}'
         )
         self._invoke_to_caom2(temp, plugin)
 
@@ -420,7 +437,7 @@ class CaomExecute(object):
             self.cadc_client,
             source_name,
             destination_name,
-            self.observable.metrics
+            self.observable.metrics,
         )
 
     def _read_model(self):
@@ -471,8 +488,9 @@ class CaomExecute(object):
         return lookup.get(logging_level, ('', logging.info))
 
     @staticmethod
-    def repo_cmd_get_client(caom_repo_client, collection, observation_id,
-                            metrics):
+    def repo_cmd_get_client(
+        caom_repo_client, collection, observation_id, metrics
+    ):
         """Execute the CAOM2Repo 'read' operation using the client instance
         from this class.
         :return an Observation instance, or None, if the observation id
@@ -489,15 +507,15 @@ class MetaCreate(CaomExecute):
     This pipeline step will execute a caom2-repo create."""
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            command_name,
-            cred_param,
-            cadc_client,
-            caom_repo_client,
-            meta_visitors,
-            observable,
+        self,
+        config,
+        storage_name,
+        command_name,
+        cred_param,
+        cadc_client,
+        caom_repo_client,
+        meta_visitors,
+        observable,
     ):
         super(MetaCreate, self).__init__(
             config,
@@ -550,16 +568,16 @@ class MetaUpdate(CaomExecute):
     This pipeline step will execute a caom2-repo update."""
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            command_name,
-            cred_param,
-            cadc_client,
-            caom_repo_client,
-            observation,
-            meta_visitors,
-            observable,
+        self,
+        config,
+        storage_name,
+        command_name,
+        cred_param,
+        cadc_client,
+        caom_repo_client,
+        observation,
+        meta_visitors,
+        observable,
     ):
         super(MetaUpdate, self).__init__(
             config,
@@ -618,16 +636,16 @@ class MetaDeleteCreate(CaomExecute):
     structure."""
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            command_name,
-            cred_param,
-            cadc_client,
-            caom_repo_client,
-            observation,
-            meta_visitors,
-            observable,
+        self,
+        config,
+        storage_name,
+        command_name,
+        cred_param,
+        cadc_client,
+        caom_repo_client,
+        observation,
+        meta_visitors,
+        observable,
     ):
         super(MetaDeleteCreate, self).__init__(
             config,
@@ -690,16 +708,16 @@ class MetaUpdateObservation(CaomExecute):
     """
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            command_name,
-            cred_param,
-            cadc_client,
-            caom_repo_client,
-            observation,
-            meta_visitors,
-            observable,
+        self,
+        config,
+        storage_name,
+        command_name,
+        cred_param,
+        cadc_client,
+        caom_repo_client,
+        observation,
+        meta_visitors,
+        observable,
     ):
         super(MetaUpdateObservation, self).__init__(
             config,
@@ -775,15 +793,15 @@ class LocalMetaCreate(CaomExecute):
     This pipeline step will execute a caom2-repo create."""
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            command_name,
-            cred_param,
-            cadc_client,
-            caom_repo_client,
-            meta_visitors,
-            observable,
+        self,
+        config,
+        storage_name,
+        command_name,
+        cred_param,
+        cadc_client,
+        caom_repo_client,
+        meta_visitors,
+        observable,
     ):
         super(LocalMetaCreate, self).__init__(
             config,
@@ -837,16 +855,16 @@ class LocalMetaDeleteCreate(CaomExecute):
     or Derived->Simple type change for the Observation structure."""
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            command_name,
-            cred_param,
-            cadc_client,
-            caom_repo_client,
-            observation,
-            meta_visitors,
-            observable,
+        self,
+        config,
+        storage_name,
+        command_name,
+        cred_param,
+        cadc_client,
+        caom_repo_client,
+        observation,
+        meta_visitors,
+        observable,
     ):
         super(LocalMetaDeleteCreate, self).__init__(
             config,
@@ -904,16 +922,16 @@ class LocalMetaUpdate(CaomExecute):
     This pipeline step will execute a caom2-repo update."""
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            command_name,
-            cred_param,
-            cadc_client,
-            caom_repo_client,
-            observation,
-            meta_visitors,
-            observable,
+        self,
+        config,
+        storage_name,
+        command_name,
+        cred_param,
+        cadc_client,
+        caom_repo_client,
+        observation,
+        meta_visitors,
+        observable,
     ):
         super(LocalMetaUpdate, self).__init__(
             config,
@@ -972,14 +990,14 @@ class MetaVisit(CaomExecute):
     """
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            cred_param,
-            cadc_client,
-            caom_repo_client,
-            meta_visitors,
-            observable,
+        self,
+        config,
+        storage_name,
+        cred_param,
+        cadc_client,
+        caom_repo_client,
+        meta_visitors,
+        observable,
     ):
         super(MetaVisit, self).__init__(
             config,
@@ -1030,15 +1048,15 @@ class DataVisit(CaomExecute):
     """
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            cadc_client,
-            caom_repo_client,
-            data_visitors,
-            task_type,
-            observable,
-            transferrer,
+        self,
+        config,
+        storage_name,
+        cadc_client,
+        caom_repo_client,
+        data_visitors,
+        task_type,
+        observable,
+        transferrer,
     ):
         super(DataVisit, self).__init__(
             config,
@@ -1064,9 +1082,7 @@ class DataVisit(CaomExecute):
 
         self.logger.debug('get the input files')
         for entry in self._storage_name.source_names:
-            local_fqn = os.path.join(
-                self.working_dir, os.path.basename(entry)
-            )
+            local_fqn = os.path.join(self.working_dir, os.path.basename(entry))
             self._transferrer.get(entry, local_fqn)
 
         self.logger.debug('get the observation for the existing model')
@@ -1116,13 +1132,13 @@ class LocalDataVisit(DataVisit):
     """
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            cadc_client,
-            caom_repo_client,
-            data_visitors,
-            observable,
+        self,
+        config,
+        storage_name,
+        cadc_client,
+        caom_repo_client,
+        data_visitors,
+        observable,
     ):
         super(LocalDataVisit, self).__init__(
             config,
@@ -1179,7 +1195,7 @@ class DataScrape(DataVisit):
             data_visitors=data_visitors,
             task_type=mc.TaskType.SCRAPE,
             observable=observable,
-            transferrer=tc.Transfer()
+            transferrer=tc.Transfer(),
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -1209,13 +1225,13 @@ class Store(CaomExecute):
     requires access to the file on disk."""
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            command_name,
-            cadc_client,
-            observable,
-            transferrer,
+        self,
+        config,
+        storage_name,
+        command_name,
+        cadc_client,
+        observable,
+        transferrer,
     ):
         super(Store, self).__init__(
             config,
@@ -1269,12 +1285,12 @@ class LocalStore(Store):
     """
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            command_name,
-            cadc_client,
-            observable,
+        self,
+        config,
+        storage_name,
+        command_name,
+        cadc_client,
+        observable,
     ):
         super(LocalStore, self).__init__(
             config,
@@ -1305,12 +1321,12 @@ class Scrape(CaomExecute):
     No record is written to a web service."""
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            command_name,
-            observable,
-            meta_visitors,
+        self,
+        config,
+        storage_name,
+        command_name,
+        observable,
+        meta_visitors,
     ):
         super(Scrape, self).__init__(
             config,
@@ -1355,12 +1371,12 @@ class ScrapeUpdate(CaomExecute):
     No record is written to a web service."""
 
     def __init__(
-            self,
-            config,
-            storage_name,
-            command_name,
-            observable,
-            meta_visitors,
+        self,
+        config,
+        storage_name,
+        command_name,
+        observable,
+        meta_visitors,
     ):
         super(ScrapeUpdate, self).__init__(
             config,
@@ -1397,6 +1413,7 @@ class ScrapeUpdate(CaomExecute):
 class OrganizeChooser(object):
     """Extend this class to provide a way to make collection-specific
     complex conditions available within the OrganizeExecute class."""
+
     def __init__(self):
         pass
 
@@ -1420,7 +1437,7 @@ class OrganizeExecutes(object):
         store_transfer=None,
         modify_transfer=None,
         cadc_client=None,
-        caom_client=None
+        caom_client=None,
     ):
         """
         Why there is support for two transfer instances:
@@ -1484,14 +1501,14 @@ class OrganizeExecutes(object):
     @property
     def rejected_count(self):
         """:return integer indicating how many inputs (files or observations,
-         depending on the configuration) have been rejected for well-known
-         reasons."""
+        depending on the configuration) have been rejected for well-known
+        reasons."""
         return self._rejected_count
 
     @property
     def success_count(self):
         """:return integer indicating how many inputs (files or observations,
-         depending on the configuration) have been successfully processed."""
+        depending on the configuration) have been successfully processed."""
         return self._success_count
 
     @success_count.setter
@@ -1501,7 +1518,7 @@ class OrganizeExecutes(object):
     @property
     def complete_record_count(self):
         """:return integer indicating how many inputs (files or observations,
-         depending on the configuration) have been processed."""
+        depending on the configuration) have been processed."""
         return self._complete_record_count
 
     @complete_record_count.setter
@@ -1540,8 +1557,8 @@ class OrganizeExecutes(object):
         if reason == mc.Rejected.NO_REASON:
             with open(self.retry_fqn, 'a') as retry:
                 if (
-                    hasattr(storage_name, '_entry') and
-                        storage_name.entry is not None
+                    hasattr(storage_name, '_entry')
+                    and storage_name.entry is not None
                 ):
                     retry.write(f'{storage_name.entry}\n')
                 else:
@@ -1588,14 +1605,15 @@ class OrganizeExecutes(object):
         """Common code to use the appropriate identifier when checking for
         rejected entries."""
         if self.config.features.use_urls:
-            result = self.observable.rejected.is_bad_metadata(
-                storage_name.url)
+            result = self.observable.rejected.is_bad_metadata(storage_name.url)
         elif self.config.features.use_file_names:
             result = self.observable.rejected.is_bad_metadata(
-                storage_name.file_name)
+                storage_name.file_name
+            )
         else:
             result = self.observable.rejected.is_bad_metadata(
-                storage_name.obs_id)
+                storage_name.obs_id
+            )
         if result:
             logging.info(
                 f'Rejected observation {storage_name.obs_id} because of bad '
@@ -1613,18 +1631,16 @@ class OrganizeExecutes(object):
             )
             cred_param = ''
         else:
-            if (
-                self.config.proxy_fqn is not None and
-                    os.path.exists(self.config.proxy_fqn)
+            if self.config.proxy_fqn is not None and os.path.exists(
+                self.config.proxy_fqn
             ):
                 logging.debug(
                     f'Using proxy certificate {self.config.proxy_fqn} for '
                     f'credentials.'
                 )
                 cred_param = f'--cert {self.config.proxy_fqn}'
-            elif (
-                self.config.netrc_file is not None and
-                    os.path.exists(self.config.netrc_file)
+            elif self.config.netrc_file is not None and os.path.exists(
+                self.config.netrc_file
             ):
                 logging.debug(
                     f'Using netrc file {self.config.netrc_file} for credentials.'
@@ -1652,13 +1668,11 @@ class OrganizeExecutes(object):
         f_handle.close()
 
     def _count_timeouts(self, e):
-        if (
-            e is not None and (
-                'Read timed out' in e or
-                'reset by peer' in e or
-                'ConnectTimeoutError' in e or
-                'Broken pipe' in e
-            )
+        if e is not None and (
+            'Read timed out' in e
+            or 'reset by peer' in e
+            or 'ConnectTimeoutError' in e
+            or 'Broken pipe' in e
         ):
             self._timeout += 1
 
@@ -1803,8 +1817,8 @@ class OrganizeExecutes(object):
                 else:
                     if self.config.use_local_files:
                         if (
-                            self.chooser is not None and
-                                self.chooser.needs_delete(observation)
+                            self.chooser is not None
+                            and self.chooser.needs_delete(observation)
                         ):
                             executors.append(
                                 LocalMetaDeleteCreate(
@@ -1825,8 +1839,8 @@ class OrganizeExecutes(object):
                                     self._meta_visitors, self.observable))
                     else:
                         if (
-                            self.chooser is not None and
-                                self.chooser.needs_delete(observation)
+                            self.chooser is not None
+                            and self.chooser.needs_delete(observation)
                         ):
                             executors.append(
                                 MetaDeleteCreate(
@@ -1868,9 +1882,12 @@ class OrganizeExecutes(object):
                 if storage_name.is_feasible:
                     if self.config.use_local_files:
                         if (
-                            executors is not None and len(executors) > 0 and
-                                (isinstance(executors[0], Scrape) or
-                                 isinstance(executors[0], ScrapeUpdate))
+                            executors is not None
+                            and len(executors) > 0
+                            and (
+                                isinstance(executors[0], Scrape)
+                                or isinstance(executors[0], ScrapeUpdate)
+                            )
                         ):
                             executors.append(
                                 DataScrape(
@@ -1923,7 +1940,7 @@ class OrganizeExecutes(object):
                 self.capture_failure(
                     storage_name,
                     BaseException('StorageName.is_rejected'),
-                    'Rejected'
+                    'Rejected',
                 )
                 # successful rejection of the execution case
                 return 0

@@ -111,4 +111,6 @@ def add_headers_to_obs_by_blueprint(obs, headers, blueprint, uri, product_id):
                         temp = value.chunks
                         value.chunks = prev_chunks
                         prev_chunks = temp
-                artifact.parts['0'].chunks = TypedList(Chunk, )
+                artifact.parts['0'].chunks = TypedList(
+                    Chunk,
+                )

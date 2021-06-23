@@ -118,7 +118,7 @@ __all__ = [
 
 
 def append_plane_provenance(
-        plane, headers, lookup, collection, repair, obs_id
+    plane, headers, lookup, collection, repair, obs_id
 ):
     """Append inputs to Planes, based on a particular keyword prefix.
     This function is NOT for removing inputs that have been previously added.
@@ -132,7 +132,9 @@ def append_plane_provenance(
         input observation ID values.
     :param obs_id String value for logging only.
     """
-    plane_inputs = TypedSet(PlaneURI,)
+    plane_inputs = TypedSet(
+        PlaneURI,
+    )
     _update_plane_provenance(
         headers, lookup, collection, repair, obs_id, plane_inputs
     )
@@ -140,7 +142,7 @@ def append_plane_provenance(
 
 
 def append_plane_provenance_single(
-        plane, headers, lookup, collection, repair, obs_id
+    plane, headers, lookup, collection, repair, obs_id
 ):
     """Append inputs to Planes, based on a particular keyword prefix. This
     differs from update_plane_provenance because all the values are in a
@@ -157,7 +159,9 @@ def append_plane_provenance_single(
         input observation ID values.
     :param obs_id String value for logging only.
     """
-    plane_inputs = TypedSet(PlaneURI,)
+    plane_inputs = TypedSet(
+        PlaneURI,
+    )
     _find_plane_provenance_single(
         plane_inputs, headers, lookup, collection, repair, obs_id
     )
@@ -165,7 +169,7 @@ def append_plane_provenance_single(
 
 
 def _find_plane_provenance_single(
-        plane_inputs, headers, lookup, collection, repair, obs_id
+    plane_inputs, headers, lookup, collection, repair, obs_id
 ):
     """
     :param plane_inputs TypedSet instance to add inputs to
@@ -185,10 +189,9 @@ def _find_plane_provenance_single(
                 for entry in prov_ids:
                     # 0 - observation
                     # 1 - plane
-                    obs_member_uri_str = \
-                        mc.CaomName.make_obs_uri_from_obs_id(
-                            collection, entry[0]
-                        )
+                    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(
+                        collection, entry[0]
+                    )
                     obs_member_uri = ObservationURI(obs_member_uri_str)
                     plane_uri = PlaneURI.get_plane_uri(
                         obs_member_uri, entry[1]
@@ -266,9 +269,7 @@ def build_chunk_time(chunk, header, name):
         if chunk.time is None:
             coord_error = CoordError(syser=1e-07, rnder=1e-07)
             time_axis = CoordAxis1D(axis=Axis('TIME', 'd'), error=coord_error)
-            chunk.time = TemporalWCS(
-                axis=time_axis, timesys='UTC'
-            )
+            chunk.time = TemporalWCS(axis=time_axis, timesys='UTC')
         ref_coord = RefCoord(pix=0.5, val=mjd_obs)
         chunk.time.axis.function = CoordFunction1D(
             naxis=1,
@@ -318,7 +319,9 @@ def build_temporal_wcs_append_sample(temporal_wcs, lower, upper):
     a bounds definition, or appending a sample, in one function.
     """
     if temporal_wcs is None:
-        samples = TypedList(CoordRange1D,)
+        samples = TypedList(
+            CoordRange1D,
+        )
         bounds = CoordBounds1D(samples=samples)
         temporal_wcs = TemporalWCS(
             axis=CoordAxis1D(
@@ -402,8 +405,9 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
     logging.debug(f'End build_temporal_wcs_bounds.')
 
 
-def change_to_composite(observation, algorithm_name='composite',
-                        collection=None, features=None):
+def change_to_composite(
+    observation, algorithm_name='composite', collection=None, features=None
+):
     """For the case where a SimpleObservation needs to become a
     DerivedObservation."""
     temp = DerivedObservation(
@@ -615,7 +619,7 @@ def copy_provenance(from_provenance):
 
 
 def exec_footprintfinder(
-        chunk, science_fqn, log_file_directory, obs_id, params='-f'
+    chunk, science_fqn, log_file_directory, obs_id, params='-f'
 ):
     """Execute the footprintfinder on a file. All preconditions for successful
     execution should be in place i.e. the file exists, and is unzipped (because
@@ -639,9 +643,7 @@ def exec_footprintfinder(
     # installed, which is not declared as a caom2pipe dependency
     import footprintfinder
 
-    if (
-        chunk.position is not None and chunk.position.axis is not None
-    ):
+    if chunk.position is not None and chunk.position.axis is not None:
         logging.debug(
             f'position exists, calculate footprints for {science_fqn}.'
         )
@@ -652,10 +654,15 @@ def exec_footprintfinder(
             # -m 0.2 fewer points
             # -f full chip
 
-            full_area, footprint_xc, footprint_yc, ra_bary, dec_bary, \
-                footprintstring, stc = footprintfinder.main(
-                    f'-r {parameters} {science_fqn}'
-            )
+            (
+                full_area,
+                footprint_xc,
+                footprint_yc,
+                ra_bary,
+                dec_bary,
+                footprintstring,
+                stc,
+            ) = footprintfinder.main(f'-r {parameters} {science_fqn}')
             logging.debug(
                 f'footprintfinder result: full area {full_area} footprint xc '
                 f'{footprint_xc} footprint yc {footprint_yc} ra bary '
@@ -822,7 +829,9 @@ def rename_parts(observation, headers):
     part_keys = [str(ii) for ii in range(1, headers[0].get('NEXTEND') + 1)]
     for plane in observation.planes.values():
         for artifact in plane.artifacts.values():
-            temp_parts = TypedOrderedDict(Part, )
+            temp_parts = TypedOrderedDict(
+                Part,
+            )
             for part_key in part_keys:
                 if part_key in artifact.parts:
                     hdu_count = mc.to_int(part_key)
@@ -834,7 +843,7 @@ def rename_parts(observation, headers):
 
 
 def _update_plane_provenance(
-        headers, lookup, collection, repair, obs_id, plane_inputs
+    headers, lookup, collection, repair, obs_id, plane_inputs
 ):
     """Add inputs to a collection, based on a particular keyword prefix.
 
@@ -867,7 +876,7 @@ def _update_plane_provenance(
 
 
 def update_plane_provenance(
-        plane, headers, lookup, collection, repair, obs_id
+    plane, headers, lookup, collection, repair, obs_id
 ):
     """Add inputs to Planes, based on a particular keyword prefix.
 
@@ -880,7 +889,9 @@ def update_plane_provenance(
         input observation ID values.
     :param obs_id String value for logging only.
     """
-    plane_inputs = TypedSet(PlaneURI,)
+    plane_inputs = TypedSet(
+        PlaneURI,
+    )
     _update_plane_provenance(
         headers, lookup, collection, repair, obs_id, plane_inputs
     )
@@ -888,7 +899,7 @@ def update_plane_provenance(
 
 
 def update_plane_provenance_list(
-        plane, headers, lookups, collection, repair, obs_id
+    plane, headers, lookups, collection, repair, obs_id
 ):
     """Add inputs to Planes, based on a particular keyword prefix.
 
@@ -901,7 +912,9 @@ def update_plane_provenance_list(
         input observation ID values.
     :param obs_id String value for logging only.
     """
-    plane_inputs = TypedSet(PlaneURI,)
+    plane_inputs = TypedSet(
+        PlaneURI,
+    )
 
     for entry in lookups:
         _update_plane_provenance(
@@ -911,7 +924,7 @@ def update_plane_provenance_list(
 
 
 def update_plane_provenance_single(
-        plane, headers, lookup, collection, repair, obs_id
+    plane, headers, lookup, collection, repair, obs_id
 ):
     """Replace inputs in Planes, based on a particular keyword prefix. This
     differs from update_plane_provenance because all the values are in a
@@ -926,7 +939,9 @@ def update_plane_provenance_single(
         input observation ID values.
     :param obs_id String value for logging only.
     """
-    plane_inputs = TypedSet(PlaneURI,)
+    plane_inputs = TypedSet(
+        PlaneURI,
+    )
     _find_plane_provenance_single(
         plane_inputs, headers, lookup, collection, repair, obs_id
     )
@@ -938,11 +953,13 @@ def update_observation_members(observation):
 
     :param observation Observation instance to add members to
     """
-    members_inputs = TypedSet(ObservationURI,)
+    members_inputs = TypedSet(
+        ObservationURI,
+    )
     for plane in observation.planes.values():
         if (
-            plane.provenance is not None and
-                plane.provenance.inputs is not None
+            plane.provenance is not None
+            and plane.provenance.inputs is not None
         ):
             for inpt in plane.provenance.inputs:
                 members_inputs.add(inpt.get_observation_uri())
@@ -962,11 +979,13 @@ def update_observation_members_filtered(observation, filter_fn):
     """
 
     inputs = []
-    members_inputs = TypedSet(ObservationURI,)
+    members_inputs = TypedSet(
+        ObservationURI,
+    )
     for plane in observation.planes.values():
         if (
-            plane.provenance is not None and
-                plane.provenance.inputs is not None
+            plane.provenance is not None
+            and plane.provenance.inputs is not None
         ):
             inputs = filter(filter_fn, plane.provenance.inputs)
 
@@ -1015,9 +1034,10 @@ def undo_astropy_cdfix_call(chunk, time_delta):
     wc.Wcsprm.html#astropy.wcs.Wcsprm.cdfix
     """
     if (
-        time_delta == 0.0 and chunk.time is not None and
-        chunk.time.axis is not None and
-        chunk.time.axis.function is not None and
-        chunk.time.axis.function.delta == 1.0
+        time_delta == 0.0
+        and chunk.time is not None
+        and chunk.time.axis is not None
+        and chunk.time.axis.function is not None
+        and chunk.time.axis.function.delta == 1.0
     ):
         chunk.time.axis.function.delta = 0.0

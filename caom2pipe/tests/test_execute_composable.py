@@ -114,8 +114,8 @@ class LocalTestVisit:
         assert v == 'TEST', 'wrong stream'
         x = kwargs['working_directory']
         assert x is not None, 'working directory'
-        assert (
-            x == os.path.join(tc.TEST_DATA_DIR, 'test_obs_id')
+        assert x == os.path.join(
+            tc.TEST_DATA_DIR, 'test_obs_id'
         ), 'wrong working directory'
         y = kwargs['science_file']
         assert y is not None, 'science file'
@@ -159,7 +159,7 @@ def test_meta_create_client_execute(test_config):
 @patch('caom2utils.fits2caom2.CadcDataClient')
 @patch('caom2utils.fits2caom2.get_cadc_headers')
 def test_meta_create_client_execute_failed_update(
-        headers_mock, f2c2_data_client_mock, test_config
+    headers_mock, f2c2_data_client_mock, test_config
 ):
     test_cred = ''
     data_client_mock = Mock()
@@ -169,8 +169,9 @@ def test_meta_create_client_execute_failed_update(
     read_obs_orig = mc.read_obs_from_file
     mc.read_obs_from_file = Mock()
     mc.read_obs_from_file.return_value = _read_obs(None)
-    f2c2_data_client_mock.return_value.get_file_info.side_effect = \
+    f2c2_data_client_mock.return_value.get_file_info.side_effect = (
         _mock_get_file_info
+    )
     headers_mock.side_effect = _get_headers
 
     test_executor = ec.MetaCreate(
@@ -569,10 +570,8 @@ def test_organize_executes_chooser(test_config):
     assert len(executors) == 1
     assert isinstance(executors[0], ec.LocalMetaDeleteCreate)
     assert executors[0].stream == 'TEST', 'stream'
-    assert (
-        executors[0].working_dir == os.path.join(
-            tc.THIS_DIR, 'test_obs_id'
-        )
+    assert executors[0].working_dir == os.path.join(
+        tc.THIS_DIR, 'test_obs_id'
     ), 'working_dir'
     assert caom_client.read.called, 'read should be called'
     caom_client.read.reset()
@@ -685,8 +684,8 @@ def test_caom_name():
     assert cn.file_name == 'test_obs_id.fits.gz'
     assert cn.uncomp_file_name == 'test_obs_id.fits'
     assert (
-        mc.CaomName.make_obs_uri_from_obs_id('TEST', 'test_obs_id') ==
-        'caom:TEST/test_obs_id'
+        mc.CaomName.make_obs_uri_from_obs_id('TEST', 'test_obs_id')
+        == 'caom:TEST/test_obs_id'
     )
 
 
@@ -740,12 +739,12 @@ def test_choose_exceptions(test_config):
 @patch('sys.exit', Mock(side_effect=MyExitError))
 def test_storage_name_failure(test_config):
     class TestStorageNameFails(tc.TestStorageName):
-
         def __init__(self):
             super(TestStorageNameFails, self).__init__()
 
         def is_valid(self):
             return False
+
     test_config.log_to_file = True
     assert not os.path.exists(test_config.success_fqn)
     assert not os.path.exists(test_config.failure_fqn)
@@ -788,7 +787,9 @@ def test_organize_executes_client_do_one(test_config):
     assert isinstance(executors[0], ec.ScrapeUpdate)
 
     test_config.task_types = [
-        mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY,
+        mc.TaskType.STORE,
+        mc.TaskType.INGEST,
+        mc.TaskType.MODIFY,
     ]
     test_oe = ec.OrganizeExecutes(
         test_config,
@@ -802,9 +803,7 @@ def test_organize_executes_client_do_one(test_config):
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 3
-    assert (
-        isinstance(executors[0], ec.Store), type(executors[0])
-    )
+    assert (isinstance(executors[0], ec.Store), type(executors[0]))
     assert isinstance(executors[1], ec.LocalMetaCreate)
     assert isinstance(executors[2], ec.LocalDataVisit)
     assert repo_client_mock.read.called, 'mock should be called'
@@ -983,26 +982,27 @@ def test_store(test_config):
         test_subject.working_dir == '/test_files/caom2pipe/test_obs_id'
     ), 'wrong working directory'
     assert (
-           len(test_subject._storage_name.destination_uris) == 1
+        len(test_subject._storage_name.destination_uris) == 1
     ), 'wrong file count'
     assert (
-        test_subject._storage_name.destination_uris[0] ==
-        'cadc:TEST/test_file.fits.gz'
+        test_subject._storage_name.destination_uris[0]
+        == 'cadc:TEST/test_file.fits.gz'
     ), 'wrong destination'
     test_subject.execute(None)
     assert test_data_client.put_file.called, 'data put not called'
     assert (
-        test_data_client.put_file.call_args.args[0] is None
-    ), 'archive not set for test_config'
-    assert (
-        test_data_client.put_file.call_args.args[1] == 'test_obs_id.fits'
-    ), 'expect a file name'
+        test_data_client.put_file.call_args.args[0] == 'TEST'
+    ), 'archive not set for test_config, is set for TestStorageName'
+    assert test_data_client.put_file.call_args.args[1] == os.path.join(
+        tc.TEST_DATA_DIR,
+        'test_obs_id/nonexistent.fits.gz',
+    ), 'expect a fully-qualified file name'
     assert (
         test_data_client.put_file.call_args.kwargs['archive_stream'] == 'TEST'
     ), 'wrong archive stream'
     assert (
-        test_data_client.put_file.call_args.kwargs['mime_type'] ==
-        'application/fits'
+        test_data_client.put_file.call_args.kwargs['mime_type']
+        == 'application/fits'
     ), 'wrong archive'
     assert (
         test_data_client.put_file.call_args.kwargs['mime_encoding'] is None
@@ -1037,17 +1037,17 @@ def test_local_store(test_config):
     assert test_subject is not None, 'expect construction'
     test_subject.execute(None)
     # does the working directory get used if it's just a local store?
-    assert (
-           test_subject.working_dir == '/test_files/caom2pipe'
+    assert test_subject.working_dir == os.path.join(
+        tc.TEST_DATA_DIR, 'test_obs_id'
     ), 'wrong working directory'
     # do one file at a time, so it doesn't matter how many files are
     # in the working directory
     assert (
-           len(test_subject._storage_name.destination_uris) == 1
+        len(test_subject._storage_name.destination_uris) == 1
     ), 'wrong file count'
     assert (
-        test_subject._storage_name.destination_uris[0] ==
-        'cadc:TEST/test_file.fits.gz'
+        test_subject._storage_name.destination_uris[0]
+        == 'cadc:TEST/test_file.fits.gz'
     ), 'wrong destination'
     assert test_data_client.put_file.called, 'data put not called'
     assert (
@@ -1061,8 +1061,8 @@ def test_local_store(test_config):
         'TEST'
     ), 'wrong archive'
     assert (
-        test_data_client.put_file.call_args.kwargs['mime_type'] ==
-        'application/fits'
+        test_data_client.put_file.call_args.kwargs['mime_type']
+        == 'application/fits'
     ), 'wrong archive'
     assert (
         test_data_client.put_file.call_args.kwargs['mime_encoding'] is None
@@ -1073,7 +1073,6 @@ def test_local_store(test_config):
 
 
 class FlagStorageName(mc.StorageName):
-
     def __init__(self, file_name, source_names, destination_uris):
         super(FlagStorageName, self).__init__(
             fname_on_disk=file_name,
@@ -1110,7 +1109,11 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     }
 
     test_subject = ec.LocalStore(
-        test_config, test_sn, 'TEST_STORE', client_mock, observable_mock,
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
     )
     test_subject.execute(None)
     assert client_mock.put_file.called, 'expect put call'
@@ -1122,7 +1125,11 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     }
 
     test_subject = ec.LocalStore(
-        test_config, test_sn, 'TEST_STORE', client_mock, observable_mock,
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
     )
     test_subject.execute(None)
     assert client_mock.put_file.called, 'expect put call, file time is newer'
@@ -1134,7 +1141,11 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     test_config.store_newer_files_only = False
     client_mock.put_file.reset()
     test_subject = ec.LocalStore(
-        test_config, test_sn, 'TEST_STORE', client_mock, observable_mock,
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
     )
     test_subject.execute(None)
     assert client_mock.put_file.called, 'expect put call, file time irrelevant'
@@ -1143,7 +1154,7 @@ def test_store_newer_files_only_flag(client_mock, test_config):
 @patch('caom2pipe.client_composable.client_put_fqn')
 @patch('vos.Client')
 def test_store_newer_files_only_flag_client(
-        client_mock, put_mock, test_config
+    client_mock, put_mock, test_config
 ):
     # just like the previous test, except supports_latest_client = True
     # first test case
@@ -1162,7 +1173,11 @@ def test_store_newer_files_only_flag_client(
     client_mock.get_node.return_value = test_node
 
     test_subject = ec.LocalStore(
-        test_config, test_sn, 'TEST_STORE', client_mock, observable_mock,
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
     )
     test_subject.execute(None)
     assert put_mock.called, 'expect copy call'
@@ -1175,7 +1190,11 @@ def test_store_newer_files_only_flag_client(
     client_mock.get_node.return_value = test_node
 
     test_subject = ec.LocalStore(
-        test_config, test_sn, 'TEST_STORE', client_mock, observable_mock,
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
     )
     test_subject.execute(None)
     assert put_mock.called, 'expect copy call, file time is newer'
@@ -1184,7 +1203,11 @@ def test_store_newer_files_only_flag_client(
     test_config.store_newer_files_only = False
     put_mock.reset()
     test_subject = ec.LocalStore(
-        test_config, test_sn, 'TEST_STORE', client_mock, observable_mock,
+        test_config,
+        test_sn,
+        'TEST_STORE',
+        client_mock,
+        observable_mock,
     )
     test_subject.execute(None)
     assert put_mock.called, 'expect copy call, file time irrelevant'
@@ -1192,10 +1215,8 @@ def test_store_newer_files_only_flag_client(
 
 def _transfer_get_mock(entry, fqn):
     assert entry == 'vos:goliaths/nonexistent.fits.gz', 'wrong entry'
-    assert (
-        fqn == os.path.join(
-            tc.TEST_DATA_DIR, 'test_obs_id/nonexistent.fits.gz'
-        )
+    assert fqn == os.path.join(
+        tc.TEST_DATA_DIR, 'test_obs_id/nonexistent.fits.gz'
     ), 'wrong fqn'
     with open(fqn, 'w') as f:
         f.write('test content')
@@ -1258,8 +1279,10 @@ def _get_file_info():
 
 
 def to_caom2():
-    plugin = '/usr/local/lib/python3.8/site-packages/test_execute_composable/' \
-             'test_execute_composable.py'
+    plugin = (
+        '/usr/local/lib/python3.8/site-packages/test_execute_composable/'
+        'test_execute_composable.py'
+    )
     assert sys.argv is not None, 'expect sys.argv to be set'
     local_meta_create_answer = [
         'test_execute_composable',
@@ -1300,16 +1323,17 @@ def to_caom2():
     if sys.argv != scrape_answer:
         # TaskType.INGEST (LocalMetaCreate)
         if sys.argv != local_meta_create_answer:
-            assert False, \
-                f'wrong sys.argv values \n{sys.argv} ' \
+            assert False, (
+                f'wrong sys.argv values \n{sys.argv} '
                 f'\n{local_meta_create_answer}'
+            )
     fqn_index = sys.argv.index('--out') + 1
     fqn = sys.argv[fqn_index]
     mc.write_obs_to_file(
         SimpleObservation(
             collection='test_collection',
             observation_id='test_obs_id',
-            algorithm=Algorithm(str('exposure'))
+            algorithm=Algorithm(str('exposure')),
         ),
         fqn,
     )

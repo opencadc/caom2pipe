@@ -87,26 +87,22 @@ import test_run_composable
 
 
 class TestTransfer(transfer_composable.Transfer):
-
     def __init__(self):
         super(TestTransfer, self).__init__()
 
     def get(self, source_fqn, dest_fqn):
         logging.error(f'source {source_fqn} dest {dest_fqn}')
-        assert (
-            source_fqn == os.path.join(
-                tc.TEST_DATA_DIR, 'test_file.fits.gz'
-            )
+        assert source_fqn == os.path.join(
+            tc.TEST_DATA_DIR, 'test_file.fits.gz'
         ), 'wrong source directory'
         assert (
-            dest_fqn ==
-            '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz'
+            dest_fqn
+            == '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz'
         ), 'wrong destination directory'
         shutil.copy(source_fqn, dest_fqn)
 
 
 class TestListDirTimeBoxDataSource(dsc.DataSource):
-
     def __init__(self):
         super(TestListDirTimeBoxDataSource, self).__init__()
 
@@ -136,26 +132,32 @@ def test_run_state(client_mock):
     test_config.collection = 'TEST'
     test_config.interval = 10
     test_config.log_file_directory = f'{test_wd}/logs'
-    test_config.failure_fqn = \
+    test_config.failure_fqn = (
         f'{test_config.log_file_directory}/failure_log.txt'
+    )
     test_config.log_to_file = True
     test_config.logging_level = 'DEBUG'
     test_config.progress_file_name = 'progress.txt'
     test_config.proxy_file_name = f'{test_wd}/cadcproxy.pem'
     test_config.rejected_file_name = 'rejected.yml'
     test_config.rejected_directory = f'{test_wd}/rejected'
-    test_config._report_fqn = \
+    test_config._report_fqn = (
         f'{test_config.log_file_directory}/app_report.txt'
+    )
     test_config.resource_id = 'ivo://cadc.nrc.ca/sc2repo'
     test_config.retry_file_name = 'retries.txt'
-    test_config.retry_fqn = \
+    test_config.retry_fqn = (
         f'{test_config.log_file_directory}/{test_config.retry_file_name}'
+    )
     test_config.state_file_name = 'state.yml'
-    test_config.success_fqn = \
+    test_config.success_fqn = (
         f'{test_config.log_file_directory}/success_log.txt'
+    )
     test_config.tap_id = 'ivo://cadc.nrc.ca/sc2tap'
     test_config.task_types = [
-        mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY
+        mc.TaskType.STORE,
+        mc.TaskType.INGEST,
+        mc.TaskType.MODIFY,
     ]
     test_config.features.use_file_names = True
     test_config.features.use_urls = False
@@ -268,6 +270,7 @@ def test_run_state(client_mock):
             except OSError as e:
                 logging.error(f'failed to delete {e}')
 
+
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 def test_run_state_v(client_mock):
     client_mock.metadata_client.read.side_effect = tc.mock_read
@@ -281,26 +284,32 @@ def test_run_state_v(client_mock):
     test_config.collection = 'TEST'
     test_config.interval = 10
     test_config.log_file_directory = f'{test_wd}/logs'
-    test_config.failure_fqn = \
+    test_config.failure_fqn = (
         f'{test_config.log_file_directory}/failure_log.txt'
+    )
     test_config.log_to_file = True
     test_config.logging_level = 'INFO'
     test_config.progress_file_name = 'progress.txt'
     test_config.proxy_file_name = f'{test_wd}/cadcproxy.pem'
     test_config.rejected_file_name = 'rejected.yml'
     test_config.rejected_directory = f'{test_wd}/rejected'
-    test_config._report_fqn = \
+    test_config._report_fqn = (
         f'{test_config.log_file_directory}/app_report.txt'
+    )
     test_config.resource_id = 'ivo://cadc.nrc.ca/sc2repo'
     test_config.retry_file_name = 'retries.txt'
-    test_config.retry_fqn = \
+    test_config.retry_fqn = (
         f'{test_config.log_file_directory}/{test_config.retry_file_name}'
+    )
     test_config.state_file_name = 'state.yml'
-    test_config.success_fqn = \
+    test_config.success_fqn = (
         f'{test_config.log_file_directory}/success_log.txt'
+    )
     test_config.tap_id = 'ivo://cadc.nrc.ca/sc2tap'
     test_config.task_types = [
-        mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY
+        mc.TaskType.STORE,
+        mc.TaskType.INGEST,
+        mc.TaskType.MODIFY,
     ]
     test_config.features.use_file_names = True
     test_config.features.use_urls = False
@@ -353,7 +362,7 @@ def test_run_state_v(client_mock):
         assert client_mock.data_client.copy.called, 'expect put call'
         client_mock.data_client.copy.assert_called_with(
             '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz',
-            destination='ad:TEST/test_file.fits.gz'
+            destination='ad:TEST/test_file.fits.gz',
         ), 'wrong call args'
 
         # state file checking
