@@ -282,13 +282,13 @@ def test_list_dir_separate_data_source():
     assert test_subject is not None, 'ctor is broken'
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a result'
-    assert len(test_result) == 65, 'expect contents in the result'
+    assert len(test_result) == 66, 'expect contents in the result'
     assert '/test_files/sub_directory/abc.fits' in test_result, 'wrong entry'
 
     test_subject = dsc.ListDirSeparateDataSource(test_config, recursive=False)
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a non-recursive result'
-    assert len(test_result) == 63, 'expect contents in non-recursive result'
+    assert len(test_result) == 64, 'expect contents in non-recursive result'
     assert (
         '/test_files/sub_directory/abc.fits' not in test_result
     ), 'recursive result should not be present'

@@ -83,7 +83,6 @@ from caom2pipe import run_composable as rc
 from caom2pipe import transfer_composable
 
 import test_conf as tc
-import test_run_composable
 
 
 class TestTransfer(transfer_composable.Transfer):
@@ -92,14 +91,17 @@ class TestTransfer(transfer_composable.Transfer):
 
     def get(self, source_fqn, dest_fqn):
         logging.error(f'source {source_fqn} dest {dest_fqn}')
-        assert source_fqn == os.path.join(
-            tc.TEST_DATA_DIR, 'test_file.fits.gz'
-        ), 'wrong source directory'
+
+        test_source_fqn = os.path.join(tc.TEST_DATA_DIR, 'test_file.fits.gz')
+        test_source_uri = 'cadc:TEST/test_file.fits.gz'
+        if source_fqn not in [test_source_fqn, test_source_uri]:
+            assert False, f'wrong source directory {source_fqn}'
         assert (
             dest_fqn
             == '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz'
         ), 'wrong destination directory'
-        shutil.copy(source_fqn, dest_fqn)
+        with open(dest_fqn, 'w') as f:
+            f.write('test content')
 
 
 class TestListDirTimeBoxDataSource(dsc.DataSource):
@@ -167,22 +169,8 @@ def test_run_state(client_mock):
     if not os.path.exists(test_wd):
         os.mkdir(test_wd)
 
-    # if this test is failing, did the docker container get
-    # restarted recently?
-    # first create /caom2pipe_test/1000003f.fits.fz,
-    # then check that the test_start_time and test_end_time values
-    # correspond somewhat to the timestamp on that file
-    #
-    # this timestamp is 15 minutes earlier than the timestamp of the
-    # file in /caom2pipe_test
-    #
-    test_start_time = '2021-05-17 19:55:09'
-    with open(test_config.state_fqn, 'w') as f:
-        f.write('bookmarks:\n')
-        f.write(f'  {caom2pipe_bookmark}:\n')
-        f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(
-        2021, 5, 17, 20, 15, 27, 965132, tzinfo=timezone.utc
+    test_start_time, test_end_time = _get_times(
+        test_config, caom2pipe_bookmark
     )
 
     with open(test_config.proxy_fqn, 'w') as f:
@@ -275,7 +263,7 @@ def test_run_state(client_mock):
 def test_run_state_v(client_mock):
     client_mock.metadata_client.read.side_effect = tc.mock_read
     client_mock.data_client.get_node.side_effect = tc.mock_get_node
-    client_mock.data_client.copy.return_value = 48
+    client_mock.data_client.copy.return_value = 12
 
     test_wd = '/usr/src/app/caom2pipe/int_test'
     caom2pipe_bookmark = 'caom2_timestamp'
@@ -319,22 +307,8 @@ def test_run_state_v(client_mock):
     if not os.path.exists(test_wd):
         os.mkdir(test_wd)
 
-    # if this test is failing, did the docker container get
-    # restarted recently?
-    # first create /caom2pipe_test/1000003f.fits.fz,
-    # then check that the test_start_time and test_end_time values
-    # correspond somewhat to the timestamp on that file
-    #
-    # this timestamp is 15 minutes earlier than the timestamp of the
-    # file in /caom2pipe_test
-    #
-    test_start_time = '2021-05-17 19:55:09'
-    with open(test_config.state_fqn, 'w') as f:
-        f.write('bookmarks:\n')
-        f.write(f'  {caom2pipe_bookmark}:\n')
-        f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(
-        2021, 5, 17, 20, 15, 27, 965132, tzinfo=timezone.utc
+    test_start_time, test_end_time = _get_times(
+        test_config, caom2pipe_bookmark
     )
 
     with open(test_config.proxy_fqn, 'w') as f:
@@ -362,7 +336,7 @@ def test_run_state_v(client_mock):
         assert client_mock.data_client.copy.called, 'expect put call'
         client_mock.data_client.copy.assert_called_with(
             '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz',
-            destination='ad:TEST/test_file.fits.gz',
+            destination='cadc:TEST/test_file.fits.gz',
         ), 'wrong call args'
 
         # state file checking
@@ -421,3 +395,24 @@ def test_run_state_v(client_mock):
                     os.unlink(entry)
             except OSError as e:
                 logging.error(f'failed to delete {e}')
+
+
+def _get_times(test_config, caom2pipe_bookmark):
+    # if this test is failing, did the docker container get
+    # restarted recently?
+    # first create /caom2pipe_test/1000003f.fits.fz,
+    # then check that the test_start_time and test_end_time values
+    # correspond somewhat to the timestamp on that file
+    #
+    # this timestamp is 15 minutes earlier than the timestamp of the
+    # file in /caom2pipe_test
+    #
+    test_start_time = '2021-05-31 15:30:09'
+    with open(test_config.state_fqn, 'w') as f:
+        f.write('bookmarks:\n')
+        f.write(f'  {caom2pipe_bookmark}:\n')
+        f.write(f'    last_record: {test_start_time}\n')
+    test_end_time = datetime(
+        2021, 5, 31, 15, 45, 27, 965132, tzinfo=timezone.utc
+    )
+    return test_start_time, test_end_time

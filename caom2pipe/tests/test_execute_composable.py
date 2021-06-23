@@ -120,7 +120,7 @@ class LocalTestVisit:
         y = kwargs['science_file']
         assert y is not None, 'science file'
         assert (
-            y == f'{tc.TEST_DATA_DIR}/test_file.fits.gz'
+            y == 'cadc:TEST/test_file.fits.gz'
         ), 'wrong science file'
         z = kwargs['log_file_directory']
         assert z is not None, 'log file directory'
@@ -387,9 +387,7 @@ def test_data_execute_v(test_config):
     test_config.features.supports_latest_client = True
     test_obs_id = 'test_obs_id'
     test_dir = os.path.join(tc.THIS_DIR, test_obs_id)
-    test_fits_fqn = os.path.join(
-        test_dir, f'{tc.TestStorageName().file_name}.gz'
-    )
+    test_fits_fqn = os.path.join(test_dir, 'test_file.fits.gz')
     try:
         if not os.path.exists(test_dir):
             os.mkdir(test_dir, mode=0o755)
@@ -427,7 +425,7 @@ def test_data_execute_v(test_config):
         assert test_observer.metrics.observe.called, 'observe not called'
         assert cadc_client_mock.copy.called, 'copy not called'
         cadc_client_mock.copy.assert_called_with(
-            'ad:TEST/test_obs_id.fits.gz', test_fits_fqn, send_md5=True
+            'cadc:TEST/test_file.fits.gz', test_fits_fqn, send_md5=True
         ), 'wrong call args'
     finally:
         if os.path.exists(test_fits_fqn):
@@ -924,7 +922,8 @@ def test_data_visit(get_mock, test_config):
     test_sn = mc.StorageName(
         obs_id='test_obs_id', collection='TEST', collection_pattern='T[\\w+-]+'
     )
-    test_cred_param = ''
+    test_sn.source_names = ['ad:TEST/test_obs_id.fits']
+    test_sn.destination_uris = test_sn.source_names
     test_transferrer = transfer_composable.CadcTransfer()
     test_transferrer.cadc_client = test_data_client
     test_transferrer.observable = test_observable
