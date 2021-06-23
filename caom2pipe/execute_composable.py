@@ -119,6 +119,7 @@ import traceback
 from datetime import datetime
 from dateutil import tz
 from shutil import move
+from urllib.parse import urlparse
 
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
@@ -1227,17 +1228,6 @@ class Store(CaomExecute):
             meta_visitors=None,
             observable=observable,
         )
-        self._destination_f_names = []
-        self._destination_uris = []
-        for entry in self._storage_name.source_names:
-            self._destination_f_names.append(os.path.basename(entry))
-            self._destination_uris.append(
-                mc.build_uri(
-                    self._storage_name.archive,
-                    os.path.basename(entry),
-                    self._storage_name.scheme,
-                ),
-            )
         self._transferrer = transferrer
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -1251,17 +1241,20 @@ class Store(CaomExecute):
             f'Store {len(self._storage_name.source_names)} files to ad.'
         )
         for index, entry in enumerate(self._storage_name.source_names):
+            temp = urlparse(entry)
             local_fqn = os.path.join(
-                self.working_dir, self._destination_f_names[index]
+                self.working_dir, temp.path.split('/')[-1]
             )
             self.logger.debug(f'Retrieve {entry}')
             self._transferrer.get(entry, local_fqn)
 
             self.logger.debug(
                 f'store the input file {entry} to '
-                f'{self._destination_uris[index]}'
+                f'{self._storage_name.destination_uris[index]}'
             )
-            self._cadc_put(local_fqn, self._destination_uris[index])
+            self._cadc_put(
+                local_fqn, self._storage_name.destination_uris[index]
+            )
 
         self.logger.debug('clean up the workspace')
         self._cleanup()
@@ -1301,7 +1294,7 @@ class LocalStore(Store):
         )
         for index, entry in enumerate(self._storage_name.source_names):
             self.logger.debug(f'store the input file {entry}')
-            self._cadc_put(entry, self._destination_uris[index])
+            self._cadc_put(entry, self._storage_name.destination_uris[index])
 
         self.logger.debug('End execute')
 

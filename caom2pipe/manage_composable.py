@@ -1540,6 +1540,7 @@ class StorageName(object):
             compression='.gz',
             entry=None,
             source_names=[],
+            destination_uris=[],
     ):
         """
 
@@ -1562,6 +1563,9 @@ class StorageName(object):
         :param source_names: list of str - the fully-qualified representation
             of files, as represented at the source. Sufficient for retrieval,
             probably includes a scheme.
+        :param destination_uris: list of str - the Artifact URIs as
+            represented at CADC. Sufficient for storing/retrieving to/from
+            CADC.
         :param scheme: str, should eventually default to 'cadc'
         :param archive: str, used for Artifact URI construction
         :param mime_encoding: str, used for CADC /data storage
@@ -1581,6 +1585,7 @@ class StorageName(object):
         self._mime_type = mime_type
         self._compression = compression
         self._source_names = source_names
+        self._destination_uris = destination_uris
         self._entry = entry
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -1609,6 +1614,10 @@ class StorageName(object):
     def compressed_file_name(self):
         """The compressed file name - adds the .gz extension."""
         return f'{self.obs_id}.fits{self._compression}'
+
+    @property
+    def destination_uris(self):
+        return self._destination_uris
 
     @property
     def model_file_name(self):
