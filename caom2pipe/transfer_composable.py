@@ -140,6 +140,7 @@ class CadcTransfer(Transfer):
         :param source: str - artifact uri
         :param dest_fqn: str - fully-qualified file system name
         """
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         working_dir = os.path.dirname(dest_fqn)
         f_name = os.path.basename(dest_fqn)
         scheme_ignore, archive, f_name_ignore = mc.decompose_uri(source)
@@ -177,6 +178,7 @@ class VoTransfer(Transfer):
         self._cadc_client = value
 
     def get(self, source, dest_fqn):
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         self._cadc_client.copy(source, dest_fqn, send_md5=True)
 
 
@@ -252,7 +254,7 @@ class HttpTransfer(FitsTransfer):
         :param dest_fqn: fully-qualified string that represents file name
         :return:
         """
-        self._logger.debug(f'Retrieve {source}')
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         mc.http_get(source, dest_fqn)
         if '.fits' in dest_fqn:
             self.check(dest_fqn)
@@ -275,7 +277,7 @@ class FtpTransfer(FitsTransfer):
         :param dest_fqn: fully-qualified string that represents file name
         :return:
         """
-        self._logger.debug(f'Retrieve {source}')
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         mc.ftp_get_timeout(self._ftp_host, source, dest_fqn)
         if '.fits' in dest_fqn:
             self.check(dest_fqn)
@@ -294,6 +296,7 @@ class VoFitsTransfer(FitsTransfer):
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def get(self, source, dest_fqn):
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         self._vos_client.copy(source, dest_fqn, send_md5=True)
         if '.fits' in dest_fqn:
             self.check(dest_fqn)

@@ -938,3 +938,23 @@ def test_value_repair_cache():
     )
     test_diff = get_differences(test_compare_observation, test_observation)
     assert test_diff is None, 'expect no comparison error'
+
+
+def test_extract_file_name_from_uri():
+    # empty string
+    test_result = mc.extract_file_name_from_uri('')
+    assert test_result == '', 'wrong empty string'
+
+    # uri
+    test_result = mc.extract_file_name_from_uri('ad:TEST/abc.fits.gz')
+    assert test_result == 'abc.fits.gz', 'wrong uri'
+
+    # file name
+    test_result = mc.extract_file_name_from_uri('abc.fits.gz')
+    assert test_result == 'abc.fits.gz', 'wrong file name'
+
+    # fqn
+    test_result = mc.extract_file_name_from_uri(
+        '/usr/src/app/data/abc.fits.gz'
+    )
+    assert test_result == 'abc.fits.gz', 'wrong fqn'
