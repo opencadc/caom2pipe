@@ -1631,6 +1631,10 @@ class StorageName(object):
     def destination_uris(self):
         return self._destination_uris
 
+    @destination_uris.setter
+    def destination_uris(self, value):
+        self._destination_uris = value
+
     @property
     def model_file_name(self):
         """The file name used on local disk that holds the CAOM2 Observation

@@ -1082,7 +1082,7 @@ class DataVisit(CaomExecute):
         self._create_dir()
 
         self.logger.debug('get the input files')
-        for entry in self._storage_name.source_names:
+        for entry in self._storage_name.destination_uris:
             local_fqn = os.path.join(self.working_dir, os.path.basename(entry))
             self._transferrer.get(entry, local_fqn)
 
@@ -1106,7 +1106,7 @@ class DataVisit(CaomExecute):
     def _visit_data(self, observation):
         """Execute the visitors that require access to the full data content
         of a file."""
-        for entry in self._storage_name.source_names:
+        for entry in self._storage_name.destination_uris:
             kwargs = {
                 'working_directory': self.working_dir,
                 'science_file': entry,
