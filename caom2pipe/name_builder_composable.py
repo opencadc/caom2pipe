@@ -91,6 +91,7 @@ class StorageNameBuilder(object):
     - the collection class directly. This choice is usually masked behind
         a specialization of the data_source_composable.get_work class.
     """
+
     def __init__(self):
         pass
 
@@ -106,7 +107,6 @@ class StorageNameBuilder(object):
 
 
 class StorageNameInstanceBuilder(StorageNameBuilder):
-
     def __init__(self, collection):
         super(StorageNameInstanceBuilder, self).__init__()
         self._collection = collection

@@ -241,9 +241,7 @@ class ListDirTimeBoxDataSource(DataSource):
       very long time, and a lot of memory, in glob/walk
     """
 
-    def __init__(
-            self, config, recursive=True
-    ):
+    def __init__(self, config, recursive=True):
         """
 
         :param config: manage_composable.Config
@@ -297,8 +295,9 @@ class ListDirTimeBoxDataSource(DataSource):
                         if entry.name.endswith(extension):
                             entry_stats = entry.stat()
                             if (
-                                exec_time >= entry_stats.st_mtime >=
-                                    prev_exec_time
+                                exec_time
+                                >= entry_stats.st_mtime
+                                >= prev_exec_time
                             ):
                                 self._temp[entry_stats.st_mtime].append(
                                     entry.path
@@ -364,12 +363,14 @@ class QueryTimeBoxDataSource(DataSource):
             exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt
         )
         self._logger.debug(f'Begin get_work.')
-        query = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
-                f"archiveName = '{self._config.archive}' " \
-                f"AND fileName not like '%{self._preview_suffix}' " \
-                f"AND ingestDate > '{prev_exec_time_pz}' " \
-                f"AND ingestDate <= '{exec_time_pz}' " \
-                "ORDER BY ingestDate ASC "
+        query = (
+            f"SELECT fileName, ingestDate FROM archive_files WHERE "
+            f"archiveName = '{self._config.archive}' "
+            f"AND fileName not like '%{self._preview_suffix}' "
+            f"AND ingestDate > '{prev_exec_time_pz}' "
+            f"AND ingestDate <= '{exec_time_pz}' "
+            "ORDER BY ingestDate ASC "
+        )
         self._logger.debug(query)
         result = deque()
         rows = clc.query_tap_client(query, self._client)
@@ -427,23 +428,26 @@ class QueryTimeBoxDataSourceTS(DataSource):
         # container timezone is UTC, ad timezone is Pacific
         db_fmt = '%Y-%m-%d %H:%M:%S.%f'
         prev_exec_time_pz = datetime.strftime(
-            datetime.utcfromtimestamp(
-                prev_exec_time
-            ).astimezone(tz.gettz('US/Pacific')), db_fmt
+            datetime.utcfromtimestamp(prev_exec_time).astimezone(
+                tz.gettz('US/Pacific')
+            ),
+            db_fmt,
         )
         exec_time_pz = datetime.strftime(
-            datetime.utcfromtimestamp(
-                exec_time
-            ).astimezone(
-                tz.gettz('US/Pacific')), db_fmt
+            datetime.utcfromtimestamp(exec_time).astimezone(
+                tz.gettz('US/Pacific')
+            ),
+            db_fmt,
         )
         self._logger.debug(f'Begin get_work.')
-        query = f"SELECT fileName, ingestDate FROM archive_files WHERE " \
-                f"archiveName = '{self._config.archive}' " \
-                f"AND fileName NOT LIKE '%{self._preview_suffix}' " \
-                f"AND ingestDate > '{prev_exec_time_pz}' " \
-                f"AND ingestDate <= '{exec_time_pz}' " \
-                "ORDER BY ingestDate ASC "
+        query = (
+            f"SELECT fileName, ingestDate FROM archive_files WHERE "
+            f"archiveName = '{self._config.archive}' "
+            f"AND fileName NOT LIKE '%{self._preview_suffix}' "
+            f"AND ingestDate > '{prev_exec_time_pz}' "
+            f"AND ingestDate <= '{exec_time_pz}' "
+            "ORDER BY ingestDate ASC "
+        )
         self._logger.debug(query)
         rows = clc.query_tap_client(query, self._client)
         result = deque()

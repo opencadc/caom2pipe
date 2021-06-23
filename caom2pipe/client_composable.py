@@ -444,6 +444,7 @@ def get_cadc_meta_client(client, archive, fname):
 class FileMeta:
     """The bits of information about a file that are used to decide whether
     or not to transfer, and whether or not a transfer was successful."""
+
     f_size: int
     md5sum: str
 
@@ -657,6 +658,5 @@ def repo_update(client, observation, metrics):
         getsizeof(observation),
         'update',
         'caom2',
-        observation.observation_id
+        observation.observation_id,
     )
-

@@ -131,6 +131,5 @@ def mock_copy_md5(source, destination, **kwargs):
 
 def mock_get_node(uri, **kwargs):
     node = type('', (), {})()
-    node.props = {'length': 42,
-                  'MD5': '1234'}
+    node.props = {'length': 42, 'MD5': '1234'}
     return node

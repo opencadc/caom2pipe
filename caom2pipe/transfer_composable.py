@@ -74,8 +74,14 @@ from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 
 
-__all__ = ['CadcTransfer', 'FtpTransfer', 'HttpTransfer', 'Transfer',
-           'VoFitsTransfer', 'VoTransfer']
+__all__ = [
+    'CadcTransfer',
+    'FtpTransfer',
+    'HttpTransfer',
+    'Transfer',
+    'VoFitsTransfer',
+    'VoTransfer',
+]
 
 
 class Transfer(object):
@@ -196,6 +202,7 @@ class FitsTransfer(Transfer):
 
     def check(self, dest_fqn):
         from astropy.io import fits
+
         try:
             hdulist = fits.open(dest_fqn, memmap=True, lazy_load_hdus=False)
             hdulist.verify('warn')

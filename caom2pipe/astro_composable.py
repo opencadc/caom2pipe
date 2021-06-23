@@ -163,6 +163,7 @@ def get_datetime(from_value):
     result = None
     if from_value is not None:
         import numpy
+
         # local import, in case the container is not provisioned with
         # numpy
         if isinstance(from_value, str):
@@ -176,16 +177,20 @@ def get_datetime(from_value):
                 if '+00:00' in from_value:
                     # because %z doesn't expect the ':' in the timezone field
                     from_value = from_value[:-6]
-                for fmt in ['%H:%M:%S', '%Y/%m/%d', '%Y-%m-%d %H:%M:%S.%f',
-                            '%d/%m/%y', '%d/%m/%y %H:%M:%S']:
+                for fmt in [
+                    '%H:%M:%S',
+                    '%Y/%m/%d',
+                    '%Y-%m-%d %H:%M:%S.%f',
+                    '%d/%m/%y',
+                    '%d/%m/%y %H:%M:%S',
+                ]:
                     try:
                         result = Time(dt_datetime.strptime(from_value, fmt))
                         break
                     except ValueError:
                         pass
-        elif (
-            isinstance(from_value, numpy.int32) or
-            isinstance(from_value, float)
+        elif isinstance(from_value, numpy.int32) or isinstance(
+            from_value, float
         ):
             result = Time(dt_datetime.fromtimestamp(from_value))
     if result is None:
@@ -206,7 +211,8 @@ def get_location(latitude, longitude, elevation):
     """The CAOM model expects the telescope location to be in geocentric
     coordinates. Rely on astropy to do the conversion."""
     result = EarthLocation.from_geodetic(
-        longitude, latitude, elevation, 'WGS84')
+        longitude, latitude, elevation, 'WGS84'
+    )
     return result.x.value, result.y.value, result.z.value
 
 
@@ -267,6 +273,7 @@ def get_vo_table_session(url, session):
 
 def build_chunk_energy_bounds(wave, axis):
     import numpy as np  # limit the  effect on container content
+
     # caom2IngestEspadons.py, l698
     x = np.arange(1, wave.size + 1, dtype='float32')
     wavegrade = np.gradient(wave)
@@ -312,7 +319,7 @@ def build_plane_time_interval(start_date, end_date, samples):
     the start and end dates, and a list of samples.
     :param samples list of SubInterval instances
     :param start_date minimum SubInterval date
-    :param end_date maximum SubInterval date. """
+    :param end_date maximum SubInterval date."""
     time_bounds = caom_Interval(
         mc.to_float(start_date.value),
         mc.to_float(end_date.value),
@@ -325,7 +332,7 @@ def build_plane_time_sample(start_date, end_date):
     """Create a SubInterval for the plane-level bounding box for time, given
     the start and end dates.
     :param start_date minimum date
-    :param end_date maximum date. """
+    :param end_date maximum date."""
     start_date.format = 'mjd'
     end_date.format = 'mjd'
     return caom_shape.SubInterval(
@@ -339,9 +346,7 @@ def build_ra_dec_as_deg(ra, dec, frame='icrs'):
     Common code to go from units.hourangle, units.deg to both values in
     units.deg
     """
-    result = SkyCoord(
-        ra, dec, frame=frame, unit=(units.hourangle, units.deg)
-    )
+    result = SkyCoord(ra, dec, frame=frame, unit=(units.hourangle, units.deg))
     return result.ra.degree, result.dec.degree
 
 
@@ -398,13 +403,13 @@ class FilterMetadataCache(object):
     """
 
     def __init__(
-            self,
-            repair_filter_lookup,
-            repair_instrument_lookup,
-            telescope,
-            cache=None,
-            default_key='NONE',
-            connected=True,
+        self,
+        repair_filter_lookup,
+        repair_instrument_lookup,
+        telescope,
+        cache=None,
+        default_key='NONE',
+        connected=True,
     ):
         # a dict
         # key - the collection filter name
@@ -460,13 +465,9 @@ class FilterMetadataCache(object):
         """
         if self._connected:
             if (
-                (
-                    instrument is None or (
-                        isinstance(instrument, Enum) and
-                        instrument.value is None
-                    )
-                ) and filter_name is None
-            ):
+                instrument is None
+                or (isinstance(instrument, Enum) and instrument.value is None)
+            ) and filter_name is None:
                 result = self._cache.get(self._default_key)
             else:
                 cache_key = self._get_cache_key(instrument, filter_name)

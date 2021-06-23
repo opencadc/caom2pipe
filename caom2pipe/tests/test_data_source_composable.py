@@ -94,12 +94,10 @@ def test_list_dir_data_source():
         os.mkdir(test_config.working_directory)
     os.chmod(
         test_config.working_directory,
-        stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR
+        stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
     )
 
-    for entry in [
-        'TEST.fits.gz', 'TEST1.fits', 'TEST2.fits.fz', 'TEST3.hdf5'
-    ]:
+    for entry in ['TEST.fits.gz', 'TEST1.fits', 'TEST2.fits.fz', 'TEST3.hdf5']:
         if not os.path.exists(f'{test_config.working_directory}/{entry}'):
             with open(f'{test_config.working_directory}/{entry}', 'w') as f:
                 f.write('test content')
@@ -190,6 +188,7 @@ def test_storage_time_box_query(query_mock):
 def test_vault_list_dir_data_source():
     def _query_mock(ignore_source_directory):
         return ['abc.txt', 'abc.fits']
+
     test_vos_client = Mock()
     test_vos_client.listdir.side_effect = _query_mock
     test_config = mc.Config()
@@ -208,6 +207,7 @@ def test_list_dir_time_box_data_source():
 
     test_dir = '/test_files/1'
     import time
+
     time.sleep(1)
     test_sub_dir = '/test_files/1/sub_directory'
     test_file_1 = os.path.join(test_dir, 'abc1.fits')
@@ -257,13 +257,9 @@ def test_list_dir_time_box_data_source():
             test_prev_exec_time, test_exec_time
         )
         assert test_result is not None, 'expect a non-recursive result'
-        assert (
-            len(test_result) == 1
-        ), 'expect contents in non-recursive result'
+        assert len(test_result) == 1, 'expect contents in non-recursive result'
         x = [ii.entry_name for ii in test_result]
-        assert (
-            test_file_2 not in x
-        ), 'recursive result should not be present'
+        assert test_file_2 not in x, 'recursive result should not be present'
     finally:
         if os.path.exists(test_file_2):
             os.unlink(test_file_2)
@@ -277,16 +273,17 @@ def test_list_dir_separate_data_source():
     test_config = mc.Config()
     test_config.data_sources = ['/test_files']
     test_config.data_source_extensions = [
-        '.fits', '.fits.gz', '.fits.fz', '.hdf5'
+        '.fits',
+        '.fits.gz',
+        '.fits.fz',
+        '.hdf5',
     ]
     test_subject = dsc.ListDirSeparateDataSource(test_config)
     assert test_subject is not None, 'ctor is broken'
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a result'
     assert len(test_result) == 65, 'expect contents in the result'
-    assert (
-        '/test_files/sub_directory/abc.fits' in test_result
-    ), 'wrong entry'
+    assert '/test_files/sub_directory/abc.fits' in test_result, 'wrong entry'
 
     test_subject = dsc.ListDirSeparateDataSource(test_config, recursive=False)
     test_result = test_subject.get_work()
