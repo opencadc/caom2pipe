@@ -270,6 +270,7 @@ class ListDirTimeBoxDataSource(DataSource):
             f'Begin get_time_box_work from {prev_exec_time} to {exec_time}.'
         )
         for source in self._source_directories:
+            self._logger.debug(f'Looking for work in {source}')
             self._append_work(prev_exec_time, exec_time, source)
         # ensure the result returned is sorted by timestamp in ascending
         # order
@@ -294,21 +295,22 @@ class ListDirTimeBoxDataSource(DataSource):
                             prev_exec_time, exec_time, entry.path
                         )
                 else:
-                    for extension in self._extensions:
-                        if self.default_filter(entry, extension):
-                            entry_stats = entry.stat()
-                            if (
-                                exec_time
-                                >= entry_stats.st_mtime
-                                >= prev_exec_time
-                            ):
-                                self._temp[entry_stats.st_mtime].append(
-                                    entry.path
-                                )
-                                break
+                    if self.default_filter(entry):
+                        entry_stats = entry.stat()
+                        if (
+                            exec_time
+                            >= entry_stats.st_mtime
+                            >= prev_exec_time
+                        ):
+                            self._temp[entry_stats.st_mtime].append(
+                                entry.path
+                            )
 
-    def default_filter(self, entry, extension):
-        return entry.name.endswith(extension)
+    def default_filter(self, entry):
+        for extension in self._extensions:
+            if entry.name.endswith(extension):
+                return True
+        return False
 
 
 class TodoFileDataSource(DataSource):
