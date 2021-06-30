@@ -199,44 +199,48 @@ class FitsTransfer(Transfer):
     def observable(self, value):
         self._observable = value
 
-    def get(self, source, dest_fqn):
-        raise NotImplementedError
-
     def check(self, dest_fqn):
         from astropy.io import fits
-
         try:
             hdulist = fits.open(dest_fqn, memmap=True, lazy_load_hdus=False)
             hdulist.verify('warn')
             for h in hdulist:
                 h.verify('warn')
             hdulist.close()
-        except (fits.VerifyError, OSError) as e:
+        except (fits.VerifyError, OSError) as e1:
             if self._observable is not None:
                 self._observable.rejected.record(
                     mc.Rejected.BAD_DATA, os.path.basename(dest_fqn)
                 )
-            if os.path.exists(dest_fqn):
-                os.unlink(dest_fqn)
-                raise mc.CadcException(
-                    f'astropy verify error {dest_fqn} when reading {e}'
-                )
+            msg = f'astropy verify error {dest_fqn} when reading {e1}'
+            self.failure_action(dest_fqn, msg)
         # a second check that fails for some NEOSSat cases - if this works,
         # the file might have been correctly retrieved
         try:
             # ignore the return value - if the file is corrupted, the getdata
             # fails, which is the only interesting behaviour here
             fits.getdata(dest_fqn, ext=0)
-        except (TypeError, OSError) as e:
+        except (TypeError, OSError) as e2:
             if self._observable is not None:
                 self._observable.rejected.record(
                     mc.Rejected.BAD_DATA, os.path.basename(dest_fqn)
                 )
-            if os.path.exists(dest_fqn):
-                os.unlink(dest_fqn)
-            raise mc.CadcException(
-                f'astropy getdata error {dest_fqn} when reading {e}'
+            msg = f'astropy getdata error {dest_fqn} when reading {e2}'
+            self.failure_action(dest_fqn, msg)
+
+    def get(self, source, dest_fqn):
+        raise NotImplementedError
+
+    def failure_action(self, fqn, msg):
+        try:
+            if os.path.exists(fqn):
+                os.unlink(fqn)
+        except Exception as e:
+            self._logger.error(
+                f'Failed to clean up {fqn} after a verification error.'
             )
+            raise mc.CadcException(e)
+        raise mc.CadcException(msg)
 
 
 class HttpTransfer(FitsTransfer):

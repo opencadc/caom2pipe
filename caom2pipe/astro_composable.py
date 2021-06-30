@@ -70,6 +70,7 @@
 import io
 import logging
 import requests
+import traceback
 
 from astropy import units
 from astropy.io import fits
@@ -99,6 +100,7 @@ __all__ = [
     'build_plane_time_interval',
     'build_plane_time_sample',
     'build_ra_dec_as_deg',
+    'check_fits',
     'convert_time',
     'FilterMetadataCache',
     'get_datetime',
@@ -123,6 +125,40 @@ def find_time_bounds(headers):
     date = headers[0].get('DATE-OBS')
     exposure = headers[0].get('TEXP')
     return convert_time(date, exposure)
+
+
+def check_fits(fqn):
+    """
+    Two FITS verification methods, returns False if either one fails.
+
+    :param fqn: FITS file to check
+    :return: boolean True if the file passes the two verification steps,
+        False otherwise
+    """
+    try:
+        hdulist = fits.open(fqn, memmap=True, lazy_load_hdus=False)
+        hdulist.verify('warn')
+        for h in hdulist:
+            h.verify('warn')
+        hdulist.close()
+        logging.debug(f'hdulist verify succeeded for {fqn}')
+    except (fits.VerifyError, OSError) as e1:
+        logging.debug(traceback.format_exc())
+        logging.error(f'astropy verify error {fqn} when reading {e1}')
+        return False
+
+    # a second check that fails for some NEOSSat cases - if this works,
+    # the file might have been correctly retrieved
+    try:
+        # ignore the return value - if the file is corrupted, the getdata
+        # fails, which is the only interesting behaviour here
+        fits.getdata(fqn, ext=0)
+    except (TypeError, OSError) as e2:
+        logging.debug(traceback.format_exc())
+        logging.error(f'astropy getdata error {fqn} when reading {e2}')
+        return False
+
+    return True
 
 
 def convert_time(start_time, exposure):

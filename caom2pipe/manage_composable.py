@@ -175,36 +175,12 @@ class Features(object):
     """Boolean feature flag implementation."""
 
     def __init__(self):
-        self._use_file_names = True
-        self._use_urls = True
         self._run_in_airflow = True
         self._supports_composite = True
         self._supports_catalog = True
         self._supports_latest_client = False
         self._supports_multiple_files = True
         self._expects_retry = True
-
-    @property
-    def use_file_names(self):
-        """If true, the lists of work to be done are expected to
-        identify file names. If false, they are expected to identify
-        observation IDs."""
-        return self._use_file_names
-
-    @use_file_names.setter
-    def use_file_names(self, value):
-        self._use_file_names = value
-
-    @property
-    def use_urls(self):
-        """If true, the lists of work to be done are expected to
-        identify URLs. If false, they are expected to identify
-        observation IDs. This and use_file_names cannot both be True."""
-        return self._use_urls
-
-    @use_urls.setter
-    def use_urls(self, value):
-        self._use_urls = value
 
     @property
     def run_in_airflow(self):
@@ -635,6 +611,7 @@ class Config(object):
         self._failure_log_file_name = None
         # the fully qualified name for the file
         self.failure_fqn = None
+        self._cleanup_files_when_storing = False
         self._report_fqn = None
         self._retry_file_name = None
         # the fully qualified name for the file
@@ -653,7 +630,7 @@ class Config(object):
         self.rejected_fqn = None
         self.slack_channel = None
         self.slack_token = None
-        self._store_newer_files_only = False
+        self._store_modified_files_only = False
         self._progress_file_name = None
         self.progress_fqn = None
         self._interval = None
@@ -667,6 +644,8 @@ class Config(object):
         self._data_source_extensions = ['.fits']
         self._recurse_data_sources = True
         self._features = Features()
+        self._cleanup_failure_destination = None
+        self._cleanup_success_destination = None
 
     @property
     def is_connected(self):
@@ -800,6 +779,42 @@ class Config(object):
         }
         if value in lookup:
             self._logging_level = lookup[value]
+
+    @property
+    def cleanup_files_when_storing(self):
+        """boolean - clean up files when finished with a possibly unsuccessful
+        attempt to STORE."""
+        return self._cleanup_files_when_storing
+
+    @cleanup_files_when_storing.setter
+    def cleanup_files_when_storing(self, value):
+        self._cleanup_files_when_storing = value
+
+    @property
+    def cleanup_success_destination(self):
+        """
+        If cleanup_files_when_storing is set to True, after a successful
+        STORE to CADC, the file will be 'mv'd to this destination. Probably
+        a fully-qualified directory name, but HTTP is always a possibility.
+        """
+        return self._cleanup_success_destination
+
+    @cleanup_success_destination.setter
+    def cleanup_success_destination(self, value):
+        self._cleanup_success_destination = value
+
+    @property
+    def cleanup_failure_destination(self):
+        """
+        If cleanup_files_when_storing is set to True, after a failed
+        STORE to CADC, the file will be 'mv'd to this destination. Probably
+        a fully-qualified directory name, but HTTP is always a possibility.
+        """
+        return self._cleanup_failure_destination
+
+    @cleanup_failure_destination.setter
+    def cleanup_failure_destination(self, value):
+        self._cleanup_failure_destination = value
 
     @property
     def recurse_data_sources(self):
@@ -960,12 +975,12 @@ class Config(object):
         self._slack_token = value
 
     @property
-    def store_newer_files_only(self):
-        return self._store_newer_files_only
+    def store_modified_files_only(self):
+        return self._store_modified_files_only
 
-    @store_newer_files_only.setter
-    def store_newer_files_only(self, value):
-        self._store_newer_files_only = value
+    @store_modified_files_only.setter
+    def store_modified_files_only(self, value):
+        self._store_modified_files_only = value
 
     @property
     def progress_file_name(self):
@@ -1094,6 +1109,12 @@ class Config(object):
             f'  log_file_directory:: {self.log_file_directory}\n'
             f'  log_to_file:: {self.log_to_file}\n'
             f'  logging_level:: {self.logging_level}\n'
+            f'  cleanup_files_when_storing:: '
+            f'{self.cleanup_files_when_storing}\n'
+            f'  cleanup_success_destination:: '
+            f'{self.cleanup_success_destination}\n'
+            f'  cleanup_failure_destination:: '
+            f'{self.cleanup_failure_destination}\n'
             f'  netrc_file:: {self.netrc_file}\n'
             f'  observable_directory:: {self.observable_directory}\n'
             f'  observe_execution:: {self.observe_execution}\n'
@@ -1115,7 +1136,7 @@ class Config(object):
             f'  slack_token:: secret\n'
             f'  source_host:: {self.source_host}\n'
             f'  state_fqn:: {self.state_fqn}\n'
-            f'  store_newer_files_only:: {self.store_newer_files_only}\n'
+            f'  store_modified_files_only:: {self.store_modified_files_only}\n'
             f'  stream:: {self.stream}\n'
             f'  success_fqn:: {self.success_fqn}\n'
             f'  success_log_file_name:: {self.success_log_file_name}\n'
@@ -1187,6 +1208,15 @@ class Config(object):
             )
             self.tap_id = config.get('tap_id', 'ivo://cadc.nrc.ca/sc2tap')
             self.use_local_files = bool(config.get('use_local_files', False))
+            self.cleanup_failure_destination = config.get(
+                'cleanup_failure_destination', None
+            )
+            self.cleanup_files_when_storing = bool(
+                config.get('cleanup_files_when_storing', False)
+            )
+            self.cleanup_success_destination = config.get(
+                'cleanup_success_destination', None
+            )
             self.logging_level = config.get('logging_level', 'DEBUG')
             self.log_to_file = config.get('log_to_file', False)
             self.log_file_directory = config.get(
@@ -1229,8 +1259,8 @@ class Config(object):
             self.slack_channel = config.get('slack_channel', None)
             self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
-            self.store_newer_files_only = config.get(
-                'store_newer_files_only', False
+            self.store_modified_files_only = config.get(
+                'store_modified_files_only', False
             )
             self._report_fqn = os.path.join(
                 self.log_file_directory,
