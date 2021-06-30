@@ -114,6 +114,9 @@ class DataSource(object):
         self._start_time_ts = None
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    def clean_up(self):
+        pass
+
     def get_work(self):
         return []
 
@@ -292,7 +295,7 @@ class ListDirTimeBoxDataSource(DataSource):
                         )
                 else:
                     for extension in self._extensions:
-                        if entry.name.endswith(extension):
+                        if self.default_filter(entry, extension):
                             entry_stats = entry.stat()
                             if (
                                 exec_time
@@ -303,6 +306,9 @@ class ListDirTimeBoxDataSource(DataSource):
                                     entry.path
                                 )
                                 break
+
+    def default_filter(self, entry, extension):
+        return entry.name.endswith(extension)
 
 
 class TodoFileDataSource(DataSource):

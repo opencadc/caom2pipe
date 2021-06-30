@@ -431,13 +431,16 @@ def get_cadc_headers_client(archive, file_name, client):
 
 def get_cadc_meta_client(client, archive, fname):
     """
-    Gets contentType, contentLength and contentChecksum of a CADC artifact
+    Retrieve metadata for a single file from the original CADC storage
+    system.
+
     :param client: CadcDataClient instance
     :param archive: archive file has been stored to
     :param fname: name of file in the archive
-    :return:
+    :return: FileMeta
     """
-    return client.get_file_info(archive, fname)
+    temp = client.get_file_info(archive, fname)
+    return FileMeta(temp.get('size'), temp.get('md5sum'))
 
 
 @dataclass
@@ -459,7 +462,7 @@ def get_cadc_meta_client_v(storage_name, cadc_client):
 
     :param storage_name: Artifact URI
     :param cadc_client:
-    :return:
+    :return: FileMeta
     """
     node = cadc_client.get_node(storage_name, limit=None, force=False)
     f_size = node.props.get('length')

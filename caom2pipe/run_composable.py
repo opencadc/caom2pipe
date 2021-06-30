@@ -197,6 +197,7 @@ class TodoRunner(object):
         self._logger.debug('End _build_todo_list.')
 
     def _finish_run(self):
+        self._data_source.clean_up()
         mc.create_dir(self._config.log_file_directory)
         self._organizer.observable.rejected.persist_state()
         self._organizer.observable.metrics.capture()

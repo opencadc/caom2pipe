@@ -117,7 +117,6 @@ import sys
 import traceback
 
 from datetime import datetime
-from dateutil import tz
 from shutil import move
 from urllib.parse import urlparse
 
@@ -206,13 +205,6 @@ class CaomExecute(object):
         self.log_file_directory = None
         self.data_visitors = []
         self.supports_latest_client = config.features.supports_latest_client
-        if hasattr(config, 'store_newer_files_only'):
-            self.store_newer_files_only = (
-                config.store_newer_files_only and config.use_local_files
-            )
-        else:
-            # do nothing different, if flag is missing from config
-            self.store_newer_files_only = False
         self._delete_cleanup_directory = (
             mc.TaskType.SCRAPE not in config.task_types
         )
@@ -374,52 +366,10 @@ class CaomExecute(object):
         """
         :param destination_name: Artifact URI
         """
-        # if use_local_files is True, and store_newer_files_only is True,
-        # and a file already exists at CADC, the file will only be sent for
-        # storage if it's last modified time is later than the last modified
-        # time of the file already at CADC
-        transfer_data = True
-        if self.store_newer_files_only:
-            # get the metadata locally
-            s = os.stat(source_name)
-            local_timestamp = s.st_mtime
-            # running from a Docker container with timezone UTC
-            local_utc = datetime.fromtimestamp(local_timestamp, tz=tz.UTC)
-
-            # get the metadata at CADC
-            if self.supports_latest_client:
-                cadc_meta = self.cadc_client.get_node(
-                    destination_name, limit=None, force=False
-                )
-                cadc_timestamp = cadc_meta.props.get('date')
-            else:
-                cadc_meta = clc.get_cadc_meta_client(
-                    self.cadc_client,
-                    self.archive,
-                    self._storage_name.file_name,
-                )
-                cadc_timestamp = cadc_meta.get('lastmod')
-
-            # CADC lastmod value looks like:
-            # 'lastmod': 'Fri, 28 Feb 2020 05:04:41 GMT'
-            cadc_utc = mc.make_time_tz(cadc_timestamp)
-            if local_utc > cadc_utc:
-                self.logger.debug(
-                    f'Transferring. {self._storage_name.file_name} has CADC '
-                    f'timestamp {cadc_utc}.'
-                )
-            else:
-                self.logger.warning(
-                    f'{self._storage_name.file_name} newer at CADC. Not '
-                    f'transferring.'
-                )
-                transfer_data = False
-
-        if transfer_data:
-            if self.supports_latest_client:
-                self._client_put(source_name, destination_name)
-            else:
-                self._cadc_data_put_client_fqn(source_name)
+        if self.supports_latest_client:
+            self._client_put(source_name, destination_name)
+        else:
+            self._cadc_data_put_client_fqn(source_name)
 
     def _cadc_data_put_client_fqn(self, source_name):
         """Store a collection file."""
@@ -1604,20 +1554,13 @@ class OrganizeExecutes(object):
     def is_rejected(self, storage_name):
         """Common code to use the appropriate identifier when checking for
         rejected entries."""
-        if self.config.features.use_urls:
-            result = self.observable.rejected.is_bad_metadata(storage_name.url)
-        elif self.config.features.use_file_names:
-            result = self.observable.rejected.is_bad_metadata(
-                storage_name.file_name
-            )
-        else:
-            result = self.observable.rejected.is_bad_metadata(
-                storage_name.obs_id
-            )
+        result = self.observable.rejected.is_bad_metadata(
+            storage_name.file_name,
+        )
         if result:
             logging.info(
-                f'Rejected observation {storage_name.obs_id} because of bad '
-                f'metadata'
+                f'Rejected observation {storage_name.file_name} because of '
+                f'bad metadata'
             )
         return result
 
