@@ -143,7 +143,7 @@ def check_fits(fqn):
         logging.debug(f'hdulist verify succeeded for {fqn}')
     except (fits.VerifyError, OSError) as e1:
         logging.debug(traceback.format_exc())
-        logging.error(f'astropy verify error {fqn} when reading {e1}')
+        logging.error(f'astropy verify error {e1} when reading {fqn}')
         return False
 
     # a second check that fails for some NEOSSat cases - if this works,
@@ -154,7 +154,7 @@ def check_fits(fqn):
         fits.getdata(fqn, ext=0)
     except (TypeError, OSError) as e2:
         logging.debug(traceback.format_exc())
-        logging.error(f'astropy getdata error {fqn} when reading {e2}')
+        logging.error(f'astropy getdata error {e2} when reading {fqn}')
         return False
 
     return True
