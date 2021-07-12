@@ -79,6 +79,7 @@ __all__ = [
     'FtpTransfer',
     'HttpTransfer',
     'Transfer',
+    'StorageInventoryTransfer',
     'VoFitsTransfer',
     'VoTransfer',
 ]
@@ -283,6 +284,25 @@ class FtpTransfer(FitsTransfer):
         """
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         mc.ftp_get_timeout(self._ftp_host, source, dest_fqn)
+        if '.fits' in dest_fqn:
+            self.check(dest_fqn)
+        self._logger.debug(f'Successfully retrieved {source}')
+
+
+class StorageInventoryTransfer(FitsTransfer):
+    """
+    Uses the StorageInventoryClient to manage transfers from CADC to local
+    disk. Have FITS integrity-checking.
+    """
+
+    def __init__(self, client):
+        super(StorageInventoryTransfer, self).__init__()
+        self._client = client
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def get(self, source, dest_fqn):
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
+        clc.si_client_get(self._client, dest_fqn, source, metrics=None)
         if '.fits' in dest_fqn:
             self.check(dest_fqn)
         self._logger.debug(f'Successfully retrieved {source}')
