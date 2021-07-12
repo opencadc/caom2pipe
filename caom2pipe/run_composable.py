@@ -609,11 +609,13 @@ def _set_logging(config):
         handler.setFormatter(formatter)
 
 
-def _set_modify_transfer(modify_transfer, config):
+def _set_modify_transfer(modify_transfer, config, client):
     if modify_transfer is None:
         if not config.use_local_files:
             if config.features.supports_latest_client:
-                modify_transfer = transfer_composable.VoTransfer()
+                modify_transfer = transfer_composable.StorageInventoryTransfer(
+                    client,
+                )
             else:
                 modify_transfer = transfer_composable.CadcTransfer()
     return modify_transfer
@@ -687,7 +689,9 @@ def run_by_todo(
         else:
             source = data_source_composable.TodoFileDataSource(config)
 
-    modify_transfer = _set_modify_transfer(modify_transfer, config)
+    modify_transfer = _set_modify_transfer(
+        modify_transfer, config, clients.data_client
+    )
 
     organizer = ec.OrganizeExecutes(
         config,
@@ -845,7 +849,9 @@ def run_by_state(
     if end_time is None:
         end_time = get_utc_now_tz()
 
-    modify_transfer = _set_modify_transfer(modify_transfer, config)
+    modify_transfer = _set_modify_transfer(
+        modify_transfer, config, clients.data_client
+    )
 
     organizer = ec.OrganizeExecutes(
         config,
@@ -902,7 +908,9 @@ def run_single(
     #
     logging.debug(f'Begin run_single {config.work_fqn}')
     clients = cc.ClientCollection(config)
-    modify_transfer = _set_modify_transfer(modify_transfer, config)
+    modify_transfer = _set_modify_transfer(
+        modify_transfer, config, clients.data_client
+    )
     organizer = ec.OrganizeExecutes(
         config,
         command_name,

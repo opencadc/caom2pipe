@@ -239,14 +239,6 @@ class CaomExecute(object):
         self.logger.debug(f'Create working directory {self.working_dir}')
         mc.create_dir(self.working_dir)
 
-    def _define_local_dirs(self, storage_name):
-        """when files are on disk don't worry about a separate directory
-        per observation"""
-        self.working_dir = self.root_dir
-        self.model_fqn = os.path.join(
-            self.working_dir, storage_name.model_file_name
-        )
-
     def _find_fits2caom2_plugin(self):
         """Find the code that is passed as the --plugin parameter to
         fits2caom2.
@@ -382,8 +374,8 @@ class CaomExecute(object):
         )
 
     def _client_put(self, source_name, destination_name):
-        """Store a collection file using VOS."""
-        clc.client_put_fqn(
+        """Store a collection file using CADC Storage Inventory clients."""
+        clc.si_client_put(
             self.cadc_client,
             source_name,
             destination_name,

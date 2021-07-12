@@ -70,12 +70,11 @@
 import glob
 import logging
 import os
-import shutil
 
 from datetime import datetime, timezone
 from mock import patch
 
-from cadcutils import net
+from cadcdata import FileInfo
 from caom2pipe import data_source_composable as dsc
 from caom2pipe import manage_composable as mc
 from caom2pipe import name_builder_composable as nbc
@@ -262,8 +261,11 @@ def test_run_state(client_mock):
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 def test_run_state_v(client_mock):
     client_mock.metadata_client.read.side_effect = tc.mock_read
-    client_mock.data_client.get_node.side_effect = tc.mock_get_node
-    client_mock.data_client.copy.return_value = 12
+    client_mock.data_client.cadcinfo.return_value = FileInfo(
+        id='cadc:TEST/anything.fits',
+        size=42,
+        md5sum='9473fdd0d880a43c21b7778d34872157',
+    )
 
     test_wd = '/usr/src/app/caom2pipe/int_test'
     caom2pipe_bookmark = 'caom2_timestamp'
@@ -333,10 +335,13 @@ def test_run_state_v(client_mock):
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
-        assert client_mock.data_client.copy.called, 'expect put call'
-        client_mock.data_client.copy.assert_called_with(
-            '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz',
-            destination='cadc:TEST/test_file.fits.gz',
+        assert client_mock.data_client.cadcput.called, 'expect put call'
+        client_mock.data_client.cadcput.assert_called_with(
+            'cadc:TEST/test_file.fits.gz',
+            src='/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz',
+            replace=True,
+            file_type='application/fits',
+            file_encoding='',
         ), 'wrong call args'
 
         # state file checking
@@ -407,12 +412,12 @@ def _get_times(test_config, caom2pipe_bookmark):
     # this timestamp is 15 minutes earlier than the timestamp of the
     # file in /caom2pipe_test
     #
-    test_start_time = '2021-05-31 15:30:09'
+    test_start_time = '2021-07-05 15:02:09'
     with open(test_config.state_fqn, 'w') as f:
         f.write('bookmarks:\n')
         f.write(f'  {caom2pipe_bookmark}:\n')
         f.write(f'    last_record: {test_start_time}\n')
     test_end_time = datetime(
-        2021, 5, 31, 15, 45, 27, 965132, tzinfo=timezone.utc
+        2021, 7, 5, 15, 19, 27, 965132, tzinfo=timezone.utc
     )
     return test_start_time, test_end_time

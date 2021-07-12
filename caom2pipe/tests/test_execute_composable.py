@@ -75,9 +75,9 @@ import sys
 from unittest.mock import Mock, patch
 
 from astropy.io import fits
-from datetime import datetime
 from hashlib import md5
 
+from cadcdata import FileInfo
 from caom2 import SimpleObservation, Algorithm
 
 from cadcdata import CadcDataClient
@@ -1115,7 +1115,7 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     assert client_mock.put_file.called, 'expect put call'
 
 
-@patch('caom2pipe.client_composable.client_put_fqn')
+@patch('caom2pipe.client_composable.si_client_put')
 @patch('vos.Client')
 def test_store_newer_files_only_flag_client(
     client_mock, put_mock, test_config
@@ -1131,9 +1131,9 @@ def test_store_newer_files_only_flag_client(
     du = [f'cadc:TEST/{test_f_name}']
     test_sn = FlagStorageName(test_f_name, sn, du)
     observable_mock = Mock(autospec=True)
-    test_node = type('', (), {})()
-    test_node.props = {'date': 'Mon, 4 Mar 2019 19:05:41 GMT'}
-    client_mock.get_node.return_value = test_node
+    client_mock.cadcinfo.return_value = FileInfo(
+        id=du[0], md5sum='d41d8cd98f00b204e9800998ecf8427e'
+    )
 
     test_subject = ec.LocalStore(
         test_config,
