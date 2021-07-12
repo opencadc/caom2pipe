@@ -88,7 +88,7 @@ from sys import getsizeof
 
 from astropy.table import Table
 
-from cadcdata import CadcDataClient
+from cadcdata import CadcDataClient, StorageInventoryClient
 from cadctap import CadcTapClient
 from cadcutils import net, exceptions
 from caom2pipe import manage_composable as mc
@@ -109,12 +109,16 @@ __all__ = [
     'get_cadc_meta_client',
     'get_cadc_meta_client_v',
     'look_pull_and_put',
-    'look_pull_and_put_v',
+    'look_pull_and_put_si',
     'query_tap_client',
     'repo_create',
     'repo_delete',
     'repo_get',
     'repo_update',
+    'si_client_get',
+    'si_client_get_headers',
+    'si_client_info',
+    'si_client_put',
 ]
 
 
@@ -167,22 +171,7 @@ class ClientCollection(object):
             self._metadata_client = CAOM2RepoClient(
                 subject, config.logging_level, config.resource_id
             )
-
-            if config.features.supports_latest_client:
-                self._logger.warning('Using vos.Client for storage.')
-                cert_file = config.proxy_fqn
-                if cert_file is not None and os.path.exists(cert_file):
-                    self._data_client = Client(vospace_certfile=cert_file)
-                else:
-                    raise mc.CadcException(
-                        'No credentials configured or found. Stopping.'
-                    )
-            else:
-                self._logger.warning(
-                    'Using cadcdata.CadcDataClient for storage.'
-                )
-                self._data_client = CadcDataClient(subject)
-
+            self._data_client = declare_client(config)
             if config.tap_id is not None:
                 self._query_client = CadcTapClient(
                     subject=subject, resource_id=config.tap_id
@@ -359,15 +348,12 @@ def data_put_fqn(
 def declare_client(config):
     """Common code to set the client used for interacting with CADC
     storage."""
+    subject = define_subject(config)
     if config.features.supports_latest_client:
         logging.warning('Using vos.Client for storage.')
-        cert_file = config.proxy_fqn
-        if cert_file is not None and os.path.exists(cert_file):
-            cadc_client = Client(vospace_certfile=cert_file)
-        else:
-            raise mc.CadcException(
-                'No credentials configured or found. Stopping.'
-            )
+        cadc_client = StorageInventoryClient(
+            subject=subject, resource_id=config.resource_id
+        )
     else:
         logging.warning('Using cadcdata.CadcDataClient for storage.')
         subject = define_subject(config)
@@ -529,8 +515,8 @@ def look_pull_and_put(
         )
 
 
-def look_pull_and_put_v(
-    storage_name, f_name, working_dir, url, cadc_client, checksum, metrics
+def look_pull_and_put_si(
+    storage_name, fqn, url, cadc_client, checksum, metrics
 ):
     """Checks to see if a file exists at CADC. If yes, stop. If no,
     pull via https to local storage, then put to CADC storage.
@@ -538,10 +524,9 @@ def look_pull_and_put_v(
     TODO - stream
     TODO - refactor to work with a single http session for archive.gemini.edu
 
-    :param storage_name The file name as it appears at CADC
-    :param f_name file name on disk for caching between the
+    :param storage_name Artifact URI as the file will appear at CADC
+    :param fqn name on disk for caching between the
         pull and the put
-    :param working_dir together with f_name, location for caching
     :param url for retrieving the file externally, if it does not exist
     :param cadc_client access to the storage service
     :param checksum what the CAOM observation says the checksum should be -
@@ -551,24 +536,22 @@ def look_pull_and_put_v(
     """
     retrieve = False
     try:
-        meta = mc._get_file_info(storage_name, cadc_client)
-        if checksum is not None and meta.md5sum != checksum:
+        cadc_meta = si_client_info(cadc_client, storage_name)
+        if checksum is not None and cadc_meta.md5sum != checksum:
             logging.debug(
-                f'Different checksums: CADC {meta.md5sum} Source {checksum}'
+                f'Different checksums: CADC {cadc_meta.md5sum} Source '
+                f'{checksum}'
             )
             retrieve = True
         else:
-            logging.info(f'{f_name} already exists at CADC.')
+            logging.info(f'{os.path.basename(fqn)} already exists at CADC.')
     except exceptions.NotFoundException:
         retrieve = True
 
     if retrieve:
-        logging.info(f'Retrieving {f_name}')
-        fqn = os.path.join(working_dir, f_name)
+        logging.info(f'Retrieving {os.path.basename(fqn)}')
         mc.http_get(url, fqn)
-        client_put(
-            cadc_client, working_dir, f_name, storage_name, metrics=metrics
-        )
+        si_client_put(cadc_client, fqn, storage_name, metrics)
 
 
 def query_tap_client(query_string, tap_client):
@@ -662,4 +645,142 @@ def repo_update(client, observation, metrics):
         'update',
         'caom2',
         observation.observation_id,
+    )
+
+
+def si_client_info(client, source):
+    """
+    Retrieve metadata for a file available from CADC using the
+    StorageInventory client.
+
+    :param client: The Client for read access to CADC storage.
+    :param source: Artifact URI - where to retrieve the file from.
+    """
+    try:
+        result = client.cadcinfo(source)
+    except Exception as e:
+        logging.error(e)
+        logging.debug(traceback.format_exc())
+        result = None
+    return result
+
+
+def si_client_get(client, fqn, source, metrics):
+    """
+    Retrieve a local copy of a file available from CADC using the
+    StorageInventory client. Assumes the working directory location exists
+    and is writeable. Checks that the md5sum of the retrieved file is the
+    same as the md5sum of the file at CADC.
+
+    :param client: The Client for read access to CADC storage.
+    :param fqn: str fully-qualified name to which the retrieved file will be
+        written.
+    :param source: Artifact URI - where to retrieve the file from.
+    :param metrics: track success execution times, and failure counts.
+    """
+    start = current()
+    try:
+        client.cadcget(source, destination=fqn)
+        if not os.path.exists(fqn):
+            raise mc.CadcException(f'Retrieve failed. {fqn} does not exist.')
+        local_meta = mc.get_file_meta(fqn)
+        cadc_meta = si_client_info(client, source)
+        if local_meta.get('md5sum') != cadc_meta.md5sum:
+            raise mc.CadcException(
+                f'Wrong MD5 checksum {local_meta.get("md5sum")} retrieved for '
+                f'{source}.'
+            )
+    except Exception as e:
+        if metrics is not None:
+            metrics.observe_failure('cadcget', 'si', os.path.basename(fqn))
+        logging.debug(traceback.format_exc())
+        raise mc.CadcException(f'Did not retrieve {fqn} because {e}')
+    if metrics is not None:
+        end = current()
+        metrics.observe(
+            start,
+            end,
+            local_meta.get('size'),
+            'cadcget',
+            'si',
+            os.path.basename(fqn),
+        )
+
+
+def si_client_get_headers(client, storage_name):
+    """
+    Creates the FITS headers object by fetching the FITS headers of a file
+    from CADC. The function takes advantage of the fhead feature of the CADC
+    storage service and retrieves just the headers and no data, minimizing
+    the transfer time.
+
+    The file may be public or proprietary, depending on the capabilities of
+    the supplied client parameter. Assumes the local directory location exists
+    and is writeable.
+
+    :param client: The Client for read access to CADC storage.
+    :param storage_name: Artifact URI - where to retrieve the file from.
+    :return: a string of keyword/value pairs.
+    """
+    try:
+        return client.cadcget(storage_name, fhead=True)
+    except Exception as e:
+        logging.debug(traceback.format_exc())
+        raise mc.CadcException(f'Did not retrieve {storage_name} header '
+                               f'because {e}')
+    # b = BytesIO()
+    # b.name = file_name
+    # client.get_file(archive, file_name, b, fhead=True)
+    # fits_header = b.getvalue().decode('ascii')
+    # b.close()
+    # return fits_header
+
+
+def si_client_put(client, fqn, storage_name, metrics):
+    """
+    Make a copy of a locally available file by writing it to CADC. Assumes
+    file and directory locations are correct.
+
+    Will check the md5sum of the file stored is the same as the md5sum of
+    the file on disk.
+
+    :param client: Client for write access to CADC storage.
+    :param fqn: str fully-qualified name from which the file will be
+        stored.
+    :param storage_name: Artifact URI - the label for storing the file.
+    :param metrics: Tracking success execution times, and failure counts.
+    """
+    start = current()
+    replace = True
+    try:
+        cadc_meta = si_client_info(client, storage_name)
+        local_meta = mc.get_file_meta(fqn)
+        if cadc_meta is None:
+            replace = False
+        logging.error(client.cadcput)
+        client.cadcput(
+            storage_name,
+            src=fqn,
+            replace=replace,
+            file_type=local_meta.get('type'),
+            file_encoding='',
+        )
+        cadc_meta = si_client_info(client, storage_name)
+        if local_meta.get('md5sum') != cadc_meta.md5sum:
+            raise mc.CadcException(
+                f'Stored file md5sum {cadc_meta.md5sum} != '
+                f'{local_meta.get("md5sum")} at CADC for {storage_name}.'
+            )
+    except Exception as e:
+        metrics.observe_failure('cadcput', 'si', os.path.basename(fqn))
+        logging.debug(traceback.format_exc())
+        raise mc.CadcException(f'Failed to store data with {e}')
+    end = current()
+    metrics.observe(
+        start,
+        end,
+        local_meta.get('size'),
+        'cadcput',
+        'si',
+        os.path.basename(fqn),
     )
