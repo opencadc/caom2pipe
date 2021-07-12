@@ -657,7 +657,7 @@ def si_client_info(client, source):
     try:
         result = client.cadcinfo(source)
     except Exception as e:
-        logging.error(e)
+        logging.error(f'cadcinfo failed for {e}')
         logging.debug(traceback.format_exc())
         result = None
     return result
@@ -755,7 +755,6 @@ def si_client_put(client, fqn, storage_name, metrics):
         local_meta = mc.get_file_meta(fqn)
         if cadc_meta is None:
             replace = False
-        logging.error(client.cadcput)
         client.cadcput(
             storage_name,
             src=fqn,
