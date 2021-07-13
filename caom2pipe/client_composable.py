@@ -351,7 +351,9 @@ def declare_client(config):
     subject = define_subject(config)
     if config.features.supports_latest_client:
         logging.warning('Using cadcdata.StorageInventoryClient for storage.')
-        cadc_client = StorageInventoryClient(subject=subject)
+        cadc_client = StorageInventoryClient(
+            subject=subject, resource_id=config.storage_inventory_resource_id
+        )
     else:
         logging.warning('Using cadcdata.CadcDataClient for storage.')
         subject = define_subject(config)
