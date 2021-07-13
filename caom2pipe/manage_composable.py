@@ -2953,7 +2953,7 @@ def http_get(url, local_fqn):
             raise CadcException(
                 f'Retrieve failed. {local_fqn} does not exist.'
             )
-    except exceptions.HttpException as e:
+    except requests.exceptions.HTTPError as e:
         logging.debug(traceback.format_exc())
         raise CadcException(
             f'Could not retrieve {local_fqn} from {url}. Failed with {e}'

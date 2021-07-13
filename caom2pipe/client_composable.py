@@ -552,7 +552,10 @@ def look_pull_and_put_si(
         retrieve = True
 
     if retrieve:
-        logging.info(f'Retrieving {os.path.basename(fqn)}')
+        logging.info(
+            f'Retrieving {os.path.basename(fqn)} for storage as '
+            f'{storage_name}'
+        )
         mc.http_get(url, fqn)
         si_client_put(cadc_client, fqn, storage_name, metrics)
 
