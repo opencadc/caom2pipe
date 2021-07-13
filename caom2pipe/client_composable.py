@@ -535,10 +535,15 @@ def look_pull_and_put_si(
     retrieve = False
     try:
         cadc_meta = si_client_info(cadc_client, storage_name)
-        if checksum is not None and cadc_meta.md5sum != checksum:
+        if (
+            (
+                checksum is not None and
+                cadc_meta is not None and
+                cadc_meta.md5sum != checksum
+            ) or cadc_meta is None
+        ):
             logging.debug(
-                f'Different checksums: CADC {cadc_meta.md5sum} Source '
-                f'{checksum}'
+                f'Different checksums: Source {checksum}, CADC {cadc_meta}'
             )
             retrieve = True
         else:
@@ -656,10 +661,14 @@ def si_client_info(client, source):
     """
     try:
         result = client.cadcinfo(source)
-    except Exception as e:
-        logging.error(f'cadcinfo failed for {e}')
+    except exceptions.NotFoundException as e1:
+        logging.error(f'cadcinfo failed for {e1}')
         logging.debug(traceback.format_exc())
         result = None
+    except Exception as e2:
+        logging.error(f'cadcinfo failed for {e2}.')
+        logging.debug(traceback.format_exc())
+        raise e2
     return result
 
 
