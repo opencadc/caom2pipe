@@ -664,9 +664,8 @@ def si_client_info(client, source):
     """
     try:
         result = client.cadcinfo(source)
-    except exceptions.NotFoundException as e1:
-        logging.error(f'cadcinfo failed for {e1}')
-        logging.debug(traceback.format_exc())
+    except exceptions.NotFoundException as e1_ignore:
+        logging.info(f'cadcinfo:: {source} not found')
         result = None
     except Exception as e2:
         logging.error(f'cadcinfo failed for {e2}.')
@@ -775,6 +774,10 @@ def si_client_put(client, fqn, storage_name, metrics):
             file_encoding='',
         )
         cadc_meta = si_client_info(client, storage_name)
+        if cadc_meta is None:
+            raise mc.CadcException(
+                f'cadcinfo failed for {storage_name}, after cadcput finished.'
+            )
         if local_meta.get('md5sum') != cadc_meta.md5sum:
             raise mc.CadcException(
                 f'Stored file md5sum {cadc_meta.md5sum} != '

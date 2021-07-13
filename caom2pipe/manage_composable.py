@@ -646,6 +646,7 @@ class Config(object):
         self._features = Features()
         self._cleanup_failure_destination = None
         self._cleanup_success_destination = None
+        self._storage_inventory_resource_id = None
 
     @property
     def is_connected(self):
@@ -844,6 +845,14 @@ class Config(object):
     @storage_host.setter
     def storage_host(self, value):
         self._storage_host = value
+
+    @property
+    def storage_inventory_resource_id(self):
+        return self._storage_inventory_resource_id
+
+    @storage_inventory_resource_id.setter
+    def storage_inventory_resource_id(self, value):
+        self._storage_inventory_resource_id = value
 
     @property
     def task_types(self):
@@ -1136,6 +1145,8 @@ class Config(object):
             f'  slack_token:: secret\n'
             f'  source_host:: {self.source_host}\n'
             f'  state_fqn:: {self.state_fqn}\n'
+            f'  storage_inventory_resource_id:: '
+            f'{self.storage_inventory_resource_id}\n'
             f'  store_modified_files_only:: {self.store_modified_files_only}\n'
             f'  stream:: {self.stream}\n'
             f'  success_fqn:: {self.success_fqn}\n'
@@ -1259,6 +1270,9 @@ class Config(object):
             self.slack_channel = config.get('slack_channel', None)
             self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
+            self.storage_inventory_resource_id = config.get(
+                'storage_inventory_resource_id', 'raven'
+            )
             self.store_modified_files_only = config.get(
                 'store_modified_files_only', False
             )
