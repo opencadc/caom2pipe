@@ -125,6 +125,10 @@ def mock_copy(source, destination):
     return os.stat(destination).st_size
 
 
+def mock_si_get(id, dest):
+    mock_copy(id, dest)
+
+
 def mock_copy_md5(source, destination, **kwargs):
     return mock_copy(source, destination)
 

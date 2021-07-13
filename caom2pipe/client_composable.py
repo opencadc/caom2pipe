@@ -687,7 +687,7 @@ def si_client_get(client, fqn, source, metrics):
     """
     start = current()
     try:
-        client.cadcget(source, destination=fqn)
+        client.cadcget(source, dest=fqn)
         if not os.path.exists(fqn):
             raise mc.CadcException(f'Retrieve failed. {fqn} does not exist.')
         local_meta = mc.get_file_meta(fqn)
