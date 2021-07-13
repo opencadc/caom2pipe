@@ -511,7 +511,7 @@ def test_si_client_get(mock_metrics, mock_client):
 
     test_source = 'gemini:GEMINI/TEST.fits'
     test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
-    mock_client.cadcget.side_effect = tc.mock_copy
+    mock_client.cadcget.side_effect = tc.mock_si_get
     mock_client.cadcinfo.return_value = FileInfo(
         test_source, md5sum='9473fdd0d880a43c21b7778d34872157'
     )
@@ -522,7 +522,7 @@ def test_si_client_get(mock_metrics, mock_client):
         metrics=mock_metrics,
     )
     mock_client.cadcget.assert_called_with(
-        test_source, destination=test_fqn
+        test_source, dest=test_fqn
     ), 'mock not called'
     assert mock_metrics.observe.called, 'mock not called'
     args, kwargs = mock_metrics.observe.call_args
