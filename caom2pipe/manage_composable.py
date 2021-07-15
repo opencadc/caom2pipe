@@ -1271,7 +1271,8 @@ class Config(object):
             self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
             self.storage_inventory_resource_id = config.get(
-                'storage_inventory_resource_id', 'raven'
+                'storage_inventory_resource_id',
+                'ivo://cadc.nrc.ca/global/raven',
             )
             self.store_modified_files_only = config.get(
                 'store_modified_files_only', False
