@@ -1203,11 +1203,11 @@ class Store(CaomExecute):
             local_fqn = os.path.join(
                 self.working_dir, temp.path.split('/')[-1]
             )
-            self.logger.debug(f'Retrieve {entry}')
+            self.logger.debug(f'Retrieve {entry} to {local_fqn}')
             self._transferrer.get(entry, local_fqn)
 
             self.logger.debug(
-                f'store the input file {entry} to '
+                f'store the input file {local_fqn} to '
                 f'{self._storage_name.destination_uris[index]}'
             )
             self._cadc_put(
