@@ -1228,6 +1228,8 @@ def to_caom2():
         f'{plugin}',
         '--lineage',
         'test_obs_id/ad:TEST/test_obs_id.fits.gz',
+        '--resource-id',
+        'ivo://cadc.nrc.ca/TEST',
     ]
     scrape_answer = [
         'test_execute_composable',
@@ -1246,6 +1248,8 @@ def to_caom2():
         f'{plugin}',
         '--lineage',
         'test_obs_id/ad:TEST/test_obs_id.fits.gz',
+        '--resource-id',
+        'ivo://cadc.nrc.ca/TEST',
     ]
     # TaskType.SCRAPE (Scrape)
     if sys.argv != scrape_answer:
