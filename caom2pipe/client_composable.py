@@ -765,7 +765,6 @@ def si_client_put(client, fqn, storage_name, metrics):
         local_meta = mc.get_file_meta(fqn)
         if cadc_meta is None:
             replace = False
-        logging.error(client.cadcput)
         client.cadcput(
             storage_name,
             src=fqn,
