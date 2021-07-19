@@ -342,6 +342,7 @@ def test_run_state_v(client_mock):
             replace=True,
             file_type='application/fits',
             file_encoding='',
+            md5_checksum='9473fdd0d880a43c21b7778d34872157',
         ), 'wrong call args'
 
         # state file checking

@@ -91,9 +91,9 @@ from astropy.table import Table
 from cadcdata import CadcDataClient, StorageInventoryClient
 from cadctap import CadcTapClient
 from cadcutils import net, exceptions
+from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 from caom2repo import CAOM2RepoClient
-from vos import Client
 
 __all__ = [
     'client_get',
@@ -725,26 +725,21 @@ def si_client_get_headers(client, storage_name):
     storage service and retrieves just the headers and no data, minimizing
     the transfer time.
 
-    The file may be public or proprietary, depending on the capabilities of
-    the supplied client parameter. Assumes the local directory location exists
-    and is writeable.
-
     :param client: The Client for read access to CADC storage.
     :param storage_name: Artifact URI - where to retrieve the file from.
     :return: a string of keyword/value pairs.
     """
     try:
-        return client.cadcget(storage_name, fhead=True)
+        b = BytesIO()
+        b.name = storage_name
+        client.cadcget(storage_name, b, fhead=True)
+        fits_header = b.getvalue().decode('ascii')
+        b.close()
+        return ac.make_headers_from_string(fits_header)
     except Exception as e:
         logging.debug(traceback.format_exc())
         raise mc.CadcException(f'Did not retrieve {storage_name} header '
                                f'because {e}')
-    # b = BytesIO()
-    # b.name = file_name
-    # client.get_file(archive, file_name, b, fhead=True)
-    # fits_header = b.getvalue().decode('ascii')
-    # b.close()
-    # return fits_header
 
 
 def si_client_put(client, fqn, storage_name, metrics):
@@ -752,8 +747,8 @@ def si_client_put(client, fqn, storage_name, metrics):
     Make a copy of a locally available file by writing it to CADC. Assumes
     file and directory locations are correct.
 
-    Will check the md5sum of the file stored is the same as the md5sum of
-    the file on disk.
+    Uses StorageInventoryClient to check the md5sum of the file stored is
+    the same as the md5sum of the file on disk.
 
     :param client: Client for write access to CADC storage.
     :param fqn: str fully-qualified name from which the file will be
@@ -763,32 +758,28 @@ def si_client_put(client, fqn, storage_name, metrics):
     """
     start = current()
     replace = True
+    cwd = os.getcwd()
     try:
         cadc_meta = si_client_info(client, storage_name)
+        os.chdir(os.path.dirname(fqn))
         local_meta = mc.get_file_meta(fqn)
         if cadc_meta is None:
             replace = False
+        logging.error(client.cadcput)
         client.cadcput(
             storage_name,
             src=fqn,
             replace=replace,
             file_type=local_meta.get('type'),
             file_encoding='',
+            md5_checksum=local_meta.get('md5sum'),
         )
-        cadc_meta = si_client_info(client, storage_name)
-        if cadc_meta is None:
-            raise mc.CadcException(
-                f'cadcinfo failed for {storage_name}, after cadcput finished.'
-            )
-        if local_meta.get('md5sum') != cadc_meta.md5sum:
-            raise mc.CadcException(
-                f'Stored file md5sum {cadc_meta.md5sum} != '
-                f'{local_meta.get("md5sum")} at CADC for {storage_name}.'
-            )
     except Exception as e:
         metrics.observe_failure('cadcput', 'si', os.path.basename(fqn))
         logging.debug(traceback.format_exc())
         raise mc.CadcException(f'Failed to store data with {e}')
+    finally:
+        os.chdir(cwd)
     end = current()
     metrics.observe(
         start,
