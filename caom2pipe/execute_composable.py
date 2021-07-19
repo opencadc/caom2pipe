@@ -208,6 +208,8 @@ class CaomExecute(object):
         self._delete_cleanup_directory = (
             mc.TaskType.SCRAPE not in config.task_types
         )
+        self._storage_inventory_resource_id = \
+            config.storage_inventory_resource_id
 
     def __str__(self):
         return (
@@ -266,8 +268,10 @@ class CaomExecute(object):
         temp = (
             f'{self.command_name} {self.logging_level_param} {conn} '
             f'{self.cred_param} --observation {self.collection} '
-            f'{self.obs_id} --local {local_fqn} --out {self.model_fqn} '
-            f'--plugin {plugin} --module {plugin} --lineage {self.lineage}'
+            f'{self._storage_name.obs_id} --local {local_fqn} --out '
+            f'{self.model_fqn} --plugin {plugin} --module {plugin} '
+            f'--lineage {self._storage_name.lineage} '
+            f'--resource-id {self._storage_inventory_resource_id}'
         )
         self._invoke_to_caom2(temp, plugin)
 
@@ -280,7 +284,8 @@ class CaomExecute(object):
             f'{self.cred_param} --observation {self.collection} '
             f'{self.obs_id} --out {self.model_fqn} '
             f'{self.external_urls_param} --plugin {plugin} --module {plugin} '
-            f'--lineage {self.lineage}'
+            f'--lineage {self._storage_name.lineage} '
+            f'--resource-id {self._storage_inventory_resource_id}'
         )
         self._invoke_to_caom2(temp, plugin)
 
@@ -293,7 +298,8 @@ class CaomExecute(object):
             f'{self.command_name} {self.logging_level_param} '
             f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
             f'{self.external_urls_param} --plugin {plugin} --module '
-            f'{plugin} --lineage {self.lineage}'
+            f'{plugin} --lineage {self._storage_name.lineage} '
+            f'--resource-id {self._storage_inventory_resource_id}'
         )
         self._invoke_to_caom2(temp, plugin)
 
@@ -303,14 +309,18 @@ class CaomExecute(object):
         # so far, the plugin is also the module :)
         local_fqn = os.path.join(self.working_dir, self.fname)
         conn = ''
-        if not connected:
+        resource_id = ''
+        if connected:
+            resource_id = f'--resource-id ' \
+                          f'{self._storage_inventory_resource_id}'
+        else:
             conn = f'--not_connected'
         temp = (
             f'{self.command_name} {self.logging_level_param} {conn} '
             f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
             f'--local '
             f'{local_fqn} --plugin {plugin} --module {plugin} '
-            f'--lineage {self._storage_name.lineage}'
+            f'--lineage {self._storage_name.lineage} {resource_id}'
         )
         self._invoke_to_caom2(temp, plugin)
 

@@ -71,7 +71,9 @@ import glob
 import logging
 import os
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
+
+import dateutil.tz
 from mock import patch
 
 from cadcdata import FileInfo
@@ -164,6 +166,7 @@ def test_run_state(client_mock):
     test_config.features.use_urls = False
     test_config.features.supports_latest_client = False
     test_config.use_local_files = False
+    test_config.storage_inventory_resource_id = 'ivo://cadc.nrc.ca/test'
 
     if not os.path.exists(test_wd):
         os.mkdir(test_wd)
@@ -305,6 +308,7 @@ def test_run_state_v(client_mock):
     test_config.features.use_urls = False
     test_config.features.supports_latest_client = True
     test_config.use_local_files = False
+    test_config.storage_inventory_resource_id = 'ivo://cadc.nrc.ca/test'
 
     if not os.path.exists(test_wd):
         os.mkdir(test_wd)
@@ -403,21 +407,19 @@ def test_run_state_v(client_mock):
 
 
 def _get_times(test_config, caom2pipe_bookmark):
-    # if this test is failing, did the docker container get
-    # restarted recently?
-    # first create /caom2pipe_test/1000003f.fits.fz,
-    # then check that the test_start_time and test_end_time values
-    # correspond somewhat to the timestamp on that file
-    #
-    # this timestamp is 15 minutes earlier than the timestamp of the
-    # file in /caom2pipe_test
-    #
-    test_start_time = '2021-07-05 15:02:09'
+    if not os.path.exists('/caom2pipe_test'):
+        os.mkdir('/caom2pipe_test')
+        from pathlib import Path
+        Path('/caom2pipe_test/1000003f.fits.fz').touch()
+
+    test_start_time = datetime.fromtimestamp(
+        os.stat('/caom2pipe_test/1000003f.fits.fz').st_mtime,
+        tz=dateutil.tz.UTC
+    ) - timedelta(minutes=5)
+
     with open(test_config.state_fqn, 'w') as f:
         f.write('bookmarks:\n')
         f.write(f'  {caom2pipe_bookmark}:\n')
         f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(
-        2021, 7, 5, 15, 19, 27, 965132, tzinfo=timezone.utc
-    )
+    test_end_time = test_start_time + timedelta(minutes=12)
     return test_start_time, test_end_time
