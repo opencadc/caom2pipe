@@ -70,6 +70,7 @@
 import os
 import pytest
 
+from cadcutils import exceptions
 from cadcdata import FileInfo
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
@@ -320,6 +321,7 @@ def test_look_pull_and_put_si(http_mock, mock_client):
         replace=True,
         file_type='application/fits',
         file_encoding='',
+        md5_checksum='9473fdd0d880a43c21b7778d34872157',
     ), 'mock not called'
     http_mock.assert_called_with(url, test_fqn), 'http mock not called'
     assert len(test_metrics.history) == 1, 'history conditions'
@@ -447,6 +449,7 @@ def test_si_client_put(mock_metrics, mock_client):
         replace=True,
         file_type='application/fits',
         file_encoding='',
+        md5_checksum='9473fdd0d880a43c21b7778d34872157',
     ), 'mock not called'
     assert mock_metrics.observe.called, 'mock not called'
     args, kwargs = mock_metrics.observe.call_args
@@ -459,13 +462,17 @@ def test_si_client_put(mock_metrics, mock_client):
 @patch('cadcdata.StorageInventoryClient')
 @patch('caom2pipe.manage_composable.Metrics')
 def test_si_client_put_failure(mock_metrics, mock_client):
+    def _raise():
+        raise exceptions.HttpException('some exception')
+
     if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
         with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
             f.write('test content')
 
     test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
     test_uri = 'cadc:GEMINI/TEST.fits'
-    mock_client.copy.return_value = 120
+    mock_client.cadcput.side_effect = _raise
+
     with pytest.raises(mc.CadcException):
         clc.si_client_put(
             mock_client,
@@ -479,6 +486,7 @@ def test_si_client_put_failure(mock_metrics, mock_client):
         replace=True,
         file_type='application/fits',
         file_encoding='',
+        md5_checksum='9473fdd0d880a43c21b7778d34872157',
     ), 'mock not called'
     assert mock_metrics.observe_failure.called, 'mock not called'
 
