@@ -97,7 +97,6 @@ from caom2repo import CAOM2RepoClient
 
 __all__ = [
     'client_get',
-    'client_put',
     'client_put_fqn',
     'ClientCollection',
     'current',
@@ -194,62 +193,18 @@ def client_get(client, working_directory, file_name, source, metrics):
     fqn = os.path.join(working_directory, file_name)
     try:
         retrieved_size = client.copy(source, destination=fqn)
-        if not os.path.exists(fqn):
-            raise mc.CadcException(f'Retrieve failed. {fqn} does not exist.')
-        file_size = os.stat(fqn).st_size
-        if retrieved_size != file_size:
-            raise mc.CadcException(
-                f'Wrong file size {retrieved_size} retrieved for {source}.'
-            )
     except Exception as e:
         metrics.observe_failure('copy', 'vos', file_name)
         logging.debug(traceback.format_exc())
         raise mc.CadcException(f'Did not retrieve {fqn} because {e}')
     end = current()
-    metrics.observe(start, end, file_size, 'copy', 'vos', file_name)
-
-
-def client_put(
-    client, working_directory, file_name, storage_name, metrics=None
-):
-    """
-    Make a copy of a locally available file by writing it to CADC. Assumes
-    file and directory locations are correct.
-
-    Will check that the size of the file stored is the same as the size of
-    the file on disk.
-
-    :param client: Client for write access to CADC storage.
-    :param working_directory: Where 'file_name' exists locally.
-    :param file_name: What to copy to CADC storage.
-    :param storage_name: Where to write the file.
-    :param metrics: Tracking success execution times, and failure counts.
-    """
-    start = current()
-    try:
-        fqn = os.path.join(working_directory, file_name)
-        stored_size = client.copy(fqn, destination=storage_name)
-        file_size = os.stat(fqn).st_size
-        if stored_size != file_size:
-            raise mc.CadcException(
-                f'Stored file size {stored_size} != {file_size} at CADC for '
-                f'{storage_name}.'
-            )
-    except Exception as e:
-        metrics.observe_failure('copy', 'vos', file_name)
-        logging.debug(traceback.format_exc())
-        raise mc.CadcException(f'Failed to store data with {e}')
-    end = current()
-    metrics.observe(start, end, file_size, 'copy', 'vos', file_name)
+    metrics.observe(start, end, retrieved_size, 'copy', 'vos', file_name)
 
 
 def client_put_fqn(client, source_name, destination_name, metrics=None):
     """
     Make a copy of a locally available file by writing it to CADC. Assumes
     file and directory locations are correct.
-
-    Will check that the size of the file stored is the same as the size of
-    the file on disk.
 
     :param client: Client for write access to CADC storage.
     :param source_name: fully-qualified file name on local storage
@@ -259,19 +214,13 @@ def client_put_fqn(client, source_name, destination_name, metrics=None):
     start = current()
     try:
         stored_size = client.copy(source_name, destination=destination_name)
-        file_size = os.stat(source_name).st_size
-        if stored_size != file_size:
-            raise mc.CadcException(
-                f'Stored file size {stored_size} != {file_size} at CADC for '
-                f'{destination_name}.'
-            )
     except Exception as e:
         metrics.observe_failure('copy', 'vos', os.path.basename(source_name))
         logging.debug(traceback.format_exc())
         raise mc.CadcException(f'Failed to store data with {e}')
     end = current()
     metrics.observe(
-        start, end, file_size, 'copy', 'vos', os.path.basename(source_name)
+        start, end, stored_size, 'copy', 'vos', os.path.basename(source_name)
     )
 
 
