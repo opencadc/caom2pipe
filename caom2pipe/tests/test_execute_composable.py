@@ -154,10 +154,9 @@ def test_meta_create_client_execute(test_config):
         mc.read_obs_from_file = read_obs_orig
 
 
-@patch('caom2utils.fits2caom2.CadcDataClient')
-@patch('caom2utils.fits2caom2.get_cadc_headers')
+@patch('caom2utils.fits2caom2.StorageClientWrapper')
 def test_meta_create_client_execute_failed_update(
-    headers_mock, f2c2_data_client_mock, test_config
+    f2c2_data_client_mock, test_config
 ):
     test_cred = ''
     data_client_mock = Mock()
@@ -167,10 +166,10 @@ def test_meta_create_client_execute_failed_update(
     read_obs_orig = mc.read_obs_from_file
     mc.read_obs_from_file = Mock()
     mc.read_obs_from_file.return_value = _read_obs(None)
-    f2c2_data_client_mock.return_value.get_file_info.side_effect = (
+    f2c2_data_client_mock.return_value.info.side_effect = (
         _mock_get_file_info
     )
-    headers_mock.side_effect = _get_headers
+    f2c2_data_client_mock.return_value.get_head.side_effect = _get_headers
 
     test_executor = ec.MetaCreate(
         test_config,
@@ -498,7 +497,7 @@ def test_data_store(test_config):
         test_executor.execute(None)
 
         # check that things worked as expected - no cleanup
-        assert data_client_mock.put_file.called, 'put_file call missed'
+        assert data_client_mock.put.called, 'put_file call missed'
     finally:
         os.stat = stat_orig
         os.path.exists = path_orig
@@ -986,27 +985,15 @@ def test_store(test_config):
         == 'cadc:TEST/test_file.fits.gz'
     ), 'wrong destination'
     test_subject.execute(None)
-    assert test_data_client.put_file.called, 'data put not called'
+    assert test_data_client.put.called, 'data put not called'
     assert (
-        test_data_client.put_file.call_args.args[0] == 'TEST'
+        test_data_client.put.call_args.args[0] == os.path.join(
+            tc.TEST_DATA_DIR, 'test_obs_id')
     ), 'archive not set for test_config, is set for TestStorageName'
-    assert test_data_client.put_file.call_args.args[1] == os.path.join(
-        tc.TEST_DATA_DIR,
-        'test_obs_id/nonexistent.fits.gz',
-    ), 'expect a fully-qualified file name'
     assert (
-        test_data_client.put_file.call_args.kwargs['archive_stream'] == 'TEST'
-    ), 'wrong archive stream'
-    assert (
-        test_data_client.put_file.call_args.kwargs['mime_type']
-        == 'application/fits'
-    ), 'wrong archive'
-    assert (
-        test_data_client.put_file.call_args.kwargs['mime_encoding'] is None
-    ), 'wrong archive'
-    assert (
-        test_data_client.put_file.call_args.kwargs['md5_check'] is True
-    ), 'wrong archive'
+        test_data_client.put.call_args.args[1] ==
+        'cadc:TEST/test_file.fits.gz'
+    ), 'expect a uri'
 
 
 def test_local_store(test_config):
@@ -1046,27 +1033,15 @@ def test_local_store(test_config):
         test_subject._storage_name.destination_uris[0]
         == 'cadc:TEST/test_file.fits.gz'
     ), 'wrong destination'
-    assert test_data_client.put_file.called, 'data put not called'
+    assert test_data_client.put.called, 'data put not called'
     assert (
-        test_data_client.put_file.call_args.args[0] == 'LOCAL_TEST'
-    ), 'expect an archive'
+        test_data_client.put.call_args.args[0] == os.path.join(
+            tc.TEST_DATA_DIR, 'test_obs_id'
+        )
+    ), 'working directory'
     assert (
-        test_data_client.put_file.call_args.args[1] == 'test_obs_id.fits'
+        test_data_client.put.call_args.args[1] == test_sn.destination_uris[0]
     ), 'expect a file name'
-    assert (
-        test_data_client.put_file.call_args.kwargs['archive_stream'] ==
-        'TEST'
-    ), 'wrong archive'
-    assert (
-        test_data_client.put_file.call_args.kwargs['mime_type']
-        == 'application/fits'
-    ), 'wrong archive'
-    assert (
-        test_data_client.put_file.call_args.kwargs['mime_encoding'] is None
-    ), 'wrong archive'
-    assert (
-        test_data_client.put_file.call_args.kwargs['md5_check'] is True
-    ), 'wrong archive'
 
 
 class FlagStorageName(mc.StorageName):
@@ -1088,7 +1063,7 @@ class FlagStorageName(mc.StorageName):
         return self._file_name
 
 
-@patch('cadcdata.CadcDataClient')
+@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper')
 def test_store_newer_files_only_flag(client_mock, test_config):
     # first test case
     # flag set to True, file is older at CADC, supports_latest_client = False
@@ -1100,9 +1075,9 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     du = [f'cadc:TEST/{test_f_name}']
     test_sn = FlagStorageName(test_f_name, sn, du)
     observable_mock = Mock(autospec=True)
-    client_mock.get_file_info.return_value = {
-        'lastmod': 'Mon, 4 Mar 2019 19:05:41 GMT',
-    }
+    client_mock.info.return_value = FileInfo(
+        id=du[0], lastmod='Mon, 4 Mar 2019 19:05:41 GMT'
+    )
 
     test_subject = ec.LocalStore(
         test_config,
@@ -1112,13 +1087,12 @@ def test_store_newer_files_only_flag(client_mock, test_config):
         observable_mock,
     )
     test_subject.execute(None)
-    assert client_mock.put_file.called, 'expect put call'
+    assert client_mock.put.called, 'expect put call'
 
 
-@patch('caom2pipe.client_composable.si_client_put')
-@patch('vos.Client')
+@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper')
 def test_store_newer_files_only_flag_client(
-    client_mock, put_mock, test_config
+    client_mock, test_config
 ):
     # just like the previous test, except supports_latest_client = True
     # first test case
@@ -1143,7 +1117,7 @@ def test_store_newer_files_only_flag_client(
         observable_mock,
     )
     test_subject.execute(None)
-    assert put_mock.called, 'expect copy call'
+    assert client_mock.put.called, 'expect copy call'
 
 
 def _transfer_get_mock(entry, fqn):
@@ -1159,7 +1133,7 @@ def _communicate():
     return ['return status', None]
 
 
-def _get_headers(uri, subject):
+def _get_headers(uri):
     x = """SIMPLE  =                    T / Written by IDL:  Fri Oct  6 01:48:35 2017
 BITPIX  =                  -32 / Bits per pixel
 NAXIS   =                    2 / Number of dimensions
@@ -1276,10 +1250,10 @@ def to_caom2():
     )
 
 
-def _mock_get_file_info(archive, file_id):
-    return {
-        'size': 10290,
-        'md5sum': 'md5:{}'.format(md5('-37'.encode()).hexdigest()),
-        'type': 'image/jpeg',
-        'name': file_id,
-    }
+def _mock_get_file_info(file_id):
+    return FileInfo(
+        id=file_id,
+        size=10290,
+        md5sum='{}'.format(md5('-37'.encode()).hexdigest()),
+        file_type='image/jpeg',
+    )

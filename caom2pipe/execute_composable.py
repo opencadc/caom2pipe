@@ -193,7 +193,9 @@ class CaomExecute(object):
         self.resource_id = config.resource_id
         self.cadc_client = cadc_client
         self.caom_repo_client = caom_repo_client
-        self.stream = config.stream
+        self.stream = None
+        if hasattr(config, 'stream'):
+            self.stream = config.stream
         self.meta_visitors = meta_visitors
         self.task_type = task_type
         self.cred_param = cred_param
@@ -364,33 +366,8 @@ class CaomExecute(object):
             self.observable.metrics,
         )
 
-    def _cadc_put(self, source_name, destination_name):
-        """
-        :param destination_name: Artifact URI
-        """
-        if self.supports_latest_client:
-            self._client_put(source_name, destination_name)
-        else:
-            self._cadc_data_put_client_fqn(source_name)
-
-    def _cadc_data_put_client_fqn(self, source_name):
-        """Store a collection file."""
-        clc.data_put_fqn(
-            self.cadc_client,
-            source_name,
-            self._storage_name,
-            self.stream,
-            self.observable.metrics,
-        )
-
-    def _client_put(self, source_name, destination_name):
-        """Store a collection file using CADC Storage Inventory clients."""
-        clc.si_client_put(
-            self.cadc_client,
-            source_name,
-            destination_name,
-            self.observable.metrics,
-        )
+    def _cadc_put(self, uri):
+        self.cadc_client.put(self.working_dir, uri, self.stream)
 
     def _read_model(self):
         """Read an observation into memory from an XML file on disk."""
@@ -1221,7 +1198,7 @@ class Store(CaomExecute):
                 f'{self._storage_name.destination_uris[index]}'
             )
             self._cadc_put(
-                local_fqn, self._storage_name.destination_uris[index]
+                self._storage_name.destination_uris[index]
             )
 
         self.logger.debug('clean up the workspace')
@@ -1262,7 +1239,7 @@ class LocalStore(Store):
         )
         for index, entry in enumerate(self._storage_name.source_names):
             self.logger.debug(f'store the input file {entry}')
-            self._cadc_put(entry, self._storage_name.destination_uris[index])
+            self._cadc_put(self._storage_name.destination_uris[index])
 
         self.logger.debug('End execute')
 

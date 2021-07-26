@@ -108,9 +108,8 @@ __all__ = [
     'get_timedelta_in_s',
     'get_vo_table',
     'FilterMetadataCache',
-    'make_headers_from_string',
+    'get_vo_table_session',
     'read_fits_data',
-    'read_fits_headers',
     'SVO_URL',
 ]
 
@@ -397,15 +396,6 @@ def get_timedelta_in_s(from_value):
     return td.seconds
 
 
-def make_headers_from_string(fits_header):
-    """Create a list of fits.Header instances from a string.
-    ":param fits_header a string of keyword/value pairs"""
-    delim = '\nEND'
-    extensions = [e + delim for e in fits_header.split(delim) if e.strip()]
-    headers = [fits.Header.fromstring(e, sep='\n') for e in extensions]
-    return headers
-
-
 def read_fits_data(fqn):
     """Read a complete fits file, including the data.
     :param fqn a string representing the fully-qualified name of the fits
@@ -414,18 +404,6 @@ def read_fits_data(fqn):
     """
     hdus = fits.open(fqn, memmap=True, lazy_load_hdus=False)
     return hdus
-
-
-def read_fits_headers(fqn):
-    """Read the headers from a fits file.
-    :param fqn a string representing the fully-qualified name of the fits
-        file.
-    :return fits file headers.
-    """
-    hdulist = fits.open(fqn, memmap=True, lazy_load_hdus=False)
-    hdulist.close()
-    headers = [h.header for h in hdulist]
-    return headers
 
 
 class FilterMetadataCache(object):

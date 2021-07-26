@@ -96,46 +96,55 @@ def test_client_put(mock_metrics, mock_client):
 
     test_destination = 'TBD'
     mock_client.copy.return_value = 12
-    clc.client_put(
+    clc.si_client_put(
         mock_client,
-        tc.TEST_FILES_DIR,
-        'TEST.fits',
+        os.path.join(tc.TEST_FILES_DIR, 'TEST.fits'),
         test_destination,
         metrics=mock_metrics,
     )
     test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
-    mock_client.copy.assert_called_with(
-        test_fqn, destination=test_destination
+    mock_client.cadcput.assert_called_with(
+        'TBD',
+        src='/test_files/TEST.fits',
+        replace=True,
+        file_type='application/fits',
+        file_encoding='',
+        md5_checksum='9473fdd0d880a43c21b7778d34872157',
     ), 'mock not called'
     assert mock_metrics.observe.called, 'mock not called'
     args, kwargs = mock_metrics.observe.call_args
     assert args[2] == 12, 'wrong size'
-    assert args[3] == 'copy', 'wrong endpoint'
-    assert args[4] == 'vos', 'wrong service'
+    assert args[3] == 'cadcput', 'wrong endpoint'
+    assert args[4] == 'si', 'wrong service'
     assert args[5] == 'TEST.fits', 'wrong id'
 
 
-@patch('vos.vos.Client')
 @patch('caom2pipe.manage_composable.Metrics')
-def test_client_put_failure(mock_metrics, mock_client):
+def test_client_put_failure(mock_metrics):
     if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
         with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
             f.write('test content')
 
-    # TODO
+    mock_client = Mock()
+    mock_client.cadcput.side_effect = (
+        exceptions.UnexpectedException('error state')
+    )
     test_destination = 'cadc:GEMINI/TEST.fits'
-    mock_client.copy.return_value = 120
     with pytest.raises(mc.CadcException):
-        clc.client_put(
+        clc.si_client_put(
             mock_client,
-            tc.TEST_FILES_DIR,
-            'TEST.fits',
+            os.path.join(tc.TEST_FILES_DIR, 'TEST.fits'),
             test_destination,
             metrics=mock_metrics,
         )
     test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
-    mock_client.copy.assert_called_with(
-        test_fqn, destination=test_destination
+    mock_client.cadcput.assert_called_with(
+        'cadc:GEMINI/TEST.fits',
+        src='/test_files/TEST.fits',
+        replace=True,
+        file_type='application/fits',
+        file_encoding='',
+        md5_checksum='9473fdd0d880a43c21b7778d34872157',
     ), 'mock not called'
     assert mock_metrics.observe_failure.called, 'mock not called'
 
@@ -146,15 +155,14 @@ def test_client_get_failure(mock_client):
     test_config.observe_execution = True
     test_metrics = mc.Metrics(test_config)
     with pytest.raises(mc.CadcException):
-        clc.client_get(
+        clc.si_client_get(
             mock_client,
-            tc.TEST_DATA_DIR,
-            'TEST_get.fits',
-            'TEST',
+            os.path.join(tc.TEST_DATA_DIR, 'TEST_get.fits'),
+            'cadc:TEST/TEST_get.fits',
             test_metrics,
         )
     assert len(test_metrics.failures) == 1, 'wrong failures'
-    assert test_metrics.failures['vos']['copy']['TEST_get.fits'] == 1, 'count'
+    assert test_metrics.failures['si']['cadcget']['TEST_get.fits'] == 1, 'count'
 
 
 @patch('vos.vos.Client')
