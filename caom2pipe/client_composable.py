@@ -88,9 +88,9 @@ from sys import getsizeof
 
 from astropy.table import Table
 
-from cadcdata import CadcDataClient, StorageInventoryClient
 from cadctap import CadcTapClient
 from cadcutils import net, exceptions
+from caom2utils import StorageClientWrapper
 from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 from caom2repo import CAOM2RepoClient
@@ -298,15 +298,12 @@ def declare_client(config):
     """Common code to set the client used for interacting with CADC
     storage."""
     subject = define_subject(config)
-    if config.features.supports_latest_client:
-        logging.warning('Using cadcdata.StorageInventoryClient for storage.')
-        cadc_client = StorageInventoryClient(
-            subject=subject, resource_id=config.storage_inventory_resource_id
-        )
-    else:
-        logging.warning('Using cadcdata.CadcDataClient for storage.')
-        subject = define_subject(config)
-        cadc_client = CadcDataClient(subject)
+    cadc_client = StorageClientWrapper(
+        using_storage_inventory=config.features.supports_latest_client,
+        resource_id=config.storage_inventory_resource_id,
+        subject=subject,
+        metrics=mc.Metrics(config),
+    )
     return cadc_client
 
 

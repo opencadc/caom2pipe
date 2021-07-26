@@ -69,7 +69,7 @@
 
 from mock import patch
 
-from caom2utils import ObsBlueprint, get_cadc_headers
+from caom2utils import ObsBlueprint
 from caom2pipe import manage_composable as mc
 from caom2pipe import translate_composable as tc
 

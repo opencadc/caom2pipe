@@ -260,7 +260,7 @@ def test_run_state(client_mock):
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 def test_run_state_v(client_mock):
     client_mock.metadata_client.read.side_effect = tc.mock_read
-    client_mock.data_client.cadcinfo.return_value = FileInfo(
+    client_mock.data_client.info.return_value = FileInfo(
         id='cadc:TEST/anything.fits',
         size=42,
         md5sum='9473fdd0d880a43c21b7778d34872157',
@@ -335,14 +335,11 @@ def test_run_state_v(client_mock):
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
-        assert client_mock.data_client.cadcput.called, 'expect put call'
-        client_mock.data_client.cadcput.assert_called_with(
+        assert client_mock.data_client.put.called, 'expect put call'
+        client_mock.data_client.put.assert_called_with(
+            '/usr/src/app/caom2pipe/int_test/test_obs_id',
             'cadc:TEST/test_file.fits.gz',
-            src='/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz',
-            replace=True,
-            file_type='application/fits',
-            file_encoding='',
-            md5_checksum='9473fdd0d880a43c21b7778d34872157',
+            None,
         ), 'wrong call args'
 
         # state file checking
