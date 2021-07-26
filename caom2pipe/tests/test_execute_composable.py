@@ -152,7 +152,7 @@ def test_meta_create_client_execute(test_config):
         mc.read_obs_from_file = read_obs_orig
 
 
-@patch('caom2utils.fits2caom2.StorageClientWrapper')
+@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper')
 def test_meta_create_client_execute_failed_update(
     f2c2_data_client_mock, test_config
 ):
