@@ -682,8 +682,7 @@ def test_query_tap(caps_mock, base_mock, test_config):
     assert result['count'] == 3212556, 'wrong test data'
 
 
-@patch('caom2pipe.manage_composable.data_put')
-def test_visit(ad_put_mock):
+def test_visit():
     class TestVisitor(mc.PreviewVisitor):
         def __init__(self, **kwargs):
             super(TestVisitor, self).__init__(archive='VLASS', **kwargs)
@@ -763,10 +762,14 @@ def test_visit(ad_put_mock):
         test_preview_uri in obs.planes[test_product_id].artifacts.keys()
     ), 'no preview'
 
-    assert ad_put_mock.called, 'ad put mock not called'
+    assert cadc_client_mock.put.called, 'put mock not called'
     assert (
-        ad_put_mock.call_count == expected_call_count
-    ), 'ad put called wrong number of times'
+        cadc_client_mock.put.call_count == expected_call_count
+    ), 'put called wrong number of times'
+    # it's an ad call, so there's a stream parameter
+    cadc_client_mock.put.assert_called_with(
+        '/test_files', 'ad:TEST/test_obs_id_prev.jpg', 'stream'
+    )
     # assert False
 
 

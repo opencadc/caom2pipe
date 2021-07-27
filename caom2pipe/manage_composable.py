@@ -1549,15 +1549,9 @@ class PreviewVisitor(object):
 
     def _store_smalls(self):
         if self._cadc_client is not None:
-            for entry in self._previews.values():
-                data_put(
-                    self._cadc_client,
-                    self._working_dir,
-                    entry.f_name,
-                    self._archive,
-                    self._stream,
-                    mime_type=entry.mime_type,
-                    metrics=self._observable.metrics,
+            for uri, entry in self._previews.items():
+                self._cadc_client.put(
+                    self._working_dir, uri, self._stream
                 )
 
 
