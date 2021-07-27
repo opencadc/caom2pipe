@@ -79,7 +79,6 @@ __all__ = [
     'FtpTransfer',
     'HttpTransfer',
     'Transfer',
-    'StorageInventoryTransfer',
     'VoFitsTransfer',
     'VoTransfer',
 ]
@@ -120,7 +119,7 @@ class Transfer(object):
 
 class CadcTransfer(Transfer):
     """
-    Uses the CadcDataClient to manage transfers from CADC to local disk.
+    Uses the StorageClientWrapper to manage transfers from CADC to local disk.
     """
 
     def __init__(self):
@@ -141,17 +140,9 @@ class CadcTransfer(Transfer):
         :param source: str - artifact uri
         :param dest_fqn: str - fully-qualified file system name
         """
-        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
+        self._logger.error(f'Transfer from {source} to {dest_fqn}.')
         working_dir = os.path.dirname(dest_fqn)
-        f_name = os.path.basename(dest_fqn)
-        scheme_ignore, archive, f_name_ignore = mc.decompose_uri(source)
-        clc.data_get(
-            self._cadc_client,
-            working_dir,
-            f_name,
-            archive,
-            self._observable.metrics,
-        )
+        self._cadc_client.get(working_dir, source)
 
     def check(self, dest_fqn):
         """Assumes fits files at this time. Returns true because the
@@ -284,25 +275,6 @@ class FtpTransfer(FitsTransfer):
         """
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         mc.ftp_get_timeout(self._ftp_host, source, dest_fqn)
-        if '.fits' in dest_fqn:
-            self.check(dest_fqn)
-        self._logger.debug(f'Successfully retrieved {source}')
-
-
-class StorageInventoryTransfer(FitsTransfer):
-    """
-    Uses the StorageInventoryClient to manage transfers from CADC to local
-    disk. Have FITS integrity-checking.
-    """
-
-    def __init__(self, client):
-        super(StorageInventoryTransfer, self).__init__()
-        self._client = client
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    def get(self, source, dest_fqn):
-        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
-        clc.si_client_get(self._client, dest_fqn, source, metrics=None)
         if '.fits' in dest_fqn:
             self.check(dest_fqn)
         self._logger.debug(f'Successfully retrieved {source}')
