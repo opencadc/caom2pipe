@@ -254,51 +254,9 @@ def test_define_subject():
         os.getcwd = getcwd_orig
 
 
-@patch('cadcdata.core.CadcDataClient')
+@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper')
 @patch('caom2pipe.manage_composable.http_get')
 def test_look_pull_and_put(http_mock, mock_client):
-    stat_orig = os.stat
-    os.stat = Mock()
-    os.stat.return_value = Mock(st_size=1234)
-    try:
-        f_name = 'test_f_name.fits'
-        url = f'https://localhost/{f_name}'
-        test_config = mc.Config()
-        test_config.observe_execution = True
-        test_metrics = mc.Metrics(test_config)
-        assert len(test_metrics.history) == 0, 'initial history conditions'
-        assert len(test_metrics.failures) == 0, 'initial failure conditions'
-        clc.look_pull_and_put(
-            f_name,
-            tc.TEST_DATA_DIR,
-            url,
-            'TEST',
-            'default',
-            'application/fits',
-            mock_client,
-            'md5:01234',
-            test_metrics,
-        )
-        mock_client.put_file.assert_called_with(
-            'TEST',
-            f_name,
-            archive_stream='default',
-            md5_check=True,
-            mime_encoding=None,
-            mime_type='application/fits',
-        ), 'mock not called'
-        http_mock.assert_called_with(
-            url, os.path.join(tc.TEST_DATA_DIR, f_name)
-        ), 'http mock not called'
-        assert len(test_metrics.history) == 1, 'history conditions'
-        assert len(test_metrics.failures) == 0, 'failure conditions'
-    finally:
-        os.stat = stat_orig
-
-
-@patch('cadcdata.StorageInventoryClient')
-@patch('caom2pipe.manage_composable.http_get')
-def test_look_pull_and_put_si(http_mock, mock_client):
     test_storage_name = 'cadc:GEMINI/TEST.fits'
     mock_client.cadcinfo.return_value = FileInfo(
         id=test_storage_name,
@@ -309,31 +267,19 @@ def test_look_pull_and_put_si(http_mock, mock_client):
     url = f'https://localhost/{f_name}'
     test_config = mc.Config()
     test_config.observe_execution = True
-    test_metrics = mc.Metrics(test_config)
-    mock_client.get_node.side_effect = tc.mock_get_node
-    mock_client.copy.return_value = 1234
-    assert len(test_metrics.history) == 0, 'initial history conditions'
-    assert len(test_metrics.failures) == 0, 'initial failure conditions'
+    mock_client.info.return_value = None
     test_fqn = os.path.join(tc.TEST_FILES_DIR, f_name)
-    clc.look_pull_and_put_si(
+    clc.look_pull_and_put(
         test_storage_name,
         test_fqn,
         url,
         mock_client,
         'md5:01234',
-        test_metrics,
     )
-    mock_client.cadcput.assert_called_with(
-        test_storage_name,
-        src=test_fqn,
-        replace=True,
-        file_type='application/fits',
-        file_encoding='',
-        md5_checksum='9473fdd0d880a43c21b7778d34872157',
+    mock_client.put.assert_called_with(
+        tc.TEST_FILES_DIR, test_storage_name
     ), 'mock not called'
     http_mock.assert_called_with(url, test_fqn), 'http mock not called'
-    assert len(test_metrics.history) == 1, 'history conditions'
-    assert len(test_metrics.failures) == 0, 'failure conditions'
 
 
 @patch('caom2repo.core.CAOM2RepoClient')

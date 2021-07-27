@@ -108,7 +108,6 @@ __all__ = [
     'get_cadc_meta_client',
     'get_cadc_meta_client_v',
     'look_pull_and_put',
-    'look_pull_and_put_si',
     'query_tap_client',
     'repo_create',
     'repo_delete',
@@ -403,72 +402,10 @@ def get_cadc_meta_client_v(storage_name, cadc_client):
 
 
 def look_pull_and_put(
-    f_name,
-    working_dir,
-    url,
-    archive,
-    stream,
-    mime_type,
-    cadc_client,
-    checksum,
-    metrics,
-):
-    """Checks to see if a file exists in ad. If yes, stop. If no,
-    pull via https to local storage, then put to ad.
-
-    TODO - stream
-    TODO - refactor to work with a single http session for archive.gemini.edu
-
-    :param f_name file name on disk for caching between the
-        pull and the put
-    :param working_dir together with f_name, location for caching
-    :param url for retrieving the file externally, if it does not exist
-    :param archive for storing in ad
-    :param stream for storing in ad
-    :param mime_type because libmagic is not always available
-    :param cadc_client access to the data web service
-    :param checksum what the CAOM observation says the checksum should be -
-        just the checksum part of ChecksumURI please, or the comparison will
-        always fail.
-    :param metrics track how long operations take
-    """
-    retrieve = False
-    try:
-        meta = cadc_client.get_file_info(archive, f_name)
-        if checksum is not None and meta['md5sum'] != checksum:
-            logging.debug(
-                f'Different checksums: CADC {meta["md5sum"]} Source {checksum}'
-            )
-            retrieve = True
-        else:
-            logging.info(f'{f_name} already exists at CADC/{archive}')
-    except exceptions.NotFoundException:
-        retrieve = True
-
-    if retrieve:
-        logging.info(f'Retrieving {f_name} for {archive}')
-        fqn = os.path.join(working_dir, f_name)
-        mc.http_get(url, fqn)
-        mc.data_put(
-            cadc_client,
-            working_dir,
-            f_name,
-            archive,
-            stream,
-            mime_type,
-            mime_encoding=None,
-            metrics=metrics,
-        )
-
-
-def look_pull_and_put_si(
-    storage_name, fqn, url, cadc_client, checksum, metrics
+    storage_name, fqn, url, cadc_client, checksum
 ):
     """Checks to see if a file exists at CADC. If yes, stop. If no,
     pull via https to local storage, then put to CADC storage.
-
-    TODO - stream
-    TODO - refactor to work with a single http session for archive.gemini.edu
 
     :param storage_name Artifact URI as the file will appear at CADC
     :param fqn name on disk for caching between the
@@ -478,26 +415,22 @@ def look_pull_and_put_si(
     :param checksum what the CAOM observation says the checksum should be -
         just the checksum part of ChecksumURI please, or the comparison will
         always fail.
-    :param metrics track how long operations take
     """
     retrieve = False
-    try:
-        cadc_meta = si_client_info(cadc_client, storage_name)
-        if (
-            (
-                checksum is not None and
-                cadc_meta is not None and
-                cadc_meta.md5sum != checksum
-            ) or cadc_meta is None
-        ):
-            logging.debug(
-                f'Different checksums: Source {checksum}, CADC {cadc_meta}'
-            )
-            retrieve = True
-        else:
-            logging.info(f'{os.path.basename(fqn)} already exists at CADC.')
-    except exceptions.NotFoundException:
+    cadc_meta = cadc_client.info(storage_name)
+    if (
+        (
+            checksum is not None and
+            cadc_meta is not None and
+            cadc_meta.md5sum != checksum
+        ) or cadc_meta is None
+    ):
+        logging.debug(
+            f'Different checksums: Source {checksum}, CADC {cadc_meta}'
+        )
         retrieve = True
+    else:
+        logging.info(f'{os.path.basename(fqn)} already exists at CADC.')
 
     if retrieve:
         logging.info(
@@ -505,7 +438,7 @@ def look_pull_and_put_si(
             f'{storage_name}'
         )
         mc.http_get(url, fqn)
-        si_client_put(cadc_client, fqn, storage_name, metrics)
+        cadc_client.put(os.path.dirname(fqn), storage_name)
 
 
 def query_tap_client(query_string, tap_client):
