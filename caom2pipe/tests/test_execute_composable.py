@@ -907,10 +907,9 @@ def test_organize_executes_client_do_one(test_config):
     assert test_oe.todo_fqn == f'{tc.THIS_DIR}/todo.txt', 'wrong todo'
 
 
-@patch('caom2pipe.client_composable.data_get')
-def test_data_visit(get_mock, test_config):
-    get_mock.side_effect = Mock(autospec=True)
-    test_data_client = Mock(autospec=True)
+@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper')
+def test_data_visit(client_mock, test_config):
+    client_mock.get.side_effect = Mock(autospec=True)
     test_repo_client = Mock(autospec=True)
     test_repo_client.read.side_effect = tc.mock_read
     dv_mock = Mock(autospec=True)
@@ -924,13 +923,13 @@ def test_data_visit(get_mock, test_config):
     test_sn.source_names = ['ad:TEST/test_obs_id.fits']
     test_sn.destination_uris = test_sn.source_names
     test_transferrer = transfer_composable.CadcTransfer()
-    test_transferrer.cadc_client = test_data_client
+    test_transferrer.cadc_client = client_mock
     test_transferrer.observable = test_observable
 
     test_subject = ec.DataVisit(
         test_config,
         test_sn,
-        test_data_client,
+        client_mock,
         test_repo_client,
         test_data_visitors,
         mc.TaskType.VISIT,
@@ -938,11 +937,10 @@ def test_data_visit(get_mock, test_config):
         test_transferrer,
     )
     test_subject.execute(None)
-    assert get_mock.called, 'should be called'
-    args, kwargs = get_mock.call_args
-    assert args[1] == f'{tc.THIS_DIR}/test_obs_id', 'wrong directory'
-    assert args[2] == 'test_obs_id.fits', 'wrong file name'
-    assert args[3] == 'TEST', 'wrong archive'
+    assert client_mock.get.called, 'should be called'
+    client_mock.get.assert_called_with(
+        f'{tc.THIS_DIR}/test_obs_id', test_sn.destination_uris[0]
+    ), 'wrong get call args'
     test_repo_client.read.assert_called_with(
         'OMM', 'test_obs_id'
     ), 'wrong values'

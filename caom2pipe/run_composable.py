@@ -612,12 +612,8 @@ def _set_logging(config):
 def _set_modify_transfer(modify_transfer, config, client):
     if modify_transfer is None:
         if not config.use_local_files:
-            if config.features.supports_latest_client:
-                modify_transfer = transfer_composable.StorageInventoryTransfer(
-                    client,
-                )
-            else:
-                modify_transfer = transfer_composable.CadcTransfer()
+            modify_transfer = transfer_composable.CadcTransfer()
+            modify_transfer.client = client
     return modify_transfer
 
 
