@@ -257,6 +257,14 @@ class CaomExecute(object):
             packages, f'{self.command_name}/{self.command_name}.py'
         )
 
+    def _find_fits2caom2_resource_id(self):
+        resource_id = ''
+        if self.supports_latest_client:
+            resource_id = (
+                f'--resource-id {self._storage_inventory_resource_id}'
+            )
+        return resource_id
+
     def _fits2caom2_cmd_local(self, connected=True):
         """
         Execute fits2caom with a credential parameter and a --local parameter.
@@ -273,7 +281,7 @@ class CaomExecute(object):
             f'{self._storage_name.obs_id} --local {local_fqn} --out '
             f'{self.model_fqn} --plugin {plugin} --module {plugin} '
             f'--lineage {self._storage_name.lineage} '
-            f'--resource-id {self._storage_inventory_resource_id}'
+            f'{self._find_fits2caom2_resource_id()}'
         )
         self._invoke_to_caom2(temp, plugin)
 
@@ -287,7 +295,7 @@ class CaomExecute(object):
             f'{self.obs_id} --out {self.model_fqn} '
             f'{self.external_urls_param} --plugin {plugin} --module {plugin} '
             f'--lineage {self._storage_name.lineage} '
-            f'--resource-id {self._storage_inventory_resource_id}'
+            f'{self._find_fits2caom2_resource_id()}'
         )
         self._invoke_to_caom2(temp, plugin)
 
@@ -301,7 +309,7 @@ class CaomExecute(object):
             f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
             f'{self.external_urls_param} --plugin {plugin} --module '
             f'{plugin} --lineage {self._storage_name.lineage} '
-            f'--resource-id {self._storage_inventory_resource_id}'
+            f'{self._find_fits2caom2_resource_id()}'
         )
         self._invoke_to_caom2(temp, plugin)
 
@@ -313,8 +321,10 @@ class CaomExecute(object):
         conn = ''
         resource_id = ''
         if connected:
-            resource_id = f'--resource-id ' \
-                          f'{self._storage_inventory_resource_id}'
+            if self.supports_latest_client:
+                resource_id = (
+                    f'--resource-id {self._storage_inventory_resource_id}'
+                )
         else:
             conn = f'--not_connected'
         temp = (
