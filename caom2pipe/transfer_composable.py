@@ -140,7 +140,7 @@ class CadcTransfer(Transfer):
         :param source: str - artifact uri
         :param dest_fqn: str - fully-qualified file system name
         """
-        self._logger.error(f'Transfer from {source} to {dest_fqn}.')
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         working_dir = os.path.dirname(dest_fqn)
         self._cadc_client.get(working_dir, source)
 
