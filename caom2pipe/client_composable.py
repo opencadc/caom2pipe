@@ -159,13 +159,12 @@ class ClientCollection(object):
         return self._query_client
 
     def _init(self, config):
-        subject = define_subject(config)
-
         if mc.TaskType.SCRAPE in config.task_types:
             self._logger.info(
                 f'SCRAPE\'ing data - no clients will be initialized.'
             )
         else:
+            subject = define_subject(config)
             self._metadata_client = CAOM2RepoClient(
                 subject, config.logging_level, config.resource_id
             )

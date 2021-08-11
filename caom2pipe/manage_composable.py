@@ -92,7 +92,7 @@ from urllib3 import Retry
 
 from astropy.table import Table
 
-from cadcutils import net, exceptions
+from cadcutils import net
 from cadcdata import CadcDataClient
 from cadctap import CadcTapClient
 from caom2 import ObservationWriter, ObservationReader, Artifact, Observation
