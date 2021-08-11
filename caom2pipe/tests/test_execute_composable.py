@@ -112,9 +112,7 @@ class LocalTestVisit:
         assert v == 'TEST', 'wrong stream'
         x = kwargs['working_directory']
         assert x is not None, 'working directory'
-        assert x == os.path.join(
-            tc.TEST_DATA_DIR, 'test_obs_id'
-        ), 'wrong working directory'
+        assert x == tc.TEST_DATA_DIR, 'wrong working directory'
         y = kwargs['science_file']
         assert y is not None, 'science file'
         assert y == 'cadc:TEST/test_file.fits.gz', 'wrong science file'
