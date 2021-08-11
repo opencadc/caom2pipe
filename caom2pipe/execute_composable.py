@@ -376,8 +376,8 @@ class CaomExecute(object):
             self.observable.metrics,
         )
 
-    def _cadc_put(self, uri):
-        self.cadc_client.put(self.working_dir, uri, self.stream)
+    def _cadc_put(self, source_fqn, uri):
+        self.cadc_client.put(os.path.dirname(source_fqn), uri, self.stream)
 
     def _read_model(self):
         """Read an observation into memory from an XML file on disk."""
@@ -1208,7 +1208,7 @@ class Store(CaomExecute):
                 f'{self._storage_name.destination_uris[index]}'
             )
             self._cadc_put(
-                self._storage_name.destination_uris[index]
+                local_fqn, self._storage_name.destination_uris[index]
             )
 
         self.logger.debug('clean up the workspace')
@@ -1249,7 +1249,9 @@ class LocalStore(Store):
         )
         for index, entry in enumerate(self._storage_name.source_names):
             self.logger.debug(f'store the input file {entry}')
-            self._cadc_put(self._storage_name.destination_uris[index])
+            self._cadc_put(
+                entry, self._storage_name.destination_uris[index]
+            )
 
         self.logger.debug('End execute')
 

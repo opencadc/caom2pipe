@@ -986,14 +986,11 @@ def test_store(test_config):
     ), 'wrong destination'
     test_subject.execute(None)
     assert test_data_client.put.called, 'data put not called'
-    assert (
-        test_data_client.put.call_args.args[0] == os.path.join(
-            tc.TEST_DATA_DIR, 'test_obs_id')
-    ), 'archive not set for test_config, is set for TestStorageName'
-    assert (
-        test_data_client.put.call_args.args[1] ==
-        'cadc:TEST/test_file.fits.gz'
-    ), 'expect a uri'
+    test_data_client.put.assert_called_with(
+        '/usr/src/app/caom2pipe/caom2pipe/tests/data/test_obs_id',
+        'cadc:TEST/test_file.fits.gz',
+        'TEST',
+    ), 'wrong put call args'
 
 
 def test_local_store(test_config):
@@ -1031,9 +1028,7 @@ def test_local_store(test_config):
     ), 'wrong destination'
     assert test_data_client.put.called, 'data put not called'
     assert (
-        test_data_client.put.call_args.args[0] == os.path.join(
-            tc.TEST_DATA_DIR, 'test_obs_id'
-        )
+        test_data_client.put.call_args.args[0] == tc.TEST_DATA_DIR
     ), 'working directory'
     assert (
         test_data_client.put.call_args.args[1] == test_sn.destination_uris[0]
@@ -1183,7 +1178,7 @@ def _get_file_info():
 
 def to_caom2():
     plugin = (
-        '/usr/local/lib/python3.8/site-packages/test_execute_composable/'
+        '/usr/local/lib/python3.9/site-packages/test_execute_composable/'
         'test_execute_composable.py'
     )
     assert sys.argv is not None, 'expect sys.argv to be set'

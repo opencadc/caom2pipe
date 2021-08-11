@@ -117,7 +117,7 @@ def test_get_datetime():
 def test_get_location():
     x, y, z = ac.get_location(21.0, -32.0, 12)
     assert x == 5051887.288718968, x
-    assert y == -3156769.536020791, y
+    assert y == -3156769.5360207916, y
     assert z == 2271399.319625149, z
 
 
