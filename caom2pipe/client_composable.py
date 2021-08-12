@@ -90,6 +90,7 @@ from astropy.table import Table
 
 from cadctap import CadcTapClient
 from cadcutils import net, exceptions
+from cadcdata import FileInfo
 from caom2utils import StorageClientWrapper
 from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
@@ -117,6 +118,7 @@ __all__ = [
     'si_client_get_headers',
     'si_client_info',
     'si_client_put',
+    'vault_info',
 ]
 
 
@@ -665,4 +667,21 @@ def si_client_put(client, fqn, storage_name, metrics):
         'cadcput',
         'si',
         os.path.basename(fqn),
+    )
+
+
+def vault_info(client, uri):
+    """
+    Translate Node properties into FileInfo.
+
+    :param client: Vault client
+    :param uri: VOS URI
+    :return: an instance of FileInfo
+    """
+    node = client.get_node(uri, limit=None, force=False)
+    return FileInfo(
+        id=uri,
+        size=node.props.get('length'),
+        md5sum=node.props.get('MD5'),
+        lastmod=node.props.get('lastmod'),
     )
