@@ -110,9 +110,11 @@ class Transfer(object):
         """
         pass
 
-    def check(self, dest_fqn):
+    def check(self, dest_fqn, original_fqn):
         """
         :param dest_fqn: str - file-system based fully-qualified name
+        :param original_fqn: str - in case the file originates somewhere
+            besides the local file-system.
         """
         return True
 
@@ -144,7 +146,7 @@ class CadcTransfer(Transfer):
         working_dir = os.path.dirname(dest_fqn)
         self._cadc_client.get(working_dir, source)
 
-    def check(self, dest_fqn):
+    def check(self, dest_fqn, original_fqn):
         """Assumes fits files at this time. Returns true because the
         CadcDataClient implementation is configured to already do an
         md5 checksum."""
@@ -191,7 +193,7 @@ class FitsTransfer(Transfer):
     def observable(self, value):
         self._observable = value
 
-    def check(self, dest_fqn):
+    def check(self, dest_fqn, original_fqn):
         from astropy.io import fits
         try:
             hdulist = fits.open(dest_fqn, memmap=True, lazy_load_hdus=False)
@@ -205,7 +207,7 @@ class FitsTransfer(Transfer):
                     mc.Rejected.BAD_DATA, os.path.basename(dest_fqn)
                 )
             msg = f'astropy verify error {dest_fqn} when reading {e1}'
-            self.failure_action(dest_fqn, msg)
+            self.failure_action(original_fqn, dest_fqn, msg)
         # a second check that fails for some NEOSSat cases - if this works,
         # the file might have been correctly retrieved
         try:
@@ -218,18 +220,21 @@ class FitsTransfer(Transfer):
                     mc.Rejected.BAD_DATA, os.path.basename(dest_fqn)
                 )
             msg = f'astropy getdata error {dest_fqn} when reading {e2}'
-            self.failure_action(dest_fqn, msg)
+            self.failure_action(original_fqn, dest_fqn, msg)
 
     def get(self, source, dest_fqn):
         raise NotImplementedError
 
-    def failure_action(self, fqn, msg):
+    def failure_action(self, original_fqn, destination_fqn, msg):
+        """Action take on failure is completely dependent on where the
+        file originated, and any cleanup configuration."""
         try:
-            if os.path.exists(fqn):
-                os.unlink(fqn)
+            if os.path.exists(destination_fqn):
+                os.unlink(destination_fqn)
         except Exception as e:
             self._logger.error(
-                f'Failed to clean up {fqn} after a verification error.'
+                f'Failed to clean up {destination_fqn} after a verification '
+                f'error.'
             )
             raise mc.CadcException(e)
         raise mc.CadcException(msg)
@@ -253,7 +258,7 @@ class HttpTransfer(FitsTransfer):
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         mc.http_get(source, dest_fqn)
         if '.fits' in dest_fqn:
-            self.check(dest_fqn)
+            self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')
 
 
@@ -276,7 +281,7 @@ class FtpTransfer(FitsTransfer):
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         mc.ftp_get_timeout(self._ftp_host, source, dest_fqn)
         if '.fits' in dest_fqn:
-            self.check(dest_fqn)
+            self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')
 
 
@@ -295,5 +300,5 @@ class VoFitsTransfer(FitsTransfer):
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         self._vos_client.copy(source, dest_fqn, send_md5=True)
         if '.fits' in dest_fqn:
-            self.check(dest_fqn)
+            self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')
