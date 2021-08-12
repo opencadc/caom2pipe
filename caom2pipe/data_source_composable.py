@@ -473,21 +473,22 @@ class VaultListDirDataSource(DataSource):
     def __init__(self, vos_client, config):
         super(VaultListDirDataSource, self).__init__(config)
         self._client = vos_client
-        self._source_directory = config.data_source
+        self._source_directories = config.data_sources
+        self._data_source_extensions = config.data_source_extensions
         self._logger = logging.getLogger(__name__)
 
     def get_work(self):
         self._logger.debug('Begin get_work.')
-        file_list = self._client.listdir(self._source_directory)
         work = []
-        for f_name in file_list:
-            endings = ['.fits', '.fits.gz', '.fits.fz']
-            for ending in endings:
-                if f_name.endswith(ending):
-                    fqn = f'{self._source_directory}/{f_name}'
-                    work.append(fqn)
-                    self._logger.debug(f'{fqn} added to work list.')
-                    break
+        for source_directory in self._source_directories:
+            file_list = self._client.listdir(source_directory)
+            for f_name in file_list:
+                for ending in self._data_source_extensions:
+                    if f_name.endswith(ending):
+                        fqn = f'{source_directory}/{f_name}'
+                        work.append(fqn)
+                        self._logger.debug(f'{fqn} added to work list.')
+                        break
         # ensure unique entries
         temp = list(set(work))
         self._logger.debug('End get_work.')

@@ -193,7 +193,8 @@ def test_vault_list_dir_data_source():
     test_vos_client.listdir.side_effect = _query_mock
     test_config = mc.Config()
     test_config.get_executors()
-    test_config.data_source = 'vos:goliaths/wrong'
+    test_config.data_sources = ['vos:goliaths/wrong']
+    test_config.data_source_extensions = ['.fits']
     test_subject = dsc.VaultListDirDataSource(test_vos_client, test_config)
     assert test_subject is not None, 'expect a test_subject'
     test_result = test_subject.get_work()
