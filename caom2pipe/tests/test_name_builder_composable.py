@@ -89,14 +89,30 @@ def test_storage_name_instance_builder():
     assert test_result.fname_on_disk == 'test_storage_name.fits', 'wrong fname'
 
 
-def test_file_name_builder():
-    test_subject = nbc.FileNameBuilder(tc.TestStorageName)
+def test_guessing_builder():
+    test_subject = nbc.GuessingBuilder(tc.TestStorageName)
     test_result = test_subject.build('test_storage_name.fits')
     # note TestStorageName has its own hard-coded values
     assert test_result.obs_id == 'test_obs_id', 'wrong obs_id'
     assert test_result.collection == 'TEST', 'wrong collection'
     assert test_result.fname_on_disk == 'test_file.fits.gz', 'wrong fname'
     assert test_result.entry == 'test_storage_name.fits', 'wrong entry'
+
+
+def test_guessing_builder_dir():
+    test_subject = nbc.GuessingBuilder(tc.TestStorageName)
+    test_result = test_subject.build('/data/test_storage_name.fits')
+    # note TestStorageName has its own hard-coded values
+    assert test_result.obs_id == 'test_obs_id', 'wrong obs_id'
+    assert test_result.collection == 'TEST', 'wrong collection'
+    assert test_result.fname_on_disk == 'test_file.fits.gz', 'wrong fname'
+    assert test_result.entry == '/data/test_storage_name.fits', 'wrong entry'
+    assert (
+        test_result.source_names == ['/data/test_storage_name.fits']
+    ), 'wrong source names'
+    assert (
+        test_result.destination_uris == ['cadc:TEST/test_file.fits.gz']
+    ), ' wrong destination uris'
 
 
 def test_obs_id_builder():
@@ -107,3 +123,23 @@ def test_obs_id_builder():
     assert test_result.collection == 'TEST', 'wrong collection'
     assert test_result.fname_on_disk == 'test_file.fits.gz', 'wrong fname'
     assert test_result.entry == 'test_obs_id_2', 'wrong entry'
+
+
+def test_guessing_builder_uri():
+    test_subject = nbc.GuessingBuilder(tc.TestStorageName)
+    test_result = test_subject.build(
+        'https://localhost/data/test_storage_name.fits'
+    )
+    # note TestStorageName has its own hard-coded values
+    assert test_result.obs_id == 'test_obs_id', 'wrong obs_id'
+    assert test_result.collection == 'TEST', 'wrong collection'
+    assert (
+        test_result.entry == 'https://localhost/data/test_storage_name.fits'
+    ), 'wrong entry'
+    assert (
+            test_result.source_names ==
+            ['https://localhost/data/test_storage_name.fits']
+    ), 'wrong source names'
+    assert (
+            test_result.destination_uris == ['cadc:TEST/test_file.fits.gz']
+    ), ' wrong destination uris'

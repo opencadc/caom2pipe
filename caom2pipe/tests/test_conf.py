@@ -81,13 +81,13 @@ TEST_OBS_FILE = os.path.join(TEST_DATA_DIR, 'test_obs_id.fits.xml')
 
 class TestStorageName(mc.StorageName):
     def __init__(
-        self, obs_id=None, file_name=None, fname_on_disk=None, entry=None
+        self, obs_id=None, file_name=None, url=None, entry=None
     ):
         super(TestStorageName, self).__init__(
             'test_obs_id', 'TEST', '*', 'test_file.fits.gz', entry=entry
         )
-        self.url = 'https://test_url/'
-        self._source_names = [os.path.join(TEST_DATA_DIR, 'test_file.fits.gz')]
+        self.url = 'https://test_url/test_file.fits.gz'
+        self._source_names = [entry]
         self._destination_uris = ['cadc:TEST/test_file.fits.gz']
 
     def is_valid(self):

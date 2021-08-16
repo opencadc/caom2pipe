@@ -73,11 +73,10 @@ from caom2pipe import manage_composable as mc
 
 __all__ = [
     'EntryBuilder',
-    'FileNameBuilder',
+    'GuessingBuilder',
     'ObsIDBuilder',
     'StorageNameInstanceBuilder',
     'StorageNameBuilder',
-    'URIBuilder',
 ]
 
 
@@ -137,20 +136,6 @@ class EntryBuilder(StorageNameBuilder):
         return self._storage_name(entry)
 
 
-class FileNameBuilder(StorageNameBuilder):
-    """
-    A class that assumes constructing the StorageName instance requires a
-    single parameter: a str 'file_name'
-    """
-
-    def __init__(self, storage_name):
-        super(FileNameBuilder, self).__init__()
-        self._storage_name = storage_name
-
-    def build(self, entry):
-        return self._storage_name(file_name=entry, entry=entry)
-
-
 class ObsIDBuilder(StorageNameBuilder):
     """
     A class that assumes constructing the StorageName instance requires a
@@ -165,16 +150,22 @@ class ObsIDBuilder(StorageNameBuilder):
         return self._storage_name(obs_id=entry, entry=entry)
 
 
-class URIBuilder(StorageNameBuilder):
+class GuessingBuilder(StorageNameBuilder):
     """
-    A class that assumes constructing the StorageName instance requires a
-    single parameter: a str 'file_name'
+    A class that attempts to guess the StorageName instance parameters,
+    based on what's provided as input.
     """
 
     def __init__(self, storage_name):
-        super(URIBuilder, self).__init__()
+        super(GuessingBuilder, self).__init__()
         self._storage_name = storage_name
 
     def build(self, entry):
         temp = urlparse(entry)
-        return self._storage_name(file_name=basename(temp.path), entry=entry)
+        if temp.scheme is None:
+            result = self._storage_name(
+                file_name=(basename(temp.path)), entry=entry
+            )
+        else:
+            result = self._storage_name(url=entry, entry=entry)
+        return result
