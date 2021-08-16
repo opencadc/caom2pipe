@@ -105,6 +105,7 @@ __all__ = [
     'find_plane_and_artifact',
     'get_obs_id_from_cadc',
     'is_composite',
+    'make_plane_uri',
     'rename_parts',
     'reset_energy',
     'reset_observable',
@@ -114,6 +115,7 @@ __all__ = [
     'update_observation_members_filtered',
     'update_plane_provenance',
     'update_plane_provenance_list',
+    'update_plane_provenance_single',
 ]
 
 

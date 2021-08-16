@@ -648,7 +648,9 @@ def test_do_one(test_config):
 
 def test_storage_name():
     sn = mc.StorageName(
-        obs_id='test_obs_id', collection='TEST', collection_pattern='T[\\w+-]+'
+        obs_id='test_obs_id',
+        collection='TEST',
+        collection_pattern='T[\\w+-]+',
     )
     assert sn.file_uri == 'ad:TEST/test_obs_id.fits.gz'
     assert sn.file_name == 'test_obs_id.fits'
@@ -664,7 +666,9 @@ def test_storage_name():
     assert sn.fname_on_disk is None
     assert not sn.is_valid()
     sn = mc.StorageName(
-        obs_id='Test_obs_id', collection='TEST', collection_pattern='T[\\w+-]+'
+        obs_id='Test_obs_id',
+        collection='TEST',
+        collection_pattern='T[\\w+-]+',
     )
     assert sn.is_valid()
     x = mc.StorageName.remove_extensions('test_obs_id.fits.header.gz')
@@ -914,7 +918,9 @@ def test_data_visit(client_mock, test_config):
     test_data_visitors = [dv_mock]
     test_observable = Mock(autospec=True)
     test_sn = mc.StorageName(
-        obs_id='test_obs_id', collection='TEST', collection_pattern='T[\\w+-]+'
+        obs_id='test_obs_id',
+        collection='TEST',
+        collection_pattern='T[\\w+-]+',
     )
     test_sn.source_names = ['ad:TEST/test_obs_id.fits']
     test_sn.destination_uris = test_sn.source_names
@@ -970,8 +976,8 @@ def test_store(test_config):
         test_transferrer,
     )
     assert test_subject is not None, 'expect construction'
-    assert (
-        test_subject.working_dir == f'{tc.TEST_DATA_DIR}/test_obs_id'
+    assert test_subject.working_dir == os.path.join(
+        tc.TEST_DATA_DIR, 'test_obs_id'
     ), 'wrong working directory'
     assert (
         len(test_subject._storage_name.destination_uris) == 1
@@ -1005,11 +1011,7 @@ def test_local_store(test_config):
     test_data_client = Mock(autospec=True)
     test_observable = Mock(autospec=True)
     test_subject = ec.LocalStore(
-        test_config,
-        test_sn,
-        test_command,
-        test_data_client,
-        test_observable,
+        test_config, test_sn, test_command, test_data_client, test_observable
     )
     assert test_subject is not None, 'expect construction'
     test_subject.execute(None)

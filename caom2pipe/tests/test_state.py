@@ -191,17 +191,13 @@ def test_run_state(client_mock):
             end_time=test_end_time,
             name_builder=test_builder,
             source=test_data_source,
-            modify_transfer=None,
+            modify_transfer=transferrer,
             store_transfer=transferrer,
             clients=client_mock,
         )
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
-        # assert data_mock.called, 'expect put call'
-        # assert (
-        #     isinstance(data_mock.call_args.args[0], net.Subject)
-        # ), 'wrong args'
 
         # state file checking
         test_state = mc.State(test_config.state_fqn)
@@ -333,7 +329,7 @@ def test_run_state_v(client_mock):
             end_time=test_end_time,
             name_builder=test_builder,
             source=test_data_source,
-            modify_transfer=None,
+            modify_transfer=transferrer,
             store_transfer=transferrer,
             clients=client_mock,
         )

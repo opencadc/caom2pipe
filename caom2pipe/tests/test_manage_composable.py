@@ -75,8 +75,8 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from caom2 import ProductType, ReleaseType, Artifact, ChecksumURI
-from caom2 import Algorithm
-from caom2 import SimpleObservation, ObservationIntentType, get_differences
+from caom2 import SimpleObservation, ObservationIntentType, Algorithm
+from caom2 import get_differences
 from caom2pipe import manage_composable as mc
 
 import test_conf as tc
@@ -917,7 +917,8 @@ def test_value_repair_cache():
     # not set in the test observation, so the observation should remain
     # unchanged
     test_observation = mc.read_obs_from_file(
-        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml'))
+        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
+    )
 
     test_subject._value_repair = {'chunk.observable.dependent': 'not_found'}
     test_subject.repair(test_observation)
