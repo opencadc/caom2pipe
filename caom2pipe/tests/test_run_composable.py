@@ -441,7 +441,7 @@ def test_run_state_log_to_file_true(
                 f.write('test content\n')
 
         test_chooser = ec.OrganizeChooser()
-        test_result = rc.run_by_state_ad(
+        test_result = rc.run_by_state(
             config=test_config,
             chooser=test_chooser,
             command_name='collection2caom2',

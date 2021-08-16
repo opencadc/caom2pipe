@@ -274,7 +274,7 @@ class CaomExecute(object):
         conn = ''
         if not connected:
             conn = f'--not_connected'
-        local_fqn = os.path.join(self.working_dir, self.fname)
+        local_fqn = ' '.join(ii for ii in self._storage_name.source_names)
         temp = (
             f'{self.command_name} {self.logging_level_param} {conn} '
             f'{self.cred_param} --observation {self.collection} '
@@ -292,7 +292,7 @@ class CaomExecute(object):
         temp = (
             f'{self.command_name} {self.logging_level_param} '
             f'{self.cred_param} --observation {self.collection} '
-            f'{self.obs_id} --out {self.model_fqn} '
+            f'{self._storage_name.obs_id} --out {self.model_fqn} '
             f'{self.external_urls_param} --plugin {plugin} --module {plugin} '
             f'--lineage {self._storage_name.lineage} '
             f'{self._find_fits2caom2_resource_id()}'
@@ -317,7 +317,7 @@ class CaomExecute(object):
         """Execute fits2caom with a --in, --local and a --cert parameter."""
         plugin = self._find_fits2caom2_plugin()
         # so far, the plugin is also the module :)
-        local_fqn = os.path.join(self.working_dir, self.fname)
+        local_fqn = ' '.join(ii for ii in self._storage_name.source_names)
         conn = ''
         resource_id = ''
         if connected:
@@ -1737,22 +1737,38 @@ class OrganizeExecutes(object):
                     )
             elif task_type == mc.TaskType.INGEST:
                 observation = CaomExecute.repo_cmd_get_client(
-                    self._caom_client, self.config.collection,
-                    storage_name.obs_id, self.observable.metrics)
+                    self._caom_client,
+                    self.config.collection,
+                    storage_name.obs_id,
+                    self.observable.metrics,
+                )
                 if observation is None:
                     if self.config.use_local_files:
                         executors.append(
                             LocalMetaCreate(
-                                self.config, storage_name, self._command_name,
-                                self._cred_param, self._cadc_client,
-                                self._caom_client, self._meta_visitors,
-                                self.observable))
+                                self.config,
+                                storage_name,
+                                self._command_name,
+                                self._cred_param,
+                                self._cadc_client,
+                                self._caom_client,
+                                self._meta_visitors,
+                                self.observable,
+                            )
+                        )
                     else:
-                        executors.append(MetaCreate(
-                            self.config, storage_name, self._command_name,
-                            self._cred_param, self._cadc_client,
-                            self._caom_client,
-                            self._meta_visitors, self.observable))
+                        executors.append(
+                            MetaCreate(
+                                self.config,
+                                storage_name,
+                                self._command_name,
+                                self._cred_param,
+                                self._cadc_client,
+                                self._caom_client,
+                                self._meta_visitors,
+                                self.observable,
+                            )
+                        )
                 else:
                     if self.config.use_local_files:
                         if (
@@ -1764,18 +1780,28 @@ class OrganizeExecutes(object):
                                     self.config,
                                     storage_name,
                                     self._command_name,
-                                    self._cred_param, self._cadc_client,
-                                    self._caom_client, observation,
-                                    self._meta_visitors, self.observable))
+                                    self._cred_param,
+                                    self._cadc_client,
+                                    self._caom_client,
+                                    observation,
+                                    self._meta_visitors,
+                                    self.observable,
+                                )
+                            )
                         else:
                             executors.append(
                                 LocalMetaUpdate(
                                     self.config,
                                     storage_name,
                                     self._command_name,
-                                    self._cred_param, self._cadc_client,
-                                    self._caom_client, observation,
-                                    self._meta_visitors, self.observable))
+                                    self._cred_param,
+                                    self._cadc_client,
+                                    self._caom_client,
+                                    observation,
+                                    self._meta_visitors,
+                                    self.observable,
+                                )
+                            )
                     else:
                         if (
                             self.chooser is not None
@@ -1786,21 +1812,35 @@ class OrganizeExecutes(object):
                                     self.config,
                                     storage_name,
                                     self._command_name,
-                                    self._cred_param, self._cadc_client,
-                                    self._caom_client, observation,
-                                    self._meta_visitors, self.observable))
+                                    self._cred_param,
+                                    self._cadc_client,
+                                    self._caom_client,
+                                    observation,
+                                    self._meta_visitors,
+                                    self.observable,
+                                )
+                            )
                         else:
                             executors.append(
                                 MetaUpdate(
-                                    self.config, storage_name,
-                                    self._command_name, self._cred_param,
-                                    self._cadc_client, self._caom_client,
-                                    observation, self._meta_visitors,
-                                    self.observable))
+                                    self.config,
+                                    storage_name,
+                                    self._command_name,
+                                    self._cred_param,
+                                    self._cadc_client,
+                                    self._caom_client,
+                                    observation,
+                                    self._meta_visitors,
+                                    self.observable,
+                                )
+                            )
             elif task_type == mc.TaskType.INGEST_OBS:
                 observation = CaomExecute.repo_cmd_get_client(
-                    self._caom_client, self.config.collection,
-                    storage_name.obs_id, self.observable.metrics)
+                    self._caom_client,
+                    self.config.collection,
+                    storage_name.obs_id,
+                    self.observable.metrics,
+                )
                 if observation is None:
                     raise mc.CadcException(
                         f'"INGEST_OBS" is an update-only task type for '
@@ -1812,11 +1852,17 @@ class OrganizeExecutes(object):
                     else:
                         executors.append(
                             MetaUpdateObservation(
-                                self.config, storage_name, self._command_name,
-                                self._cred_param, self._cadc_client,
+                                self.config,
+                                storage_name,
+                                self._command_name,
+                                self._cred_param,
+                                self._cadc_client,
                                 self._caom_client,
-                                observation, self._meta_visitors,
-                                self.observable))
+                                observation,
+                                self._meta_visitors,
+                                self.observable,
+                            )
+                        )
             elif task_type == mc.TaskType.MODIFY:
                 if storage_name.is_feasible:
                     if self.config.use_local_files:
@@ -1839,26 +1885,44 @@ class OrganizeExecutes(object):
                         else:
                             executors.append(
                                 LocalDataVisit(
-                                    self.config, storage_name,
-                                    self._cred_param,
-                                    self._cadc_client, self._caom_client,
-                                    self._data_visitors, self.observable))
+                                    self.config,
+                                    storage_name,
+                                    self._cadc_client,
+                                    self._caom_client,
+                                    self._data_visitors,
+                                    self.observable,
+                                )
+                            )
                     else:
-                        executors.append(DataVisit(
-                            self.config, storage_name, self._cred_param,
-                            self._cadc_client, self._caom_client,
-                            self._data_visitors, mc.TaskType.MODIFY,
-                            self.observable, self._modify_transfer))
+                        executors.append(
+                            DataVisit(
+                                self.config,
+                                storage_name,
+                                self._cadc_client,
+                                self._caom_client,
+                                self._data_visitors,
+                                mc.TaskType.MODIFY,
+                                self.observable,
+                                self._modify_transfer,
+                            )
+                        )
                 else:
                     self._logger.info(
                         f'Skipping the MODIFY task for '
                         f'{storage_name.file_name}.'
                     )
             elif task_type == mc.TaskType.VISIT:
-                executors.append(MetaVisit(
-                    self.config, storage_name, self._cred_param,
-                    self._cadc_client, self._caom_client, self._meta_visitors,
-                    self.observable))
+                executors.append(
+                    MetaVisit(
+                        self.config,
+                        storage_name,
+                        self._cred_param,
+                        self._cadc_client,
+                        self._caom_client,
+                        self._meta_visitors,
+                        self.observable,
+                    )
+                )
             elif task_type == mc.TaskType.DEFAULT:
                 pass
             else:

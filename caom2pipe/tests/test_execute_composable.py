@@ -777,7 +777,7 @@ def test_organize_executes_client_do_one(test_config):
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 1
-    assert isinstance(executors[0], ec.ScrapeUpdate)
+    assert isinstance(executors[0], ec.ScrapeUpdate), f'{type(executors[0])}'
 
     test_config.task_types = [
         mc.TaskType.STORE,
@@ -971,7 +971,7 @@ def test_store(test_config):
     )
     assert test_subject is not None, 'expect construction'
     assert (
-        test_subject.working_dir == '/test_files/caom2pipe/test_obs_id'
+        test_subject.working_dir == f'{tc.TEST_DATA_DIR}/test_obs_id'
     ), 'wrong working directory'
     assert (
         len(test_subject._storage_name.destination_uris) == 1
