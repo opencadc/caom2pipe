@@ -248,8 +248,8 @@ def test_local_meta_create_client_execute(test_config):
 
     test_executor = ec.LocalMetaCreate(
         test_config,
-        tc.TestStorageName(),
-        TEST_APP,
+        tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz'),
+        __name__,
         test_cred,
         data_client_mock,
         repo_client_mock,
@@ -269,7 +269,7 @@ def test_local_meta_update_client_execute(test_config):
     test_observer = Mock()
     test_executor = ec.LocalMetaUpdate(
         test_config,
-        tc.TestStorageName(),
+        tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz'),
         TEST_APP,
         test_cred,
         data_client_mock,
@@ -291,7 +291,7 @@ def test_local_meta_delete_create_client_execute(test_config):
     test_observer = Mock()
     test_executor = ec.LocalMetaDeleteCreate(
         test_config,
-        tc.TestStorageName(),
+        tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz'),
         TEST_APP,
         test_cred,
         data_client_mock,
@@ -448,7 +448,7 @@ def test_data_local_execute(test_config):
     # run the test
     test_executor = ec.LocalDataVisit(
         test_config,
-        tc.TestStorageName(),
+        tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz'),
         data_client_mock,
         repo_client_mock,
         test_data_visitors,
@@ -486,7 +486,7 @@ def test_data_store(test_config):
         test_config.working_directory = tc.TEST_DATA_DIR
         test_executor = ec.Store(
             test_config,
-            tc.TestStorageName(),
+            tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz'),
             'command_name',
             data_client_mock,
             observable=test_observer,
@@ -514,7 +514,7 @@ def test_scrape(test_config):
     test_config.logging_level = 'INFO'
     test_executor = ec.Scrape(
         test_config,
-        tc.TestStorageName(),
+        tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz'),
         __name__,
         observable=None,
         meta_visitors=[],
@@ -995,7 +995,7 @@ def test_local_store(test_config):
     test_config.use_local_files = True
     test_config.store_newer_files_only = False
     test_config.features.supports_latest_client = False
-    test_sn = tc.TestStorageName()
+    test_sn = tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz')
 
     if not os.path.exists(test_sn.source_names[0]):
         with open(test_sn.source_names[0], 'w') as f:

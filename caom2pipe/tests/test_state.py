@@ -93,13 +93,16 @@ class TestTransfer(transfer_composable.Transfer):
     def get(self, source_fqn, dest_fqn):
         logging.error(f'source {source_fqn} dest {dest_fqn}')
 
-        test_source_fqn = os.path.join(tc.TEST_DATA_DIR, 'test_file.fits.gz')
+        test_source_fqn = '/caom2pipe_test/1000003f.fits.fz'
         test_source_uri = 'cadc:TEST/test_file.fits.gz'
         if source_fqn not in [test_source_fqn, test_source_uri]:
             assert False, f'wrong source directory {source_fqn}'
         assert (
             dest_fqn
-            == '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz'
+            in [
+                '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz',
+                '/usr/src/app/caom2pipe/int_test/test_obs_id/1000003f.fits.fz',
+            ]
         ), 'wrong destination directory'
         with open(dest_fqn, 'w') as f:
             f.write('test content')
@@ -116,9 +119,7 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
             stats = os.stat(entry)
             if prev_exec_time <= stats.st_mtime <= exec_time:
                 result.append(
-                    dsc.StateRunnerMeta(
-                        os.path.basename(entry), stats.st_mtime
-                    )
+                    dsc.StateRunnerMeta(entry, stats.st_mtime)
                 )
         return result
 
@@ -179,7 +180,7 @@ def test_run_state(client_mock):
         f.write('test content\n')
 
     test_data_source = TestListDirTimeBoxDataSource()
-    test_builder = nbc.FileNameBuilder(tc.TestStorageName)
+    test_builder = nbc.GuessingBuilder(tc.TestStorageName)
     transferrer = TestTransfer()
 
     try:
@@ -321,7 +322,7 @@ def test_run_state_v(client_mock):
         f.write('test content\n')
 
     test_data_source = TestListDirTimeBoxDataSource()
-    test_builder = nbc.FileNameBuilder(tc.TestStorageName)
+    test_builder = nbc.GuessingBuilder(tc.TestStorageName)
     transferrer = TestTransfer()
 
     try:
