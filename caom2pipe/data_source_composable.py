@@ -89,6 +89,7 @@ __all__ = [
     'StateRunnerMeta',
     'TodoFileDataSource',
     'VaultListDirDataSource',
+    'VaultListDirTimeBoxDataSource',
 ]
 
 
@@ -493,3 +494,38 @@ class VaultListDirDataSource(DataSource):
         temp = list(set(work))
         self._logger.debug('End get_work.')
         return temp
+
+
+class VaultListDirTimeBoxDataSource(ListDirTimeBoxDataSource):
+    """
+    Implement the identification of the work to be done, by doing a
+    time-boxed directory listing.
+    """
+
+    def __init__(self, vault_client, config, recursive=True):
+        super(VaultListDirTimeBoxDataSource, self).__init__(config, recursive)
+        self._client = vault_client
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def _append_work(self, prev_exec_time, exec_time, entry):
+        self._logger.info(f'Search for work in {entry}.')
+        targets = self._client.glob(f'{entry}/*')
+        for target in targets:
+            target_node = self._client.get_node(target)
+            target_node_mtime = mc.make_time_tz(target_node.props.get('date'))
+            if target_node.isdir() and self._recursive:
+                if exec_time >= target_node_mtime >= prev_exec_time:
+                    self._append_work(
+                        prev_exec_time, exec_time, target_node.uri
+                    )
+            else:
+                for extension in self._extensions:
+                    if target_node.uri.endswith(extension):
+                        if (
+                                exec_time >= target_node_mtime >=
+                                prev_exec_time
+                        ):
+                            self._temp[target_node_mtime].append(
+                                target_node.uri
+                            )
+                            break

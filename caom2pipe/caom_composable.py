@@ -114,6 +114,7 @@ __all__ = [
     'update_observation_members',
     'update_observation_members_filtered',
     'update_plane_provenance',
+    'update_plane_provenance_from_values',
     'update_plane_provenance_list',
     'update_plane_provenance_single',
 ]
@@ -352,8 +353,8 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
     """
     logging.debug(f'Begin build_temporal_wcs_bounds.')
     product_ids = []
-    for input in plane.provenance.inputs:
-        product_ids.append(input.get_product_id())
+    for ip in plane.provenance.inputs:
+        product_ids.append(ip.get_product_id())
     logging.info(f'Finding temporal inputs for {len(product_ids)} inputs.')
 
     inputs = []
@@ -408,7 +409,7 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
 
 
 def change_to_composite(
-    observation, algorithm_name='composite', collection=None, features=None
+    observation, algorithm_name='composite'
 ):
     """For the case where a SimpleObservation needs to become a
     DerivedObservation."""
@@ -779,7 +780,7 @@ def get_obs_id_from_cadc(artifact_uri, tap_client):
     JOIN caom2.Artifact AS A on A.planeID = P.planeID
     WHERE A.uri = '{artifact_uri}'
     """
-    table = mc.query_tap_client(query_string, tap_client)
+    table = clc.query_tap_client(query_string, tap_client)
     result = None
     if len(table) >= 1:
         result = table[0]['observationID']
@@ -897,6 +898,24 @@ def update_plane_provenance(
     _update_plane_provenance(
         headers, lookup, collection, repair, obs_id, plane_inputs
     )
+    mc.update_typed_set(plane.provenance.inputs, plane_inputs)
+
+
+def update_plane_provenance_from_values(
+    plane, repair, values, collection, obs_id
+):
+    plane_inputs = TypedSet(PlaneURI,)
+    for value in values:
+        prov_obs_id, prov_prod_id = repair(value, obs_id)
+        if prov_obs_id is not None and prov_prod_id is not None:
+            obs_member_uri_str = \
+                mc.CaomName.make_obs_uri_from_obs_id(
+                    collection, prov_obs_id)
+            obs_member_uri = ObservationURI(obs_member_uri_str)
+            plane_uri = PlaneURI.get_plane_uri(
+                obs_member_uri, prov_prod_id)
+            plane_inputs.add(plane_uri)
+            logging.debug(f'Adding PlaneURI {plane_uri}')
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
