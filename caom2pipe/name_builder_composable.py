@@ -67,6 +67,8 @@
 # ***********************************************************************
 #
 
+import logging
+
 from os.path import basename
 from urllib.parse import urlparse
 from caom2pipe import manage_composable as mc
@@ -159,10 +161,14 @@ class GuessingBuilder(StorageNameBuilder):
     def __init__(self, storage_name):
         super(GuessingBuilder, self).__init__()
         self._storage_name = storage_name
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def build(self, entry):
+        self._logger.debug(
+            f'Build a {self._storage_name.__name__} instance with {entry}.'
+        )
         temp = urlparse(entry)
-        if temp.scheme is None:
+        if temp.scheme is None or temp.scheme == '':
             result = self._storage_name(
                 file_name=(basename(temp.path)), entry=entry
             )
