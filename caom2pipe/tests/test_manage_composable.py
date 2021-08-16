@@ -75,7 +75,8 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from caom2 import ProductType, ReleaseType, Artifact, ChecksumURI
-from caom2 import SimpleObservation, ObservationIntentType, get_differences
+from caom2 import SimpleObservation, ObservationIntentType, Algorithm
+from caom2 import get_differences
 from caom2pipe import manage_composable as mc
 
 import test_conf as tc
@@ -85,7 +86,17 @@ TEST_OBS_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_obs_id.fits.xml')
 ISO8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 
 
-def test_read_obs():
+def test_read_write_obs_with_file():
+    if os.path.exists(TEST_OBS_FILE):
+        os.unlink(TEST_OBS_FILE)
+    mc.write_obs_to_file(
+        SimpleObservation(
+            collection='test_collection',
+            observation_id='test_obs_id',
+            algorithm=Algorithm(str('exposure')),
+        ),
+        TEST_OBS_FILE,
+    )
     test_subject = mc.read_obs_from_file(TEST_OBS_FILE)
     assert test_subject is not None, 'expect a result'
     assert isinstance(test_subject, SimpleObservation), 'wrong read'
@@ -140,7 +151,9 @@ def test_config_class():
         assert test_config.netrc_file == 'test_netrc', 'netrc'
         assert test_config.archive == 'NEOSS', 'archive'
         assert test_config.collection == 'NEOSSAT', 'collection'
-        assert test_config.log_file_directory == tc.TEST_DATA_DIR, 'logging dir'
+        assert (
+            test_config.log_file_directory == tc.TEST_DATA_DIR
+        ), 'logging dir'
         assert (
             test_config.success_fqn == f'{tc.TEST_DATA_DIR}/success_log.txt'
         ), 'success fqn'
@@ -389,120 +402,6 @@ def test_data_put(mock_metrics, mock_client):
     assert args[5] == 'TEST.fits', 'wrong id'
 
 
-@patch('cadcdata.core.CadcDataClient')
-def test_data_get(mock_client):
-    test_config = mc.Config()
-    test_config.observe_execution = True
-    test_metrics = mc.Metrics(test_config)
-    with pytest.raises(mc.CadcException):
-        mc.data_get(
-            mock_client,
-            tc.TEST_DATA_DIR,
-            'TEST_get.fits',
-            'TEST',
-            test_metrics,
-        )
-    assert len(test_metrics.failures) == 1, 'wrong failures'
-    assert test_metrics.failures['data']['get']['TEST_get.fits'] == 1, 'count'
-
-
-@patch('vos.vos.Client')
-@patch('caom2pipe.manage_composable.Metrics')
-def test_client_put(mock_metrics, mock_client):
-    if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
-        with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
-            f.write('test content')
-
-    test_destination = 'TBD'
-    mock_client.copy.return_value = 12
-    mc.client_put(
-        mock_client,
-        tc.TEST_FILES_DIR,
-        'TEST.fits',
-        test_destination,
-        metrics=mock_metrics,
-    )
-    test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
-    mock_client.copy.assert_called_with(
-        test_fqn, destination=test_destination
-    ), 'mock not called'
-    assert mock_metrics.observe.called, 'mock not called'
-    args, kwargs = mock_metrics.observe.call_args
-    assert args[2] == 12, 'wrong size'
-    assert args[3] == 'copy', 'wrong endpoint'
-    assert args[4] == 'vos', 'wrong service'
-    assert args[5] == 'TEST.fits', 'wrong id'
-
-
-@patch('vos.vos.Client')
-@patch('caom2pipe.manage_composable.Metrics')
-def test_client_put_failure(mock_metrics, mock_client):
-    if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
-        with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
-            f.write('test content')
-
-    # TODO
-    test_destination = 'cadc:GEMINI/TEST.fits'
-    mock_client.copy.return_value = 120
-    with pytest.raises(mc.CadcException):
-        mc.client_put(
-            mock_client,
-            tc.TEST_FILES_DIR,
-            'TEST.fits',
-            test_destination,
-            metrics=mock_metrics,
-        )
-    test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
-    mock_client.copy.assert_called_with(
-        test_fqn, destination=test_destination
-    ), 'mock not called'
-    assert mock_metrics.observe_failure.called, 'mock not called'
-
-
-@patch('vos.vos.Client')
-def test_client_get_failure(mock_client):
-    test_config = mc.Config()
-    test_config.observe_execution = True
-    test_metrics = mc.Metrics(test_config)
-    with pytest.raises(mc.CadcException):
-        mc.client_get(
-            mock_client,
-            tc.TEST_DATA_DIR,
-            'TEST_get.fits',
-            'TEST',
-            test_metrics,
-        )
-    assert len(test_metrics.failures) == 1, 'wrong failures'
-    assert test_metrics.failures['vos']['copy']['TEST_get.fits'] == 1, 'count'
-
-
-@patch('vos.vos.Client')
-@patch('caom2pipe.manage_composable.Metrics')
-def test_client_get(mock_metrics, mock_client):
-    test_fqn = f'{tc.TEST_FILES_DIR}/TEST.fits'
-    if os.path.exists(test_fqn):
-        os.unlink(test_fqn)
-
-    test_source = 'gemini:GEMINI/TEST.fits'
-    mock_client.copy.side_effect = tc.mock_copy
-    mc.client_get(
-        mock_client,
-        tc.TEST_FILES_DIR,
-        'TEST.fits',
-        test_source,
-        metrics=mock_metrics,
-    )
-    mock_client.copy.assert_called_with(
-        test_source, destination=test_fqn
-    ), 'mock not called'
-    assert mock_metrics.observe.called, 'mock not called'
-    args, kwargs = mock_metrics.observe.call_args
-    assert args[2] == 12, 'wrong size'
-    assert args[3] == 'copy', 'wrong endpoint'
-    assert args[4] == 'vos', 'wrong service'
-    assert args[5] == 'TEST.fits', 'wrong id'
-
-
 def test_state():
     if os.path.exists(TEST_STATE_FILE):
         os.unlink(TEST_STATE_FILE)
@@ -533,9 +432,7 @@ def test_state():
     assert 'NEOSS' in test_context, 'wrong content'
     test_context.append('2019')
 
-    test_subject.save_state(
-        'gemini_timestamp', test_result + timedelta(3)
-    )
+    test_subject.save_state('gemini_timestamp', test_result + timedelta(3))
     test_subject.save_state('neossat_context', test_context)
 
     with open(TEST_STATE_FILE, 'r') as f:
@@ -567,214 +464,28 @@ def test_increment_time():
     t1_dt = datetime.strptime(t1, mc.ISO_8601_FORMAT)
     result = mc.increment_time_tz(t1_dt, 10)
     assert result is not None, 'expect a result'
-    assert (
-        result == datetime(2017, 6, 26, 17, 17, 21, 527000)
-    ), 'wrong result'
+    assert result == datetime(2017, 6, 26, 17, 17, 21, 527000), 'wrong result'
 
     t2 = '2017-07-26T17:07:21.527'
     t2_dt = datetime.strptime(t2, mc.ISO_8601_FORMAT)
     result = mc.increment_time_tz(t2_dt, 5)
     assert result is not None, 'expect a result'
-    assert (
-        result == datetime(2017, 7, 26, 17, 12, 21, 527000)
-    ), 'wrong result'
+    assert result == datetime(2017, 7, 26, 17, 12, 21, 527000), 'wrong result'
 
     t3 = 1571595618.0
     result = mc.increment_time_tz(t3, 15)
-    assert (
-        result == datetime(2019, 10, 20, 18, 35, 18, tzinfo=timezone.utc)
+    assert result == datetime(
+        2019, 10, 20, 18, 35, 18, tzinfo=timezone.utc
     ), 'wrong t3 result'
 
     with pytest.raises(NotImplementedError):
         mc.increment_time_tz(t2_dt, 23, '%f')
 
 
-@patch('cadcdata.core.CadcDataClient')
-@patch('caom2pipe.manage_composable.http_get')
-def test_look_pull_and_put(http_mock, mock_client):
-    stat_orig = os.stat
-    os.stat = Mock()
-    os.stat.return_value = Mock(st_size=1234)
-    try:
-        f_name = 'test_f_name.fits'
-        url = f'https://localhost/{f_name}'
-        test_config = mc.Config()
-        test_config.observe_execution = True
-        test_metrics = mc.Metrics(test_config)
-        assert len(test_metrics.history) == 0, 'initial history conditions'
-        assert len(test_metrics.failures) == 0, 'initial failure conditions'
-        mc.look_pull_and_put(
-            f_name,
-            tc.TEST_DATA_DIR,
-            url,
-            'TEST',
-            'default',
-            'application/fits',
-            mock_client,
-            'md5:01234',
-            test_metrics,
-        )
-        mock_client.put_file.assert_called_with(
-            'TEST',
-            f_name,
-            archive_stream='default',
-            md5_check=True,
-            mime_encoding=None,
-            mime_type='application/fits',
-        ), 'mock not called'
-        http_mock.assert_called_with(
-            url, os.path.join(tc.TEST_DATA_DIR, f_name)
-        ), 'http mock not called'
-        assert len(test_metrics.history) == 1, 'history conditions'
-        assert len(test_metrics.failures) == 0, 'failure conditions'
-    finally:
-        os.stat = stat_orig
-
-
-@patch('vos.vos.Client')
-@patch('caom2pipe.manage_composable.http_get')
-def test_look_pull_and_put_v(http_mock, mock_client):
-    stat_orig = os.stat
-    os.stat = Mock()
-    os.stat.return_value = Mock(st_size=1234)
-    try:
-        test_storage_name = 'cadc:GEMINI/TEST.fits'
-        f_name = 'test_f_name.fits'
-        url = f'https://localhost/{f_name}'
-        test_config = mc.Config()
-        test_config.observe_execution = True
-        test_metrics = mc.Metrics(test_config)
-        mock_client.get_node.side_effect = tc.mock_get_node
-        mock_client.copy.return_value = 1234
-        assert len(test_metrics.history) == 0, 'initial history conditions'
-        assert len(test_metrics.failures) == 0, 'initial failure conditions'
-        mc.look_pull_and_put_v(
-            test_storage_name,
-            f_name,
-            tc.TEST_DATA_DIR,
-            url,
-            mock_client,
-            'md5:01234',
-            test_metrics,
-        )
-        test_fqn = os.path.join(tc.TEST_DATA_DIR, f_name)
-        mock_client.copy.assert_called_with(
-            test_fqn, destination=test_storage_name
-        ), 'mock not called'
-        http_mock.assert_called_with(
-            url, os.path.join(tc.TEST_DATA_DIR, f_name)
-        ), 'http mock not called'
-        assert len(test_metrics.history) == 1, 'history conditions'
-        assert len(test_metrics.failures) == 0, 'failure conditions'
-    finally:
-        os.stat = stat_orig
-
-
-@patch('caom2repo.core.CAOM2RepoClient')
-def test_repo_create(mock_client):
-    test_obs = mc.read_obs_from_file(TEST_OBS_FILE)
-    test_config = mc.Config()
-    test_config.observe_execution = True
-    test_metrics = mc.Metrics(test_config)
-    assert len(test_metrics.history) == 0, 'initial history conditions'
-    assert len(test_metrics.failures) == 0, 'initial failure conditions'
-
-    mc.repo_create(mock_client, test_obs, test_metrics)
-
-    mock_client.create.assert_called_with(test_obs), 'mock not called'
-    assert len(test_metrics.history) == 1, 'history conditions'
-    assert len(test_metrics.failures) == 0, 'failure conditions'
-    assert 'caom2' in test_metrics.history, 'history'
-    assert 'create' in test_metrics.history['caom2'], 'create'
-    assert 'test_obs_id' in test_metrics.history['caom2']['create'], 'obs id'
-
-    mock_client.reset_mock()
-    mock_client.create.side_effect = Exception('boo')
-    with pytest.raises(mc.CadcException):
-        mc.repo_create(mock_client, test_obs, test_metrics)
-    assert len(test_metrics.failures) == 1, 'should have failure counts'
-
-
-@patch('caom2repo.core.CAOM2RepoClient')
-def test_repo_get(mock_client):
-    test_config = mc.Config()
-    test_config.observe_execution = True
-    test_metrics = mc.Metrics(test_config)
-    assert len(test_metrics.history) == 0, 'initial history conditions'
-    assert len(test_metrics.failures) == 0, 'initial failure conditions'
-
-    mc.repo_get(mock_client, 'collection', 'test_obs_id', test_metrics)
-
-    mock_client.read.assert_called_with(
-        'collection', 'test_obs_id'
-    ), 'mock not called'
-    assert len(test_metrics.history) == 1, 'history conditions'
-    assert len(test_metrics.failures) == 0, 'failure conditions'
-    assert 'caom2' in test_metrics.history, 'history'
-    assert 'read' in test_metrics.history['caom2'], 'create'
-    assert 'test_obs_id' in test_metrics.history['caom2']['read'], 'obs id'
-
-    mock_client.reset_mock()
-    mock_client.read.side_effect = Exception('boo')
-    with pytest.raises(mc.CadcException):
-        mc.repo_get(mock_client, 'collection', 'test_obs_id', test_metrics)
-    assert len(test_metrics.failures) == 1, 'should have failure counts'
-
-
-@patch('caom2repo.core.CAOM2RepoClient')
-def test_repo_update(mock_client):
-    test_obs = mc.read_obs_from_file(TEST_OBS_FILE)
-    test_config = mc.Config()
-    test_config.observe_execution = True
-    test_metrics = mc.Metrics(test_config)
-    assert len(test_metrics.history) == 0, 'initial history conditions'
-    assert len(test_metrics.failures) == 0, 'initial failure conditions'
-
-    mc.repo_update(mock_client, test_obs, test_metrics)
-
-    mock_client.update.assert_called_with(test_obs), 'mock not called'
-    assert len(test_metrics.history) == 1, 'history conditions'
-    assert len(test_metrics.failures) == 0, 'failure conditions'
-    assert 'caom2' in test_metrics.history, 'history'
-    assert 'update' in test_metrics.history['caom2'], 'update'
-    assert 'test_obs_id' in test_metrics.history['caom2']['update'], 'obs id'
-
-    mock_client.reset_mock()
-    mock_client.update.side_effect = Exception('boo')
-    with pytest.raises(mc.CadcException):
-        mc.repo_update(mock_client, test_obs, test_metrics)
-    assert len(test_metrics.failures) == 1, 'should have failure counts'
-
-
-@patch('caom2repo.core.CAOM2RepoClient')
-def test_repo_delete(mock_client):
-    test_config = mc.Config()
-    test_config.observe_execution = True
-    test_metrics = mc.Metrics(test_config)
-    assert len(test_metrics.history) == 0, 'initial history conditions'
-    assert len(test_metrics.failures) == 0, 'initial failure conditions'
-
-    mc.repo_delete(mock_client, 'coll', 'test_id', test_metrics)
-
-    mock_client.delete.assert_called_with('coll', 'test_id'), 'mock not called'
-    assert len(test_metrics.history) == 1, 'history conditions'
-    assert len(test_metrics.failures) == 0, 'failure conditions'
-    assert 'caom2' in test_metrics.history, 'history'
-    assert 'delete' in test_metrics.history['caom2'], 'delete'
-    assert 'test_id' in test_metrics.history['caom2']['delete'], 'obs id'
-
-    mock_client.reset_mock()
-    mock_client.delete.side_effect = Exception('boo')
-    with pytest.raises(mc.CadcException):
-        mc.repo_delete(mock_client, 'coll', 'test_id', test_metrics)
-    assert len(test_metrics.failures) == 1, 'should have failure counts'
-
-
 @patch('requests.get')
 def test_http_get(mock_req):
     # Response mock
     class Object(object):
-
         def __init__(self):
             self.headers = {
                 'Date': 'Thu, 25 Jul 2019 16:10:02 GMT',
@@ -782,8 +493,7 @@ def test_http_get(mock_req):
                 'Content-Length': '4',
                 'Cache-Control': 'no-cache',
                 'Expired': '-1',
-                'Content-Disposition':
-                'attachment; filename="S20080610S0045.fits"',
+                'Content-Disposition': 'attachment; filename="S20080610S0045.fits"',
                 'Connection': 'close',
                 'Content-Type': 'application/fits',
             }
@@ -821,8 +531,9 @@ def test_http_get(mock_req):
     mock_req.reset_mock()
 
     # checks succeed
-    test_object.headers['Content-Checksum'] = \
-        '6547436690a26a399603a7096e876a2d'
+    test_object.headers[
+        'Content-Checksum'
+    ] = '6547436690a26a399603a7096e876a2d'
     mc.http_get('https://localhost/index.html', '/tmp/abc')
     assert mock_req.called, 'mock not called'
 
@@ -849,7 +560,6 @@ def test_create_dir():
 
 
 class TestValidator(mc.Validator):
-
     def __init__(self, source_name, preview_suffix):
         super(TestValidator, self).__init__(
             source_name, preview_suffix=preview_suffix
@@ -897,8 +607,10 @@ def test_validator(caps_mock, ad_mock, tap_mock):
         assert len(test_destination_meta) == 3, 'wrong number of results'
         assert (
             test_destination_meta[0] == 'NEOS_SCI_2019213215700_cord.fits'
-        ), f'wrong value format, should be just a file name, ' \
-           f'{test_destination_meta[0]}'
+        ), (
+            f'wrong value format, should be just a file name, '
+            f'{test_destination_meta[0]}'
+        )
 
         test_listing_fqn = f'{tc.TEST_DATA_DIR}/{mc.VALIDATE_OUTPUT}'
         if os.path.exists(test_listing_fqn):
@@ -939,59 +651,14 @@ def test_validator2(caps_mock, ad_mock):
         assert test_destination_data is not None, 'expected data result'
         assert len(test_destination_data) == 5, 'wrong number of data results'
         test_result = test_destination_data[1]
-        assert (
-            test_result['fileName'] == 'NEOS_SCI_2015347000000.fits'
-        ), f'wrong value format, should be just a file name, ' \
-           f'{test_result["fileName"]}'
-        assert (
-            test_result['ingestDate'] == '2019-10-23T16:27:27.000'
-        ), f'wrong value format, should be a datetime value, ' \
-           f'{test_result["ingestDate"]}'
-    finally:
-        os.getcwd = getcwd_orig
-
-
-def test_define_subject():
-
-    getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
-
-    try:
-        test_config = mc.Config()
-        test_config.get_executors()
-        test_config.proxy_fqn = None
-        test_config.netrc_file = 'test_netrc'
-        test_netrc_fqn = os.path.join(
-            test_config.working_directory, test_config.netrc_file
+        assert test_result['fileName'] == 'NEOS_SCI_2015347000000.fits', (
+            f'wrong value format, should be just a file name, '
+            f'{test_result["fileName"]}'
         )
-        if not os.path.exists(test_netrc_fqn):
-            with open(test_netrc_fqn, 'w') as f:
-                f.write(
-                    'machine www.example.com login userid password userpass'
-                )
-
-        test_subject = mc.define_subject(test_config)
-        assert test_subject is not None, 'expect a netrc subject'
-        test_config.netrc_file = 'nonexistent'
-        test_subject = mc.define_subject(test_config)
-        assert test_subject is None, 'expect no subject, cannot find content'
-        test_config.netrc_file = None
-        # proxy pre-condition
-        test_config.proxy_fqn = f'{tc.TEST_DATA_DIR}/proxy.pem'
-
-        if not os.path.exists(test_config.proxy_fqn):
-            with open(test_config.proxy_fqn, 'w') as f:
-                f.write('proxy content')
-
-        test_subject = mc.define_subject(test_config)
-        assert test_subject is not None, 'expect a proxy subject'
-        test_config.proxy_fqn = '/nonexistent'
-        with pytest.raises(mc.CadcException):
-            mc.define_subject(test_config)
-
-        test_config.proxy_fqn = None
-        with pytest.raises(mc.CadcException):
-            mc.define_subject(test_config)
+        assert test_result['ingestDate'] == '2019-10-23T16:27:27.000', (
+            f'wrong value format, should be a datetime value, '
+            f'{test_result["ingestDate"]}'
+        )
     finally:
         os.getcwd = getcwd_orig
 
@@ -1002,10 +669,7 @@ def test_query_tap(caps_mock, base_mock, test_config):
     caps_mock.return_value = 'https://localhost'
     response = Mock()
     response.status_code = 200
-    response.iter_content.return_value = [
-        b'count\n'
-         b'3212556\n'
-    ]
+    response.iter_content.return_value = [b'count\n' b'3212556\n']
     base_mock.return_value.__enter__.return_value = response
     test_config.tap_id = 'https://cadc.nrc.ca/sc2tap'
     result = mc.query_tap(
@@ -1018,11 +682,8 @@ def test_query_tap(caps_mock, base_mock, test_config):
     assert result['count'] == 3212556, 'wrong test data'
 
 
-@patch('caom2pipe.manage_composable.data_put')
-def test_visit(ad_put_mock):
-
+def test_visit():
     class TestVisitor(mc.PreviewVisitor):
-
         def __init__(self, **kwargs):
             super(TestVisitor, self).__init__(archive='VLASS', **kwargs)
 
@@ -1040,7 +701,6 @@ def test_visit(ad_put_mock):
             return 1
 
     class VisitStorageName(tc.TestStorageName):
-
         def __init__(self):
             super(VisitStorageName, self).__init__()
 
@@ -1058,8 +718,10 @@ def test_visit(ad_put_mock):
     cadc_client_mock = Mock()
 
     test_product_id = 'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
-    test_file_name = 'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.' \
-                     'image.pbcor.tt0.subim.fits'
+    test_file_name = (
+        'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
+        'image.pbcor.tt0.subim.fits'
+    )
 
     kwargs = {
         'working_directory': tc.TEST_FILES_DIR,
@@ -1078,8 +740,10 @@ def test_visit(ad_put_mock):
         test_result = test_subject.visit(obs, storage_name)
     except Exception as e:
         import logging
+
         logging.error(e)
         import traceback
+
         logging.error(traceback.format_exc())
         assert False, f'{str(e)}'
 
@@ -1098,10 +762,14 @@ def test_visit(ad_put_mock):
         test_preview_uri in obs.planes[test_product_id].artifacts.keys()
     ), 'no preview'
 
-    assert ad_put_mock.called, 'ad put mock not called'
+    assert cadc_client_mock.put.called, 'put mock not called'
     assert (
-        ad_put_mock.call_count == expected_call_count
-    ), 'ad put called wrong number of times'
+        cadc_client_mock.put.call_count == expected_call_count
+    ), 'put called wrong number of times'
+    # it's an ad call, so there's a stream parameter
+    cadc_client_mock.put.assert_called_with(
+        '/test_files', 'ad:TEST/test_obs_id_prev.jpg', 'stream'
+    )
     # assert False
 
 
@@ -1189,14 +857,12 @@ def test_value_repair_cache():
     test_chunk = test_part.chunks[test_chunk_index]
     assert test_observation.type == 'Dark', 'repair initial condition'
     assert test_observation.proposal.pi_name == 'jjk', 'pi name ic'
-    assert (
-        test_plane.meta_release == datetime(1990, 1, 1, 0, 0)
+    assert test_plane.meta_release == datetime(
+        1990, 1, 1, 0, 0
     ), 'plane meta release ic'
-    assert (
-        math.isclose(
-            test_chunk.position.axis.function.ref_coord.coord1.pix,
-            512.579594886106
-        )
+    assert math.isclose(
+        test_chunk.position.axis.function.ref_coord.coord1.pix,
+        512.579594886106,
     ), 'position pix ic'
     assert test_artifact.uri == test_artifact_uri, 'artifact uri ic'
     assert test_part.product_type is ProductType.CALIBRATION, 'part ic'
@@ -1211,14 +877,12 @@ def test_value_repair_cache():
     assert (
         test_observation.proposal.pi_name == 'JJ Kavelaars'
     ), 'proposal pi name repair failed'
-    assert (
-        test_plane.meta_release == datetime(2000, 1, 1, 0, 0)
+    assert test_plane.meta_release == datetime(
+        2000, 1, 1, 0, 0
     ), 'plane meta release repair failed'
-    assert (
-        math.isclose(
-            test_chunk.position.axis.function.ref_coord.coord1.pix,
-            512.57959987654321
-        )
+    assert math.isclose(
+        test_chunk.position.axis.function.ref_coord.coord1.pix,
+        512.57959987654321,
     ), 'position pix repair failed'
     assert (
         test_artifact.uri == 'cadc:GEMINI/GN2001BQ013-04.fits'
@@ -1253,12 +917,34 @@ def test_value_repair_cache():
     # not set in the test observation, so the observation should remain
     # unchanged
     test_observation = mc.read_obs_from_file(
-        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml'))
+        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
+    )
 
     test_subject._value_repair = {'chunk.observable.dependent': 'not_found'}
     test_subject.repair(test_observation)
 
     test_compare_observation = mc.read_obs_from_file(
-        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml'))
+        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
+    )
     test_diff = get_differences(test_compare_observation, test_observation)
     assert test_diff is None, 'expect no comparison error'
+
+
+def test_extract_file_name_from_uri():
+    # empty string
+    test_result = mc.extract_file_name_from_uri('')
+    assert test_result == '', 'wrong empty string'
+
+    # uri
+    test_result = mc.extract_file_name_from_uri('ad:TEST/abc.fits.gz')
+    assert test_result == 'abc.fits.gz', 'wrong uri'
+
+    # file name
+    test_result = mc.extract_file_name_from_uri('abc.fits.gz')
+    assert test_result == 'abc.fits.gz', 'wrong file name'
+
+    # fqn
+    test_result = mc.extract_file_name_from_uri(
+        '/usr/src/app/data/abc.fits.gz'
+    )
+    assert test_result == 'abc.fits.gz', 'wrong fqn'

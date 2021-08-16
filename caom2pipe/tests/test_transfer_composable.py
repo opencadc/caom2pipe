@@ -78,10 +78,9 @@ import test_conf
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-@patch('caom2pipe.manage_composable.data_get')
-def test_cadc_transfer(data_get_mock, caps_mock):
+@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper', autospec=True)
+def test_cadc_transfer(client_mock, caps_mock):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
-    data_get_mock.side_effect = Mock(autospec=True)
     test_subject = tc.CadcTransfer()
     assert test_subject is not None, 'expect a result'
     test_config = mc.Config()
@@ -90,15 +89,14 @@ def test_cadc_transfer(data_get_mock, caps_mock):
         mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)
     )
     test_subject.observable = test_observable
-    test_subject.cadc_client = Mock()
+    test_subject.cadc_client = client_mock
     test_source = 'ad:TEST/test_file.fits'
     test_destination = '/tmp/test_file.fits'
     test_subject.get(test_source, test_destination)
-    assert data_get_mock.called, 'should have been called'
-    args, kwargs = data_get_mock.call_args
-    assert args[1] == '/tmp', 'wrong dir name'
-    assert args[2] == 'test_file.fits', 'wrong file name'
-    assert args[3] == 'TEST', 'wrong archive name'
+    assert client_mock.get.called, 'should have been called'
+    client_mock.get.assert_called_with(
+        '/tmp', 'ad:TEST/test_file.fits'
+    ), 'wrong parameters'
 
 
 def test_vo_transfer():

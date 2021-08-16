@@ -76,16 +76,19 @@ from caom2pipe import manage_composable as mc
 THIS_DIR = os.path.dirname(os.path.realpath(__file__))
 TEST_DATA_DIR = os.path.join(THIS_DIR, 'data')
 TEST_FILES_DIR = '/test_files'
+TEST_OBS_FILE = os.path.join(TEST_DATA_DIR, 'test_obs_id.fits.xml')
 
 
 class TestStorageName(mc.StorageName):
     def __init__(
-        self, obs_id=None, file_name=None, fname_on_disk=None, entry=None
+        self, obs_id=None, file_name=None, url=None, entry=None
     ):
         super(TestStorageName, self).__init__(
             'test_obs_id', 'TEST', '*', 'test_file.fits.gz', entry=entry
         )
-        self.url = 'https://test_url/'
+        self.url = 'https://test_url/test_file.fits.gz'
+        self._source_names = [entry]
+        self._destination_uris = ['cadc:TEST/test_file.fits.gz']
 
     def is_valid(self):
         return True
@@ -122,12 +125,15 @@ def mock_copy(source, destination):
     return os.stat(destination).st_size
 
 
+def mock_si_get(id, dest):
+    mock_copy(id, dest)
+
+
 def mock_copy_md5(source, destination, **kwargs):
     return mock_copy(source, destination)
 
 
 def mock_get_node(uri, **kwargs):
     node = type('', (), {})()
-    node.props = {'length': 42,
-                  'MD5': '1234'}
+    node.props = {'length': 42, 'MD5': '1234'}
     return node

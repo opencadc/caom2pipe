@@ -70,11 +70,18 @@
 import logging
 import os
 
+from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 
 
-__all__ = ['CadcTransfer', 'FtpTransfer', 'HttpTransfer', 'Transfer',
-           'VoFitsTransfer', 'VoTransfer']
+__all__ = [
+    'CadcTransfer',
+    'FtpTransfer',
+    'HttpTransfer',
+    'Transfer',
+    'VoFitsTransfer',
+    'VoTransfer',
+]
 
 
 class Transfer(object):
@@ -103,16 +110,18 @@ class Transfer(object):
         """
         pass
 
-    def check(self, dest_fqn):
+    def check(self, dest_fqn, original_fqn):
         """
         :param dest_fqn: str - file-system based fully-qualified name
+        :param original_fqn: str - in case the file originates somewhere
+            besides the local file-system.
         """
         return True
 
 
 class CadcTransfer(Transfer):
     """
-    Uses the CadcDataClient to manage transfers from CADC to local disk.
+    Uses the StorageClientWrapper to manage transfers from CADC to local disk.
     """
 
     def __init__(self):
@@ -133,18 +142,11 @@ class CadcTransfer(Transfer):
         :param source: str - artifact uri
         :param dest_fqn: str - fully-qualified file system name
         """
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         working_dir = os.path.dirname(dest_fqn)
-        f_name = os.path.basename(dest_fqn)
-        scheme_ignore, archive, f_name_ignore = mc.decompose_uri(source)
-        mc.data_get(
-            self._cadc_client,
-            working_dir,
-            f_name,
-            archive,
-            self._observable.metrics,
-        )
+        self._cadc_client.get(working_dir, source)
 
-    def check(self, dest_fqn):
+    def check(self, dest_fqn, original_fqn):
         """Assumes fits files at this time. Returns true because the
         CadcDataClient implementation is configured to already do an
         md5 checksum."""
@@ -170,6 +172,7 @@ class VoTransfer(Transfer):
         self._cadc_client = value
 
     def get(self, source, dest_fqn):
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         self._cadc_client.copy(source, dest_fqn, send_md5=True)
 
 
@@ -190,10 +193,7 @@ class FitsTransfer(Transfer):
     def observable(self, value):
         self._observable = value
 
-    def get(self, source, dest_fqn):
-        raise NotImplementedError
-
-    def check(self, dest_fqn):
+    def check(self, dest_fqn, original_fqn):
         from astropy.io import fits
         try:
             hdulist = fits.open(dest_fqn, memmap=True, lazy_load_hdus=False)
@@ -201,32 +201,43 @@ class FitsTransfer(Transfer):
             for h in hdulist:
                 h.verify('warn')
             hdulist.close()
-        except (fits.VerifyError, OSError) as e:
+        except (fits.VerifyError, OSError) as e1:
             if self._observable is not None:
                 self._observable.rejected.record(
                     mc.Rejected.BAD_DATA, os.path.basename(dest_fqn)
                 )
-            if os.path.exists(dest_fqn):
-                os.unlink(dest_fqn)
-                raise mc.CadcException(
-                    f'astropy verify error {dest_fqn} when reading {e}'
-                )
+            msg = f'astropy verify error {dest_fqn} when reading {e1}'
+            self.failure_action(original_fqn, dest_fqn, msg)
         # a second check that fails for some NEOSSat cases - if this works,
         # the file might have been correctly retrieved
         try:
             # ignore the return value - if the file is corrupted, the getdata
             # fails, which is the only interesting behaviour here
             fits.getdata(dest_fqn, ext=0)
-        except (TypeError, OSError) as e:
+        except (TypeError, OSError) as e2:
             if self._observable is not None:
                 self._observable.rejected.record(
                     mc.Rejected.BAD_DATA, os.path.basename(dest_fqn)
                 )
-            if os.path.exists(dest_fqn):
-                os.unlink(dest_fqn)
-            raise mc.CadcException(
-                f'astropy getdata error {dest_fqn} when reading {e}'
+            msg = f'astropy getdata error {dest_fqn} when reading {e2}'
+            self.failure_action(original_fqn, dest_fqn, msg)
+
+    def get(self, source, dest_fqn):
+        raise NotImplementedError
+
+    def failure_action(self, original_fqn, destination_fqn, msg):
+        """Action take on failure is completely dependent on where the
+        file originated, and any cleanup configuration."""
+        try:
+            if os.path.exists(destination_fqn):
+                os.unlink(destination_fqn)
+        except Exception as e:
+            self._logger.error(
+                f'Failed to clean up {destination_fqn} after a verification '
+                f'error.'
             )
+            raise mc.CadcException(e)
+        raise mc.CadcException(msg)
 
 
 class HttpTransfer(FitsTransfer):
@@ -244,10 +255,10 @@ class HttpTransfer(FitsTransfer):
         :param dest_fqn: fully-qualified string that represents file name
         :return:
         """
-        self._logger.debug(f'Retrieve {source}')
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         mc.http_get(source, dest_fqn)
         if '.fits' in dest_fqn:
-            self.check(dest_fqn)
+            self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')
 
 
@@ -267,10 +278,10 @@ class FtpTransfer(FitsTransfer):
         :param dest_fqn: fully-qualified string that represents file name
         :return:
         """
-        self._logger.debug(f'Retrieve {source}')
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         mc.ftp_get_timeout(self._ftp_host, source, dest_fqn)
         if '.fits' in dest_fqn:
-            self.check(dest_fqn)
+            self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')
 
 
@@ -286,7 +297,8 @@ class VoFitsTransfer(FitsTransfer):
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def get(self, source, dest_fqn):
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         self._vos_client.copy(source, dest_fqn, send_md5=True)
         if '.fits' in dest_fqn:
-            self.check(dest_fqn)
+            self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')

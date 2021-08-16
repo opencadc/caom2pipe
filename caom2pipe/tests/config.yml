@@ -1,2 +1,3 @@
 working_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data
 cache_file_name: test_cache.yml
+proxy_file_name: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_proxy.pem

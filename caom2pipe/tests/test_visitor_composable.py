@@ -81,8 +81,10 @@ def test_cleanup():
     )
     test_product_id = 'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
     assert len(test_obs.planes[test_product_id].artifacts) == 2, 'initial'
-    test_f_name = 'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.' \
-                  'image.pbcor.tt0.subim.fits'
+    test_f_name = (
+        'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
+        'image.pbcor.tt0.subim.fits'
+    )
     kwargs = {'url': test_f_name}
     result = test_subject.visit(test_obs, **kwargs)
     assert result is not None, 'expect a result'

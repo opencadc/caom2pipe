@@ -85,21 +85,19 @@ from collections import deque
 from datetime import datetime, timezone
 
 from caom2pipe import astro_composable as ac
+from caom2pipe import client_composable as cc
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
 from caom2pipe import name_builder_composable
 from caom2pipe import data_source_composable
 from caom2pipe import transfer_composable
-from caom2repo import CAOM2RepoClient
 
 __all__ = [
     'get_utc_now',
     'get_utc_now_tz',
     'run_by_state',
-    'run_by_state_ad',
     'run_by_todo',
     'StateRunner',
-    'StateRunnerTS',
     'TodoRunner',
 ]
 
@@ -108,6 +106,7 @@ class RunnerReport(object):
     """
     This class contains metrics for reporting on pipeline runs.
     """
+
     def __init__(self, location):
         self._location = os.path.basename(location)
         self._start_time = get_utc_now_tz().timestamp()
@@ -173,6 +172,7 @@ class TodoRunner(object):
     translating a list of work into a collection-specific name
     (StorageNameBuilder extensions).
     """
+
     def __init__(self, config, organizer, builder, data_source):
         self._builder = builder
         self._data_source = data_source
@@ -195,6 +195,7 @@ class TodoRunner(object):
         self._logger.debug('End _build_todo_list.')
 
     def _finish_run(self):
+        self._data_source.clean_up()
         mc.create_dir(self._config.log_file_directory)
         self._organizer.observable.rejected.persist_state()
         self._organizer.observable.metrics.capture()
@@ -214,11 +215,12 @@ class TodoRunner(object):
                 result = self._organizer.do_one(storage_name)
             else:
                 self._logger.error(
-                    f'{storage_name.obs_id} failed naming validation check.')
+                    f'{storage_name.obs_id} failed naming validation check.'
+                )
                 self._organizer.capture_failure(
                     storage_name,
                     BaseException('Invalid name format'),
-                    'Invalid name format.'
+                    'Invalid name format.',
                 )
                 result = -1
         except Exception as e:
@@ -289,7 +291,8 @@ class TodoRunner(object):
                 # make another file list
                 self._build_todo_list()
                 self._reporter.add_retries(
-                    self._organizer.complete_record_count)
+                    self._organizer.complete_record_count
+                )
                 self._logger.warning(
                     f'Retry {self._organizer.complete_record_count} entries'
                 )
@@ -305,144 +308,6 @@ class TodoRunner(object):
 
 
 class StateRunner(TodoRunner):
-
-    def __init__(
-            self,
-            config,
-            organizer,
-            builder,
-            data_source,
-            bookmark_name,
-            max_ts=None,
-    ):
-        super(StateRunner, self).__init__(
-            config, organizer, builder, data_source
-        )
-        self._bookmark_name = bookmark_name
-        self._end_time = get_utc_now() if max_ts is None else max_ts
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    def _record_progress(self, count, cumulative_count, start_time, save_time):
-        with open(self._config.progress_fqn, 'a') as progress:
-            progress.write(
-                f'{datetime.now()} {self._organizer.command_name} current:: '
-                f'{save_time} {count} since:: {start_time}:: '
-                f'{cumulative_count}\n'
-            )
-
-    def _wrap_state_save(self, state, save_time):
-        save_str = save_time
-        if not isinstance(save_time, str):
-            from astropy.time import Time as astro_Time
-            if isinstance(save_time, datetime):
-                save_str = save_time
-            elif isinstance(save_time, astro_Time):
-                save_time.format = 'datetime'
-                save_str = save_time.value
-        state.save_state(self._bookmark_name, save_str)
-
-    def run(self):
-        """
-        Uses an iterable with a two-item list:
-            0 - key - input parameter to a NameBuilder implementation
-            1 - timestamp - for tracking progress
-        :return: 0 for success, -1 for failure
-        """
-        self._logger.debug(f'Begin run state for {self._bookmark_name}')
-        if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
-            os.makedirs(os.path.dirname(self._config.progress_fqn))
-
-        state = mc.State(self._config.state_fqn)
-        if self._data_source.start_time_ts is None:
-            start_time = state.get_bookmark(self._bookmark_name)
-        else:
-            start_time = self._data_source.start_time_ts
-
-        # make sure prev_exec_time is type datetime
-        prev_exec_time = mc.increment_time(start_time, 0)
-        exec_time = min(
-            mc.increment_time(prev_exec_time, self._config.interval),
-            self._end_time,
-        )
-
-        self._logger.debug(
-            f'Starting at {start_time}, ending at {self._end_time}'
-        )
-        result = 0
-        cumulative = 0
-        cumulative_correct = 0
-        if prev_exec_time == self._end_time:
-            self._logger.info(
-                f'Start time is the same as end time {start_time}, stopping.'
-            )
-            exec_time = prev_exec_time
-        else:
-            cumulative = 0
-            result = 0
-            while exec_time <= self._end_time:
-                self._logger.info(
-                    f'Processing from {prev_exec_time} to {exec_time}'
-                )
-                save_time = exec_time
-                self._organizer.success_count = 0
-                entries = self._data_source.get_time_box_work(
-                    prev_exec_time, exec_time
-                )
-                num_entries = len(entries)
-
-                if num_entries > 0:
-                    self._logger.info(f'Processing {num_entries} entries.')
-                    self._organizer.complete_record_count = num_entries
-                    self._organizer.set_log_location()
-                    pop_action = entries.pop
-                    if isinstance(entries, deque):
-                        pop_action = entries.popleft
-                    while len(entries) > 0:
-                        entry = pop_action()
-                        entry_time = ac.get_datetime(entry.entry_ts)
-                        result |= self._process_entry(entry.entry_name)
-                        save_time = min(entry_time, exec_time)
-                    self._finish_run()
-
-                cumulative += num_entries
-                cumulative_correct += self._organizer.success_count
-                self._record_progress(
-                    num_entries, cumulative, start_time, save_time
-                )
-                self._wrap_state_save(state, save_time)
-
-                if exec_time == self._end_time:
-                    # the last interval will always have the exec time
-                    # equal to the end time, which will fail the while check
-                    # so leave after the last interval has been processed
-                    #
-                    # but the while <= check is required so that an interval
-                    # smaller than exec_time -> end_time will get executed,
-                    # so don't get rid of the '=' in the while loop
-                    # comparison, just because this one exists
-                    break
-                prev_exec_time = exec_time
-                exec_time = min(
-                    mc.increment_time(prev_exec_time, self._config.interval),
-                    self._end_time
-                )
-
-        self._reporter.add_entries(cumulative)
-        self._reporter.add_successes(cumulative_correct)
-        self._wrap_state_save(state, exec_time)
-        self._logger.info('==================================================')
-        self._logger.info(
-            f'Done {self._organizer.command_name}, saved state is {exec_time}'
-        )
-        self._logger.info(
-            f'{cumulative_correct} of {cumulative} records processed '
-            f'correctly.'
-        )
-        self._logger.info('==================================================')
-        return result
-
-
-class StateRunnerTS(StateRunner):
     """This is StateRunner with all times as timestamps (i.e. float),
     somewhat enforced by the use of the StateRunnerMeta class.
 
@@ -450,33 +315,38 @@ class StateRunnerTS(StateRunner):
     """
 
     def __init__(
-            self,
-            config,
-            organizer,
-            builder,
-            data_source,
-            bookmark_name,
-            max_ts=None,
+        self,
+        config,
+        organizer,
+        builder,
+        data_source,
+        bookmark_name,
+        max_ts=None,
     ):
-        super(StateRunnerTS, self).__init__(
-            config, organizer, builder, data_source, bookmark_name
+        super(StateRunner, self).__init__(
+            config, organizer, builder, data_source
         )
+        self._bookmark_name = bookmark_name
         max_ts_in_s = None
         if max_ts is not None:
             max_ts_in_s = mc.convert_to_ts(max_ts)
         # end time is a datetime.timestamp
         self._end_time = (
-            get_utc_now_tz().timestamp() if max_ts_in_s is None
-                          else max_ts_in_s
+            get_utc_now_tz().timestamp()
+            if max_ts_in_s is None
+            else max_ts_in_s
         )
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _record_progress(self, count, cumulative_count, start_time, save_time):
         start_time_dt = datetime.utcfromtimestamp(start_time)
         save_time_dt = datetime.utcfromtimestamp(save_time)
-        super(StateRunnerTS, self)._record_progress(
-            count, cumulative_count, start_time_dt, save_time_dt
-        )
+        with open(self._config.progress_fqn, 'a') as progress:
+            progress.write(
+                f'{datetime.now()} {self._organizer.command_name} current:: '
+                f'{save_time_dt} {count} since:: {start_time_dt}:: '
+                f'{cumulative_count}\n'
+            )
 
     def _wrap_state_save(self, state, save_time):
         state.save_state(
@@ -594,15 +464,6 @@ class StateRunnerTS(StateRunner):
         return result
 
 
-def _set_clients(config):
-    subject = mc.define_subject(config)
-    caom_client = CAOM2RepoClient(
-        subject, config.logging_level, config.resource_id
-    )
-    cadc_client = mc.declare_client(config)
-    return cadc_client, caom_client
-
-
 def _set_logging(config):
     formatter = logging.Formatter(
         '%(asctime)s:%(levelname)-8s:%(name)-36s:%(lineno)-4d:%(message)s'
@@ -612,13 +473,11 @@ def _set_logging(config):
         handler.setFormatter(formatter)
 
 
-def _set_modify_transfer(modify_transfer, config):
+def _set_modify_transfer(modify_transfer, config, client):
     if modify_transfer is None:
         if not config.use_local_files:
-            if config.features.supports_latest_client:
-                modify_transfer = transfer_composable.VoTransfer()
-            else:
-                modify_transfer = transfer_composable.CadcTransfer()
+            modify_transfer = transfer_composable.CadcTransfer()
+            modify_transfer.client = client
     return modify_transfer
 
 
@@ -637,15 +496,16 @@ def get_utc_now_tz():
 
 
 def run_by_todo(
-        config=None,
-        name_builder=None,
-        chooser=None,
-        command_name=None,
-        source=None,
-        meta_visitors=[],
-        data_visitors=[],
-        modify_transfer=None,
-        store_transfer=None,
+    config=None,
+    name_builder=None,
+    chooser=None,
+    command_name=None,
+    source=None,
+    meta_visitors=[],
+    data_visitors=[],
+    modify_transfer=None,
+    store_transfer=None,
+    clients=None,
 ):
     """A default implementation for using the TodoRunner.
 
@@ -670,12 +530,18 @@ def run_by_todo(
     :param store_transfer Transfer extension that identifies hot to retrieve
         data from a source for storage at CADC, probably an HTTP or FTP site.
         Don't try to guess what this one is.
+<<<<<<< HEAD
+    :param clients: ClientCollection instance
+=======
+    :param clients instance of ClientsCollection, if one was required
+>>>>>>> 7555f3000d08e5142f347cbd37797bc079aaddd2
     """
     if config is None:
         config = mc.Config()
         config.get_executors()
     _set_logging(config)
-    cadc_client, caom_client = _set_clients(config)
+    if clients is None:
+        clients = cc.ClientCollection(config)
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
@@ -684,11 +550,15 @@ def run_by_todo(
 
     if source is None:
         if config.use_local_files:
-            source = data_source_composable.ListDirDataSource(config, chooser)
+            source = data_source_composable.ListDirSeparateDataSource(
+                config, recursive=config.recurse_data_sources
+            )
         else:
             source = data_source_composable.TodoFileDataSource(config)
 
-    modify_transfer = _set_modify_transfer(modify_transfer, config)
+    modify_transfer = _set_modify_transfer(
+        modify_transfer, config, clients.data_client
+    )
 
     organizer = ec.OrganizeExecutes(
         config,
@@ -698,8 +568,8 @@ def run_by_todo(
         chooser,
         store_transfer,
         modify_transfer,
-        cadc_client=cadc_client,
-        caom_client=caom_client,
+        cadc_client=clients.data_client,
+        caom_client=clients.metadata_client,
     )
 
     runner = TodoRunner(config, organizer, name_builder, source)
@@ -709,93 +579,19 @@ def run_by_todo(
     return result
 
 
-def run_by_state_ad(
-        config=None,
-        name_builder=None,
-        command_name=None,
-        bookmark_name=None,
-        meta_visitors=[],
-        data_visitors=[],
-        end_time=None,
-        chooser=None,
-        source=None,
-        transferrer=None,
-):
-    """A default implementation for using the StateRunner.
-
-    :param config Config instance
-    :param name_builder NameBuilder extension that creates an instance of
-        a StorageName extension, from an entry from a DataSourceComposable
-        listing
-    :param command_name string that represents the specific pipeline
-        application name
-    :param bookmark_name string that represents the state.yml lookup value
-    :param meta_visitors list of modules with visit methods, that expect
-        the metadata of a work file to exist on disk
-    :param data_visitors list of modules with visit methods, that expect the
-        work file to exist on disk
-    :param end_time datetime for stopping a run, should be in UTC.
-    :param chooser OrganizerChooser, if there's strange rules about file
-        naming.
-    :param source DataSourceComposable extension that identifies work to be
-        done.
-    :param transferrer Transfer extension that identifies how to retrieve
-        data from a source.
-    """
-    if config is None:
-        config = mc.Config()
-        config.get_executors()
-    _set_logging(config)
-    cadc_client, caom_client = _set_clients(config)
-
-    if name_builder is None:
-        name_builder = name_builder_composable.StorageNameInstanceBuilder(
-            config.collection
-        )
-
-    if source is None:
-        source = data_source_composable.QueryTimeBoxDataSource(config)
-
-    if end_time is None:
-        end_time = get_utc_now()
-
-    if transferrer is None:
-        if config.use_local_files:
-            transferrer = transfer_composable.Transfer()
-        else:
-            transferrer = transfer_composable.CadcTransfer()
-    organizer = ec.OrganizeExecutes(
-        config,
-        command_name,
-        meta_visitors,
-        data_visitors,
-        chooser,
-        transferrer,
-        cadc_client=cadc_client,
-        caom_client=caom_client,
-    )
-
-    runner = StateRunner(
-        config, organizer, name_builder, source, bookmark_name, end_time
-    )
-    result = runner.run()
-    result |= runner.run_retry()
-    runner.report()
-    return result
-
-
 def run_by_state(
-        config=None,
-        name_builder=None,
-        command_name=None,
-        bookmark_name=None,
-        meta_visitors=[],
-        data_visitors=[],
-        end_time=None,
-        chooser=None,
-        source=None,
-        modify_transfer=None,
-        store_transfer=None,
+    config=None,
+    name_builder=None,
+    command_name=None,
+    bookmark_name=None,
+    meta_visitors=[],
+    data_visitors=[],
+    end_time=None,
+    chooser=None,
+    source=None,
+    modify_transfer=None,
+    store_transfer=None,
+    clients=None,
 ):
     """A default implementation for using the StateRunner.
 
@@ -823,12 +619,14 @@ def run_by_state(
     :param store_transfer Transfer extension that identifies hot to retrieve
         data from a source for storage at CADC, probably an HTTP or FTP site.
         Don't try to guess what this one is.
+    :param clients instance of ClientsCollection, if one was required
     """
     if config is None:
         config = mc.Config()
         config.get_executors()
     _set_logging(config)
-    cadc_client, caom_client = _set_clients(config)
+    if clients is None:
+        clients = cc.ClientCollection(config)
 
     if name_builder is None:
         name_builder = name_builder_composable.StorageNameInstanceBuilder(
@@ -836,12 +634,19 @@ def run_by_state(
         )
 
     if source is None:
-        source = data_source_composable.QueryTimeBoxDataSourceTS(config)
+        if config.use_local_files:
+            source = data_source_composable.ListDirTimeBoxDataSource(
+                config, recursive=config.recurse_data_sources
+            )
+        else:
+            source = data_source_composable.QueryTimeBoxDataSourceTS(config)
 
     if end_time is None:
         end_time = get_utc_now_tz()
 
-    modify_transfer = _set_modify_transfer(modify_transfer, config)
+    modify_transfer = _set_modify_transfer(
+        modify_transfer, config, clients.data_client
+    )
 
     organizer = ec.OrganizeExecutes(
         config,
@@ -851,11 +656,11 @@ def run_by_state(
         chooser,
         store_transfer,
         modify_transfer,
-        cadc_client,
-        caom_client,
+        clients.data_client,
+        clients.metadata_client,
     )
 
-    runner = StateRunnerTS(
+    runner = StateRunner(
         config, organizer, name_builder, source, bookmark_name, end_time
     )
     result = runner.run()
@@ -865,14 +670,14 @@ def run_by_state(
 
 
 def run_single(
-        config,
-        storage_name,
-        command_name,
-        meta_visitors,
-        data_visitors,
-        chooser=None,
-        store_transfer=None,
-        modify_transfer=None,
+    config,
+    storage_name,
+    command_name,
+    meta_visitors,
+    data_visitors,
+    chooser=None,
+    store_transfer=None,
+    modify_transfer=None,
 ):
     """Process a single entry by StorageName detail.
 
@@ -897,8 +702,10 @@ def run_single(
     # missing the metrics and the reporting
     #
     logging.debug(f'Begin run_single {config.work_fqn}')
-    cadc_client, caom_client = _set_clients(config)
-    modify_transfer = _set_modify_transfer(modify_transfer, config)
+    clients = cc.ClientCollection(config)
+    modify_transfer = _set_modify_transfer(
+        modify_transfer, config, clients.data_client
+    )
     organizer = ec.OrganizeExecutes(
         config,
         command_name,
@@ -907,8 +714,8 @@ def run_single(
         chooser,
         store_transfer,
         modify_transfer,
-        cadc_client,
-        caom_client,
+        clients.data_client,
+        clients.metadata_client,
     )
     organizer.complete_record_count = 1
     organizer.choose(storage_name)

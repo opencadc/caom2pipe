@@ -1,0 +1,38 @@
+<caom2:Observation xmlns:caom2="http://www.opencadc.org/caom2/xml/v2.4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="caom2:DerivedObservation" caom2:id="00000000-0000-0000-16b2-01506e4c9700">
+  <caom2:collection>GEMINI</caom2:collection>
+  <caom2:observationID>GN2001BQ013-04</caom2:observationID>
+  <caom2:algorithm>
+    <caom2:name>composite</caom2:name>
+  </caom2:algorithm>
+  <caom2:type>DARK</caom2:type>
+  <caom2:planes>
+    <caom2:plane caom2:id="00000000-0000-0000-89dc-edb27c90c000">
+      <caom2:productID>GN2001BQ013-04</caom2:productID>
+      <caom2:provenance>
+        <caom2:name>test_provenance</caom2:name>
+        <caom2:inputs>
+          <caom2:planeURI>caom:GEMINI/test_data_label/N20160102S0296</caom2:planeURI>
+          <caom2:planeURI>caom:GEMINI/test_data_label/N20160102S0297</caom2:planeURI>
+        </caom2:inputs>
+      </caom2:provenance>
+      <caom2:artifacts>
+        <caom2:artifact caom2:id="00000000-0000-0000-ba10-c26a6be64700">
+          <caom2:uri>cadc:GEMINI/test.fits</caom2:uri>
+          <caom2:productType>science</caom2:productType>
+          <caom2:releaseType>data</caom2:releaseType>
+          <caom2:contentChecksum>md5:012345678901234567890</caom2:contentChecksum>
+          <caom2:parts>
+            <caom2:part caom2:id="00000000-0000-0000-ba10-c26a6be64700">
+              <caom2:name>0</caom2:name>
+              <caom2:productType>science</caom2:productType>
+              <caom2:chunks>
+                <caom2:chunk caom2:id="00000000-0000-0000-a273-a0a841bbd24c" caom2:metaProducer="gem2caom2/0.8.1">
+                </caom2:chunk>
+              </caom2:chunks>
+            </caom2:part>
+          </caom2:parts>
+        </caom2:artifact>
+      </caom2:artifacts>
+    </caom2:plane>
+  </caom2:planes>
+</caom2:Observation>

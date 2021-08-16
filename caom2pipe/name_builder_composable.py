@@ -67,10 +67,15 @@
 # ***********************************************************************
 #
 
+import logging
+
+from os.path import basename
+from urllib.parse import urlparse
 from caom2pipe import manage_composable as mc
 
 __all__ = [
-    'FileNameBuilder',
+    'EntryBuilder',
+    'GuessingBuilder',
     'ObsIDBuilder',
     'StorageNameInstanceBuilder',
     'StorageNameBuilder',
@@ -90,6 +95,7 @@ class StorageNameBuilder(object):
     - the collection class directly. This choice is usually masked behind
         a specialization of the data_source_composable.get_work class.
     """
+
     def __init__(self):
         pass
 
@@ -105,7 +111,6 @@ class StorageNameBuilder(object):
 
 
 class StorageNameInstanceBuilder(StorageNameBuilder):
-
     def __init__(self, collection):
         super(StorageNameInstanceBuilder, self).__init__()
         self._collection = collection
@@ -119,18 +124,18 @@ class StorageNameInstanceBuilder(StorageNameBuilder):
         )
 
 
-class FileNameBuilder(StorageNameBuilder):
+class EntryBuilder(StorageNameBuilder):
     """
     A class that assumes constructing the StorageName instance requires a
-    single parameter: a str 'file_name'
+    single positional parameter.
     """
 
     def __init__(self, storage_name):
-        super(FileNameBuilder, self).__init__()
+        super(EntryBuilder, self).__init__()
         self._storage_name = storage_name
 
     def build(self, entry):
-        return self._storage_name(file_name=entry, entry=entry)
+        return self._storage_name(entry)
 
 
 class ObsIDBuilder(StorageNameBuilder):
@@ -145,3 +150,28 @@ class ObsIDBuilder(StorageNameBuilder):
 
     def build(self, entry):
         return self._storage_name(obs_id=entry, entry=entry)
+
+
+class GuessingBuilder(StorageNameBuilder):
+    """
+    A class that attempts to guess the StorageName instance parameters,
+    based on what's provided as input.
+    """
+
+    def __init__(self, storage_name):
+        super(GuessingBuilder, self).__init__()
+        self._storage_name = storage_name
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def build(self, entry):
+        self._logger.debug(
+            f'Build a {self._storage_name.__name__} instance with {entry}.'
+        )
+        temp = urlparse(entry)
+        if temp.scheme is None or temp.scheme == '':
+            result = self._storage_name(
+                file_name=(basename(temp.path)), entry=entry
+            )
+        else:
+            result = self._storage_name(url=entry, entry=entry)
+        return result

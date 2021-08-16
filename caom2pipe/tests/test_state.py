@@ -70,12 +70,13 @@
 import glob
 import logging
 import os
-import shutil
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
+
+import dateutil.tz
 from mock import patch
 
-from cadcutils import net
+from cadcdata import FileInfo
 from caom2pipe import data_source_composable as dsc
 from caom2pipe import manage_composable as mc
 from caom2pipe import name_builder_composable as nbc
@@ -83,22 +84,31 @@ from caom2pipe import run_composable as rc
 from caom2pipe import transfer_composable
 
 import test_conf as tc
-import test_run_composable
 
 
 class TestTransfer(transfer_composable.Transfer):
-
     def __init__(self):
         super(TestTransfer, self).__init__()
 
-    def get(self, source, dest_fqn):
-        logging.error(f'source {source} dest {dest_fqn}')
-        source_fqn = f'/caom2pipe_test/{source}'
-        shutil.copy(source_fqn, dest_fqn)
+    def get(self, source_fqn, dest_fqn):
+        logging.error(f'source {source_fqn} dest {dest_fqn}')
+
+        test_source_fqn = '/caom2pipe_test/1000003f.fits.fz'
+        test_source_uri = 'cadc:TEST/test_file.fits.gz'
+        if source_fqn not in [test_source_fqn, test_source_uri]:
+            assert False, f'wrong source directory {source_fqn}'
+        assert (
+            dest_fqn
+            in [
+                '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz',
+                '/usr/src/app/caom2pipe/int_test/test_obs_id/1000003f.fits.fz',
+            ]
+        ), 'wrong destination directory'
+        with open(dest_fqn, 'w') as f:
+            f.write('test content')
 
 
 class TestListDirTimeBoxDataSource(dsc.DataSource):
-
     def __init__(self):
         super(TestListDirTimeBoxDataSource, self).__init__()
 
@@ -109,17 +119,15 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
             stats = os.stat(entry)
             if prev_exec_time <= stats.st_mtime <= exec_time:
                 result.append(
-                    dsc.StateRunnerMeta(os.path.basename(entry),
-                    stats.st_mtime)
+                    dsc.StateRunnerMeta(entry, stats.st_mtime)
                 )
         return result
 
 
-@patch('caom2pipe.run_composable.CAOM2RepoClient')
-@patch('caom2pipe.manage_composable.CadcDataClient')
-def test_run_state(data_mock, repo_mock):
-    repo_mock.return_value.read.side_effect = tc.mock_read
-    data_mock.return_value.get_file.side_effect = tc.mock_get_file
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+def test_run_state(client_mock):
+    client_mock.metadata_client.read.side_effect = tc.mock_read
+    client_mock.data_client.get_file.side_effect = tc.mock_get_file
 
     test_wd = '/usr/src/app/caom2pipe/int_test'
     caom2pipe_bookmark = 'caom2_timestamp'
@@ -128,57 +136,51 @@ def test_run_state(data_mock, repo_mock):
     test_config.collection = 'TEST'
     test_config.interval = 10
     test_config.log_file_directory = f'{test_wd}/logs'
-    test_config.failure_fqn = \
+    test_config.failure_fqn = (
         f'{test_config.log_file_directory}/failure_log.txt'
+    )
     test_config.log_to_file = True
     test_config.logging_level = 'DEBUG'
     test_config.progress_file_name = 'progress.txt'
     test_config.proxy_file_name = f'{test_wd}/cadcproxy.pem'
     test_config.rejected_file_name = 'rejected.yml'
     test_config.rejected_directory = f'{test_wd}/rejected'
-    test_config._report_fqn = f'{test_config.log_file_directory}/app_report.txt'
+    test_config._report_fqn = (
+        f'{test_config.log_file_directory}/app_report.txt'
+    )
     test_config.resource_id = 'ivo://cadc.nrc.ca/sc2repo'
     test_config.retry_file_name = 'retries.txt'
-    test_config.retry_fqn = \
+    test_config.retry_fqn = (
         f'{test_config.log_file_directory}/{test_config.retry_file_name}'
+    )
     test_config.state_file_name = 'state.yml'
-    test_config.success_fqn = \
+    test_config.success_fqn = (
         f'{test_config.log_file_directory}/success_log.txt'
+    )
     test_config.tap_id = 'ivo://cadc.nrc.ca/sc2tap'
     test_config.task_types = [
-        mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY
+        mc.TaskType.STORE,
+        mc.TaskType.INGEST,
+        mc.TaskType.MODIFY,
     ]
     test_config.features.use_file_names = True
     test_config.features.use_urls = False
     test_config.features.supports_latest_client = False
     test_config.use_local_files = False
+    test_config.storage_inventory_resource_id = 'ivo://cadc.nrc.ca/test'
 
     if not os.path.exists(test_wd):
         os.mkdir(test_wd)
 
-    # if this test is failing, did the docker container get
-    # restarted recently?
-    # first create /caom2pipe_test/1000003f.fits.fz,
-    # then check that the test_start_time and test_end_time values
-    # correspond somewhat to the timestamp on that file
-    #
-    # this timestamp is 15 minutes earlier than the timestamp of the
-    # file in /caom2pipe_test
-    #
-    test_start_time = '2021-05-08 02:25:09'
-    with open(test_config.state_fqn, 'w') as f:
-        f.write('bookmarks:\n')
-        f.write(f'  {caom2pipe_bookmark}:\n')
-        f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(
-        2021, 5, 8, 2, 41, 27, 965132, tzinfo=timezone.utc
+    test_start_time, test_end_time = _get_times(
+        test_config, caom2pipe_bookmark
     )
 
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content\n')
 
     test_data_source = TestListDirTimeBoxDataSource()
-    test_builder = nbc.FileNameBuilder(tc.TestStorageName)
+    test_builder = nbc.GuessingBuilder(tc.TestStorageName)
     transferrer = TestTransfer()
 
     try:
@@ -189,16 +191,13 @@ def test_run_state(data_mock, repo_mock):
             end_time=test_end_time,
             name_builder=test_builder,
             source=test_data_source,
-            modify_transfer=None,
+            modify_transfer=transferrer,
             store_transfer=transferrer,
+            clients=client_mock,
         )
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
-        # assert data_mock.called, 'expect put call'
-        # assert (
-        #     isinstance(data_mock.call_args.args[0], net.Subject)
-        # ), 'wrong args'
 
         # state file checking
         test_state = mc.State(test_config.state_fqn)
@@ -212,8 +211,9 @@ def test_run_state(data_mock, repo_mock):
         assert os.path.exists(test_config.progress_fqn), 'progress fqn'
         log_file = f'{test_config.log_file_directory}/test_obs_id.log'
         actual = glob.glob(f'{test_config.log_file_directory}/**')
-        assert os.path.exists(log_file), f'specific log file {actual}'
-        xml_file = f'{test_config.log_file_directory}/test_obs_id.fits.xml'
+        actual_str = '\n'.join(ii for ii in actual)
+        assert os.path.exists(log_file), f'specific log file {actual_str}'
+        xml_file = f'{test_config.log_file_directory}/test_obs_id.xml'
         assert os.path.exists(xml_file), f'xml file {actual}'
 
         # reporting testing
@@ -258,13 +258,14 @@ def test_run_state(data_mock, repo_mock):
                 logging.error(f'failed to delete {e}')
 
 
-@patch('caom2pipe.run_composable.CAOM2RepoClient')
-@patch('caom2pipe.manage_composable.Client')
-def test_run_state_v(client_mock, repo_mock):
-    repo_mock.return_value.read.side_effect = tc.mock_read
-    client_mock.get_node.side_effect = tc.mock_get_node
-    # the test file is length 0
-    client_mock.return_value.copy.return_value = 0
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+def test_run_state_v(client_mock):
+    client_mock.metadata_client.read.side_effect = tc.mock_read
+    client_mock.data_client.info.return_value = FileInfo(
+        id='cadc:TEST/anything.fits',
+        size=42,
+        md5sum='9473fdd0d880a43c21b7778d34872157',
+    )
 
     test_wd = '/usr/src/app/caom2pipe/int_test'
     caom2pipe_bookmark = 'caom2_timestamp'
@@ -273,57 +274,51 @@ def test_run_state_v(client_mock, repo_mock):
     test_config.collection = 'TEST'
     test_config.interval = 10
     test_config.log_file_directory = f'{test_wd}/logs'
-    test_config.failure_fqn = \
+    test_config.failure_fqn = (
         f'{test_config.log_file_directory}/failure_log.txt'
+    )
     test_config.log_to_file = True
-    test_config.logging_level = 'DEBUG'
+    test_config.logging_level = 'INFO'
     test_config.progress_file_name = 'progress.txt'
     test_config.proxy_file_name = f'{test_wd}/cadcproxy.pem'
     test_config.rejected_file_name = 'rejected.yml'
     test_config.rejected_directory = f'{test_wd}/rejected'
-    test_config._report_fqn = f'{test_config.log_file_directory}/app_report.txt'
+    test_config._report_fqn = (
+        f'{test_config.log_file_directory}/app_report.txt'
+    )
     test_config.resource_id = 'ivo://cadc.nrc.ca/sc2repo'
     test_config.retry_file_name = 'retries.txt'
-    test_config.retry_fqn = \
+    test_config.retry_fqn = (
         f'{test_config.log_file_directory}/{test_config.retry_file_name}'
+    )
     test_config.state_file_name = 'state.yml'
-    test_config.success_fqn = \
+    test_config.success_fqn = (
         f'{test_config.log_file_directory}/success_log.txt'
+    )
     test_config.tap_id = 'ivo://cadc.nrc.ca/sc2tap'
     test_config.task_types = [
-        mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY
+        mc.TaskType.STORE,
+        mc.TaskType.INGEST,
+        mc.TaskType.MODIFY,
     ]
     test_config.features.use_file_names = True
     test_config.features.use_urls = False
     test_config.features.supports_latest_client = True
     test_config.use_local_files = False
+    test_config.storage_inventory_resource_id = 'ivo://cadc.nrc.ca/test'
 
     if not os.path.exists(test_wd):
         os.mkdir(test_wd)
 
-    # if this test is failing, did the docker container get
-    # restarted recently?
-    # first create /caom2pipe_test/1000003f.fits.fz,
-    # then check that the test_start_time and test_end_time values
-    # correspond somewhat to the timestamp on that file
-    #
-    # this timestamp is 15 minutes earlier than the timestamp of the
-    # file in /caom2pipe_test
-    #
-    test_start_time = '2021-05-08 02:25:09'
-    with open(test_config.state_fqn, 'w') as f:
-        f.write('bookmarks:\n')
-        f.write(f'  {caom2pipe_bookmark}:\n')
-        f.write(f'    last_record: {test_start_time}\n')
-    test_end_time = datetime(
-        2021, 5, 8, 2, 41, 27, 965132, tzinfo=timezone.utc
+    test_start_time, test_end_time = _get_times(
+        test_config, caom2pipe_bookmark
     )
 
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content\n')
 
     test_data_source = TestListDirTimeBoxDataSource()
-    test_builder = nbc.FileNameBuilder(tc.TestStorageName)
+    test_builder = nbc.GuessingBuilder(tc.TestStorageName)
     transferrer = TestTransfer()
 
     try:
@@ -334,19 +329,19 @@ def test_run_state_v(client_mock, repo_mock):
             end_time=test_end_time,
             name_builder=test_builder,
             source=test_data_source,
-            modify_transfer=None,
+            modify_transfer=transferrer,
             store_transfer=transferrer,
+            clients=client_mock,
         )
 
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
-        assert client_mock.return_value.copy.called, 'expect put call'
-        args, kwargs = client_mock.return_value.copy.call_args
-        assert args[0] == 'ad:TEST/test_obs_id.fits.gz', 'wrong args[0]'
-        assert (
-            args[1] == '/usr/src/app/caom2pipe/int_test/test_obs_id/'
-                       'test_obs_id.fits'
-        ), 'wrong args[1]'
+        assert client_mock.data_client.put.called, 'expect put call'
+        client_mock.data_client.put.assert_called_with(
+            '/usr/src/app/caom2pipe/int_test/test_obs_id',
+            'cadc:TEST/test_file.fits.gz',
+            None,
+        ), 'wrong call args'
 
         # state file checking
         test_state = mc.State(test_config.state_fqn)
@@ -361,7 +356,7 @@ def test_run_state_v(client_mock, repo_mock):
         log_file = f'{test_config.log_file_directory}/test_obs_id.log'
         actual = glob.glob(f'{test_config.log_file_directory}/**')
         assert os.path.exists(log_file), f'specific log file {actual}'
-        xml_file = f'{test_config.log_file_directory}/test_obs_id.fits.xml'
+        xml_file = f'{test_config.log_file_directory}/test_obs_id.xml'
         assert os.path.exists(xml_file), f'xml file {actual}'
 
         # reporting testing
@@ -404,3 +399,22 @@ def test_run_state_v(client_mock, repo_mock):
                     os.unlink(entry)
             except OSError as e:
                 logging.error(f'failed to delete {e}')
+
+
+def _get_times(test_config, caom2pipe_bookmark):
+    if not os.path.exists('/caom2pipe_test'):
+        os.mkdir('/caom2pipe_test')
+        from pathlib import Path
+        Path('/caom2pipe_test/1000003f.fits.fz').touch()
+
+    test_start_time = datetime.fromtimestamp(
+        os.stat('/caom2pipe_test/1000003f.fits.fz').st_mtime,
+        tz=dateutil.tz.UTC
+    ) - timedelta(minutes=5)
+
+    with open(test_config.state_fqn, 'w') as f:
+        f.write('bookmarks:\n')
+        f.write(f'  {caom2pipe_bookmark}:\n')
+        f.write(f'    last_record: {test_start_time}\n')
+    test_end_time = test_start_time + timedelta(minutes=12)
+    return test_start_time, test_end_time

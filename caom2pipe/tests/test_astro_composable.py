@@ -117,7 +117,7 @@ def test_get_datetime():
 def test_get_location():
     x, y, z = ac.get_location(21.0, -32.0, 12)
     assert x == 5051887.288718968, x
-    assert y == -3156769.536020791, y
+    assert y == -3156769.5360207916, y
     assert z == 2271399.319625149, z
 
 
@@ -128,8 +128,8 @@ def test_build_plane_time():
     result = ac.build_plane_time(start, end, exposure)
     assert result is not None, 'expected a value'
     assert result.bounds is not None, 'expected a bounds value'
-    assert (
-        math.isclose(result.exposure, 7199.999999999994)
+    assert math.isclose(
+        result.exposure, 7199.999999999994
     ), 'wrong exposure value'
 
 
@@ -144,7 +144,7 @@ def test_build_ra_dec_as_deg():
     test_dec = '+00:35:32.36300'
     result_ra, result_dec = ac.build_ra_dec_as_deg(test_ra, test_dec)
     assert result_ra is not None
-    assert math.isclose(result_ra,  282.9446795833333), 'wrong ra value'
+    assert math.isclose(result_ra, 282.9446795833333), 'wrong ra value'
     assert result_dec is not None
     assert math.isclose(result_dec, 0.5923230555555556), 'wrong dec value'
 
@@ -166,6 +166,7 @@ def test_filter_md_cache(query_mock):
         if table is not None:
             result = parse_single_table(table)
         return result, error_message
+
     query_mock.side_effect = _vo_mock
 
     fn_repair = {'collection': 'repaired'}
@@ -178,11 +179,12 @@ def test_filter_md_cache(query_mock):
 
     # uncached, unrepaired
     test_result = test_subject.get_svo_filter(
-        'unrepaired_inst', 'unrepaired_fn')
+        'unrepaired_inst', 'unrepaired_fn'
+    )
     assert test_result is not None, 'expect a result'
     assert (
-           ac.FilterMetadataCache.get_central_wavelength(test_result) ==
-           3740.2043404255
+        ac.FilterMetadataCache.get_central_wavelength(test_result)
+        == 3740.2043404255
     ), 'wrong cw'
     assert (
         ac.FilterMetadataCache.get_fwhm(test_result) == 414.98068085106
@@ -198,8 +200,8 @@ def test_filter_md_cache(query_mock):
     )
     assert test_result is not None, 'expect a result'
     assert (
-           ac.FilterMetadataCache.get_central_wavelength(test_result) ==
-           3740.2043404255
+        ac.FilterMetadataCache.get_central_wavelength(test_result)
+        == 3740.2043404255
     ), 'wrong cw'
     assert (
         ac.FilterMetadataCache.get_fwhm(test_result) == 414.98068085106
@@ -220,8 +222,6 @@ def test_filter_md_cache(query_mock):
     test_result = test_subject.get_svo_filter('undefined', 'undefined')
     assert test_result is not None, 'expect result'
     assert (
-       ac.FilterMetadataCache.get_central_wavelength(test_result) == -2
+        ac.FilterMetadataCache.get_central_wavelength(test_result) == -2
     ), 'wrong cw'
-    assert (
-        ac.FilterMetadataCache.get_fwhm(test_result) == -2
-    ), 'wrong fwhm'
+    assert ac.FilterMetadataCache.get_fwhm(test_result) == -2, 'wrong fwhm'

@@ -69,7 +69,7 @@
 
 from mock import patch
 
-from caom2utils import ObsBlueprint, get_cadc_headers
+from caom2utils import ObsBlueprint
 from caom2pipe import manage_composable as mc
 from caom2pipe import translate_composable as tc
 
@@ -85,55 +85,74 @@ def test_add_headers_to_obs_by_blueprint(parser_mock):
     test_uri = 'ad:CFHT/2515996g.fits'
     assert len(test_obs.planes) == 1, 'wrong number of planes'
     assert (
-       len(test_obs.planes[test_product_id].artifacts) == 1
+        len(test_obs.planes[test_product_id].artifacts) == 1
     ), 'wrong number of artifacts'
     assert (
-       len(test_obs.planes[test_product_id].artifacts[test_uri].parts) == 5
+        len(test_obs.planes[test_product_id].artifacts[test_uri].parts) == 5
     ), 'wrong number of parts'
     assert (
-            len(
-                test_obs.planes[test_product_id].artifacts[test_uri].parts[
-                    '0'
-                ].chunks
-            ) == 1
+        len(
+            test_obs.planes[test_product_id]
+            .artifacts[test_uri]
+            .parts['0']
+            .chunks
+        )
+        == 1
     ), 'wrong number of chunks'
     assert (
-        test_obs.planes[test_product_id].artifacts[test_uri].parts[
-            '0'
-        ]. chunks[0].naxis == 3
+        test_obs.planes[test_product_id]
+        .artifacts[test_uri]
+        .parts['0']
+        .chunks[0]
+        .naxis
+        == 3
     ), 'track initial value'
     assert (
-        test_obs.planes[test_product_id].artifacts[test_uri].parts[
-            'IMAGE DATA'
-        ].chunks[0].naxis is None
+        test_obs.planes[test_product_id]
+        .artifacts[test_uri]
+        .parts['IMAGE DATA']
+        .chunks[0]
+        .naxis
+        is None
     ), 'track initial value'
     tc.add_headers_to_obs_by_blueprint(
         test_obs, [], test_blueprint, test_uri, test_product_id
     )
     assert (
-       len(test_obs.planes[test_product_id].artifacts[test_uri].parts) == 5
+        len(test_obs.planes[test_product_id].artifacts[test_uri].parts) == 5
     ), 'wrong number of parts'
     assert (
         len(
-            test_obs.planes[test_product_id].artifacts[test_uri].parts[
-                '0'
-            ].chunks
-        ) == 0
+            test_obs.planes[test_product_id]
+            .artifacts[test_uri]
+            .parts['0']
+            .chunks
+        )
+        == 0
     ), 'wrong number of chunks'
     assert (
-       len(test_obs.planes[test_product_id].artifacts[test_uri].parts[
-               '1'
-           ].chunks
-           ) == 1
+        len(
+            test_obs.planes[test_product_id]
+            .artifacts[test_uri]
+            .parts['1']
+            .chunks
+        )
+        == 1
     ), 'wrong number of chunks'
     assert (
-        len(test_obs.planes[test_product_id].artifacts[test_uri].parts[
-                'IMAGE DATA'
-            ].chunks
-            ) == 1
+        len(
+            test_obs.planes[test_product_id]
+            .artifacts[test_uri]
+            .parts['IMAGE DATA']
+            .chunks
+        )
+        == 1
     ), 'wrong number of chunks'
     assert (
-        test_obs.planes[test_product_id].artifacts[test_uri].parts[
-            'IMAGE DATA'
-        ].chunks[0].naxis == 3
+        test_obs.planes[test_product_id]
+        .artifacts[test_uri]
+        .parts['IMAGE DATA']
+        .chunks[0]
+        .naxis
+        == 3
     ), 'track initial value'

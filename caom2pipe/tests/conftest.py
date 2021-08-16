@@ -25,11 +25,16 @@ def test_config():
     test_config.resource_id = 'ivo://cadc.nrc.ca/sc2repo'
     test_config.features.run_in_airflow = False
     test_config.features.use_file_names = False
-    test_config._report_fqn = f'{test_config.log_file_directory}/' \
-                              f'test_report.txt'
+    test_config._report_fqn = (
+        f'{test_config.log_file_directory}/' f'test_report.txt'
+    )
+    test_config.storage_inventory_resource_id = 'ivo://cadc.nrc.ca/TEST'
     test_config.stream = 'TEST'
-    for f_name in [test_config.failure_fqn, test_config.success_fqn,
-                   test_config.retry_fqn]:
+    for f_name in [
+        test_config.failure_fqn,
+        test_config.success_fqn,
+        test_config.retry_fqn,
+    ]:
         if os.path.exists(f_name):
             os.unlink(f_name)
     return test_config

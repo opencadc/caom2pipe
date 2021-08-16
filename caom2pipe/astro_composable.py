@@ -70,6 +70,7 @@
 import io
 import logging
 import requests
+import traceback
 
 from astropy import units
 from astropy.io import fits
@@ -93,13 +94,24 @@ from caom2 import CoordBounds1D, CoordRange1D, RefCoord
 from caom2pipe import manage_composable as mc
 
 
-__all__ = ['convert_time', 'get_datetime', 'build_chunk_energy_bounds',
-           'build_plane_time', 'build_plane_time_interval',
-           'build_plane_time_sample', 'build_ra_dec_as_deg',
-           'get_geocentric_location', 'get_location', 'get_timedelta_in_s',
-           'make_headers_from_string', 'get_vo_table', 'read_fits_data',
-           'get_vo_table_session',
-           'read_fits_headers', 'SVO_URL', 'FilterMetadataCache']
+__all__ = [
+    'build_chunk_energy_bounds',
+    'build_plane_time',
+    'build_plane_time_interval',
+    'build_plane_time_sample',
+    'build_ra_dec_as_deg',
+    'check_fits',
+    'convert_time',
+    'FilterMetadataCache',
+    'get_datetime',
+    'get_geocentric_location',
+    'get_location',
+    'get_timedelta_in_s',
+    'get_vo_table',
+    'get_vo_table_session',
+    'read_fits_data',
+    'SVO_URL',
+]
 
 SVO_URL = 'http://svo2.cab.inta-csic.es/svo/theory/fps3/fps.php?ID='
 
@@ -113,13 +125,48 @@ def find_time_bounds(headers):
     return convert_time(date, exposure)
 
 
+def check_fits(fqn):
+    """
+    Two FITS verification methods, returns False if either one fails.
+
+    :param fqn: FITS file to check
+    :return: boolean True if the file passes the two verification steps,
+        False otherwise
+    """
+    try:
+        hdulist = fits.open(fqn, memmap=True, lazy_load_hdus=False)
+        hdulist.verify('warn')
+        for h in hdulist:
+            h.verify('warn')
+        hdulist.close()
+        logging.debug(f'hdulist verify succeeded for {fqn}')
+    except (fits.VerifyError, OSError) as e1:
+        logging.debug(traceback.format_exc())
+        logging.error(f'astropy verify error {e1} when reading {fqn}')
+        return False
+
+    # a second check that fails for some NEOSSat cases - if this works,
+    # the file might have been correctly retrieved
+    try:
+        # ignore the return value - if the file is corrupted, the getdata
+        # fails, which is the only interesting behaviour here
+        fits.getdata(fqn, ext=0)
+    except (TypeError, OSError) as e2:
+        logging.debug(traceback.format_exc())
+        logging.error(f'astropy getdata error {e2} when reading {fqn}')
+        return False
+
+    return True
+
+
 def convert_time(start_time, exposure):
     """Convert a start time and exposure length into an mjd_start and mjd_end
     time."""
     logging.debug('Begin convert_time.')
     if start_time is not None and exposure is not None:
-        logging.debug(f'Use date {start_time} and exposure {exposure} to '
-                      f'convert time.')
+        logging.debug(
+            f'Use date {start_time} and exposure {exposure} to convert time.'
+        )
         if type(start_time) is float:
             t_start = Time(start_time, format='mjd')
         else:
@@ -131,7 +178,8 @@ def convert_time(start_time, exposure):
         mjd_start = t_start.value
         mjd_end = t_end.value
         logging.debug(
-            f'End convert_time mjd start {mjd_start} mjd end {mjd_end}.')
+            f'End convert_time mjd start {mjd_start} mjd end {mjd_end}.'
+        )
         return mjd_start, mjd_end
     return None, None
 
@@ -149,6 +197,7 @@ def get_datetime(from_value):
     result = None
     if from_value is not None:
         import numpy
+
         # local import, in case the container is not provisioned with
         # numpy
         if isinstance(from_value, str):
@@ -162,15 +211,21 @@ def get_datetime(from_value):
                 if '+00:00' in from_value:
                     # because %z doesn't expect the ':' in the timezone field
                     from_value = from_value[:-6]
-                for fmt in ['%H:%M:%S', '%Y/%m/%d', '%Y-%m-%d %H:%M:%S.%f',
-                            '%d/%m/%y', '%d/%m/%y %H:%M:%S']:
+                for fmt in [
+                    '%H:%M:%S',
+                    '%Y/%m/%d',
+                    '%Y-%m-%d %H:%M:%S.%f',
+                    '%d/%m/%y',
+                    '%d/%m/%y %H:%M:%S',
+                ]:
                     try:
                         result = Time(dt_datetime.strptime(from_value, fmt))
                         break
                     except ValueError:
                         pass
-        elif (isinstance(from_value, numpy.int32) or
-              isinstance(from_value, float)):
+        elif isinstance(from_value, numpy.int32) or isinstance(
+            from_value, float
+        ):
             result = Time(dt_datetime.fromtimestamp(from_value))
     if result is None:
         logging.error(f'Cannot parse datetime {from_value}')
@@ -190,7 +245,8 @@ def get_location(latitude, longitude, elevation):
     """The CAOM model expects the telescope location to be in geocentric
     coordinates. Rely on astropy to do the conversion."""
     result = EarthLocation.from_geodetic(
-        longitude, latitude, elevation, 'WGS84')
+        longitude, latitude, elevation, 'WGS84'
+    )
     return result.x.value, result.y.value, result.z.value
 
 
@@ -251,6 +307,7 @@ def get_vo_table_session(url, session):
 
 def build_chunk_energy_bounds(wave, axis):
     import numpy as np  # limit the  effect on container content
+
     # caom2IngestEspadons.py, l698
     x = np.arange(1, wave.size + 1, dtype='float32')
     wavegrade = np.gradient(wave)
@@ -282,11 +339,13 @@ def build_plane_time(start_date, end_date, exposure_time):
     """Calculate the plane-level bounding box for time, with one sample."""
     sample = build_plane_time_sample(start_date, end_date)
     time_bounds = build_plane_time_interval(start_date, end_date, [sample])
-    return caom_Time(bounds=time_bounds,
-                     dimension=1,
-                     resolution=exposure_time.to('second').value,
-                     sample_size=exposure_time.to('day').value,
-                     exposure=exposure_time.to('second').value)
+    return caom_Time(
+        bounds=time_bounds,
+        dimension=1,
+        resolution=exposure_time.to('second').value,
+        sample_size=exposure_time.to('day').value,
+        exposure=exposure_time.to('second').value,
+    )
 
 
 def build_plane_time_interval(start_date, end_date, samples):
@@ -294,10 +353,12 @@ def build_plane_time_interval(start_date, end_date, samples):
     the start and end dates, and a list of samples.
     :param samples list of SubInterval instances
     :param start_date minimum SubInterval date
-    :param end_date maximum SubInterval date. """
-    time_bounds = caom_Interval(mc.to_float(start_date.value),
-                                mc.to_float(end_date.value),
-                                samples=samples)
+    :param end_date maximum SubInterval date."""
+    time_bounds = caom_Interval(
+        mc.to_float(start_date.value),
+        mc.to_float(end_date.value),
+        samples=samples,
+    )
     return time_bounds
 
 
@@ -305,12 +366,13 @@ def build_plane_time_sample(start_date, end_date):
     """Create a SubInterval for the plane-level bounding box for time, given
     the start and end dates.
     :param start_date minimum date
-    :param end_date maximum date. """
+    :param end_date maximum date."""
     start_date.format = 'mjd'
     end_date.format = 'mjd'
     return caom_shape.SubInterval(
         mc.to_float(start_date.value),
-        mc.to_float(end_date.value))
+        mc.to_float(end_date.value),
+    )
 
 
 def build_ra_dec_as_deg(ra, dec, frame='icrs'):
@@ -318,8 +380,7 @@ def build_ra_dec_as_deg(ra, dec, frame='icrs'):
     Common code to go from units.hourangle, units.deg to both values in
     units.deg
     """
-    result = SkyCoord(ra, dec, frame=frame,
-                      unit=(units.hourangle, units.deg))
+    result = SkyCoord(ra, dec, frame=frame, unit=(units.hourangle, units.deg))
     return result.ra.degree, result.dec.degree
 
 
@@ -330,18 +391,9 @@ def get_timedelta_in_s(from_value):
     """
     temp = dt_strptime(from_value, '%H:%M:%S')
     td = dt_timedelta(
-        hours=temp.tm_hour, minutes=temp.tm_min, seconds=temp.tm_sec)
+        hours=temp.tm_hour, minutes=temp.tm_min, seconds=temp.tm_sec
+    )
     return td.seconds
-
-
-def make_headers_from_string(fits_header):
-    """Create a list of fits.Header instances from a string.
-    ":param fits_header a string of keyword/value pairs"""
-    delim = '\nEND'
-    extensions = \
-        [e + delim for e in fits_header.split(delim) if e.strip()]
-    headers = [fits.Header.fromstring(e, sep='\n') for e in extensions]
-    return headers
 
 
 def read_fits_data(fqn):
@@ -354,18 +406,6 @@ def read_fits_data(fqn):
     return hdus
 
 
-def read_fits_headers(fqn):
-    """Read the headers from a fits file.
-    :param fqn a string representing the fully-qualified name of the fits
-        file.
-    :return fits file headers.
-    """
-    hdulist = fits.open(fqn, memmap=True, lazy_load_hdus=False)
-    hdulist.close()
-    headers = [h.header for h in hdulist]
-    return headers
-
-
 class FilterMetadataCache(object):
     """
     Cache the results of calls to the SVO filter service. As part of the
@@ -375,9 +415,15 @@ class FilterMetadataCache(object):
     Units are Angstroms.
     """
 
-    def __init__(self, repair_filter_lookup, repair_instrument_lookup,
-                 telescope, cache=None, default_key='NONE',
-                 connected=True):
+    def __init__(
+        self,
+        repair_filter_lookup,
+        repair_instrument_lookup,
+        telescope,
+        cache=None,
+        default_key='NONE',
+        connected=True,
+    ):
         # a dict
         # key - the collection filter name
         # value - the filter name as used at SVO
@@ -398,9 +444,10 @@ class FilterMetadataCache(object):
         else:
             inst_r = self._repair_instrument_name(instrument)
         fn_r = self._repair_filter_name(filter_name, inst_r)
-        self._logger.debug(f'Looking for instrument {instrument}, '
-                           f'repaired instrument {inst_r}, filter '
-                           f'{filter_name} repaired filter {fn_r}.')
+        self._logger.debug(
+            f'Looking for instrument {instrument}, repaired instrument '
+            f'{inst_r}, filter {filter_name} repaired filter {fn_r}.'
+        )
         cache_key = f'{inst_r}.{fn_r}'
         if inst_r in fn_r:
             cache_key = fn_r
@@ -430,9 +477,10 @@ class FilterMetadataCache(object):
         :return: units are Angstroms
         """
         if self._connected:
-            if ((instrument is None or
-                 (isinstance(instrument, Enum) and
-                  instrument.value is None)) and filter_name is None):
+            if (
+                instrument is None
+                or (isinstance(instrument, Enum) and instrument.value is None)
+            ) and filter_name is None:
                 result = self._cache.get(self._default_key)
             else:
                 cache_key = self._get_cache_key(instrument, filter_name)
@@ -445,7 +493,8 @@ class FilterMetadataCache(object):
                     if vo_table is None:
                         self._logger.warning(
                             f'Unable to download SVO filter information '
-                            f'from {url} because {error_message}')
+                            f'from {url} because {error_message}'
+                        )
                         # identify missing SVO lookups as un-defined cache
                         # values
                         fwhm = -2
@@ -453,14 +502,16 @@ class FilterMetadataCache(object):
                     else:
                         fwhm = vo_table.get_field_by_id('FWHM').value
                         central_wl = vo_table.get_field_by_id(
-                            'WavelengthCen').value
+                            'WavelengthCen'
+                        ).value
                     result = {'cw': central_wl, 'fwhm': fwhm}
                     self._cache[cache_key] = result
         else:
             # some recognizably wrong value
             self._logger.warning(
                 f'Not connected - using default energy values for '
-                f'{instrument} and {filter_name}')
+                f'{instrument} and {filter_name}'
+            )
             result = {'cw': -0.1, 'fwhm': -0.1}
         return result
 
