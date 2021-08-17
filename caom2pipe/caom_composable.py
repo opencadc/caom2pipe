@@ -114,7 +114,6 @@ __all__ = [
     'update_observation_members',
     'update_observation_members_filtered',
     'update_plane_provenance',
-    'update_plane_provenance_from_values',
     'update_plane_provenance_list',
     'update_plane_provenance_single',
 ]
