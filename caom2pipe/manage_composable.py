@@ -1469,6 +1469,14 @@ class PreviewVisitor(object):
         # keys are uris, values are lists, where the 0th entry is a file name,
         # and the 1th entry is the artifact type
         self._previews = {}
+        self._logger.debug(self)
+
+    def __str__(self):
+        return (
+            f'working directory: {self._working_dir}\n'
+            f'stream: {self._stream}\n'
+            f'science file: {self._science_file}\n'
+        )
 
     def visit(self, observation, storage_name):
         check_param(observation, Observation)
