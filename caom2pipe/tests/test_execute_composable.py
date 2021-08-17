@@ -72,7 +72,7 @@ import os
 import pytest
 import sys
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, ANY
 
 from astropy.io import fits
 from hashlib import md5
@@ -80,8 +80,6 @@ from hashlib import md5
 from cadcdata import FileInfo
 from caom2 import SimpleObservation, Algorithm
 
-from cadcdata import CadcDataClient
-from caom2repo import CAOM2RepoClient
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable
@@ -99,8 +97,8 @@ class TestVisit:
     def visit(observation, **kwargs):
         x = kwargs['working_directory']
         assert x is not None, 'working directory'
-        y = kwargs['science_file']
-        assert y is not None, 'science file'
+        y = kwargs['storage_name']
+        assert y is not None, 'storage_name'
         z = kwargs['log_file_directory']
         assert z is not None, 'log file directory'
         assert observation is not None, 'undefined observation'
@@ -114,10 +112,14 @@ class LocalTestVisit:
         assert v == 'TEST', 'wrong stream'
         x = kwargs['working_directory']
         assert x is not None, 'working directory'
-        assert x == tc.TEST_DATA_DIR, 'wrong working directory'
-        y = kwargs['science_file']
-        assert y is not None, 'science file'
-        assert y == 'cadc:TEST/test_file.fits.gz', 'wrong science file'
+        assert (
+            x == f'{tc.TEST_DATA_DIR}/test_obs_id'
+        ), 'wrong working directory'
+        y = kwargs['storage_name']
+        assert y is not None, 'storage name'
+        assert (
+            y.destination_uris[0] == 'cadc:TEST/test_file.fits.gz'
+        ), 'wrong science file'
         z = kwargs['log_file_directory']
         assert z is not None, 'log file directory'
         assert z == tc.TEST_DATA_DIR, 'wrong log dir'
@@ -952,8 +954,8 @@ def test_data_visit(client_mock, test_config):
     args, kwargs = dv_mock.visit.call_args
     assert kwargs.get('working_directory') == f'{tc.THIS_DIR}/test_obs_id'
     assert (
-        kwargs.get('science_file') == test_sn.source_names[0]
-    ), 'wrong science file parameter'
+        kwargs.get('storage_name') == test_sn
+    ), 'wrong storage name parameter'
     assert kwargs.get('log_file_directory') == tc.TEST_DATA_DIR
     assert kwargs.get('stream') == 'TEST'
 
@@ -1111,6 +1113,67 @@ def test_store_newer_files_only_flag_client(
     )
     test_subject.execute(None)
     assert client_mock.put.called, 'expect copy call'
+
+
+def test_data_visit_params():
+    test_wd = '/tmp/abc'
+    if os.path.exists(test_wd):
+        if os.path.isdir(test_wd):
+            os.rmdir(test_wd)
+        else:
+            os.unlink(test_wd)
+    storage_name = mc.StorageName(
+        obs_id='abc',
+        fname_on_disk='abc.fits.gz',
+        source_names=['vos:DAO/incoming/abc.fits.gz'],
+        destination_uris=['ad:TEST/abc.fits.gz'],
+    )
+
+    test_config = mc.Config()
+    test_config.task_types = [mc.TaskType.MODIFY]
+    test_config.working_directory = '/tmp'
+    test_config.logging_level = 'DEBUG'
+
+    test_cadc_client = Mock(autospec=True)
+    test_caom_client = Mock(autospec=True)
+    test_caom_client.read.side_effect = _read_obs2
+    data_visitor = Mock(autospec=True)
+    test_data_visitors = [data_visitor]
+    test_observable = Mock(autospec=True)
+    test_transferrer = Mock(autospec=True)
+
+    try:
+        test_config.use_local_files = False
+        test_subject = ec.DataVisit(
+            test_config,
+            storage_name,
+            test_cadc_client,
+            test_caom_client,
+            test_data_visitors,
+            test_config.task_types[0],
+            test_observable,
+            test_transferrer,
+        )
+        assert test_subject is not None, 'broken ctor'
+        test_subject.execute(context=None)
+        assert data_visitor.visit.called, 'expect visit call'
+        data_visitor.visit.assert_called_with(
+            ANY,
+            working_directory='/tmp/abc',
+            storage_name=storage_name,
+            log_file_directory=None,
+            cadc_client=ANY,
+            caom_repo_client=ANY,
+            stream=None,
+            observable=ANY,
+        ), f'wrong visit params {storage_name.source_names}'
+        data_visitor.visit.reset_mock()
+    finally:
+        if os.path.exists(test_wd):
+            dir_listing = os.listdir(test_wd)
+            for f in dir_listing:
+                os.unlink(f)
+            os.rmdir(test_wd)
 
 
 def _transfer_get_mock(entry, fqn):

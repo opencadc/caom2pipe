@@ -723,28 +723,22 @@ def test_visit():
         'image.pbcor.tt0.subim.fits'
     )
 
+    storage_name = VisitStorageName()
     kwargs = {
         'working_directory': tc.TEST_FILES_DIR,
         'cadc_client': cadc_client_mock,
         'stream': 'stream',
         'observable': test_observable,
-        'science_file': test_file_name,
+        'storage_name': storage_name,
     }
 
     obs = mc.read_obs_from_file(f'{tc.TEST_DATA_DIR}/fpf_start_obs.xml')
     assert len(obs.planes[test_product_id].artifacts) == 2, 'initial condition'
 
     try:
-        storage_name = VisitStorageName()
         test_subject = TestVisitor(**kwargs)
-        test_result = test_subject.visit(obs, storage_name)
+        test_result = test_subject.visit(obs)
     except Exception as e:
-        import logging
-
-        logging.error(e)
-        import traceback
-
-        logging.error(traceback.format_exc())
         assert False, f'{str(e)}'
 
     assert test_result is not None, f'expect a result'
