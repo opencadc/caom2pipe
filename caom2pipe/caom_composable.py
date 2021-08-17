@@ -901,24 +901,6 @@ def update_plane_provenance(
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
-def update_plane_provenance_from_values(
-    plane, repair, values, collection, obs_id
-):
-    plane_inputs = TypedSet(PlaneURI,)
-    for value in values:
-        prov_obs_id, prov_prod_id = repair(value, obs_id)
-        if prov_obs_id is not None and prov_prod_id is not None:
-            obs_member_uri_str = \
-                mc.CaomName.make_obs_uri_from_obs_id(
-                    collection, prov_obs_id)
-            obs_member_uri = ObservationURI(obs_member_uri_str)
-            plane_uri = PlaneURI.get_plane_uri(
-                obs_member_uri, prov_prod_id)
-            plane_inputs.add(plane_uri)
-            logging.debug(f'Adding PlaneURI {plane_uri}')
-    mc.update_typed_set(plane.provenance.inputs, plane_inputs)
-
-
 def update_plane_provenance_list(
     plane, headers, lookups, collection, repair, obs_id
 ):
