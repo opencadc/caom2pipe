@@ -69,12 +69,11 @@
 
 import glob
 import os
-import pytest
 import stat
 
 from astropy.table import Table
 from cadctap import CadcTapClient
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from mock import Mock, patch
 
 from caom2pipe import data_source_composable as dsc
@@ -293,3 +292,65 @@ def test_list_dir_separate_data_source():
     assert (
         '/test_files/sub_directory/abc.fits' not in test_result
     ), 'recursive result should not be present'
+
+
+def test_vault_list_dir_time_box_data_source():
+    node1 = type('', (), {})()
+    node1.props = {'date': '2020-09-15 19:55:03.067000+00:00'}
+    node1.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
+    node2 = type('', (), {})()
+    node2.props = {'date': '2020-09-13 19:55:03.067000+00:00'}
+    node2.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/994899p_moc.fits'
+    node1.isdir = Mock(return_value=False)
+    node2.isdir = Mock(return_value=False)
+
+    def _glob_mock(ignore_source_directory):
+        return [1, 2]
+
+    def _get_node_mock(target):
+        if target == 1:
+            return node1
+        else:
+            return node2
+
+    test_vos_client = Mock()
+    test_vos_client.glob.side_effect = _glob_mock
+    test_vos_client.get_node.side_effect = _get_node_mock
+    test_config = mc.Config()
+    test_config.get_executors()
+    test_config.data_sources = ['vos:goliaths/wrong']
+    test_subject = dsc.VaultListDirTimeBoxDataSource(
+        test_vos_client, test_config
+    )
+    assert test_subject is not None, 'expect a test_subject'
+    test_prev_exec_time = datetime(
+        year=2020,
+        month=9,
+        day=15,
+        hour=10,
+        minute=0,
+        second=0,
+        tzinfo=timezone.utc,
+    )
+    test_exec_time = datetime(
+        year=2020,
+        month=9,
+        day=16,
+        hour=10,
+        minute=0,
+        second=0,
+        tzinfo=timezone.utc,
+    )
+    test_result = test_subject.get_time_box_work(
+        test_prev_exec_time, test_exec_time
+    )
+    assert test_result is not None, 'expect a test result'
+    assert len(test_result) == 1, 'wrong number of results'
+    assert (
+            'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits' ==
+            test_result[0].entry_name
+    ), 'wrong name result'
+    assert (
+            datetime(2020, 9, 15, 19, 55, 3, 67000, tzinfo=timezone.utc) ==
+            test_result[0].entry_ts
+    ), 'wrong ts result'

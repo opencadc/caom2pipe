@@ -114,6 +114,7 @@ __all__ = [
     'update_observation_members',
     'update_observation_members_filtered',
     'update_plane_provenance',
+    'update_plane_provenance_from_values',
     'update_plane_provenance_list',
     'update_plane_provenance_single',
 ]
@@ -352,8 +353,8 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
     """
     logging.debug(f'Begin build_temporal_wcs_bounds.')
     product_ids = []
-    for input in plane.provenance.inputs:
-        product_ids.append(input.get_product_id())
+    for ip in plane.provenance.inputs:
+        product_ids.append(ip.get_product_id())
     logging.info(f'Finding temporal inputs for {len(product_ids)} inputs.')
 
     inputs = []
@@ -408,7 +409,7 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
 
 
 def change_to_composite(
-    observation, algorithm_name='composite', collection=None, features=None
+    observation, algorithm_name='composite'
 ):
     """For the case where a SimpleObservation needs to become a
     DerivedObservation."""
@@ -779,7 +780,7 @@ def get_obs_id_from_cadc(artifact_uri, tap_client):
     JOIN caom2.Artifact AS A on A.planeID = P.planeID
     WHERE A.uri = '{artifact_uri}'
     """
-    table = mc.query_tap_client(query_string, tap_client)
+    table = clc.query_tap_client(query_string, tap_client)
     result = None
     if len(table) >= 1:
         result = table[0]['observationID']
