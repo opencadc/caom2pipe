@@ -1466,6 +1466,8 @@ class PreviewVisitor(object):
         self._storage_name = kwargs.get('storage_name')
         if self._storage_name is None:
             raise CadcException('Visitor needs a storage_name parameter.')
+        self._science_file = self._storage_name.file_name
+        self._science_fqn = self._storage_name.get_file_fqn(self._working_dir)
         self._delete_list = []
         # keys are uris, values are lists, where the 0th entry is a file name,
         # and the 1th entry is the artifact type
@@ -1794,6 +1796,15 @@ class StorageName(object):
     def _get_uri(self, fname):
         """The ad URI for a file, without consideration for compression."""
         return f'{self.scheme}:{self.archive}/{fname}'
+
+    def get_file_fqn(self, working_directory):
+        temp = parse.urlparse(self._source_names[0])
+        if ((temp.scheme is None or temp.scheme == '') and
+                os.path.dirname(self._source_names[0]) != ''):
+            fqn = self._source_names[0]
+        else:
+            fqn = os.path.join(working_directory, self.file_name)
+        return fqn
 
     @staticmethod
     def remove_extensions(name):
