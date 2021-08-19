@@ -69,8 +69,8 @@
 
 import logging
 import os
+import traceback
 
-from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 
 
@@ -79,6 +79,7 @@ __all__ = [
     'FtpTransfer',
     'HttpTransfer',
     'Transfer',
+    'VoFitsCleanupTransfer',
     'VoFitsTransfer',
     'VoTransfer',
 ]
@@ -291,14 +292,68 @@ class VoFitsTransfer(FitsTransfer):
     FITS integrity-checking.
     """
 
-    def __init__(self, vos_client):
+    def __init__(self, vo_client):
         super(VoFitsTransfer, self).__init__()
-        self._vos_client = vos_client
+        self._vo_client = vo_client
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def get(self, source, dest_fqn):
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
-        self._vos_client.copy(source, dest_fqn, send_md5=True)
+        self._vo_client.copy(source, dest_fqn, send_md5=True)
         if '.fits' in dest_fqn:
             self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')
+
+
+class VoFitsCleanupTransfer(VoFitsTransfer):
+    """
+    Implements the case where clean up needs to occur.
+    """
+
+    def __init__(self, vo_client, config):
+        super(VoFitsCleanupTransfer, self).__init__(vo_client)
+        self._cleanup_when_storing = config.cleanup_files_when_storing
+        self._failure_destination = config.cleanup_failure_destination
+        self._success_destination = config.cleanup_success_destination
+
+    def get(self, source, dest_fqn):
+        self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
+        try:
+            self._vo_client.copy(source, dest_fqn, send_md5=True)
+            if '.fits' in dest_fqn:
+                self.check(dest_fqn, source)
+            self._logger.debug(f'Successfully retrieved {source}')
+        except Exception as e:
+            self._logger.debug(traceback.format_exc())
+            self._logger.error(
+                f'Failed to return {source} to {dest_fqn}  with error {e}.'
+            )
+
+    def failure_action(self, original_fqn, destination_fqn, msg):
+        try:
+            if os.path.exists(destination_fqn):
+                os.unlink(destination_fqn)
+        except Exception as e:
+            self._logger.error(
+                f'Failed to clean up {destination_fqn} after a verification '
+                f'error.'
+            )
+            raise mc.CadcException(e)
+
+        self._move_action(original_fqn, self._failure_destination)
+
+    def _move_action(self, original_fqn, destination):
+        self._logger.debug('Begin _move_action')
+        if self._cleanup_when_storing:
+            f_name = os.path.basename(original_fqn)
+            move_destination = os.path.join(destination, f_name)
+            try:
+                self._vo_client.move(original_fqn, move_destination)
+            except Exception as e:
+                self._logger.debug(traceback.format_exc())
+                self._logger.error(
+                    f'Failed to move {original_fqn} to {move_destination} '
+                    f' with error {e}.'
+                )
+                raise mc.CadcException(e)
+        self._logger.debug('Done _move_action')

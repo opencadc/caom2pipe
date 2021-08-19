@@ -471,9 +471,9 @@ class VaultListDirDataSource(DataSource):
     listing.
     """
 
-    def __init__(self, vos_client, config):
+    def __init__(self, vo_client, config):
         super(VaultListDirDataSource, self).__init__(config)
-        self._client = vos_client
+        self._vo_client = vo_client
         self._source_directories = config.data_sources
         self._data_source_extensions = config.data_source_extensions
         self._logger = logging.getLogger(__name__)
@@ -482,7 +482,7 @@ class VaultListDirDataSource(DataSource):
         self._logger.debug('Begin get_work.')
         work = []
         for source_directory in self._source_directories:
-            file_list = self._client.listdir(source_directory)
+            file_list = self._vo_client.listdir(source_directory)
             for f_name in file_list:
                 for ending in self._data_source_extensions:
                     if f_name.endswith(ending):
