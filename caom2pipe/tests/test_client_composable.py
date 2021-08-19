@@ -258,7 +258,7 @@ def test_define_subject():
         os.getcwd = getcwd_orig
 
 
-@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper')
+@patch('caom2utils.data_util.StorageClientWrapper')
 @patch('caom2pipe.manage_composable.http_get')
 def test_look_pull_and_put(http_mock, mock_client):
     test_storage_name = 'cadc:GEMINI/TEST.fits'

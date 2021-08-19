@@ -154,7 +154,7 @@ def test_meta_create_client_execute(test_config):
         mc.read_obs_from_file = read_obs_orig
 
 
-@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper')
+@patch('caom2utils.data_util.StorageClientWrapper')
 def test_meta_create_client_execute_failed_update(
     f2c2_data_client_mock, test_config
 ):
@@ -911,7 +911,7 @@ def test_organize_executes_client_do_one(test_config):
     assert test_oe.todo_fqn == f'{tc.THIS_DIR}/todo.txt', 'wrong todo'
 
 
-@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper')
+@patch('caom2utils.data_util.StorageClientWrapper')
 def test_data_visit(client_mock, test_config):
     client_mock.get.side_effect = Mock(autospec=True)
     test_repo_client = Mock(autospec=True)
@@ -1058,7 +1058,7 @@ class FlagStorageName(mc.StorageName):
         return self._file_name
 
 
-@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper')
+@patch('caom2utils.data_util.StorageClientWrapper')
 def test_store_newer_files_only_flag(client_mock, test_config):
     # first test case
     # flag set to True, file is older at CADC, supports_latest_client = False
@@ -1085,7 +1085,7 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     assert client_mock.put.called, 'expect put call'
 
 
-@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper')
+@patch('caom2utils.data_util.StorageClientWrapper')
 def test_store_newer_files_only_flag_client(
     client_mock, test_config
 ):

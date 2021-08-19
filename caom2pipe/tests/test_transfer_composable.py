@@ -78,7 +78,7 @@ import test_conf
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper', autospec=True)
+@patch('caom2utils.data_util.StorageClientWrapper', autospec=True)
 def test_cadc_transfer(client_mock, caps_mock):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     test_subject = tc.CadcTransfer()
