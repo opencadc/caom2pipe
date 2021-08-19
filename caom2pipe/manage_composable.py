@@ -1459,7 +1459,7 @@ class PreviewVisitor(object):
             )
         self._stream = kwargs.get('stream')
         if self._stream is None:
-            raise CadcException('Visitor needs a stream parameter.')
+            self._logger.warning('No stream parameter.')
         self._observable = kwargs.get('observable')
         if self._observable is None:
             raise CadcException('Visitor needs a observable parameter.')

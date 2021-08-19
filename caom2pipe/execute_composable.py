@@ -195,7 +195,10 @@ class CaomExecute(object):
         self.caom_repo_client = caom_repo_client
         self.stream = None
         if hasattr(config, 'stream'):
-            self.stream = config.stream
+            self.stream = (
+                None if config.features.supports_latest_client else
+                config.stream
+            )
         self.meta_visitors = meta_visitors
         self.task_type = task_type
         self.cred_param = cred_param
@@ -1764,6 +1767,9 @@ class OrganizeExecutes(object):
                             )
                         )
                 else:
+                    self._logger.debug(
+                        f'Update metadata for {storage_name.obs_id}'
+                    )
                     if self.config.use_local_files:
                         if (
                             self.chooser is not None

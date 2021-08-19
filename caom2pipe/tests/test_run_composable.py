@@ -511,35 +511,9 @@ def test_run_todo_list_dir_data_source_exception(
         ), 'scrape, should be no data client call'
 
 
-@patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
-def test_run_todo_retry(do_one_mock, test_config):
-    (
-        retry_success_fqn,
-        retry_failure_fqn,
-        retry_retry_fqn,
-    ) = _clean_up_log_files(test_config)
-
-    do_one_mock.side_effect = _mock_do_one
-
-    test_config.work_fqn = f'{tc.TEST_DATA_DIR}/todo.txt'
-    test_config.log_to_file = True
-    test_config.retry_failures = True
-    _write_todo(test_config)
-
-    test_result = rc.run_by_todo(config=test_config, command_name=TEST_COMMAND)
-
-    assert test_result is not None, 'expect a result'
-    assert test_result == -1, 'expect failure'
-    _check_log_files(
-        test_config, retry_success_fqn, retry_failure_fqn, retry_retry_fqn
-    )
-    assert do_one_mock.called, 'expect do_one call'
-    assert do_one_mock.call_count == 2, 'wrong number of calls'
-
-
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
-def test_run_todo_retry_v(do_one_mock, clients_mock, test_config):
+def test_run_todo_retry(do_one_mock, clients_mock, test_config):
     test_config.features.supports_latest_client = True
     (
         retry_success_fqn,
@@ -617,8 +591,10 @@ def test_run_state_retry(get_work_mock, tap_mock, do_one_mock, test_config):
     assert tap_mock.called, 'init should be called'
 
 
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
-def test_run_single(do_mock, test_config):
+def test_run_single(do_mock, get_access_mock, test_config):
+    get_access_mock.return_value = 'https://localhost'
     _clean_up_log_files(test_config)
     progress_file = os.path.join(tc.TEST_DATA_DIR, 'progress.txt')
 
