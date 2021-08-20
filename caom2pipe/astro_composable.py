@@ -151,6 +151,7 @@ def check_fits(fqn):
         # ignore the return value - if the file is corrupted, the getdata
         # fails, which is the only interesting behaviour here
         fits.getdata(fqn, ext=0)
+        logging.debug(f'fits.getdata succeeded for {fqn}')
     except (TypeError, OSError) as e2:
         logging.debug(traceback.format_exc())
         logging.error(f'astropy getdata error {e2} when reading {fqn}')
