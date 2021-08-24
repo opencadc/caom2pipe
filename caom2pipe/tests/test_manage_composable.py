@@ -703,6 +703,7 @@ def test_visit():
     class VisitStorageName(tc.TestStorageName):
         def __init__(self):
             super(VisitStorageName, self).__init__()
+            self._source_names = [self.file_uri]
 
         @property
         def product_id(self):
