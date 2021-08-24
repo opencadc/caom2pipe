@@ -1798,9 +1798,11 @@ class StorageName(object):
         return f'{self.scheme}:{self.archive}/{fname}'
 
     def get_file_fqn(self, working_directory):
-        temp = parse.urlparse(self._source_names[0])
-        if ((temp.scheme is None or temp.scheme == '') and
-                os.path.dirname(self._source_names[0]) != ''):
+        if (
+            self._source_names is not None and
+            len(self._source_names) > 0 and
+            os.path.exists(self._source_names[0])
+        ):
             fqn = self._source_names[0]
         else:
             fqn = os.path.join(working_directory, self.file_name)
