@@ -530,11 +530,7 @@ def run_by_todo(
     :param store_transfer Transfer extension that identifies hot to retrieve
         data from a source for storage at CADC, probably an HTTP or FTP site.
         Don't try to guess what this one is.
-<<<<<<< HEAD
     :param clients: ClientCollection instance
-=======
-    :param clients instance of ClientsCollection, if one was required
->>>>>>> 7555f3000d08e5142f347cbd37797bc079aaddd2
     """
     if config is None:
         config = mc.Config()

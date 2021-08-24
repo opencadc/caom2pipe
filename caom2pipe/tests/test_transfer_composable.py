@@ -69,6 +69,7 @@
 
 import os
 import pytest
+import shutil
 from mock import patch, Mock
 
 from caom2pipe import manage_composable as mc
@@ -78,7 +79,7 @@ import test_conf
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper', autospec=True)
+@patch('caom2utils.data_util.StorageClientWrapper', autospec=True)
 def test_cadc_transfer(client_mock, caps_mock):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     test_subject = tc.CadcTransfer()
@@ -186,3 +187,48 @@ def test_ftp_transfer(data_get_mock):
         assert args[1] == 'localhost', 'wrong dir name'
         assert args[2] == test_source, 'wrong source name'
         assert args[3] == test_destination, 'wrong dest name'
+
+
+def test_vo_fits_cleanup_transfer():
+    try:
+        mock_client = Mock(autospec=True)
+        test_config = mc.Config()
+        test_config.cleanup_files_when_storing = True
+        test_config.cleanup_failure_destination = 'vos:goliaths/failure'
+        test_config.cleanup_success_destination = 'vos:goliaths/success'
+        test_subject = tc.VoFitsCleanupTransfer(mock_client, test_config)
+        assert test_subject is not None, 'ctor failure'
+
+        test_source = 'vos:goliaths/test/abc.fits.gz'
+        test_destination_fqn = '/tmp/abc.fits.gz'
+
+        # success
+        def _copy_success(ignore1, ignore2, send_md5=True):
+            shutil.copy('/test_files/correct.fits.gz', '/tmp/abc.fits.gz')
+        mock_client.copy.side_effect = _copy_success
+        test_subject.get(test_source, test_destination_fqn)
+        assert mock_client.copy.called, 'expect copy to be called'
+        mock_client.copy.assert_called_with(
+            test_source, test_destination_fqn, send_md5=True
+        ), 'wrong call args'
+        assert not mock_client.move.called, 'expect move to not be called'
+
+        # failure
+        def _copy_failure(ignore1, ignore2, send_md5=True):
+            shutil.copy('/test_files/broken.fits', '/tmp/abc.fits')
+        mock_client.copy.side_effect = _copy_failure
+        test_source = 'vos:goliaths/test/abc.fits'
+        test_destination_fqn = '/tmp/abc.fits'
+        test_subject.get(test_source, test_destination_fqn)
+        assert mock_client.copy.called, 'expect copy to be called'
+        mock_client.copy.assert_called_with(
+            test_source, test_destination_fqn, send_md5=True
+        ), 'wrong call args'
+        assert mock_client.move.called, 'expect move to be called'
+        mock_client.move.assert_called_with(
+            test_source, 'vos:goliaths/failure/abc.fits'
+        ), 'wrong failure move args'
+    finally:
+        for p in ['/tmp/abc.fits', '/tmp/abc.fits.gz']:
+            if os.path.exists(p):
+                os.unlink(p)

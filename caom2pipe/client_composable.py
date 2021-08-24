@@ -501,11 +501,12 @@ def repo_get(client, collection, obs_id, metrics):
         observation = client.read(collection, obs_id)
     except exceptions.NotFoundException:
         observation = None
-    except Exception:
+    except Exception as e:
         metrics.observe_failure('read', 'caom2', obs_id)
         logging.debug(traceback.format_exc())
         raise mc.CadcException(
-            f'Could not retrieve an observation record for {obs_id}.'
+            f'Could not retrieve an observation record for {obs_id} '
+            f'because {e}.'
         )
     end = current()
     metrics.observe(

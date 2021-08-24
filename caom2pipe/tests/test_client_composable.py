@@ -80,14 +80,18 @@ from unittest.mock import Mock, patch
 import test_conf as tc
 
 
-def test_clients():
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+def test_clients(get_access_mock):
+    get_access_mock.return_value = 'https://localhost'
     test_config = mc.Config()
     test_config.get_executors()
+    test_config.resource_id = 'ivo://cadc.nrc.ca/test'
+    test_config.tap_id = 'ivo://cadc.nrc.ca/test'
     test_subject = clc.ClientCollection(test_config)
     assert test_subject is not None, 'ctor failure'
 
 
-@patch('vos.vos.Client')
+@patch('cadcdata.storageinv.StorageInventoryClient')
 @patch('caom2pipe.manage_composable.Metrics')
 def test_client_put(mock_metrics, mock_client):
     if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
@@ -149,7 +153,7 @@ def test_client_put_failure(mock_metrics):
     assert mock_metrics.observe_failure.called, 'mock not called'
 
 
-@patch('vos.vos.Client')
+@patch('cadcdata.storageinv.StorageInventoryClient')
 def test_client_get_failure(mock_client):
     test_config = mc.Config()
     test_config.observe_execution = True
@@ -254,7 +258,7 @@ def test_define_subject():
         os.getcwd = getcwd_orig
 
 
-@patch('caom2utils.cadc_client_wrapper.StorageClientWrapper')
+@patch('caom2utils.data_util.StorageClientWrapper')
 @patch('caom2pipe.manage_composable.http_get')
 def test_look_pull_and_put(http_mock, mock_client):
     test_storage_name = 'cadc:GEMINI/TEST.fits'
@@ -382,89 +386,7 @@ def test_repo_delete(mock_client):
     assert len(test_metrics.failures) == 1, 'should have failure counts'
 
 
-@patch('cadcdata.StorageInventoryClient')
-@patch('caom2pipe.manage_composable.Metrics')
-def test_si_client_put(mock_metrics, mock_client):
-    if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
-        with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
-            f.write('test content')
-
-    test_uri = 'cadc:TEST/test_file.fits.gz'
-    mock_client.cadcinfo.return_value = FileInfo(
-        id=test_uri, md5sum='9473fdd0d880a43c21b7778d34872157'
-    )
-    test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
-    clc.si_client_put(
-        mock_client, test_fqn, test_uri, metrics=mock_metrics
-    )
-    mock_client.cadcput.assert_called_with(
-        test_uri,
-        src=test_fqn,
-        replace=True,
-        file_type='application/fits',
-        file_encoding='',
-        md5_checksum='9473fdd0d880a43c21b7778d34872157',
-    ), 'mock not called'
-    assert mock_metrics.observe.called, 'mock not called'
-    args, kwargs = mock_metrics.observe.call_args
-    assert args[2] == 12, 'wrong size'
-    assert args[3] == 'cadcput', 'wrong endpoint'
-    assert args[4] == 'si', 'wrong service'
-    assert args[5] == 'TEST.fits', 'wrong id'
-
-
-@patch('cadcdata.StorageInventoryClient')
-@patch('caom2pipe.manage_composable.Metrics')
-def test_si_client_put_failure(mock_metrics, mock_client):
-    def _raise():
-        raise exceptions.HttpException('some exception')
-
-    if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
-        with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
-            f.write('test content')
-
-    test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
-    test_uri = 'cadc:GEMINI/TEST.fits'
-    mock_client.cadcput.side_effect = _raise
-
-    with pytest.raises(mc.CadcException):
-        clc.si_client_put(
-            mock_client,
-            test_fqn,
-            test_uri,
-            metrics=mock_metrics,
-        )
-    mock_client.cadcput.assert_called_with(
-        test_uri,
-        src=test_fqn,
-        replace=True,
-        file_type='application/fits',
-        file_encoding='',
-        md5_checksum='9473fdd0d880a43c21b7778d34872157',
-    ), 'mock not called'
-    assert mock_metrics.observe_failure.called, 'mock not called'
-
-
-@patch('cadcdata.StorageInventoryClient')
-def test_si_client_get_failure(mock_client):
-    test_config = mc.Config()
-    test_config.observe_execution = True
-    test_metrics = mc.Metrics(test_config)
-    test_fqn = os.path.join(tc.TEST_DATA_DIR, 'TEST_get.fits')
-    with pytest.raises(mc.CadcException):
-        clc.si_client_get(
-            mock_client,
-            test_fqn,
-            'TEST',
-            test_metrics,
-        )
-    assert len(test_metrics.failures) == 1, 'wrong failures'
-    assert (
-        test_metrics.failures['si']['cadcget']['TEST_get.fits'] == 1
-    ), 'count'
-
-
-@patch('cadcdata.StorageInventoryClient')
+@patch('cadcdata.storageinv.StorageInventoryClient')
 @patch('caom2pipe.manage_composable.Metrics')
 def test_si_client_get(mock_metrics, mock_client):
     test_fqn = f'{tc.TEST_FILES_DIR}/TEST.fits'

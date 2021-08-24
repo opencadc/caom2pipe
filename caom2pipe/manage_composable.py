@@ -73,6 +73,8 @@ import io
 import logging
 import os
 import re
+import stat
+
 import requests
 import subprocess
 import sys
@@ -1445,7 +1447,6 @@ class PreviewVisitor(object):
     def __init__(
         self, archive, release_type=None, mime_type='image/jpeg', **kwargs
     ):
-        self._storage_name = None
         self._archive = archive
         self._release_type = release_type
         self._mime_type = mime_type
@@ -1458,29 +1459,38 @@ class PreviewVisitor(object):
             )
         self._stream = kwargs.get('stream')
         if self._stream is None:
-            raise CadcException('Visitor needs a stream parameter.')
+            self._logger.warning('No stream parameter.')
         self._observable = kwargs.get('observable')
         if self._observable is None:
             raise CadcException('Visitor needs a observable parameter.')
-        self._science_file = kwargs.get('science_file')
-        if self._science_file is None:
-            raise CadcException('Visitor needs a science_file parameter.')
+        self._storage_name = kwargs.get('storage_name')
+        if self._storage_name is None:
+            raise CadcException('Visitor needs a storage_name parameter.')
+        self._science_file = self._storage_name.file_name
+        self._science_fqn = self._storage_name.get_file_fqn(self._working_dir)
         self._delete_list = []
         # keys are uris, values are lists, where the 0th entry is a file name,
         # and the 1th entry is the artifact type
         self._previews = {}
+        self._logger.debug(self)
 
-    def visit(self, observation, storage_name):
+    def __str__(self):
+        return (
+            f'working directory: {self._working_dir}\n'
+            f'stream: {self._stream}\n'
+            f'science file: {self._storage_name.file_name}\n'
+        )
+
+    def visit(self, observation):
         check_param(observation, Observation)
         count = 0
-        if storage_name.product_id in observation.planes.keys():
-            plane = observation.planes[storage_name.product_id]
-            if storage_name.file_uri in plane.artifacts.keys():
-                self._storage_name = storage_name
+        if self._storage_name.product_id in observation.planes.keys():
+            plane = observation.planes[self._storage_name.product_id]
+            if self._storage_name.file_uri in plane.artifacts.keys():
                 count += self._do_prev(plane, observation.observation_id)
             self._augment_artifacts(plane)
             self._delete_list_of_files()
-        logging.info(
+        self._logger.info(
             f'Completed preview augmentation for {observation.observation_id}.'
         )
         return {'artifacts': count}
@@ -1536,16 +1546,8 @@ class PreviewVisitor(object):
         raise NotImplementedError
 
     @property
-    def science_file(self):
-        return self._science_file
-
-    @property
     def storage_name(self):
         return self._storage_name
-
-    @storage_name.setter
-    def storage_name(self, value):
-        self._storage_name = value
 
     def _store_smalls(self):
         if self._cadc_client is not None:
@@ -1794,6 +1796,15 @@ class StorageName(object):
     def _get_uri(self, fname):
         """The ad URI for a file, without consideration for compression."""
         return f'{self.scheme}:{self.archive}/{fname}'
+
+    def get_file_fqn(self, working_directory):
+        temp = parse.urlparse(self._source_names[0])
+        if ((temp.scheme is None or temp.scheme == '') and
+                os.path.dirname(self._source_names[0]) != ''):
+            fqn = self._source_names[0]
+        else:
+            fqn = os.path.join(working_directory, self.file_name)
+        return fqn
 
     @staticmethod
     def remove_extensions(name):
@@ -2328,10 +2339,12 @@ def get_version(entry):
 def create_dir(dir_name):
     """Create the working area if it does not already exist."""
     if os.path.exists(dir_name):
-        if not os.path.isdir(dir_name) or not os.access(
-            dir_name, os.W_OK | os.X_OK
-        ):
-            raise CadcException(f'{dir_name} is not writeable.')
+        if not os.path.isdir(dir_name):
+            raise CadcException(f'{dir_name} is not a directory.')
+        if not os.access(dir_name, os.W_OK | os.X_OK):
+            os.chmod(dir_name, stat.S_IRWXU)
+            if not os.access(dir_name, os.W_OK | os.X_OK):
+                raise CadcException(f'{dir_name} is not writeable.')
     else:
         os.makedirs(dir_name, mode=0o775)
 
