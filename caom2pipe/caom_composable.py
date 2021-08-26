@@ -114,6 +114,7 @@ __all__ = [
     'update_observation_members',
     'update_observation_members_filtered',
     'update_plane_provenance',
+    'update_plane_provenance_from_values',
     'update_plane_provenance_list',
     'update_plane_provenance_single',
 ]
@@ -898,6 +899,34 @@ def update_plane_provenance(
         headers, lookup, collection, repair, obs_id, plane_inputs
     )
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
+
+
+def update_plane_provenance_from_values(
+    plane, repair, values, collection, obs_id
+):
+    """
+    Add inputs to Planes, based on a list of input values.
+
+    :param plane: Plane instance to add inputs to
+    :param repair: The function to fix the input values, to ensure they
+        match input observationID values
+    :param values: list of values to add as inputs, after repair
+    :param collection: str The collection name for URI construction
+    :param obs_id: str value for logging only
+    :return:
+    """
+    logging.debug(f'Begin update_plane_provenance_from_values')
+    plane_inputs = TypedSet(PlaneURI,)
+    for value in values:
+        prov_obs_id, prov_prod_id = repair(value, obs_id)
+        if prov_obs_id is not None and prov_prod_id is not None:
+            obs_member_uri_ignore, plane_uri = make_plane_uri(
+                prov_obs_id, prov_prod_id, collection
+            )
+            plane_inputs.add(plane_uri)
+            logging.debug(f'Adding PlaneURI {plane_uri}')
+    mc.update_typed_set(plane.provenance.inputs, plane_inputs)
+    logging.debug(f'End update_plane_provenance_from_values')
 
 
 def update_plane_provenance_list(
