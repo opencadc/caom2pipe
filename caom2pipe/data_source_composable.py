@@ -136,7 +136,7 @@ class DataSource(object):
 class ListDirDataSource(DataSource):
     """
     Implement the identification of the work to be done, by doing a directory
-    listing.
+    listing. This is the original use_local_files: True behaviour.
     """
 
     def __init__(self, config, chooser):
