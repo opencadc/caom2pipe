@@ -84,7 +84,12 @@ class TestStorageName(mc.StorageName):
         self, obs_id=None, file_name=None, url=None, entry=None
     ):
         super(TestStorageName, self).__init__(
-            'test_obs_id', 'TEST', '*', 'test_file.fits.gz', entry=entry
+            'test_obs_id',
+            'TEST',
+            '*',
+            'test_file.fits.gz',
+            entry=entry,
+            scheme='cadc',
         )
         self.url = 'https://test_url/test_file.fits.gz'
         self._source_names = [entry]

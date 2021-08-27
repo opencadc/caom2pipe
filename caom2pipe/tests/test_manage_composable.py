@@ -752,7 +752,7 @@ def test_visit():
         len(obs.planes[test_product_id].artifacts) == end_artifact_count
     ), f'new artifacts'
 
-    test_preview_uri = 'ad:TEST/test_obs_id_prev.jpg'
+    test_preview_uri = 'cadc:TEST/test_obs_id_prev.jpg'
     assert (
         test_preview_uri in obs.planes[test_product_id].artifacts.keys()
     ), 'no preview'
@@ -763,7 +763,7 @@ def test_visit():
     ), 'put called wrong number of times'
     # it's an ad call, so there's a stream parameter
     cadc_client_mock.put.assert_called_with(
-        '/test_files', 'ad:TEST/test_obs_id_prev.jpg', 'stream'
+        '/test_files', 'cadc:TEST/test_obs_id_prev.jpg', 'stream'
     )
     # assert False
 
