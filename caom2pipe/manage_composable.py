@@ -1633,10 +1633,14 @@ class StorageName(object):
 
     def __str__(self):
         return (
-            f'obs_id {self.obs_id}, '
-            f'fname_on_disk {self.fname_on_disk}, '
-            f'file_name {self.file_name}, '
-            f'lineage {self.lineage}'
+            f'\n'
+            f'          obs_id: {self.obs_id}\n'
+            f'       file_name: {self.file_name}\n'
+            f'   fname_on_disk: {self.fname_on_disk}\n'
+            f'         lineage: {self.lineage}\n'
+            f'      product_id: {self.product_id}\n'
+            f'    source_names: {self.source_names}\n'
+            f'destination_uris: {self.destination_uris}'
         )
 
     @property
