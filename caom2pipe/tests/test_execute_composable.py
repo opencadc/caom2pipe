@@ -1045,7 +1045,6 @@ class FlagStorageName(mc.StorageName):
             fname_on_disk=file_name,
             obs_id='1000003f',
             collection='TEST',
-            archive='TEST',
             compression='',
             entry=file_name,
             source_names=source_names,
@@ -1262,7 +1261,7 @@ def to_caom2():
         '--module',
         f'{plugin}',
         '--lineage',
-        'test_obs_id/ad:TEST/test_obs_id.fits.gz',
+        'test_obs_id/cadc:TEST/test_obs_id.fits.gz',
     ]
     scrape_answer = [
         'test_execute_composable',
@@ -1280,7 +1279,7 @@ def to_caom2():
         '--module',
         f'{plugin}',
         '--lineage',
-        'test_obs_id/ad:TEST/test_obs_id.fits.gz',
+        'test_obs_id/cadc:TEST/test_obs_id.fits.gz',
     ]
     # TaskType.SCRAPE (Scrape)
     if sys.argv != scrape_answer:

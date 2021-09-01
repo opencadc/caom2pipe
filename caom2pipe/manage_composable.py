@@ -1582,7 +1582,6 @@ class StorageName(object):
         collection_pattern='.*',
         fname_on_disk=None,
         scheme='ad',
-        archive=None,
         url=None,
         mime_encoding=None,
         mime_type='application/fits',
@@ -1603,8 +1602,6 @@ class StorageName(object):
             in storage (i.e. extensions may exist in one location that do
             not exist in another).
         :param scheme: string value for the scheme of the file URI.
-        :param archive: ad storage unit, defaults to value of
-            'collection'
         :param url: if the metadata/data is externally available via http,
             the url for retrieval
         :param entry: string - the value as obtained from the DataSource,
@@ -1625,10 +1622,6 @@ class StorageName(object):
         self.collection_pattern = collection_pattern
         self.scheme = scheme
         self.fname_on_disk = fname_on_disk
-        if archive is not None:
-            self.archive = archive
-        else:
-            self.archive = collection
         self._url = url
         self._mime_encoding = mime_encoding
         self._mime_type = mime_type
@@ -1640,10 +1633,14 @@ class StorageName(object):
 
     def __str__(self):
         return (
-            f'obs_id {self.obs_id}, '
-            f'fname_on_disk {self.fname_on_disk}, '
-            f'file_name {self.file_name}, '
-            f'lineage {self.lineage}'
+            f'\n'
+            f'          obs_id: {self.obs_id}\n'
+            f'       file_name: {self.file_name}\n'
+            f'   fname_on_disk: {self.fname_on_disk}\n'
+            f'         lineage: {self.lineage}\n'
+            f'      product_id: {self.product_id}\n'
+            f'    source_names: {self.source_names}\n'
+            f'destination_uris: {self.destination_uris}'
         )
 
     @property
@@ -1654,7 +1651,7 @@ class StorageName(object):
     def file_uri(self):
         """The ad URI for the file. Assumes compression."""
         return (
-            f'{self.scheme}:{self.archive}/{self.file_name}'
+            f'{self.scheme}:{self.collection}/{self.file_name}'
             f'{self._compression}'
         )
 
@@ -1794,8 +1791,10 @@ class StorageName(object):
         return pattern.match(self.obs_id)
 
     def _get_uri(self, fname):
-        """The ad URI for a file, without consideration for compression."""
-        return f'{self.scheme}:{self.archive}/{fname}'
+        """
+        The Artifact URI for a file, without consideration for compression.
+        """
+        return f'{self.scheme}:{self.collection}/{fname}'
 
     def get_file_fqn(self, working_directory):
         if (
