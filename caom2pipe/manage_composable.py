@@ -1571,7 +1571,7 @@ class StorageName(object):
         - preview URI
         - thumbnail URI
     - fully-qualified name of a file at it's source, if required. This
-      may be a Linux directory+file name, and HTTP URL, or a IVOA Virtual
+      may be a Linux directory+file name, and HTTP URL, or an IVOA Virtual
       Storage URI.
     """
 
@@ -1613,7 +1613,6 @@ class StorageName(object):
             represented at CADC. Sufficient for storing/retrieving to/from
             CADC.
         :param scheme: str, should eventually default to 'cadc'
-        :param archive: str, used for Artifact URI construction
         :param mime_encoding: str, used for CADC /data storage
         :param mime_type: str, used for CADC /data storage
         """
@@ -1636,7 +1635,6 @@ class StorageName(object):
             f'\n'
             f'          obs_id: {self.obs_id}\n'
             f'       file_name: {self.file_name}\n'
-            f'   fname_on_disk: {self.fname_on_disk}\n'
             f'         lineage: {self.lineage}\n'
             f'      product_id: {self.product_id}\n'
             f'    source_names: {self.source_names}\n'

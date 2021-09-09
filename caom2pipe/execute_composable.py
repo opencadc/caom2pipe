@@ -1212,6 +1212,9 @@ class Store(CaomExecute):
             self._cadc_put(
                 local_fqn, self._storage_name.destination_uris[index]
             )
+            self._transferrer.post_store_check(
+                entry, self._storage_name.destination_uris[index]
+            )
 
         self.logger.debug('clean up the workspace')
         self._cleanup()

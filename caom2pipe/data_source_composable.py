@@ -88,8 +88,7 @@ __all__ = [
     'QueryTimeBoxDataSourceTS',
     'StateRunnerMeta',
     'TodoFileDataSource',
-    'VaultListDirDataSource',
-    'VaultListDirTimeBoxDataSource',
+    'VaultDataSource',
 ]
 
 
@@ -113,6 +112,9 @@ class DataSource(object):
         self._config = config
         # if this value is used, it should be a timestamp - i.e. a float
         self._start_time_ts = None
+        self._extensions = None
+        if config is not None:
+            self._extensions = config.data_source_extensions
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def clean_up(self):
@@ -131,6 +133,12 @@ class DataSource(object):
     @start_time_ts.setter
     def start_time_ts(self, value):
         self._start_time_ts = value
+
+    def default_filter(self, entry_name):
+        for extension in self._extensions:
+            if entry_name.endswith(extension):
+                return True
+        return False
 
 
 class ListDirDataSource(DataSource):
@@ -296,7 +304,7 @@ class ListDirTimeBoxDataSource(DataSource):
                             prev_exec_time, exec_time, entry.path
                         )
                 else:
-                    if self.default_filter(entry):
+                    if self.default_filter(entry.name):
                         entry_stats = entry.stat()
                         if (
                             exec_time
@@ -306,12 +314,6 @@ class ListDirTimeBoxDataSource(DataSource):
                             self._temp[entry_stats.st_mtime].append(
                                 entry.path
                             )
-
-    def default_filter(self, entry):
-        for extension in self._extensions:
-            if entry.name.endswith(extension):
-                return True
-        return False
 
 
 class TodoFileDataSource(DataSource):
@@ -465,15 +467,17 @@ class QueryTimeBoxDataSourceTS(DataSource):
         return result
 
 
-class VaultListDirDataSource(DataSource):
+class VaultDataSource(ListDirTimeBoxDataSource):
     """
     Implement the identification of the work to be done, by doing a directory
-    listing.
+    listing on VOSpace.
+
+    The directory listing may be time-boxed.
     """
 
-    def __init__(self, vo_client, config):
-        super(VaultListDirDataSource, self).__init__(config)
-        self._vo_client = vo_client
+    def __init__(self, vault_client, config, recursive=True):
+        super(VaultDataSource, self).__init__(config, recursive)
+        self._vault_client = vault_client
         self._source_directories = config.data_sources
         self._data_source_extensions = config.data_source_extensions
         self._logger = logging.getLogger(__name__)
@@ -482,36 +486,24 @@ class VaultListDirDataSource(DataSource):
         self._logger.debug('Begin get_work.')
         work = []
         for source_directory in self._source_directories:
-            file_list = self._vo_client.listdir(source_directory)
+            file_list = self._vault_client.listdir(source_directory)
             for f_name in file_list:
-                for ending in self._data_source_extensions:
-                    if f_name.endswith(ending):
-                        fqn = f'{source_directory}/{f_name}'
-                        work.append(fqn)
-                        self._logger.debug(f'{fqn} added to work list.')
-                        break
+                fqn = f'{source_directory}/{f_name}'
+                logging.error(fqn)
+                target_node = self._vault_client.get_node(fqn)
+                if self.default_filter(target_node):
+                    work.append(fqn)
+                    self._logger.debug(f'{fqn} added to work list.')
         # ensure unique entries
         temp = list(set(work))
         self._logger.debug('End get_work.')
         return temp
 
-
-class VaultListDirTimeBoxDataSource(ListDirTimeBoxDataSource):
-    """
-    Implement the identification of the work to be done, by doing a
-    time-boxed directory listing.
-    """
-
-    def __init__(self, vault_client, config, recursive=True):
-        super(VaultListDirTimeBoxDataSource, self).__init__(config, recursive)
-        self._client = vault_client
-        self._logger = logging.getLogger(self.__class__.__name__)
-
     def _append_work(self, prev_exec_time, exec_time, entry):
         self._logger.info(f'Search for work in {entry}.')
-        targets = self._client.glob(f'{entry}/*')
+        targets = self._vault_client.glob(f'{entry}/*')
         for target in targets:
-            target_node = self._client.get_node(target)
+            target_node = self._vault_client.get_node(target)
             target_node_mtime = mc.make_time_tz(target_node.props.get('date'))
             if target_node.isdir() and self._recursive:
                 if exec_time >= target_node_mtime >= prev_exec_time:
@@ -519,13 +511,23 @@ class VaultListDirTimeBoxDataSource(ListDirTimeBoxDataSource):
                         prev_exec_time, exec_time, target_node.uri
                     )
             else:
-                for extension in self._extensions:
-                    if target_node.uri.endswith(extension):
-                        if (
-                                exec_time >= target_node_mtime >=
-                                prev_exec_time
-                        ):
-                            self._temp[target_node_mtime].append(
-                                target_node.uri
-                            )
-                            break
+                if self.default_filter(target_node):
+                    if (
+                            exec_time >= target_node_mtime >=
+                            prev_exec_time
+                    ):
+                        self._temp[target_node_mtime].append(
+                            target_node.uri
+                        )
+                        self._logger.info(
+                            f'Add {target_node.uri} to work list.'
+                        )
+
+    def default_filter(self, target_node):
+        if super().default_filter(target_node.uri):
+            target_node_size = target_node.props.get('size')
+            if target_node_size == 0:
+                self._logger.info(f'Skipping 0-length {target_node.uri}')
+            else:
+                return True
+        return False
