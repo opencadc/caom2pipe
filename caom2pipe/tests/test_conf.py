@@ -81,7 +81,7 @@ TEST_OBS_FILE = os.path.join(TEST_DATA_DIR, 'test_obs_id.fits.xml')
 
 class TestStorageName(mc.StorageName):
     def __init__(
-        self, obs_id=None, file_name=None, url=None, entry=None
+        self, obs_id=None, file_name=None, uri=None, entry=None
     ):
         super(TestStorageName, self).__init__(
             'test_obs_id',
