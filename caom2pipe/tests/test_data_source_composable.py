@@ -186,15 +186,32 @@ def test_storage_time_box_query(query_mock):
 
 def test_vault_list_dir_data_source():
     def _query_mock(ignore_source_directory):
-        return ['abc.txt', 'abc.fits']
+        return ['abc.txt', 'abc.fits', '900898p_moc.fits']
+
+    node1 = type('', (), {})()
+    node1.props = {
+        'size': 0,
+    }
+    node1.uri = 'vos://cadc.nrc.ca!vault/goliaths/wrong/900898p_moc.fits'
+    node2 = type('', (), {})()
+    node2.props = {
+        'size': 12,
+    }
+    node2.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/abc.fits'
+    node3 = type('', (), {})()
+    node3.props = {
+        'size': 12,
+    }
+    node3.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/abc.txt'
 
     test_vos_client = Mock()
     test_vos_client.listdir.side_effect = _query_mock
+    test_vos_client.get_node.side_effect = [node1, node2, node3]
     test_config = mc.Config()
     test_config.get_executors()
     test_config.data_sources = ['vos:goliaths/wrong']
     test_config.data_source_extensions = ['.fits']
-    test_subject = dsc.VaultListDirDataSource(test_vos_client, test_config)
+    test_subject = dsc.VaultDataSource(test_vos_client, test_config)
     assert test_subject is not None, 'expect a test_subject'
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a test result'
@@ -282,13 +299,13 @@ def test_list_dir_separate_data_source():
     assert test_subject is not None, 'ctor is broken'
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a result'
-    assert len(test_result) == 71, 'expect contents in the result'
+    assert len(test_result) == 76, 'expect contents in the result'
     assert '/test_files/sub_directory/abc.fits' in test_result, 'wrong entry'
 
     test_subject = dsc.ListDirSeparateDataSource(test_config, recursive=False)
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a non-recursive result'
-    assert len(test_result) == 69, 'expect contents in non-recursive result'
+    assert len(test_result) == 74, 'expect contents in non-recursive result'
     assert (
         '/test_files/sub_directory/abc.fits' not in test_result
     ), 'recursive result should not be present'
@@ -296,10 +313,16 @@ def test_list_dir_separate_data_source():
 
 def test_vault_list_dir_time_box_data_source():
     node1 = type('', (), {})()
-    node1.props = {'date': '2020-09-15 19:55:03.067000+00:00'}
+    node1.props = {
+        'date': '2020-09-15 19:55:03.067000+00:00',
+        'size': 14,
+    }
     node1.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
     node2 = type('', (), {})()
-    node2.props = {'date': '2020-09-13 19:55:03.067000+00:00'}
+    node2.props = {
+        'date': '2020-09-13 19:55:03.067000+00:00',
+        'size': 12,
+    }
     node2.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/994899p_moc.fits'
     node1.isdir = Mock(return_value=False)
     node2.isdir = Mock(return_value=False)
@@ -319,9 +342,7 @@ def test_vault_list_dir_time_box_data_source():
     test_config = mc.Config()
     test_config.get_executors()
     test_config.data_sources = ['vos:goliaths/wrong']
-    test_subject = dsc.VaultListDirTimeBoxDataSource(
-        test_vos_client, test_config
-    )
+    test_subject = dsc.VaultDataSource(test_vos_client, test_config)
     assert test_subject is not None, 'expect a test_subject'
     test_prev_exec_time = datetime(
         year=2020,

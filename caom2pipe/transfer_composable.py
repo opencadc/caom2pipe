@@ -119,6 +119,17 @@ class Transfer(object):
         """
         return True
 
+    def post_store_check(self, source_fqn, dest_fqn):
+        """
+        After a file is stored to CADC, check that it has the same md5sum at
+        CADC as at its source.
+        :param source_fqn: str - a fully-qualified name that will make sense
+          to a source client.
+        :param dest_fqn: str - a fully-qualified name that will make sense to
+          CADC storage.
+        """
+        return True
+
 
 class CadcTransfer(Transfer):
     """

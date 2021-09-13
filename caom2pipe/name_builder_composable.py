@@ -173,5 +173,5 @@ class GuessingBuilder(StorageNameBuilder):
                 file_name=(basename(temp.path)), entry=entry
             )
         else:
-            result = self._storage_name(url=entry, entry=entry)
+            result = self._storage_name(uri=entry, entry=entry)
         return result
