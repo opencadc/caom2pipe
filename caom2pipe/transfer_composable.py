@@ -225,7 +225,7 @@ class FitsTransfer(Transfer):
         try:
             # ignore the return value - if the file is corrupted, the getdata
             # fails, which is the only interesting behaviour here
-            fits.getdata(dest_fqn, ext=0)
+            fits.getdata(dest_fqn)
         except (TypeError, OSError) as e2:
             if self._observable is not None:
                 self._observable.rejected.record(
