@@ -1195,7 +1195,7 @@ class Store(CaomExecute):
         self._create_dir()
 
         self.logger.debug(
-            f'Store {len(self._storage_name.source_names)} files to ad.'
+            f'Store {len(self._storage_name.source_names)} files to CADC.'
         )
         for index, entry in enumerate(self._storage_name.source_names):
             temp = urlparse(entry)
