@@ -679,10 +679,13 @@ def vault_info(client, uri):
     :param uri: VOS URI
     :return: an instance of FileInfo
     """
-    node = client.get_node(uri, limit=None, force=False)
-    return FileInfo(
-        id=uri,
-        size=node.props.get('length'),
-        md5sum=node.props.get('MD5'),
-        lastmod=node.props.get('lastmod'),
-    )
+    try:
+        node = client.get_node(uri, limit=None, force=False)
+        return FileInfo(
+            id=uri,
+            size=node.props.get('length'),
+            md5sum=node.props.get('MD5'),
+            lastmod=node.props.get('lastmod'),
+        )
+    except exceptions.NotFoundException as e:
+        return None
