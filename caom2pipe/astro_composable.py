@@ -152,7 +152,9 @@ def check_fits(fqn):
         # fails, which is the only interesting behaviour here
         fits.getdata(fqn, ext=0)
         logging.debug(f'fits.getdata succeeded for {fqn}')
-    except (TypeError, OSError) as e2:
+    except IndexError as e2:
+        logging.debug(f'No data in header when reading {fqn}')
+    except (TypeError, OSError) as e3:
         logging.debug(traceback.format_exc())
         logging.error(f'astropy getdata error {e2} when reading {fqn}')
         return False
