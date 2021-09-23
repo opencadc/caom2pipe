@@ -134,9 +134,12 @@ class DataSource(object):
     def start_time_ts(self, value):
         self._start_time_ts = value
 
-    def default_filter(self, entry_name):
+    def default_filter(self, entry):
+        """
+        :param entry: os.DirEntry
+        """
         for extension in self._extensions:
-            if entry_name.endswith(extension):
+            if entry.name.endswith(extension):
                 return True
         return False
 
@@ -292,8 +295,8 @@ class ListDirTimeBoxDataSource(DataSource):
         self._temp = defaultdict(list)
         return self._work
 
-    def _append_work(self, prev_exec_time, exec_time, entry):
-        with os.scandir(entry) as dir_listing:
+    def _append_work(self, prev_exec_time, exec_time, entry_path):
+        with os.scandir(entry_path) as dir_listing:
             for entry in dir_listing:
                 # the slowest thing to do is the 'stat' call, so delay it as
                 # long as possible, and only if necessary
@@ -304,7 +307,8 @@ class ListDirTimeBoxDataSource(DataSource):
                             prev_exec_time, exec_time, entry.path
                         )
                 else:
-                    if self.default_filter(entry.name):
+                    # send the dir_listing value
+                    if self.default_filter(entry):
                         entry_stats = entry.stat()
                         if (
                             exec_time
@@ -337,7 +341,7 @@ class TodoFileDataSource(DataSource):
                 temp = line.strip()
                 if len(temp) > 0:
                     # ignore empty lines
-                    logging.debug(f'Adding entry {temp} to work list.')
+                    self._logger.debug(f'Adding entry {temp} to work list.')
                     work.append(temp)
         self._logger.debug(f'End get_work in {self.__class__.__name__}')
         return work
@@ -524,7 +528,15 @@ class VaultDataSource(ListDirTimeBoxDataSource):
                         )
 
     def default_filter(self, target_node):
-        if super().default_filter(target_node.uri):
+        """
+        :param target_node: Node
+        """
+        # make a Node look like an os.DirEntry, which is expected by
+        # the super invocation
+        dir_entry = type('', (), {})
+        dir_entry.name = os.path.basename(target_node.uri)
+        dir_entry.path = target_node.uri
+        if super().default_filter(dir_entry):
             target_node_size = target_node.props.get('size')
             if target_node_size == 0:
                 self._logger.info(f'Skipping 0-length {target_node.uri}')
