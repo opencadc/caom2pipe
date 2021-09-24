@@ -195,7 +195,6 @@ class TodoRunner(object):
         self._logger.debug('End _build_todo_list.')
 
     def _finish_run(self):
-        self._data_source.clean_up()
         mc.create_dir(self._config.log_file_directory)
         self._organizer.observable.rejected.persist_state()
         self._organizer.observable.metrics.capture()
@@ -241,6 +240,14 @@ class TodoRunner(object):
             self._logger.debug(traceback.format_exc())
             # keep processing the rest of the entries, so don't throw
             # this or any other exception at this point
+            result = -1
+        try:
+            self._data_source.clean_up(entry)
+        except Exception as e:
+            self._logger.info(
+                f'Cleanup failed for {storage_name.entry} with {e}'
+            )
+            self._logger.debug(traceback.format_exc())
             result = -1
         self._logger.debug(f'End _process_entry.')
         return result

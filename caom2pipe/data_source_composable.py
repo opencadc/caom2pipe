@@ -117,7 +117,7 @@ class DataSource(object):
             self._extensions = config.data_source_extensions
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def clean_up(self):
+    def clean_up(self, entry):
         pass
 
     def get_work(self):
