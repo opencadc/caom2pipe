@@ -156,7 +156,7 @@ def check_fits(fqn):
         logging.debug(f'No data in header when reading {fqn}')
     except (TypeError, OSError) as e3:
         logging.debug(traceback.format_exc())
-        logging.error(f'astropy getdata error {e2} when reading {fqn}')
+        logging.error(f'astropy getdata error {e3} when reading {fqn}')
         return False
 
     return True
