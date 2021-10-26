@@ -90,6 +90,7 @@ from caom2 import Interval as caom_Interval
 from caom2 import Time as caom_Time
 from caom2 import shape as caom_shape
 from caom2 import CoordBounds1D, CoordRange1D, RefCoord
+from caom2utils import data_util
 
 from caom2pipe import manage_composable as mc
 
@@ -109,6 +110,7 @@ __all__ = [
     'get_timedelta_in_s',
     'get_vo_table',
     'get_vo_table_session',
+    'make_headers_from_file',
     'read_fits_data',
     'SVO_URL',
 ]
@@ -397,6 +399,19 @@ def get_timedelta_in_s(from_value):
         hours=temp.tm_hour, minutes=temp.tm_min, seconds=temp.tm_sec
     )
     return td.seconds
+
+
+def make_headers_from_file(fqn):
+    """
+    Make keyword/value pairs from a non-FITS file behave like the headers for
+    a FITS file.
+
+    :param fqn:
+    :return: [fits.Header]
+    """
+    fits_header = open(fqn).read()
+    headers = data_util.make_headers_from_string(fits_header)
+    return headers
 
 
 def read_fits_data(fqn):
