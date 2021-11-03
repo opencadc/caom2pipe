@@ -585,6 +585,25 @@ class CaomName(object):
         product_id = bits[2]
         return obs_id, product_id
 
+    @staticmethod
+    def extract_file_name(entry):
+        """
+        :param entry: may be a URL, a fully-qualified file name, or a simple
+            file name. Extract the file name from which-ever one of those
+            structures it is.
+        :return:
+        """
+        temp = parse.urlparse(entry)
+        if temp.scheme == '':
+            file_name = os.path.basename(entry)
+        else:
+            if temp.scheme.startswith('http'):
+                file_name = temp.path.split('/')[-1]
+            else:
+                # it's an Artifact URI
+                file_name = temp.path.split('/')[-1]
+        return file_name
+
 
 class Config(object):
     """Configuration information that remains the same for all steps and all
@@ -1635,6 +1654,7 @@ class StorageName(object):
             f'\n'
             f'          obs_id: {self.obs_id}\n'
             f'       file_name: {self.file_name}\n'
+            f'        file_uri: {self.file_uri}\n'
             f'         lineage: {self.lineage}\n'
             f'      product_id: {self.product_id}\n'
             f'    source_names: {self.source_names}\n'
