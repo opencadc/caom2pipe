@@ -394,7 +394,7 @@ class CaomExecute(object):
                 'working_directory': self.working_dir,
                 'cadc_client': self.cadc_client,
                 'stream': self.stream,
-                'url': self._storage_name.url,
+                'storage_name': self._storage_name,
                 'observable': self.observable,
             }
             for visitor in self.meta_visitors:
