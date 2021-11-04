@@ -683,7 +683,7 @@ def vault_info(client, uri):
         node = client.get_node(uri, limit=None, force=False)
         return FileInfo(
             id=uri,
-            size=node.props.get('length'),
+            size=mc.to_int(node.props.get('length')),
             md5sum=node.props.get('MD5'),
             lastmod=node.props.get('lastmod'),
         )
