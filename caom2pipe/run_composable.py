@@ -619,7 +619,7 @@ def run_by_state(
         files are usually stored at CADC, so it's probably a CadcTransfer
         instance, but this allows for the case that a file is never stored
         at CADC. Try to guess what this one is.
-    :param store_transfer Transfer extension that identifies hot to retrieve
+    :param store_transfer Transfer extension that identifies how to retrieve
         data from a source for storage at CADC, probably an HTTP or FTP site.
         Don't try to guess what this one is.
     :param clients instance of ClientsCollection, if one was required
