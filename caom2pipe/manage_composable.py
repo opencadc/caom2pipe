@@ -639,6 +639,7 @@ class Config(object):
         self.retry_fqn = None
         self._retry_failures = False
         self._retry_count = 1
+        self._retry_decay = 1
         self._proxy_file_name = None
         # the fully qualified name for the file
         self.proxy_fqn = None
@@ -953,6 +954,20 @@ class Config(object):
         self._retry_count = value
 
     @property
+    def retry_decay(self):
+        """factor applied to how long the application will wait before
+        retrying the entries in the retries.txt file.
+
+        Default is 1 minute, a value of 0.25 will result in a 15 second delay,
+        a value of 10 will result in a 10 minute delay.
+        """
+        return self._retry_decay
+
+    @retry_decay.setter
+    def retry_decay(self, value):
+        self._retry_decay = value
+
+    @property
     def rejected_directory(self):
         """the directory where rejected entry files are written, by default
         will be the log file directory"""
@@ -1159,6 +1174,7 @@ class Config(object):
             f'  report_fqn:: {self.report_fqn}\n'
             f'  resource_id:: {self.resource_id}\n'
             f'  retry_count:: {self.retry_count}\n'
+            f'  retry_decay:: {self.retry_decay}\n'
             f'  retry_failures:: {self.retry_failures}\n'
             f'  retry_file_name:: {self.retry_file_name}\n'
             f'  retry_fqn:: {self.retry_fqn}\n'
@@ -1267,6 +1283,7 @@ class Config(object):
             self.retry_file_name = config.get('retry_file_name', 'retries.txt')
             self.retry_failures = config.get('retry_failures', False)
             self.retry_count = config.get('retry_count', 1)
+            self.retry_decay = config.get('retry_decay', 1)
             self.rejected_file_name = config.get(
                 'rejected_file_name', 'rejected.yml'
             )

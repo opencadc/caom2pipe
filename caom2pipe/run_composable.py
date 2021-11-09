@@ -83,8 +83,8 @@ import traceback
 
 from collections import deque
 from datetime import datetime, timezone
+from time import sleep
 
-from caom2pipe import astro_composable as ac
 from caom2pipe import client_composable as cc
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
@@ -300,9 +300,12 @@ class TodoRunner(object):
                 self._reporter.add_retries(
                     self._organizer.complete_record_count
                 )
+                decay_interval = self._config.retry_decay * (count + 1) * 60
                 self._logger.warning(
-                    f'Retry {self._organizer.complete_record_count} entries'
+                    f'Retry {self._organizer.complete_record_count} entries '
+                    f'in {decay_interval} seconds.'
                 )
+                sleep(decay_interval)
                 result |= self._run_todo_list()
                 self._reporter.add_successes(self._organizer.success_count)
                 if not self._config.need_to_retry():

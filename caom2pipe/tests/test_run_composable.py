@@ -526,6 +526,7 @@ def test_run_todo_retry(do_one_mock, clients_mock, test_config):
     test_config.work_fqn = f'{tc.TEST_DATA_DIR}/todo.txt'
     test_config.log_to_file = True
     test_config.retry_failures = True
+    test_config.retry_decay = 0
     _write_todo(test_config)
 
     test_result = rc.run_by_todo(config=test_config, command_name=TEST_COMMAND)

@@ -526,6 +526,9 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
             if entry.name.startswith('.'):
                 # skip dot files
                 copy_file = False
+            elif '.hdf5' in entry.name:
+                # no hdf5 validation
+                pass
             elif ac.check_fits(entry.path):
                 # only transfer files that pass the FITS verification
                 if self._store_modified_files_only:
