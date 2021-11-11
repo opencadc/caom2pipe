@@ -122,7 +122,7 @@ class DataSource(object):
             self._extensions = config.data_source_extensions
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def clean_up(self, entry):
+    def clean_up(self, entry, current_count):
         pass
 
     def get_work(self):
@@ -482,6 +482,8 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
     """
     def __init__(self, config, cadc_client, recursive=True):
         super(UseLocalFilesDataSource, self).__init__(config)
+        self._retry_failures = config.retry_failures
+        self._retry_count = config.retry_count
         self._cadc_client = cadc_client
         self._cleanup_when_storing = config.cleanup_files_when_storing
         self._cleanup_failure_directory = config.cleanup_failure_destination
@@ -494,17 +496,31 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
         self._recursive = recursive
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def clean_up(self, entry):
+    def clean_up(self, entry, current_count):
         """
         Move a file to the success or failure location, depending on
         whether a file with the same checksum is at CADC.
 
+        Move the file only after all retries (as specified in config.yml)
+        have been attempted. Note that this cleanup behaviour will be assigned
+        to the TodoFileDataSource during a retry.
+
         :param entry: either a data_source_composable.StateRunnerMeta instance
             or an str, depending on whether the clean-up is invoked from a
             time-boxed or all-in-one invocation of cfht2caom2.
+        :param current_count: int how many retries have been executed
         """
         self._logger.debug(f'Begin clean_up with {entry}')
-        if self._cleanup_when_storing:
+        if (
+            self._cleanup_when_storing
+            and (
+                (not self._retry_failures)
+                or (
+                    self._retry_failures
+                    and current_count >= self._retry_count
+                )
+            )
+        ):
             if isinstance(entry, str):
                 fqn = entry
             else:

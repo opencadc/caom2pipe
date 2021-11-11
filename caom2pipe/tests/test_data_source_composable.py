@@ -413,6 +413,7 @@ def test_transfer_check_fits_verify():
 
     def _at_cfht(test_start_ts, test_end_ts):
         test_config.cleanup_files_when_storing = True
+        test_config.retry_failures = False
         cadc_client_mock = Mock(autospec=True)
         cadc_client_mock.info.side_effect = mock_info
         test_subject = dsc.UseLocalFilesDataSource(
@@ -445,7 +446,7 @@ def test_transfer_check_fits_verify():
 
         # and after the transfer
         for test_entry in test_result:
-            test_subject.clean_up(test_entry)
+            test_subject.clean_up(test_entry, current_count=0)
         assert not test_correct_file.exists(), 'correct file at source'
         assert not moved_success.exists(), 'correct file at destination'
         assert moved_failure.exists(), 'correct file at destination'
@@ -483,7 +484,7 @@ def test_transfer_check_fits_verify():
             assert not moved.exists(), 'file at destination'
         # clean up should do nothing
         for test_entry in test_result:
-            test_subject.clean_up(test_entry)
+            test_subject.clean_up(test_entry, current_count=0)
         for f in [
             test_empty_file,
             test_broken_file,
@@ -608,7 +609,7 @@ def test_transfer_fails(check_fits_mock):
 
     cadc_client_mock.info.side_effect = [match, different]
     for test_entry in test_result:
-        test_subject.clean_up(test_entry)
+        test_subject.clean_up(test_entry, current_count=0)
 
     assert not test_correct_file_1.exists(), 'file 1 should be moved'
     assert not test_correct_file_2.exists(), 'file 2 should be moved'

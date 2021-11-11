@@ -205,7 +205,7 @@ class TodoRunner(object):
         )
         self._logger.info('----------------------------------------')
 
-    def _process_entry(self, entry):
+    def _process_entry(self, entry, current_count):
         self._logger.debug(f'Begin _process_entry for {entry}.')
         storage_name = None
         try:
@@ -242,7 +242,7 @@ class TodoRunner(object):
             # this or any other exception at this point
             result = -1
         try:
-            self._data_source.clean_up(entry)
+            self._data_source.clean_up(entry, current_count)
         except Exception as e:
             self._logger.info(
                 f'Cleanup failed for {storage_name.entry} with {e}'
@@ -252,11 +252,15 @@ class TodoRunner(object):
         self._logger.debug(f'End _process_entry.')
         return result
 
-    def _run_todo_list(self):
+    def _run_todo_list(self, current_count):
+        """
+        :param current_count: int - current retry count - needs to be passed
+            to _process_entry.
+        """
         self._logger.debug('Begin _run_todo_list.')
         result = 0
         for entry in self._todo_list:
-            result |= self._process_entry(entry)
+            result |= self._process_entry(entry, current_count)
         self._finish_run()
         self._logger.debug('End _run_todo_list.')
         return result
@@ -265,9 +269,13 @@ class TodoRunner(object):
         self._config.update_for_retry(count)
         # the log location changes for each retry
         self._organizer.set_log_location()
+        # change the data source handling, but preserve the original
+        # clean_up behaviour
+        original_data_source_cleanup = self._data_source.clean_up
         self._data_source = data_source_composable.TodoFileDataSource(
             self._config
         )
+        self._data_source.clean_up = original_data_source_cleanup
 
     def report(self):
         self._reporter.add_timeouts(self._organizer.timeouts)
@@ -281,7 +289,7 @@ class TodoRunner(object):
         self._logger.debug('Begin run.')
         self._build_todo_list()
         self._reporter.add_entries(self._organizer.complete_record_count)
-        result = self._run_todo_list()
+        result = self._run_todo_list(current_count=0)
         self._reporter.add_successes(self._organizer.success_count)
         self._logger.debug('End run.')
         return result
@@ -303,10 +311,10 @@ class TodoRunner(object):
                 decay_interval = self._config.retry_decay * (count + 1) * 60
                 self._logger.warning(
                     f'Retry {self._organizer.complete_record_count} entries '
-                    f'in {decay_interval} seconds.'
+                    f'at {decay_interval} seconds from now.'
                 )
                 sleep(decay_interval)
-                result |= self._run_todo_list()
+                result |= self._run_todo_list(current_count=count + 1)
                 self._reporter.add_successes(self._organizer.success_count)
                 if not self._config.need_to_retry():
                     break
@@ -425,7 +433,7 @@ class StateRunner(TodoRunner):
                         pop_action = entries.popleft
                     while len(entries) > 0:
                         entry = pop_action()
-                        result |= self._process_entry(entry.entry_name)
+                        result |= self._process_entry(entry.entry_name, 0)
                         save_time = min(
                             mc.convert_to_ts(entry.entry_ts), exec_time
                         )
@@ -476,7 +484,7 @@ class StateRunner(TodoRunner):
 
 def _set_logging(config):
     formatter = logging.Formatter(
-        '%(asctime)s:%(levelname)-8s:%(name)-36s:%(lineno)-4d:%(message)s'
+        '%(asctime)s:%(levelname)-8s:%(name)-12s:%(lineno)-4d:%(message)s'
     )
     for handler in logging.getLogger().handlers:
         handler.setLevel(config.logging_level)
