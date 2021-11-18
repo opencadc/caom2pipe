@@ -1,0 +1,16 @@
+value_repair:
+  observation.proposal.pi_name:
+    jjk: JJ Kavelaars
+  observation.type:
+    dark: DARK
+    Dark: DARK
+  plane.meta_release:
+    any: 2000-01-01T00:00:00.000000
+  chunk.position.axis.function.ref_coord.coord1.pix:
+    512.579594886106: 512.57959987654321
+  artifact.uri:
+    gemini:GEM/GN2001BQ013-04.fits: cadc:GEMINI/GN2001BQ013-04.fits
+  part.product_type:
+    calibration: none
+  observation.intent:
+    none: science
