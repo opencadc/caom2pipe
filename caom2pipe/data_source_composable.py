@@ -484,6 +484,11 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
         super(UseLocalFilesDataSource, self).__init__(config)
         self._cadc_client = cadc_client
         self._cleanup_when_storing = config.cleanup_files_when_storing
+        if mc.TaskType.SCRAPE in config.task_types:
+            # assume iterative testing is the objective for SCRAPE'ing,
+            # and over-ride the configuration that will undermine that
+            # behaviour.
+            self._cleanup_when_storing = False
         self._cleanup_failure_directory = config.cleanup_failure_destination
         self._cleanup_success_directory = config.cleanup_success_destination
         self._store_modified_files_only = config.store_modified_files_only
