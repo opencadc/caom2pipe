@@ -498,6 +498,15 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
         self._collection = config.collection
         self._recursive = recursive
         self._logger = logging.getLogger(self.__class__.__name__)
+        self._is_connected = config.is_connected
+        if not self._is_connected:
+            # assume iterative testing is the objective for SCRAPE'ing,
+            # and over-ride the configuration that will undermine that
+            # behaviour.
+            self._cleanup_when_storing = False
+            self._logger.info(
+                'SCRAPE\'ing data - over-riding config.yml clean-up.'
+            )
 
     def clean_up(self, entry):
         """
@@ -611,14 +620,20 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
         """
         # get the metadata locally
         result = True
-        local_meta = data_util.get_local_file_info(entry_path)
-        # get the metadata at CADC
-        f_name = os.path.basename(entry_path)
-        scheme = 'cadc' if self._supports_latest_client else 'ad'
-        destination_name = mc.build_uri(self._collection, f_name, scheme)
-        cadc_meta = self._cadc_client.info(destination_name)
-        if cadc_meta is not None and local_meta.md5sum == cadc_meta.md5sum:
-            result = False
+        if self._is_connected:
+            local_meta = data_util.get_local_file_info(entry_path)
+            # get the metadata at CADC
+            f_name = os.path.basename(entry_path)
+            scheme = 'cadc' if self._supports_latest_client else 'ad'
+            destination_name = mc.build_uri(self._collection, f_name, scheme)
+            cadc_meta = self._cadc_client.info(destination_name)
+            if cadc_meta is not None and local_meta.md5sum == cadc_meta.md5sum:
+                result = False
+        else:
+            self._logger.debug(
+                f'SCRAPE\'ing data - no md5sum checking with CADC for '
+                f'{entry_path}.'
+            )
         self._logger.debug(
             f'Done _check_md5sum for {entry_path} result is {result}'
         )
