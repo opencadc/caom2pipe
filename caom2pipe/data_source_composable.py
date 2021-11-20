@@ -629,8 +629,10 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
                 f'SCRAPE\'ing data - no md5sum checking with CADC for '
                 f'{entry_path}.'
             )
+        temp_text = 'different' if result else 'same'
         self._logger.debug(
-            f'Done _check_md5sum for {entry_path} result is {result}'
+            f'Done _check_md5sum for {entry_path} result is {temp_text} at '
+            f'CADC.'
         )
         return result
 
