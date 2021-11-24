@@ -182,7 +182,6 @@ class Features(object):
         self._supports_catalog = True
         self._supports_latest_client = False
         self._supports_multiple_files = True
-        self._expects_retry = True
 
     @property
     def run_in_airflow(self):
@@ -233,16 +232,6 @@ class Features(object):
     @supports_multiple_files.setter
     def supports_multiple_files(self, value):
         self._supports_multiple_files = value
-
-    @property
-    def expects_retry(self):
-        """If true, will execute any specific code for running retries
-        based on retries_log.txt content."""
-        return self._expects_retry
-
-    @expects_retry.setter
-    def expects_retry(self, value):
-        self._expects_retry = value
 
     def __str__(self):
         return ' '.join(
@@ -1353,12 +1342,7 @@ class Config(object):
             need to attempt to retry the pipeline execution for any entries.
         """
         result = True
-        if (
-            self.features is not None
-            and self.features.expects_retry
-            and self.retry_failures
-            and self.log_to_file
-        ):
+        if self.retry_failures:
             meta = get_file_meta(self.retry_fqn)
             if meta['size'] == 0:
                 logging.info(
