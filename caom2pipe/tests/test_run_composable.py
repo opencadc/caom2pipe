@@ -192,7 +192,7 @@ def test_run_todo_list_dir_data_source_invalid_fname_v(
 
     class TestStorageName(mc.StorageName):
         def __init__(self, entry):
-            self._obs_id = os.path.basename(entry)
+            super().__init__(obs_id=os.path.basename(entry))
             self._source_names = [entry]
 
         def is_valid(self):

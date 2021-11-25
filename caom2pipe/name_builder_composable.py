@@ -121,6 +121,7 @@ class StorageNameInstanceBuilder(StorageNameBuilder):
             collection=self._collection,
             fname_on_disk=entry,
             entry=entry,
+            source_names=[entry],
         )
 
 

@@ -230,7 +230,9 @@ class TodoRunner(object):
                     f'StorageName construction failed. Using a default '
                     f'instance for {entry}, for logging only.'
                 )
-                storage_name = mc.StorageName(obs_id=entry)
+                storage_name = mc.StorageName(
+                    obs_id=entry, source_names=[entry]
+                )
             self._organizer.capture_failure(
                 storage_name, e, traceback.format_exc()
             )

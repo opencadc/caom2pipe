@@ -534,7 +534,7 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
                 fqn = entry
             else:
                 fqn = entry.entry_name
-            self._logger.debug(f'Clean up f{fqn}')
+            self._logger.debug(f'Clean up {fqn}')
             if self._check_md5sum(fqn):
                 # the transfer itself failed, so track as a failure
                 self._move_action(fqn, self._cleanup_failure_directory)
