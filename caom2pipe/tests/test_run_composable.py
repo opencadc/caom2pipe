@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -76,7 +75,7 @@ import os
 from astropy.table import Table
 from datetime import datetime, timedelta, timezone
 
-from mock import Mock, patch, ANY
+from unittest.mock import Mock, patch, ANY
 import test_conf as tc
 
 from caom2 import SimpleObservation, Algorithm
@@ -239,7 +238,7 @@ def test_run_todo_file_data_source(clients_mock, test_config):
         SimpleObservation(
             collection=test_config.collection,
             observation_id='def',
-            algorithm=Algorithm(str('test')),
+            algorithm=Algorithm('test'),
         )
     )
 
@@ -273,7 +272,7 @@ def test_run_todo_file_data_source_v(clients_mock, test_config):
         return_value=SimpleObservation(
             collection=test_config.collection,
             observation_id='def',
-            algorithm=Algorithm(str('test')),
+            algorithm=Algorithm('test'),
         )
     )
 
@@ -412,7 +411,7 @@ def test_run_state_log_to_file_true(
             return_value=SimpleObservation(
                 collection=test_config.collection,
                 observation_id='def',
-                algorithm=Algorithm(str('test')),
+                algorithm=Algorithm('test'),
             )
         )
         fits2caom2_mock.side_effect = _mock_write
@@ -945,7 +944,7 @@ def _mock_write():
         SimpleObservation(
             collection='test_collection',
             observation_id='ghi',
-            algorithm=Algorithm(str('test')),
+            algorithm=Algorithm('test'),
         ),
         fqn,
     )
@@ -955,5 +954,5 @@ def _mock_read(ignore_fqn):
     return SimpleObservation(
         collection='test_collection',
         observation_id='ghi',
-        algorithm=Algorithm(str('test')),
+        algorithm=Algorithm('test'),
     )

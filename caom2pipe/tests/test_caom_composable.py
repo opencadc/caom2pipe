@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -77,7 +76,7 @@ from caom2 import ValueCoord2D
 from caom2pipe import caom_composable as cc
 from caom2pipe import manage_composable as mc
 
-from mock import Mock, patch
+from unittest.mock import Mock, patch
 import test_conf as tc
 
 try:

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -739,7 +738,7 @@ def test_choose_exceptions(test_config):
 def test_storage_name_failure(test_config):
     class TestStorageNameFails(tc.TestStorageName):
         def __init__(self):
-            super(TestStorageNameFails, self).__init__()
+            super().__init__()
 
         def is_valid(self):
             return False
@@ -1041,7 +1040,7 @@ def test_local_store(test_config):
 
 class FlagStorageName(mc.StorageName):
     def __init__(self, file_name, source_names, destination_uris):
-        super(FlagStorageName, self).__init__(
+        super().__init__(
             fname_on_disk=file_name,
             obs_id='1000003f',
             collection='TEST',
@@ -1219,7 +1218,7 @@ def _read_obs(arg1):
     return SimpleObservation(
         collection='test_collection',
         observation_id='test_obs_id',
-        algorithm=Algorithm(str('exposure')),
+        algorithm=Algorithm('exposure'),
     )
 
 
@@ -1295,7 +1294,7 @@ def to_caom2():
         SimpleObservation(
             collection='test_collection',
             observation_id='test_obs_id',
-            algorithm=Algorithm(str('exposure')),
+            algorithm=Algorithm('exposure'),
         ),
         fqn,
     )
@@ -1305,6 +1304,6 @@ def _mock_get_file_info(file_id):
     return FileInfo(
         id=file_id,
         size=10290,
-        md5sum='{}'.format(md5('-37'.encode()).hexdigest()),
+        md5sum='{}'.format(md5(b'-37').hexdigest()),
         file_type='image/jpeg',
     )

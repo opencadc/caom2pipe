@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -67,7 +66,7 @@
 # ***********************************************************************
 #
 
-from mock import patch
+from unittest.mock import patch
 
 from caom2utils import ObsBlueprint
 from caom2pipe import manage_composable as mc

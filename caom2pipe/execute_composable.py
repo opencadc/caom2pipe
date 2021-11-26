@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -127,7 +126,7 @@ from caom2pipe import transfer_composable as tc
 __all__ = ['CaomExecute', 'OrganizeExecutes', 'OrganizeChooser']
 
 
-class CaomExecute(object):
+class CaomExecute:
     """Abstract class that defines the operations common to all Execute
     classes."""
 
@@ -459,7 +458,7 @@ class MetaCreate(CaomExecute):
         meta_visitors,
         observable,
     ):
-        super(MetaCreate, self).__init__(
+        super().__init__(
             config,
             mc.TaskType.INGEST,
             storage_name,
@@ -521,7 +520,7 @@ class MetaUpdate(CaomExecute):
         meta_visitors,
         observable,
     ):
-        super(MetaUpdate, self).__init__(
+        super().__init__(
             config,
             mc.TaskType.INGEST,
             storage_name,
@@ -589,7 +588,7 @@ class MetaDeleteCreate(CaomExecute):
         meta_visitors,
         observable,
     ):
-        super(MetaDeleteCreate, self).__init__(
+        super().__init__(
             config,
             mc.TaskType.INGEST,
             storage_name,
@@ -661,7 +660,7 @@ class MetaUpdateObservation(CaomExecute):
         meta_visitors,
         observable,
     ):
-        super(MetaUpdateObservation, self).__init__(
+        super().__init__(
             config,
             mc.TaskType.INGEST_OBS,
             storage_name,
@@ -745,7 +744,7 @@ class LocalMetaCreate(CaomExecute):
         meta_visitors,
         observable,
     ):
-        super(LocalMetaCreate, self).__init__(
+        super().__init__(
             config,
             mc.TaskType.INGEST,
             storage_name,
@@ -808,7 +807,7 @@ class LocalMetaDeleteCreate(CaomExecute):
         meta_visitors,
         observable,
     ):
-        super(LocalMetaDeleteCreate, self).__init__(
+        super().__init__(
             config,
             mc.TaskType.INGEST,
             storage_name,
@@ -875,7 +874,7 @@ class LocalMetaUpdate(CaomExecute):
         meta_visitors,
         observable,
     ):
-        super(LocalMetaUpdate, self).__init__(
+        super().__init__(
             config,
             mc.TaskType.INGEST,
             storage_name,
@@ -941,7 +940,7 @@ class MetaVisit(CaomExecute):
         meta_visitors,
         observable,
     ):
-        super(MetaVisit, self).__init__(
+        super().__init__(
             config,
             mc.TaskType.VISIT,
             storage_name,
@@ -1000,7 +999,7 @@ class DataVisit(CaomExecute):
         observable,
         transferrer,
     ):
-        super(DataVisit, self).__init__(
+        super().__init__(
             config,
             task_type=task_type,
             storage_name=storage_name,
@@ -1081,7 +1080,7 @@ class LocalDataVisit(DataVisit):
         data_visitors,
         observable,
     ):
-        super(LocalDataVisit, self).__init__(
+        super().__init__(
             config,
             storage_name=storage_name,
             cadc_client=cadc_client,
@@ -1128,7 +1127,7 @@ class DataScrape(DataVisit):
     """
 
     def __init__(self, config, storage_name, data_visitors, observable):
-        super(DataScrape, self).__init__(
+        super().__init__(
             config,
             storage_name,
             cadc_client=None,
@@ -1174,7 +1173,7 @@ class Store(CaomExecute):
         observable,
         transferrer,
     ):
-        super(Store, self).__init__(
+        super().__init__(
             config,
             mc.TaskType.STORE,
             storage_name,
@@ -1236,7 +1235,7 @@ class LocalStore(Store):
         cadc_client,
         observable,
     ):
-        super(LocalStore, self).__init__(
+        super().__init__(
             config,
             storage_name,
             command_name,
@@ -1274,7 +1273,7 @@ class Scrape(CaomExecute):
         observable,
         meta_visitors,
     ):
-        super(Scrape, self).__init__(
+        super().__init__(
             config,
             mc.TaskType.SCRAPE,
             storage_name,
@@ -1324,7 +1323,7 @@ class ScrapeUpdate(CaomExecute):
         observable,
         meta_visitors,
     ):
-        super(ScrapeUpdate, self).__init__(
+        super().__init__(
             config,
             mc.TaskType.SCRAPE,
             storage_name,
@@ -1356,7 +1355,7 @@ class ScrapeUpdate(CaomExecute):
         self.logger.debug(f'End execute')
 
 
-class OrganizeChooser(object):
+class OrganizeChooser:
     """Extend this class to provide a way to make collection-specific
     complex conditions available within the OrganizeExecute class."""
 
@@ -1370,7 +1369,7 @@ class OrganizeChooser(object):
         return False
 
 
-class OrganizeExecutes(object):
+class OrganizeExecutes:
     """How to turn on/off various task types in a CaomExecute pipeline."""
 
     def __init__(

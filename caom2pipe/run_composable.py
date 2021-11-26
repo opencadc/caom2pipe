@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -102,7 +101,7 @@ __all__ = [
 ]
 
 
-class RunnerReport(object):
+class RunnerReport:
     """
     This class contains metrics for reporting on pipeline runs.
     """
@@ -165,7 +164,7 @@ class RunnerReport(object):
         return msg
 
 
-class TodoRunner(object):
+class TodoRunner:
     """
     This class brings together the mechanisms for identifying the
     lists of work to be done (DataSource extensions), and the mechanisms for
@@ -330,7 +329,7 @@ class StateRunner(TodoRunner):
         bookmark_name,
         max_ts=None,
     ):
-        super(StateRunner, self).__init__(
+        super().__init__(
             config, organizer, builder, data_source
         )
         self._bookmark_name = bookmark_name

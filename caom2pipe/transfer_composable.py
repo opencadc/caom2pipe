@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -85,7 +84,7 @@ __all__ = [
 ]
 
 
-class Transfer(object):
+class Transfer:
     """
     No-op class to represent the actions of transferring a file from
     one point to another.
@@ -137,7 +136,7 @@ class CadcTransfer(Transfer):
     """
 
     def __init__(self):
-        super(CadcTransfer, self).__init__()
+        super().__init__()
         self._cadc_client = None
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -171,7 +170,7 @@ class VoTransfer(Transfer):
     """
 
     def __init__(self):
-        super(VoTransfer, self).__init__()
+        super().__init__()
         self._cadc_client = None
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -304,7 +303,7 @@ class VoFitsTransfer(FitsTransfer):
     """
 
     def __init__(self, vo_client):
-        super(VoFitsTransfer, self).__init__()
+        super().__init__()
         self._vo_client = vo_client
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -322,7 +321,7 @@ class VoFitsCleanupTransfer(VoFitsTransfer):
     """
 
     def __init__(self, vo_client, config):
-        super(VoFitsCleanupTransfer, self).__init__(vo_client)
+        super().__init__(vo_client)
         self._cleanup_when_storing = config.cleanup_files_when_storing
         self._failure_destination = config.cleanup_failure_destination
         self._success_destination = config.cleanup_success_destination

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -424,7 +423,7 @@ def read_fits_data(fqn):
     return hdus
 
 
-class FilterMetadataCache(object):
+class FilterMetadataCache:
     """
     Cache the results of calls to the SVO filter service. As part of the
     caching, identify those filters that are not available from the service,

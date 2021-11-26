@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -122,7 +121,7 @@ __all__ = [
 ]
 
 
-class ClientCollection(object):
+class ClientCollection:
     """
     This class initializes and provides accessors to known HTTP clients
     for CADC services.

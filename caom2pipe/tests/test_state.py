@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -74,7 +73,7 @@ import os
 from datetime import datetime, timedelta
 
 import dateutil.tz
-from mock import patch
+from unittest.mock import patch
 
 from cadcdata import FileInfo
 from caom2pipe import data_source_composable as dsc
@@ -88,7 +87,7 @@ import test_conf as tc
 
 class TestTransfer(transfer_composable.Transfer):
     def __init__(self):
-        super(TestTransfer, self).__init__()
+        super().__init__()
 
     def get(self, source_fqn, dest_fqn):
         logging.error(f'source {source_fqn} dest {dest_fqn}')
@@ -110,7 +109,7 @@ class TestTransfer(transfer_composable.Transfer):
 
 class TestListDirTimeBoxDataSource(dsc.DataSource):
     def __init__(self):
-        super(TestListDirTimeBoxDataSource, self).__init__()
+        super().__init__()
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         result = []
@@ -220,7 +219,7 @@ def test_run_state(client_mock):
         report_file = f'{test_config.log_file_directory}/app_report.txt'
         assert os.path.exists(report_file), f'report file {actual}'
         pass_through_test = False
-        with open(report_file, 'r') as f:
+        with open(report_file) as f:
             for line in f:
                 pass_through_test = True
                 if 'Number' in line:
@@ -363,7 +362,7 @@ def test_run_state_v(client_mock):
         report_file = f'{test_config.log_file_directory}/app_report.txt'
         assert os.path.exists(report_file), f'report file {actual}'
         pass_through_test = False
-        with open(report_file, 'r') as f:
+        with open(report_file) as f:
             for line in f:
                 pass_through_test = True
                 if 'Number' in line:
