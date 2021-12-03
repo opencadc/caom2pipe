@@ -210,9 +210,6 @@ class CaomExecute:
         self.log_file_directory = None
         self.data_visitors = []
         self.supports_latest_client = config.features.supports_latest_client
-        self._delete_cleanup_directory = (
-            mc.TaskType.SCRAPE not in config.task_types
-        )
         self._storage_inventory_resource_id = \
             config.storage_inventory_resource_id
         self._header_reader_client = header_reader_client
@@ -227,25 +224,6 @@ class CaomExecute:
             f'       lineage: {self._storage_name.lineage}\n'
             f'   working_dir: {self.working_dir}\n'
         )
-
-    def _cleanup(self):
-        """Remove a directory and all its contents. Only do this if there
-        is not a 'SCRAPE' task type, since the point of scraping is to
-        be able to look at the pipeline execution artefacts once the
-        processing is done.
-        """
-        self.logger.debug(
-            f'Remove working directory {self.working_dir} and contents.'
-        )
-        if os.path.exists(self.working_dir) and self._delete_cleanup_directory:
-            for ii in os.listdir(self.working_dir):
-                os.remove(os.path.join(self.working_dir, ii))
-            os.rmdir(self.working_dir)
-
-    def _create_dir(self):
-        """Create the working area if it does not already exist."""
-        self.logger.debug(f'Create working directory {self.working_dir}')
-        mc.create_dir(self.working_dir)
 
     def _find_fits2caom2_plugin(self):
         """Find the code that is passed as the --plugin parameter to
@@ -454,9 +432,6 @@ class MetaCreate(CaomExecute):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self.logger.debug(
             'the observation does not exist, so go straight to generating '
             'the xml, as the main_app will retrieve the headers'
@@ -474,9 +449,6 @@ class MetaCreate(CaomExecute):
 
         self.logger.debug('create the observation with xml')
         self._repo_cmd_create_client(observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self.logger.debug('End execute')
 
@@ -519,9 +491,6 @@ class MetaUpdate(CaomExecute):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self.logger.debug('write the observation to disk for next step')
         self._write_model(self.observation)
 
@@ -541,9 +510,6 @@ class MetaUpdate(CaomExecute):
 
         self.logger.debug('update the observation with xml')
         self._repo_cmd_update_client(self.observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self.logger.debug('End execute')
 
@@ -589,9 +555,6 @@ class MetaDeleteCreate(CaomExecute):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self.logger.debug('write the observation to disk for next step')
         self._write_model(self.observation)
 
@@ -614,9 +577,6 @@ class MetaDeleteCreate(CaomExecute):
 
         self.logger.debug('store the xml')
         self._repo_cmd_create_client(self.observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self.logger.debug('End execute')
 
@@ -656,9 +616,6 @@ class LocalMetaCreate(CaomExecute):
     def execute(self, context):
         self.logger.debug('Begin execute')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self.logger.debug(
             'the observation does not exist, so go straight to generating '
             'the xml, as the main_app will retrieve the headers'
@@ -676,9 +633,6 @@ class LocalMetaCreate(CaomExecute):
 
         self.logger.debug('store the xml')
         self._repo_cmd_create_client(observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self.logger.debug('End execute')
 
@@ -722,9 +676,6 @@ class LocalMetaDeleteCreate(CaomExecute):
     def execute(self, context):
         self.logger.debug('Begin execute')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self.logger.debug('write the observation to disk for fits2caom2 step')
         self._write_model(self.observation)
 
@@ -747,9 +698,6 @@ class LocalMetaDeleteCreate(CaomExecute):
 
         self.logger.debug('store the xml')
         self._repo_cmd_create_client(observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self.logger.debug('End execute')
 
@@ -791,9 +739,6 @@ class LocalMetaUpdate(CaomExecute):
     def execute(self, context):
         self.logger.debug('Begin execute')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self.logger.debug('write the observation to disk for fits2caom2')
         self._write_model(self.observation)
 
@@ -813,9 +758,6 @@ class LocalMetaUpdate(CaomExecute):
 
         self.logger.debug('store the xml')
         self._repo_cmd_update_client(self.observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self.logger.debug('End execute')
 
@@ -859,9 +801,6 @@ class MetaVisit(CaomExecute):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self.logger.debug('retrieve the existing observation, if it exists')
         observation = self._repo_cmd_read_client()
 
@@ -873,9 +812,6 @@ class MetaVisit(CaomExecute):
 
         self.logger.debug('store the xml')
         self._repo_cmd_update_client(observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self.logger.debug('End execute')
 
@@ -920,9 +856,6 @@ class DataVisit(CaomExecute):
     def execute(self, context):
         self._logger.debug('Begin execute')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self.logger.debug('get the input files')
         for entry in self._storage_name.destination_uris:
             local_fqn = os.path.join(self.working_dir, os.path.basename(entry))
@@ -939,9 +872,6 @@ class DataVisit(CaomExecute):
 
         self.logger.debug('store the updated xml')
         self._repo_cmd_update_client(observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self._logger.debug('End execute.')
 
@@ -997,9 +927,6 @@ class LocalDataVisit(DataVisit):
     def execute(self, context):
         self._logger.debug(f'Begin execute')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self._logger.debug('get the observation for the existing model')
         observation = self._repo_cmd_read_client()
 
@@ -1011,9 +938,6 @@ class LocalDataVisit(DataVisit):
 
         self._logger.debug('store the updated xml')
         self._repo_cmd_update_client(observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self._logger.debug(f'End execute')
 
@@ -1044,9 +968,6 @@ class DataScrape(DataVisit):
     def execute(self, context):
         self.logger.debug('Begin execute')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self.logger.debug('get observation for the existing model from disk')
         observation = self._read_model()
 
@@ -1055,9 +976,6 @@ class DataScrape(DataVisit):
 
         self.logger.debug('output the updated xml')
         self._write_model(observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self.logger.debug('End execute')
 
@@ -1093,9 +1011,6 @@ class Store(CaomExecute):
     def execute(self, context):
         self.logger.debug('Begin execute')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self.logger.debug(
             f'Store {len(self._storage_name.source_names)} files to CADC.'
         )
@@ -1117,9 +1032,6 @@ class Store(CaomExecute):
             self._transferrer.post_store_check(
                 entry, self._storage_name.destination_uris[index]
             )
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self.logger.debug('End execute')
 
@@ -1194,9 +1106,6 @@ class Scrape(CaomExecute):
     def execute(self, context):
         self.logger.debug(f'Begin execute')
 
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
         self.logger.debug('generate the xml from the file on disk')
         self._fits2caom2_out_local_no_visit()
 
@@ -1208,9 +1117,6 @@ class Scrape(CaomExecute):
 
         self.logger.debug('write the updated xml to disk for debugging')
         self._write_model(observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
 
         self.logger.debug(f'End execute')
 
@@ -1346,6 +1252,30 @@ class OrganizeExecutes:
         self._log_h = None
         self._logger = logging.getLogger(self.__class__.__name__)
         self._logger.setLevel(config.logging_level)
+
+    def _clean_up_workspace(self, obs_id):
+        """Remove a directory and all its contents. Only do this if there
+        is not a 'SCRAPE' task type, since the point of scraping is to
+        be able to look at the pipeline execution artefacts once the
+        processing is done.
+        """
+        working_dir = os.path.join(self.config.working_directory, obs_id)
+        self._logger.debug(
+            f'Remove working directory {working_dir} and contents.'
+        )
+        if (
+            os.path.exists(working_dir)
+            and mc.TaskType.SCRAPE not in self.config.task_types
+        ):
+            for ii in os.listdir(working_dir):
+                os.remove(os.path.join(working_dir, ii))
+            os.rmdir(working_dir)
+
+    def _create_workspace(self, obs_id):
+        """Create the working area if it does not already exist."""
+        working_dir = os.path.join(self.config.working_directory, obs_id)
+        self._logger.debug(f'Create working directory {working_dir}')
+        mc.create_dir(working_dir)
 
     def set_log_files(self, config):
         self.todo_fqn = config.work_fqn
@@ -1838,28 +1768,33 @@ class OrganizeExecutes:
                     'Rejected',
                 )
                 # successful rejection of the execution case
-                return 0
-            executors = self.choose(storage_name)
-            for executor in executors:
-                self._logger.info(
-                    f'Step {executor.task_type} with '
-                    f'{executor.__class__.__name__} for {storage_name.obs_id}'
-                )
-                executor.execute(context=None)
-            if len(executors) > 0:
-                self.capture_success(
-                    storage_name.obs_id, storage_name.file_name, start_s
-                )
-                return 0
+                result = 0
             else:
-                self._logger.info(f'No executors for {storage_name}')
-                return -1  # cover the case where file name validation fails
+                executors = self.choose(storage_name)
+                self._create_workspace(storage_name.obs_id)
+                for executor in executors:
+                    self._logger.info(
+                        f'Step {executor.task_type} with '
+                        f'{executor.__class__.__name__} for '
+                        f'{storage_name.obs_id}'
+                    )
+                    executor.execute(context=None)
+                if len(executors) > 0:
+                    self.capture_success(
+                        storage_name.obs_id, storage_name.file_name, start_s
+                    )
+                    result = 0
+                else:
+                    self._logger.info(f'No executors for {storage_name}')
+                    result = -1  # cover case where file name validation fails
         except Exception as e:
             self.capture_failure(storage_name, e, traceback.format_exc())
             self._logger.warning(
                 f'Execution failed for {storage_name.obs_id} with {e}'
             )
             self._logger.debug(traceback.format_exc())
-            return -1
+            result = -1
         finally:
+            self._clean_up_workspace(storage_name.obs_id)
             self._unset_file_logging()
+        return result

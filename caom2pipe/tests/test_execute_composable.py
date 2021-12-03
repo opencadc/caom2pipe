@@ -147,10 +147,13 @@ def test_meta_create_client_execute(test_config):
         header_reader_client=Mock(autospec=True),
     )
     try:
+        if not os.path.exists(test_executor.working_dir):
+            os.mkdir(test_executor.working_dir)
         test_executor.execute(None)
         assert repo_client_mock.create.called, 'create call missed'
         assert test_observer.metrics.observe.called, 'observe not called'
     finally:
+        _clean_up_dir(test_executor.working_dir)
         mc.read_obs_from_file = read_obs_orig
 
 
@@ -208,9 +211,14 @@ def test_meta_update_client_execute(test_config):
         observable=test_observer,
         header_reader_client=Mock(autospec=True),
     )
-    test_executor.execute(None)
-    assert repo_client_mock.update.called, 'update call missed'
-    assert test_observer.metrics.observe.called, 'observer call missed'
+    try:
+        if not os.path.exists(test_executor.working_dir):
+            os.mkdir(test_executor.working_dir)
+        test_executor.execute(None)
+        assert repo_client_mock.update.called, 'update call missed'
+        assert test_observer.metrics.observe.called, 'observer call missed'
+    finally:
+        _clean_up_dir(test_executor.working_dir)
 
 
 def test_meta_delete_create_client_execute(test_config):
@@ -231,10 +239,15 @@ def test_meta_delete_create_client_execute(test_config):
         observable=test_observer,
         header_reader_client=Mock(autospec=True),
     )
-    test_executor.execute(None)
-    assert repo_client_mock.delete.called, 'delete call missed'
-    assert repo_client_mock.create.called, 'create call missed'
-    assert test_observer.metrics.observe.called, 'observe not called'
+    try:
+        if not os.path.exists(test_executor.working_dir):
+            os.mkdir(test_executor.working_dir)
+        test_executor.execute(None)
+        assert repo_client_mock.delete.called, 'delete call missed'
+        assert repo_client_mock.create.called, 'create call missed'
+        assert test_observer.metrics.observe.called, 'observe not called'
+    finally:
+        _clean_up_dir(test_executor.working_dir)
 
 
 def test_local_meta_create_client_execute(test_config):
@@ -262,9 +275,14 @@ def test_local_meta_create_client_execute(test_config):
         observable=test_observer,
         header_reader_client=Mock(autospec=True),
     )
-    test_executor.execute(None)
-    assert repo_client_mock.create.called, 'create call missed'
-    assert test_observer.metrics.observe.called, 'observe not called'
+    try:
+        if not os.path.exists(test_executor.working_dir):
+            os.mkdir(test_executor.working_dir)
+        test_executor.execute(None)
+        assert repo_client_mock.create.called, 'create call missed'
+        assert test_observer.metrics.observe.called, 'observe not called'
+    finally:
+        _clean_up_dir(test_executor.working_dir)
 
 
 def test_local_meta_update_client_execute(test_config):
@@ -285,9 +303,14 @@ def test_local_meta_update_client_execute(test_config):
         observable=test_observer,
         header_reader_client=Mock(autospec=True),
     )
-    test_executor.execute(None)
-    assert repo_client_mock.update.called, 'update call missed'
-    assert test_observer.metrics.observe.called, 'observe not called'
+    try:
+        if not os.path.exists(test_executor.working_dir):
+            os.mkdir(test_executor.working_dir)
+        test_executor.execute(None)
+        assert repo_client_mock.update.called, 'update call missed'
+        assert test_observer.metrics.observe.called, 'observe not called'
+    finally:
+        _clean_up_dir(test_executor.working_dir)
 
 
 def test_local_meta_delete_create_client_execute(test_config):
@@ -308,10 +331,15 @@ def test_local_meta_delete_create_client_execute(test_config):
         observable=test_observer,
         header_reader_client=Mock(autospec=True),
     )
-    test_executor.execute(None)
-    assert repo_client_mock.delete.called, 'delete call missed'
-    assert repo_client_mock.create.called, 'create call missed'
-    assert test_observer.metrics.observe.called, 'observe not called'
+    try:
+        if not os.path.exists(test_executor.working_dir):
+            os.mkdir(test_executor.working_dir)
+        test_executor.execute(None)
+        assert repo_client_mock.delete.called, 'delete call missed'
+        assert repo_client_mock.create.called, 'create call missed'
+        assert test_observer.metrics.observe.called, 'observe not called'
+    finally:
+        _clean_up_dir(test_executor.working_dir)
 
 
 def test_client_visit(test_config):
@@ -380,10 +408,7 @@ def test_data_execute(test_config):
         assert repo_client_mock.update.called, 'update call missed'
         assert test_observer.metrics.observe.called, 'observe not called'
     finally:
-        if os.path.exists(test_fits_fqn):
-            os.unlink(test_fits_fqn)
-        if os.path.exists(test_dir):
-            os.rmdir(test_dir)
+        _clean_up_dir(test_dir)
 
 
 def test_data_execute_v(test_config):
@@ -431,10 +456,7 @@ def test_data_execute_v(test_config):
             'cadc:TEST/test_file.fits.gz', test_fits_fqn, send_md5=True
         ), 'wrong call args'
     finally:
-        if os.path.exists(test_fits_fqn):
-            os.unlink(test_fits_fqn)
-        if os.path.exists(test_dir):
-            os.rmdir(test_dir)
+        _clean_up_dir(test_dir)
 
 
 def test_data_local_execute(test_config):
@@ -528,7 +550,12 @@ def test_scrape(test_config):
         meta_visitors=[],
         header_reader_client=Mock(autospec=True),
     )
-    test_executor.execute(None)
+    try:
+        if not os.path.exists(test_executor.working_dir):
+            os.mkdir(test_executor.working_dir)
+        test_executor.execute(None)
+    finally:
+        _clean_up_dir(test_executor.working_dir)
 
 
 @patch('caom2pipe.manage_composable.read_obs_from_file')
@@ -896,24 +923,29 @@ def test_data_visit(client_mock, test_config):
         test_observable,
         test_transferrer,
     )
-    test_subject.execute(None)
-    assert client_mock.get.called, 'should be called'
-    client_mock.get.assert_called_with(
-        f'{tc.THIS_DIR}/test_obs_id', test_sn.destination_uris[0]
-    ), 'wrong get call args'
-    test_repo_client.read.assert_called_with(
-        'OMM', 'test_obs_id'
-    ), 'wrong values'
-    assert test_repo_client.update.called, 'expect an execution'
-    # TODO - why is the log file directory NOT the working directory?
+    try:
+        if not os.path.exists(test_subject.working_dir):
+            os.mkdir(test_subject.working_dir)
+        test_subject.execute(None)
+        assert client_mock.get.called, 'should be called'
+        client_mock.get.assert_called_with(
+            f'{tc.THIS_DIR}/test_obs_id', test_sn.destination_uris[0]
+        ), 'wrong get call args'
+        test_repo_client.read.assert_called_with(
+            'OMM', 'test_obs_id'
+        ), 'wrong values'
+        assert test_repo_client.update.called, 'expect an execution'
+        # TODO - why is the log file directory NOT the working directory?
 
-    args, kwargs = dv_mock.visit.call_args
-    assert kwargs.get('working_directory') == f'{tc.THIS_DIR}/test_obs_id'
-    assert (
-        kwargs.get('storage_name') == test_sn
-    ), 'wrong storage name parameter'
-    assert kwargs.get('log_file_directory') == tc.TEST_DATA_DIR
-    assert kwargs.get('stream') == 'TEST'
+        args, kwargs = dv_mock.visit.call_args
+        assert kwargs.get('working_directory') == f'{tc.THIS_DIR}/test_obs_id'
+        assert (
+            kwargs.get('storage_name') == test_sn
+        ), 'wrong storage name parameter'
+        assert kwargs.get('log_file_directory') == tc.TEST_DATA_DIR
+        assert kwargs.get('stream') == 'TEST'
+    finally:
+        _clean_up_dir(test_subject.working_dir)
 
 
 def test_store(test_config):
@@ -944,13 +976,18 @@ def test_store(test_config):
         test_subject._storage_name.destination_uris[0]
         == 'cadc:TEST/test_file.fits.gz'
     ), 'wrong destination'
-    test_subject.execute(None)
-    assert test_data_client.put.called, 'data put not called'
-    test_data_client.put.assert_called_with(
-        '/usr/src/app/caom2pipe/caom2pipe/tests/data/test_obs_id',
-        'cadc:TEST/test_file.fits.gz',
-        'TEST',
-    ), 'wrong put call args'
+    try:
+        if not os.path.exists(test_subject.working_dir):
+            os.mkdir(test_subject.working_dir)
+        test_subject.execute(None)
+        assert test_data_client.put.called, 'data put not called'
+        test_data_client.put.assert_called_with(
+            '/usr/src/app/caom2pipe/caom2pipe/tests/data/test_obs_id',
+            'cadc:TEST/test_file.fits.gz',
+            'TEST',
+        ), 'wrong put call args'
+    finally:
+        _clean_up_dir(test_subject.working_dir)
 
 
 def test_local_store(test_config):
@@ -1110,6 +1147,8 @@ def test_data_visit_params():
             test_transferrer,
         )
         assert test_subject is not None, 'broken ctor'
+        if not os.path.exists(test_subject.working_dir):
+            os.mkdir(test_subject.working_dir)
         test_subject.execute(context=None)
         assert data_visitor.visit.called, 'expect visit call'
         data_visitor.visit.assert_called_with(
@@ -1124,11 +1163,8 @@ def test_data_visit_params():
         ), f'wrong visit params {storage_name.source_names}'
         data_visitor.visit.reset_mock()
     finally:
-        if os.path.exists(test_wd):
-            dir_listing = os.listdir(test_wd)
-            for f in dir_listing:
-                os.unlink(f)
-            os.rmdir(test_wd)
+        _clean_up_dir(test_subject.working_dir)
+        _clean_up_dir(test_wd)
 
 
 def _transfer_get_mock(entry, fqn):
@@ -1138,6 +1174,13 @@ def _transfer_get_mock(entry, fqn):
     ), 'wrong fqn'
     with open(fqn, 'w') as f:
         f.write('test content')
+
+
+def _clean_up_dir(fqn):
+    if os.path.exists(fqn):
+        for ii in os.listdir(fqn):
+            os.unlink(os.path.join(fqn, ii))
+        os.rmdir(fqn)
 
 
 def _communicate():
