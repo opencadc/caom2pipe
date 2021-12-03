@@ -95,8 +95,8 @@ TEST_SOURCE = (
 )
 
 
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local')
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out_local')
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_out_local_no_visit')
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_in_out_local_no_visit')
 @patch('caom2pipe.manage_composable.read_obs_from_file')
 @patch('caom2pipe.manage_composable.write_obs_to_file')
 def test_run_todo_list_dir_data_source(
@@ -120,15 +120,15 @@ def test_run_todo_list_dir_data_source(
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     if fits2caom2_mock.called:
-        fits2caom2_mock.assert_called_with(connected=False)
+        fits2caom2_mock.assert_called_with()
     else:
         assert fits2caom2_in_out_mock.called, 'expect fits2caom2 in/out call'
     assert write_obs_mock.called, 'expect write call'
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local')
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out_local')
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_out_local_no_visit')
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_in_out_local_no_visit')
 @patch('caom2pipe.manage_composable.read_obs_from_file')
 @patch('caom2pipe.manage_composable.write_obs_to_file')
 def test_run_todo_list_dir_data_source_v(
@@ -150,7 +150,7 @@ def test_run_todo_list_dir_data_source_v(
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     if fits2caom2_mock.called:
-        fits2caom2_mock.assert_called_with(connected=False)
+        fits2caom2_mock.assert_called_with()
     else:
         assert fits2caom2_in_out_mock.called, 'expect fits2caom2 in/out call'
     assert read_obs_mock.called, 'read_obs not called'
@@ -307,10 +307,10 @@ def test_run_todo_file_data_source_v(clients_mock, test_config):
 @patch('caom2pipe.data_source_composable.CadcTapClient')
 @patch('caom2pipe.client_composable.query_tap_client')
 @patch(
-    'caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out',
+    'caom2pipe.execute_composable.CaomExecute._fits2caom2_in_out_no_visit',
     autospec=True,
 )
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd')
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_out_no_visit')
 def test_run_state(
     fits2caom2_mock,
     fits2caom2_in_out_mock,
@@ -394,7 +394,7 @@ def test_run_state(
 @patch('caom2pipe.data_source_composable.CadcTapClient')
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.client_composable.query_tap_client')
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd')
+@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_out_no_visit')
 def test_run_state_log_to_file_true(
     fits2caom2_mock,
     tap_mock,

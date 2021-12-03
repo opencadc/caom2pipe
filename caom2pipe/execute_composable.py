@@ -141,6 +141,7 @@ class CaomExecute:
         caom_repo_client,
         meta_visitors,
         observable,
+        header_reader_client,
     ):
         """
         :param config: Configurable parts of execution, as stored in
@@ -214,6 +215,7 @@ class CaomExecute:
         )
         self._storage_inventory_resource_id = \
             config.storage_inventory_resource_id
+        self._header_reader_client = header_reader_client
 
     def __str__(self):
         return (
@@ -267,85 +269,60 @@ class CaomExecute:
             )
         return resource_id
 
-    def _fits2caom2_cmd_local(self, connected=True):
+    def _fits2caom2_in_out_no_visit(self):
+        # for update
+        temp = (
+            f'{self.command_name} {self.logging_level_param} '
+            f'--in {self.model_fqn} --out {self.model_fqn} '
+            f'--lineage {self._storage_name.lineage}'
+        )
+        self._invoke_to_caom2_client(temp)
+
+    def _fits2caom2_out_no_visit(self):
+        # for create
+        temp = (
+            f'{self.command_name} {self.logging_level_param} '
+            f'--observation {self.collection} {self._storage_name.obs_id} '
+            f'--out {self.model_fqn} --lineage {self._storage_name.lineage}'
+        )
+        self._invoke_to_caom2_client(temp)
+
+    def _fits2caom2_in_out_local_no_visit(self):
+        """Execute fits2caom with a --in, --local and a --cert parameter."""
+        # so far, the plugin is also the module :)
+        local_fqn = ' '.join(ii for ii in self._storage_name.source_names)
+        temp = (
+            f'{self.command_name} {self.logging_level_param} '
+            f' --in {self.model_fqn} --out {self.model_fqn} '
+            f'--local {local_fqn} '
+            f'--lineage {self._storage_name.lineage}'
+        )
+        self._invoke_to_caom2_client(temp)
+
+    def _fits2caom2_out_local_no_visit(self):
         """
         Execute fits2caom with a credential parameter and a --local parameter.
         """
-        plugin = self._find_fits2caom2_plugin()
-        # so far, the plugin is also the module :)
-        conn = ''
-        if not connected:
-            conn = f'--not_connected'
         local_fqn = ' '.join(ii for ii in self._storage_name.source_names)
         temp = (
-            f'{self.command_name} {self.logging_level_param} {conn} '
-            f'{self.cred_param} --observation {self.collection} '
-            f'{self._storage_name.obs_id} --local {local_fqn} --out '
-            f'{self.model_fqn} --plugin {plugin} --module {plugin} '
-            f'--lineage {self._storage_name.lineage} '
-            f'{self._find_fits2caom2_resource_id()}'
-        )
-        self._invoke_to_caom2(temp, plugin)
-
-    def _fits2caom2_cmd(self):
-        """Execute fits2caom with a --cert parameter."""
-        plugin = self._find_fits2caom2_plugin()
-        # so far, the plugin is also the module :)
-        temp = (
             f'{self.command_name} {self.logging_level_param} '
-            f'{self.cred_param} --observation {self.collection} '
-            f'{self._storage_name.obs_id} --out {self.model_fqn} '
-            f'{self.external_urls_param} --plugin {plugin} --module {plugin} '
-            f'--lineage {self._storage_name.lineage} '
-            f'{self._find_fits2caom2_resource_id()}'
+            f'--observation {self.collection} {self._storage_name.obs_id} '
+            f'--local {local_fqn} --out {self.model_fqn} --lineage '
+            f'{self._storage_name.lineage}'
         )
-        self._invoke_to_caom2(temp, plugin)
+        self._invoke_to_caom2_client(temp)
 
-    def _fits2caom2_cmd_in_out(self):
-        """Execute fits2caom with a --in, a --external_url and a --cert
-        parameter."""
-        plugin = self._find_fits2caom2_plugin()
-        # so far, the plugin is also the module :)
-        temp = (
-            f'{self.command_name} {self.logging_level_param} '
-            f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
-            f'{self.external_urls_param} --plugin {plugin} --module '
-            f'{plugin} --lineage {self._storage_name.lineage} '
-            f'{self._find_fits2caom2_resource_id()}'
-        )
-        self._invoke_to_caom2(temp, plugin)
-
-    def _fits2caom2_cmd_in_out_local(self, connected=True):
-        """Execute fits2caom with a --in, --local and a --cert parameter."""
-        plugin = self._find_fits2caom2_plugin()
-        # so far, the plugin is also the module :)
-        local_fqn = ' '.join(ii for ii in self._storage_name.source_names)
-        conn = ''
-        resource_id = ''
-        if connected:
-            if self.supports_latest_client:
-                resource_id = (
-                    f'--resource-id {self._storage_inventory_resource_id}'
-                )
-        else:
-            conn = f'--not_connected'
-        temp = (
-            f'{self.command_name} {self.logging_level_param} {conn} '
-            f'{self.cred_param} --in {self.model_fqn} --out {self.model_fqn} '
-            f'--local '
-            f'{local_fqn} --plugin {plugin} --module {plugin} '
-            f'--lineage {self._storage_name.lineage} {resource_id}'
-        )
-        self._invoke_to_caom2(temp, plugin)
-
-    def _invoke_to_caom2(self, cmd_str, plugin):
+    def _invoke_to_caom2_client(self, cmd_str):
         """The common bits of call 'to_caom2.'"""
         self.logger.debug(cmd_str)
         sys.argv = cmd_str.split()
-        command = mc.load_module(plugin, 'to_caom2')
-        result = command.to_caom2()
+        plugin = self._find_fits2caom2_plugin()
+        command = mc.load_module(plugin, 'to_caom2_with_client')
+        result = command.to_caom2_with_client(self._header_reader_client)
         if result == -1:
-            raise mc.CadcException(f'Error executing to_caom2 with {cmd_str}')
+            raise mc.CadcException(
+                f'Error executing to_caom2_with_client with {cmd_str}'
+            )
 
     def _repo_cmd_create_client(self, observation):
         """Create an observation instance from the input parameter."""
@@ -457,6 +434,7 @@ class MetaCreate(CaomExecute):
         caom_repo_client,
         meta_visitors,
         observable,
+        header_reader_client,
     ):
         super().__init__(
             config,
@@ -468,6 +446,7 @@ class MetaCreate(CaomExecute):
             caom_repo_client,
             meta_visitors,
             observable,
+            header_reader_client,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -482,7 +461,7 @@ class MetaCreate(CaomExecute):
             'the observation does not exist, so go straight to generating '
             'the xml, as the main_app will retrieve the headers'
         )
-        self._fits2caom2_cmd()
+        self._fits2caom2_out_no_visit()
 
         self.logger.debug('read the xml into memory from the file')
         observation = self._read_model()
@@ -519,6 +498,7 @@ class MetaUpdate(CaomExecute):
         observation,
         meta_visitors,
         observable,
+        header_reader_client,
     ):
         super().__init__(
             config,
@@ -530,6 +510,7 @@ class MetaUpdate(CaomExecute):
             caom_repo_client,
             meta_visitors,
             observable,
+            header_reader_client,
         )
         self.observation = observation
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -547,7 +528,7 @@ class MetaUpdate(CaomExecute):
         self.logger.debug(
             'generate the xml, as the main_app will retrieve the headers'
         )
-        self._fits2caom2_cmd_in_out()
+        self._fits2caom2_in_out_no_visit()
 
         self.logger.debug('read the xml from disk')
         self.observation = self._read_model()
@@ -587,6 +568,7 @@ class MetaDeleteCreate(CaomExecute):
         observation,
         meta_visitors,
         observable,
+        header_reader_client,
     ):
         super().__init__(
             config,
@@ -598,6 +580,7 @@ class MetaDeleteCreate(CaomExecute):
             caom_repo_client,
             meta_visitors,
             observable,
+            header_reader_client,
         )
         self.observation = observation
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -615,7 +598,7 @@ class MetaDeleteCreate(CaomExecute):
         self.logger.debug(
             'make a new observation from an existing observation'
         )
-        self._fits2caom2_cmd_in_out()
+        self._fits2caom2_in_out_no_visit()
 
         self.logger.debug('read the xml into memory from the file')
         self.observation = self._read_model()
@@ -638,95 +621,6 @@ class MetaDeleteCreate(CaomExecute):
         self.logger.debug('End execute')
 
 
-class MetaUpdateObservation(CaomExecute):
-    """
-    Defines the pipeline step for Collection ingestion of metadata into CAOM.
-    This requires access to only header information.
-
-    This pipeline step will handle the 1 observation ID to n file names
-    relationship when executing fits2caom2, based only on existing
-    metadata from a CAOM2 record.
-    """
-
-    def __init__(
-        self,
-        config,
-        storage_name,
-        command_name,
-        cred_param,
-        cadc_client,
-        caom_repo_client,
-        observation,
-        meta_visitors,
-        observable,
-    ):
-        super().__init__(
-            config,
-            mc.TaskType.INGEST_OBS,
-            storage_name,
-            command_name,
-            cred_param,
-            cadc_client,
-            caom_repo_client,
-            meta_visitors,
-            observable,
-        )
-        self.observation = observation
-        # set the pre-conditions, as none of this is known, until
-        # the observation is figured out
-        self.fname = None
-        self.lineage = None
-        self.external_urls_param = ''
-        self.logger = logging.getLogger(self.__class__.__name__)
-
-    def execute(self, context):
-        self.logger.debug(f'Begin execute.')
-        self.logger.debug('the steps:')
-
-        self.logger.debug('create the work space, if it does not exist')
-        self._create_dir()
-
-        self.logger.debug('set up parameters for to_caom2 call')
-        self._set_parameters()
-
-        self.logger.debug('write the observation to disk for next step')
-        self._write_model(self.observation)
-
-        self.logger.debug('update an existing observation')
-        self._fits2caom2_cmd_in_out()
-
-        self.logger.debug('read the xml into memory from the file')
-        self.observation = self._read_model()
-
-        self.logger.debug('the metadata visitors')
-        self._visit_meta(self.observation)
-
-        self.logger.debug('write the observation to disk for debugging')
-        self._write_model(self.observation)
-
-        self.logger.debug('update the observation')
-        self._repo_cmd_update_client(self.observation)
-
-        self.logger.debug('clean up the workspace')
-        self._cleanup()
-
-        self.logger.debug(f'End execute')
-
-    def _set_parameters(self):
-        lineage = ''
-        # make a dict of product ids and artifact uris
-        for plane in self.observation.planes.values():
-            for artifact in plane.artifacts.values():
-                if 'fits' in artifact.uri:
-                    scheme, archive, file_name = mc.decompose_uri(artifact.uri)
-                    result = mc.get_lineage(
-                        archive, plane.product_id, file_name, scheme
-                    )
-                    lineage = f'{lineage} {result}'
-
-        self.lineage = lineage
-
-
 class LocalMetaCreate(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into
     CAOM. This requires access to only header information.
@@ -743,6 +637,7 @@ class LocalMetaCreate(CaomExecute):
         caom_repo_client,
         meta_visitors,
         observable,
+        header_reader_client,
     ):
         super().__init__(
             config,
@@ -754,6 +649,7 @@ class LocalMetaCreate(CaomExecute):
             caom_repo_client,
             meta_visitors,
             observable,
+            header_reader_client,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -767,7 +663,7 @@ class LocalMetaCreate(CaomExecute):
             'the observation does not exist, so go straight to generating '
             'the xml, as the main_app will retrieve the headers'
         )
-        self._fits2caom2_cmd_local()
+        self._fits2caom2_out_local_no_visit()
 
         self.logger.debug('read the xml from disk')
         observation = self._read_model()
@@ -806,6 +702,7 @@ class LocalMetaDeleteCreate(CaomExecute):
         observation,
         meta_visitors,
         observable,
+        header_reader_client,
     ):
         super().__init__(
             config,
@@ -817,6 +714,7 @@ class LocalMetaDeleteCreate(CaomExecute):
             caom_repo_client,
             meta_visitors,
             observable,
+            header_reader_client,
         )
         self.observation = observation
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -833,7 +731,7 @@ class LocalMetaDeleteCreate(CaomExecute):
         self.logger.debug(
             'make a new observation from an existing observation'
         )
-        self._fits2caom2_cmd_in_out_local()
+        self._fits2caom2_in_out_local_no_visit()
 
         self.logger.debug('read the xml from disk')
         observation = self._read_model()
@@ -873,6 +771,7 @@ class LocalMetaUpdate(CaomExecute):
         observation,
         meta_visitors,
         observable,
+        header_reader_client,
     ):
         super().__init__(
             config,
@@ -884,6 +783,7 @@ class LocalMetaUpdate(CaomExecute):
             caom_repo_client,
             meta_visitors,
             observable,
+            header_reader_client,
         )
         self.observation = observation
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -900,7 +800,7 @@ class LocalMetaUpdate(CaomExecute):
         self.logger.debug(
             'generate the xml, as the main_app will retrieve the headers'
         )
-        self._fits2caom2_cmd_in_out_local()
+        self._fits2caom2_in_out_local_no_visit()
 
         self.logger.debug('read the xml from disk')
         self.observation = self._read_model()
@@ -950,6 +850,7 @@ class MetaVisit(CaomExecute):
             caom_repo_client=caom_repo_client,
             meta_visitors=meta_visitors,
             observable=observable,
+            header_reader_client=None,
         )
         self.fname = None
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -1009,6 +910,7 @@ class DataVisit(CaomExecute):
             caom_repo_client=caom_repo_client,
             meta_visitors=None,
             observable=observable,
+            header_reader_client=None,
         )
         self._data_visitors = data_visitors
         self._log_file_directory = config.log_file_directory
@@ -1183,6 +1085,7 @@ class Store(CaomExecute):
             caom_repo_client=None,
             meta_visitors=None,
             observable=observable,
+            header_reader_client=None,
         )
         self._transferrer = transferrer
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -1272,6 +1175,7 @@ class Scrape(CaomExecute):
         command_name,
         observable,
         meta_visitors,
+        header_reader_client,
     ):
         super().__init__(
             config,
@@ -1283,6 +1187,7 @@ class Scrape(CaomExecute):
             caom_repo_client=None,
             meta_visitors=meta_visitors,
             observable=observable,
+            header_reader_client=header_reader_client,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -1293,7 +1198,7 @@ class Scrape(CaomExecute):
         self._create_dir()
 
         self.logger.debug('generate the xml from the file on disk')
-        self._fits2caom2_cmd_local(connected=False)
+        self._fits2caom2_out_local_no_visit()
 
         self.logger.debug('get observation for the existing model from disk')
         observation = self._read_model()
@@ -1322,6 +1227,7 @@ class ScrapeUpdate(CaomExecute):
         command_name,
         observable,
         meta_visitors,
+        header_reader_client,
     ):
         super().__init__(
             config,
@@ -1333,6 +1239,7 @@ class ScrapeUpdate(CaomExecute):
             caom_repo_client=None,
             meta_visitors=meta_visitors,
             observable=observable,
+            header_reader_client=header_reader_client,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -1341,7 +1248,7 @@ class ScrapeUpdate(CaomExecute):
         self.logger.debug('the steps:')
 
         self.logger.debug('generate the xml from the file on disk')
-        self._fits2caom2_cmd_in_out_local(connected=False)
+        self._fits2caom2_in_out_local_no_visit()
 
         self.logger.debug('get observation for the existing model from disk')
         observation = self._read_model()
@@ -1383,6 +1290,7 @@ class OrganizeExecutes:
         modify_transfer=None,
         cadc_client=None,
         caom_client=None,
+        header_reader_client=None,
     ):
         """
         Why there is support for two transfer instances:
@@ -1402,6 +1310,8 @@ class OrganizeExecutes:
         :param cadc_client CadcDataClient/vos.Client, depending on the
             Features.supports_latest_client flag value
         :param caom_client CAOM2RepoClient
+        :param header_reader_client client instance for reading headers,
+            passed on to to_caom2_client.
         """
         self.config = config
         self.chooser = chooser
@@ -1431,6 +1341,7 @@ class OrganizeExecutes:
             self._store_transfer.observable = self.observable
         self._cadc_client = cadc_client
         self._caom_client = caom_client
+        self._header_reader_client = header_reader_client
         self._cred_param = self._define_cred_param()
         self._log_h = None
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -1689,6 +1600,7 @@ class OrganizeExecutes:
                                 self._command_name,
                                 self.observable,
                                 self._meta_visitors,
+                                self._header_reader_client,
                             )
                         )
                     else:
@@ -1705,6 +1617,7 @@ class OrganizeExecutes:
                                 self._command_name,
                                 self.observable,
                                 self._meta_visitors,
+                                self._header_reader_client,
                             )
                         )
                     else:
@@ -1753,6 +1666,7 @@ class OrganizeExecutes:
                                 self._caom_client,
                                 self._meta_visitors,
                                 self.observable,
+                                self._header_reader_client,
                             )
                         )
                     else:
@@ -1766,6 +1680,7 @@ class OrganizeExecutes:
                                 self._caom_client,
                                 self._meta_visitors,
                                 self.observable,
+                                self._header_reader_client,
                             )
                         )
                 else:
@@ -1788,6 +1703,7 @@ class OrganizeExecutes:
                                     observation,
                                     self._meta_visitors,
                                     self.observable,
+                                    self._header_reader_client,
                                 )
                             )
                         else:
@@ -1802,6 +1718,7 @@ class OrganizeExecutes:
                                     observation,
                                     self._meta_visitors,
                                     self.observable,
+                                    self._header_reader_client,
                                 )
                             )
                     else:
@@ -1820,6 +1737,7 @@ class OrganizeExecutes:
                                     observation,
                                     self._meta_visitors,
                                     self.observable,
+                                    self._header_reader_client,
                                 )
                             )
                         else:
@@ -1834,37 +1752,9 @@ class OrganizeExecutes:
                                     observation,
                                     self._meta_visitors,
                                     self.observable,
+                                    self._header_reader_client,
                                 )
                             )
-            elif task_type == mc.TaskType.INGEST_OBS:
-                observation = CaomExecute.repo_cmd_get_client(
-                    self._caom_client,
-                    self.config.collection,
-                    storage_name.obs_id,
-                    self.observable.metrics,
-                )
-                if observation is None:
-                    raise mc.CadcException(
-                        f'"INGEST_OBS" is an update-only task type for '
-                        f'{storage_name.obs_id}.'
-                    )
-                else:
-                    if self.config.use_local_files:
-                        raise NotImplementedError
-                    else:
-                        executors.append(
-                            MetaUpdateObservation(
-                                self.config,
-                                storage_name,
-                                self._command_name,
-                                self._cred_param,
-                                self._cadc_client,
-                                self._caom_client,
-                                observation,
-                                self._meta_visitors,
-                                self.observable,
-                            )
-                        )
             elif task_type == mc.TaskType.MODIFY:
                 if storage_name.is_feasible:
                     if self.config.use_local_files:

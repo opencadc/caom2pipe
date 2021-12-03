@@ -258,8 +258,6 @@ class TaskType(Enum):
     INGEST = 'ingest'  # create/update a CAOM instance from metadata only
     MODIFY = 'modify'  # data access observation visitors
     VISIT = 'visit'  # metadata access observation visitors
-    # update a CAOM instance using CAOM metadata as input and knowledge
-    INGEST_OBS = 'ingest_obs'
 
 
 class State:

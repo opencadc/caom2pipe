@@ -144,6 +144,7 @@ def test_meta_create_client_execute(test_config):
         repo_client_mock,
         meta_visitors=None,
         observable=test_observer,
+        header_reader_client=Mock(autospec=True),
     )
     try:
         test_executor.execute(None)
@@ -179,6 +180,7 @@ def test_meta_create_client_execute_failed_update(
         repo_client_mock,
         meta_visitors=None,
         observable=test_observer,
+        header_reader_client=Mock(autospec=True),
     )
     try:
         with pytest.raises(mc.CadcException):
@@ -204,6 +206,7 @@ def test_meta_update_client_execute(test_config):
         _read_obs(None),
         meta_visitors=None,
         observable=test_observer,
+        header_reader_client=Mock(autospec=True),
     )
     test_executor.execute(None)
     assert repo_client_mock.update.called, 'update call missed'
@@ -226,6 +229,7 @@ def test_meta_delete_create_client_execute(test_config):
         _read_obs(None),
         None,
         observable=test_observer,
+        header_reader_client=Mock(autospec=True),
     )
     test_executor.execute(None)
     assert repo_client_mock.delete.called, 'delete call missed'
@@ -256,6 +260,7 @@ def test_local_meta_create_client_execute(test_config):
         repo_client_mock,
         meta_visitors=None,
         observable=test_observer,
+        header_reader_client=Mock(autospec=True),
     )
     test_executor.execute(None)
     assert repo_client_mock.create.called, 'create call missed'
@@ -278,6 +283,7 @@ def test_local_meta_update_client_execute(test_config):
         _read_obs(None),
         meta_visitors=None,
         observable=test_observer,
+        header_reader_client=Mock(autospec=True),
     )
     test_executor.execute(None)
     assert repo_client_mock.update.called, 'update call missed'
@@ -300,6 +306,7 @@ def test_local_meta_delete_create_client_execute(test_config):
         meta_visitors=None,
         observation=_read_obs(None),
         observable=test_observer,
+        header_reader_client=Mock(autospec=True),
     )
     test_executor.execute(None)
     assert repo_client_mock.delete.called, 'delete call missed'
@@ -519,6 +526,7 @@ def test_scrape(test_config):
         __name__,
         observable=None,
         meta_visitors=[],
+        header_reader_client=Mock(autospec=True),
     )
     test_executor.execute(None)
 
@@ -558,6 +566,7 @@ def test_organize_executes_chooser(test_config):
         test_chooser,
         cadc_client=Mock(autospec=True, return_value=None),
         caom_client=caom_client,
+        header_reader_client=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
@@ -602,6 +611,7 @@ def test_organize_executes_client_existing(test_config):
         [],
         cadc_client=Mock(autospec=True),
         caom_client=repo_client_mock,
+        header_reader_client=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
@@ -624,6 +634,7 @@ def test_organize_executes_client_visit(test_config):
         [],
         cadc_client=Mock(autospec=True),
         caom_client=repo_client_mock,
+        header_reader_client=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
@@ -692,35 +703,6 @@ def test_omm_name_dots():
     TEST_URI = f'ad:OMM/{TEST_NAME}.fits.gz'
     test_file_id = mc.CaomName(TEST_URI).file_id
     assert TEST_NAME == test_file_id, 'dots messing with things'
-
-
-def test_meta_update_observation_direct(test_config):
-    test_cred_param = '--cert /usr/src/app/cadcproxy.pem'
-    data_client_mock = Mock()
-    repo_client_mock = Mock()
-    test_sn = tc.TestStorageName()
-    test_observation = mc.read_obs_from_file(
-        f'{tc.TEST_DATA_DIR}/fpf_start_obs.xml'
-    )
-    try:
-        test_observable = mc.Observable(
-            mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)
-        )
-        test_executor = ec.MetaUpdateObservation(
-            test_config,
-            test_sn,
-            TEST_APP,
-            test_cred_param,
-            data_client_mock,
-            repo_client_mock,
-            test_observation,
-            [],
-            observable=test_observable,
-        )
-        test_executor.execute(None)
-        assert repo_client_mock.update.called, 'repo update called'
-    finally:
-        pass
 
 
 @patch('sys.exit', Mock(side_effect=MyExitError))
@@ -883,31 +865,6 @@ def test_organize_executes_client_do_one(test_config):
     assert isinstance(executors[0], ec.MetaDeleteCreate)
     assert repo_client_mock.read.called, 'mock should be called'
     assert repo_client_mock.read.reset()
-
-    test_config.task_types = [mc.TaskType.INGEST_OBS]
-    test_config.use_local_files = False
-    ec.CaomExecute.repo_cmd_get_client = Mock(
-        return_value=_read_obs(test_obs_id)
-    )
-    test_oe = ec.OrganizeExecutes(
-        test_config,
-        TEST_APP,
-        [],
-        [],
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
-    )
-    executors = test_oe.choose(test_obs_id)
-    assert executors is not None
-    assert len(executors) == 1
-    assert isinstance(executors[0], ec.MetaUpdateObservation)
-    assert repo_client_mock.read.called, 'mock should be called'
-    assert executors[0].stream == 'TEST', 'stream'
-    assert executors[0].external_urls_param == '', 'external_url_params'
-    assert (
-        executors[0].working_dir == f'{tc.THIS_DIR}/test_obs_id'
-    ), 'working_dir'
-    assert test_oe.todo_fqn == f'{tc.THIS_DIR}/todo.txt', 'wrong todo'
 
 
 @patch('caom2utils.data_util.StorageClientWrapper')
@@ -1239,11 +1196,7 @@ def _get_file_info():
     return {'fname': 'test_file.fits'}
 
 
-def to_caom2():
-    plugin = (
-        '/usr/local/lib/python3.9/site-packages/test_execute_composable/'
-        'test_execute_composable.py'
-    )
+def to_caom2_with_client(ignore):
     assert sys.argv is not None, 'expect sys.argv to be set'
     local_meta_create_answer = [
         'test_execute_composable',
@@ -1255,17 +1208,12 @@ def to_caom2():
         f'{tc.TEST_DATA_DIR}/test_file.fits.gz',
         '--out',
         f'{tc.THIS_DIR}/test_obs_id/test_obs_id.xml',
-        '--plugin',
-        f'{plugin}',
-        '--module',
-        f'{plugin}',
         '--lineage',
         'test_obs_id/cadc:TEST/test_obs_id.fits.gz',
     ]
     scrape_answer = [
         'test_execute_composable',
         '--verbose',
-        '--not_connected',
         '--observation',
         'OMM',
         'test_obs_id',
@@ -1273,10 +1221,6 @@ def to_caom2():
         f'{tc.TEST_DATA_DIR}/test_file.fits.gz',
         '--out',
         f'{tc.TEST_DATA_DIR}/test_obs_id/test_obs_id.xml',
-        '--plugin',
-        f'{plugin}',
-        '--module',
-        f'{plugin}',
         '--lineage',
         'test_obs_id/cadc:TEST/test_obs_id.fits.gz',
     ]
