@@ -338,7 +338,10 @@ class CaomExecute:
 
     def _read_model(self):
         """Read an observation into memory from an XML file on disk."""
-        return mc.read_obs_from_file(self.model_fqn)
+        if os.path.exists(self.model_fqn):
+            return mc.read_obs_from_file(self.model_fqn)
+        else:
+            return None
 
     def _visit_meta(self, observation):
         """Execute metadata-only visitors on an Observation in
@@ -349,6 +352,7 @@ class CaomExecute:
                 'cadc_client': self.cadc_client,
                 'stream': self.stream,
                 'storage_name': self._storage_name,
+                'headers_dict': self._headers_dict,
                 'observable': self.observable,
             }
             for visitor in self.meta_visitors:
@@ -762,6 +766,86 @@ class LocalMetaUpdate(CaomExecute):
         self.logger.debug('End execute')
 
 
+class MetaHeaderVisit(CaomExecute):
+    """Defines the pipeline step for Collection augmentation by a visitor
+     of metadata into CAOM. This assumes a record already exists in CAOM,
+     and the update DOES NOT require access to either the header or the data.
+
+    This pipeline step will execute a caom2-repo update.
+
+    This functionality exists as Séverin's request.
+    """
+
+    def __init__(
+        self,
+        config,
+        storage_name,
+        cred_param,
+        cadc_client,
+        caom_repo_client,
+        meta_visitors,
+        header_reader,
+        observable,
+    ):
+        super().__init__(
+            config,
+            mc.TaskType.VISIT,
+            storage_name,
+            command_name=None,
+            cred_param=cred_param,
+            cadc_client=cadc_client,
+            caom_repo_client=caom_repo_client,
+            meta_visitors=meta_visitors,
+            observable=observable,
+            header_reader_client=header_reader,
+        )
+        self._header_reader = header_reader
+        self._storage_name = storage_name
+        self._header_dict = None
+        self._observation = None
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def execute(self, context):
+        self.logger.debug('Begin execute')
+        self.logger.debug('the steps:')
+
+        self.logger.debug('retrieve the headers')
+        self._header_dict = self._header_reader.get_headers(self._storage_name)
+
+        self.logger.debug('retrieve the existing observation, if it exists')
+        self._observation = self._repo_cmd_read_client()
+
+        self.logger.debug('the metadata visitors')
+        self._visit_meta_header_dict()
+
+        self.logger.debug('write the updated xml to disk for debugging')
+        self._write_model(self._observation)
+
+        self.logger.debug('store the xml')
+        self._repo_cmd_update_client(self._observation)
+
+        self.logger.debug('End execute')
+
+    def _visit_meta_header_dict(self):
+        """Execute metadata-only visitors on an Observation in memory."""
+        if self.meta_visitors is not None and len(self.meta_visitors) > 0:
+            kwargs = {
+                'working_directory': self.working_dir,
+                'cadc_client': self.cadc_client,
+                'stream': self.stream,
+                'storage_name': self._storage_name,
+                'headers_dict': self._header_dict,
+                'observable': self.observable,
+            }
+            for visitor in self.meta_visitors:
+                try:
+                    self.logger.debug(f'Visit for {visitor}')
+                    visitor.visit(self._observation, **kwargs)
+                except Exception as e:
+                    raise mc.CadcException(e)
+
+
+
 class MetaVisit(CaomExecute):
     """Defines the pipeline step for Collection augmentation by a visitor
      of metadata into CAOM. This assumes a record already exists in CAOM,
@@ -1108,6 +1192,55 @@ class Scrape(CaomExecute):
 
         self.logger.debug('generate the xml from the file on disk')
         self._fits2caom2_out_local_no_visit()
+
+        self.logger.debug('get observation for the existing model from disk')
+        observation = self._read_model()
+
+        self.logger.debug('the metadata visitors')
+        self._visit_meta(observation)
+
+        self.logger.debug('write the updated xml to disk for debugging')
+        self._write_model(observation)
+
+        self.logger.debug(f'End execute')
+
+
+class ScrapeWithHeaders(CaomExecute):
+    """Defines the pipeline step for Collection creation of a CAOM model
+    observation. The file containing the metadata is located on disk.
+    No record is written to a web service."""
+
+    def __init__(
+        self,
+        config,
+        storage_name,
+        command_name,
+        observable,
+        meta_visitors,
+        header_reader_client,
+    ):
+        super().__init__(
+            config,
+            mc.TaskType.SCRAPE,
+            storage_name,
+            command_name,
+            cred_param='',
+            cadc_client=None,
+            caom_repo_client=None,
+            meta_visitors=meta_visitors,
+            observable=observable,
+            header_reader_client=header_reader_client,
+        )
+        self._headers_dict = {}
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def execute(self, context):
+        self.logger.debug('Begin execute')
+
+        self.logger.debug('Get the headers')
+        self._headers_dict = self._header_reader_client.get_headers_and_file_info(
+            self._storage_name
+        )
 
         self.logger.debug('get observation for the existing model from disk')
         observation = self._read_model()
@@ -1508,53 +1641,63 @@ class OrganizeExecutes:
         for task_type in self.task_types:
             self._logger.debug(task_type)
             if task_type == mc.TaskType.SCRAPE:
-                model_fqn_1 = os.path.join(
-                    self.config.working_directory,
-                    storage_name.model_file_name,
+                executors.append(
+                    ScrapeWithHeaders(
+                        self.config,
+                        storage_name,
+                        None,
+                        self.observable,
+                        self._meta_visitors,
+                        FileHeaderReader(),
+                    )
                 )
-                model_fqn_2 = os.path.join(
-                    self.config.log_file_directory,
-                    storage_name.model_file_name,
-                )
-                for model_fqn in [model_fqn_1, model_fqn_2]:
-                    exists = os.path.exists(model_fqn)
-                    if exists:
-                        break
-
-                if exists:
-                    if self.config.use_local_files:
-                        executors.append(
-                            ScrapeUpdate(
-                                self.config,
-                                storage_name,
-                                self._command_name,
-                                self.observable,
-                                self._meta_visitors,
-                                self._header_reader_client,
-                            )
-                        )
-                    else:
-                        raise mc.CadcException(
-                            'use_local_files must be True with Task Type '
-                            '"SCRAPE"'
-                        )
-                else:
-                    if self.config.use_local_files:
-                        executors.append(
-                            Scrape(
-                                self.config,
-                                storage_name,
-                                self._command_name,
-                                self.observable,
-                                self._meta_visitors,
-                                self._header_reader_client,
-                            )
-                        )
-                    else:
-                        raise mc.CadcException(
-                            'use_local_files must be True with Task Type '
-                            '"SCRAPE"'
-                        )
+                # model_fqn_1 = os.path.join(
+                #     self.config.working_directory,
+                #     storage_name.model_file_name,
+                # )
+                # model_fqn_2 = os.path.join(
+                #     self.config.log_file_directory,
+                #     storage_name.model_file_name,
+                # )
+                # for model_fqn in [model_fqn_1, model_fqn_2]:
+                #     exists = os.path.exists(model_fqn)
+                #     if exists:
+                #         break
+                #
+                # if exists:
+                #     if self.config.use_local_files:
+                #         executors.append(
+                #             ScrapeUpdate(
+                #                 self.config,
+                #                 storage_name,
+                #                 self._command_name,
+                #                 self.observable,
+                #                 self._meta_visitors,
+                #                 self._header_reader_client,
+                #             )
+                #         )
+                #     else:
+                #         raise mc.CadcException(
+                #             'use_local_files must be True with Task Type '
+                #             '"SCRAPE"'
+                #         )
+                # else:
+                #     if self.config.use_local_files:
+                #         executors.append(
+                #             Scrape(
+                #                 self.config,
+                #                 storage_name,
+                #                 self._command_name,
+                #                 self.observable,
+                #                 self._meta_visitors,
+                #                 self._header_reader_client,
+                #             )
+                #         )
+                #     else:
+                #         raise mc.CadcException(
+                #             'use_local_files must be True with Task Type '
+                #             '"SCRAPE"'
+                #         )
             elif task_type == mc.TaskType.STORE:
                 if self.config.use_local_files:
                     executors.append(
@@ -1587,21 +1730,20 @@ class OrganizeExecutes:
                 if observation is None:
                     if self.config.use_local_files:
                         executors.append(
-                            LocalMetaCreate(
+                             MetaHeaderVisit(
                                 self.config,
                                 storage_name,
-                                self._command_name,
                                 self._cred_param,
                                 self._cadc_client,
                                 self._caom_client,
                                 self._meta_visitors,
-                                self.observable,
                                 self._header_reader_client,
-                            )
+                                self.observable,
+                             )
                         )
                     else:
                         executors.append(
-                            MetaCreate(
+                            MetaHeaderVisit(
                                 self.config,
                                 storage_name,
                                 self._command_name,
@@ -1798,3 +1940,50 @@ class OrganizeExecutes:
             self._clean_up_workspace(storage_name.obs_id)
             self._unset_file_logging()
         return result
+
+
+class HeaderReader:
+    """Wrap the mechanism for reading a FITS file header. Use cases are:
+        - FITS files on local disk
+        - CADC storage client
+        - Gemini http client
+        - VOSpace client
+    """
+
+    def __init__(self):
+        pass
+
+    def get_headers_and_file_info(self, storage_name):
+        return None
+
+
+class StorageClientHeaderReader(HeaderReader):
+
+    def __init__(self, client):
+        super().__init__()
+        self._client = client
+
+    def get_headers_and_file_info(self, storage_name):
+        return {
+            storage_name.uri: [
+                self._client.get_head(storage_name.uri),
+                self._client.info(storage_name.uri),
+            ],
+        }
+
+
+class FileHeaderReader(HeaderReader):
+
+    def __init__(self):
+        super().__init__()
+
+    def get_headers_and_file_info(self, storage_name):
+        from caom2utils import data_util
+        result = {}
+        for index, entry in enumerate(storage_name.source_names):
+            headers = data_util.get_local_headers_from_fits(entry)
+            file_info = data_util.get_local_file_info(entry)
+            # result[storage_name.uris[index]] = [headers, file_info]
+            result[storage_name.file_uri] = [headers, file_info]
+        return result
+
