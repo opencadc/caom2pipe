@@ -341,7 +341,14 @@ class CaomExecute:
         if os.path.exists(self.model_fqn):
             return mc.read_obs_from_file(self.model_fqn)
         else:
-            return None
+            # this is wrong and should not be here, because it assumes the
+            # wrong pre-conditions
+            from caom2 import SimpleObservation, Algorithm
+            return SimpleObservation(
+                collection='DAO',
+                observation_id=self._storage_name.obs_id,
+                algorithm=Algorithm('exposure'),
+            )
 
     def _visit_meta(self, observation):
         """Execute metadata-only visitors on an Observation in
