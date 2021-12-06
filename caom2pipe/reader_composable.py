@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2019.                            (c) 2019.
+#  (c) 2021.                            (c) 2021.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -61,83 +62,92 @@
 #  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 #                                       <http://www.gnu.org/licenses/>.
 #
-#  $Revision: 4 $
+#  : 4 $
 #
 # ***********************************************************************
 #
-import os
 
-from caom2 import SimpleObservation, Algorithm
-from caom2pipe import execute_composable as ec
-from caom2pipe import manage_composable as mc
+from dataclasses import dataclass
+from cadcdata import FileInfo
+from caom2utils import data_util
 
-
-THIS_DIR = os.path.dirname(os.path.realpath(__file__))
-TEST_DATA_DIR = os.path.join(THIS_DIR, 'data')
-TEST_FILES_DIR = '/test_files'
-TEST_OBS_FILE = os.path.join(TEST_DATA_DIR, 'test_obs_id.fits.xml')
+__all__ = ['FileMetadata', 'MetadataReader']
 
 
-class TestStorageName(mc.StorageName):
-    def __init__(
-        self, obs_id=None, file_name=None, uri=None, entry=None
-    ):
-        super().__init__(
-            'test_obs_id',
-            'TEST',
-            '*',
-            'test_file.fits.gz',
-            entry=entry,
-            scheme='cadc',
-        )
-        self.url = 'https://test_url/test_file.fits.gz'
-        self._source_names = [entry]
-        self._destination_uris = ['cadc:TEST/test_file.fits.gz']
-
-    def is_valid(self):
-        return True
+@dataclass
+class FileMetadata:
+    """
+    Keep the FITS header, and FileInfo together, because they need the
+    same client/session to retrieve them. It's coupling for efficiency
+    and (an attempt at) politeness to data providers.
+    """
+    headers: []  # astropy.io.fits.Headers
+    file_info: FileInfo
 
 
-class TestChooser(ec.OrganizeChooser):
-    def __init(self):
+class MetadataReader:
+    """Wrap the mechanism for reading a FileMetadata. Use cases are:
+        - FITS files on local disk
+        - CADC storage client
+        - Gemini http client
+        - VOSpace client
+
+    TODO - how to handle thumbnails and previews
+    """
+
+    def __init__(self):
+        self._metadata = {}
+
+    @property
+    def metadata(self):
+        return self._metadata
+
+    def get(self, storage_name):
+        """:returns a dict where the key is an Artifact URI, and the
+        value is a FileMetadata instance."""
+        return self._metadata
+
+    def reset(self):
+        self._metadata = {}
+
+
+class FileMetadataReader(MetadataReader):
+
+    def __init__(self):
         super().__init__()
 
-    def needs_delete(self):
-        return True
-
-    def use_compressed(self, ignore):
-        return True
-
-
-def mock_read(collection, obs_id):
-    return SimpleObservation(
-        collection=collection,
-        observation_id=obs_id,
-        algorithm=Algorithm('exposure'),
-    )
-
-
-def mock_get_file(collection, f_name, **kwargs):
-    dest_fqn = kwargs.get('destination')
-    with open(dest_fqn, 'w') as f:
-        f.write(f'{collection} {f_name}\n')
+    def get(self, storage_name):
+        for index, entry in enumerate(storage_name.source_names):
+            file_meta_data = FileMetadata([], None)
+            if '.fits' in storage_name.file_uri:
+                file_meta_data.headers = (
+                    data_util.get_local_headers_from_fits(entry)
+                )
+            file_meta_data.file_info = data_util.get_local_file_info(entry)
+            self._metadata[storage_name.destination_uris[index]] = (
+                file_meta_data
+            )
+        return self._metadata
 
 
-def mock_copy(source, destination):
-    with open(destination, 'w') as f:
-        f.write('test content')
-    return os.stat(destination).st_size
+class StorageClientReader(MetadataReader):
 
+    def __init__(self, client):
+        """
 
-def mock_si_get(id, dest):
-    mock_copy(id, dest)
+        :param client: StorageClientWrapper instance
+        """
+        super().__init__()
+        self._client = client
 
-
-def mock_copy_md5(source, destination, **kwargs):
-    return mock_copy(source, destination)
-
-
-def mock_get_node(uri, **kwargs):
-    node = type('', (), {})()
-    node.props = {'length': 42, 'MD5': '1234'}
-    return node
+    def get(self, storage_name):
+        file_meta_data = FileMetadata([], None)
+        if '.fits' in storage_name.file_uri:
+            file_meta_data.headers = self._client.get_head(
+                storage_name.file_uri
+            )
+        else:
+            file_meta_data.headers = []
+        file_meta_data.file_info = self._client.info(storage_name.file_uri)
+        self._metadata = {storage_name.file_uri: file_meta_data}
+        return self._metadata

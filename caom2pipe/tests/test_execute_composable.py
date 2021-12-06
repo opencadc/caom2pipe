@@ -66,7 +66,6 @@
 # ***********************************************************************
 #
 
-import logging
 import os
 import pytest
 import sys
@@ -75,12 +74,14 @@ from unittest.mock import Mock, patch, ANY
 
 from astropy.io import fits
 from hashlib import md5
+from shutil import copy
 
 from cadcdata import FileInfo
 from caom2 import SimpleObservation, Algorithm
 
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
+from caom2pipe import reader_composable as rdc
 from caom2pipe import transfer_composable
 import test_conf as tc
 
@@ -101,6 +102,7 @@ class TestVisit:
         z = kwargs['log_file_directory']
         assert z is not None, 'log file directory'
         assert observation is not None, 'undefined observation'
+        return observation
 
 
 class LocalTestVisit:
@@ -123,213 +125,23 @@ class LocalTestVisit:
         assert z is not None, 'log file directory'
         assert z == tc.TEST_DATA_DIR, 'wrong log dir'
         assert observation is not None, 'undefined observation'
+        return observation
 
 
-def test_meta_create_client_execute(test_config):
-    test_cred = ''
+def test_meta_visit_delete_create_execute(test_config):
     data_client_mock = Mock()
     data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
     repo_client_mock = Mock()
+    repo_client_mock.read.side_effect = _read_obs2
     test_observer = Mock()
-    read_obs_orig = mc.read_obs_from_file
-    mc.read_obs_from_file = Mock()
-    mc.read_obs_from_file.return_value = _read_obs(None)
-
-    test_executor = ec.MetaCreate(
+    test_executor = ec.MetaVisitDeleteCreate(
         test_config,
         tc.TestStorageName(),
-        TEST_APP,
-        test_cred,
         data_client_mock,
         repo_client_mock,
-        meta_visitors=None,
+        [],
         observable=test_observer,
-        header_reader_client=Mock(autospec=True),
-    )
-    try:
-        if not os.path.exists(test_executor.working_dir):
-            os.mkdir(test_executor.working_dir)
-        test_executor.execute(None)
-        assert repo_client_mock.create.called, 'create call missed'
-        assert test_observer.metrics.observe.called, 'observe not called'
-    finally:
-        _clean_up_dir(test_executor.working_dir)
-        mc.read_obs_from_file = read_obs_orig
-
-
-@patch('caom2utils.data_util.StorageClientWrapper')
-def test_meta_create_client_execute_failed_update(
-    f2c2_data_client_mock, test_config
-):
-    test_cred = ''
-    data_client_mock = Mock()
-    data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
-    repo_client_mock = Mock()
-    test_observer = Mock()
-    read_obs_orig = mc.read_obs_from_file
-    mc.read_obs_from_file = Mock()
-    mc.read_obs_from_file.return_value = _read_obs(None)
-    f2c2_data_client_mock.return_value.info.side_effect = (
-        _mock_get_file_info
-    )
-    f2c2_data_client_mock.return_value.get_head.side_effect = _get_headers
-
-    test_executor = ec.MetaCreate(
-        test_config,
-        tc.TestStorageName(),
-        'failedUpdateCollection2caom2',
-        test_cred,
-        data_client_mock,
-        repo_client_mock,
-        meta_visitors=None,
-        observable=test_observer,
-        header_reader_client=Mock(autospec=True),
-    )
-    try:
-        with pytest.raises(mc.CadcException):
-            test_executor.execute(None)
-        assert not repo_client_mock.create.called, 'should have no create call'
-    finally:
-        mc.read_obs_from_file = read_obs_orig
-
-
-def test_meta_update_client_execute(test_config):
-    test_cred = ''
-    data_client_mock = Mock()
-    data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
-    repo_client_mock = Mock()
-    test_observer = Mock()
-    test_executor = ec.MetaUpdate(
-        test_config,
-        tc.TestStorageName(),
-        TEST_APP,
-        test_cred,
-        data_client_mock,
-        repo_client_mock,
-        _read_obs(None),
-        meta_visitors=None,
-        observable=test_observer,
-        header_reader_client=Mock(autospec=True),
-    )
-    try:
-        if not os.path.exists(test_executor.working_dir):
-            os.mkdir(test_executor.working_dir)
-        test_executor.execute(None)
-        assert repo_client_mock.update.called, 'update call missed'
-        assert test_observer.metrics.observe.called, 'observer call missed'
-    finally:
-        _clean_up_dir(test_executor.working_dir)
-
-
-def test_meta_delete_create_client_execute(test_config):
-    test_cred = ''
-    data_client_mock = Mock()
-    data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
-    repo_client_mock = Mock()
-    test_observer = Mock()
-    test_executor = ec.MetaDeleteCreate(
-        test_config,
-        tc.TestStorageName(),
-        TEST_APP,
-        test_cred,
-        data_client_mock,
-        repo_client_mock,
-        _read_obs(None),
-        None,
-        observable=test_observer,
-        header_reader_client=Mock(autospec=True),
-    )
-    try:
-        if not os.path.exists(test_executor.working_dir):
-            os.mkdir(test_executor.working_dir)
-        test_executor.execute(None)
-        assert repo_client_mock.delete.called, 'delete call missed'
-        assert repo_client_mock.create.called, 'create call missed'
-        assert test_observer.metrics.observe.called, 'observe not called'
-    finally:
-        _clean_up_dir(test_executor.working_dir)
-
-
-def test_local_meta_create_client_execute(test_config):
-    test_dir = os.path.join(tc.THIS_DIR, 'test_obs_id')
-    test_f_fqn = os.path.join(test_dir, 'test_obs_id.fits.xml')
-    if os.path.exists(test_f_fqn):
-        os.unlink(test_f_fqn)
-        os.rmdir(test_dir)
-
-    test_cred = ''
-    data_client_mock = Mock()
-    data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
-    repo_client_mock = Mock()
-    test_observer = Mock()
-    test_config.logging_level = 'INFO'
-
-    test_executor = ec.LocalMetaCreate(
-        test_config,
-        tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz'),
-        __name__,
-        test_cred,
-        data_client_mock,
-        repo_client_mock,
-        meta_visitors=None,
-        observable=test_observer,
-        header_reader_client=Mock(autospec=True),
-    )
-    try:
-        if not os.path.exists(test_executor.working_dir):
-            os.mkdir(test_executor.working_dir)
-        test_executor.execute(None)
-        assert repo_client_mock.create.called, 'create call missed'
-        assert test_observer.metrics.observe.called, 'observe not called'
-    finally:
-        _clean_up_dir(test_executor.working_dir)
-
-
-def test_local_meta_update_client_execute(test_config):
-    test_cred = ''
-    data_client_mock = Mock()
-    data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
-    repo_client_mock = Mock()
-    test_observer = Mock()
-    test_executor = ec.LocalMetaUpdate(
-        test_config,
-        tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz'),
-        TEST_APP,
-        test_cred,
-        data_client_mock,
-        repo_client_mock,
-        _read_obs(None),
-        meta_visitors=None,
-        observable=test_observer,
-        header_reader_client=Mock(autospec=True),
-    )
-    try:
-        if not os.path.exists(test_executor.working_dir):
-            os.mkdir(test_executor.working_dir)
-        test_executor.execute(None)
-        assert repo_client_mock.update.called, 'update call missed'
-        assert test_observer.metrics.observe.called, 'observe not called'
-    finally:
-        _clean_up_dir(test_executor.working_dir)
-
-
-def test_local_meta_delete_create_client_execute(test_config):
-    test_cred = ''
-    data_client_mock = Mock()
-    data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
-    repo_client_mock = Mock()
-    test_observer = Mock()
-    test_executor = ec.LocalMetaDeleteCreate(
-        test_config,
-        tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz'),
-        TEST_APP,
-        test_cred,
-        data_client_mock,
-        repo_client_mock,
-        meta_visitors=None,
-        observation=_read_obs(None),
-        observable=test_observer,
-        header_reader_client=Mock(autospec=True),
+        metadata_reader=Mock(autospec=True),
     )
     try:
         if not os.path.exists(test_executor.working_dir):
@@ -343,20 +155,20 @@ def test_local_meta_delete_create_client_execute(test_config):
 
 
 def test_client_visit(test_config):
-    test_cred = None
     data_client_mock = Mock()
     repo_client_mock = Mock()
+    metadata_reader_mock = Mock()
     test_observer = Mock()
 
     with patch('caom2pipe.manage_composable.write_obs_to_file') as write_mock:
         test_executor = ec.MetaVisit(
             test_config,
             tc.TestStorageName(),
-            test_cred,
             data_client_mock,
             repo_client_mock,
             meta_visitors=None,
             observable=test_observer,
+            metadata_reader=metadata_reader_mock,
         )
 
         test_executor.execute(None)
@@ -397,7 +209,6 @@ def test_data_execute(test_config):
             data_client_mock,
             repo_client_mock,
             test_data_visitors,
-            mc.TaskType.MODIFY,
             test_observer,
             test_transferrer,
         )
@@ -441,7 +252,6 @@ def test_data_execute_v(test_config):
             cadc_client_mock,
             repo_client_mock,
             test_data_visitors,
-            mc.TaskType.MODIFY,
             test_observer,
             test_transferrer,
         )
@@ -517,7 +327,6 @@ def test_data_store(test_config):
         test_executor = ec.Store(
             test_config,
             tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz'),
-            'command_name',
             data_client_mock,
             observable=test_observer,
             transferrer=transfer_composable.Transfer(),
@@ -538,17 +347,17 @@ def test_scrape(test_config):
     if os.path.exists(model_fqn):
         os.remove(model_fqn)
 
-    netrc = os.path.join(tc.TEST_DATA_DIR, 'test_netrc')
-    assert os.path.exists(netrc)
+    # netrc = os.path.join(tc.TEST_DATA_DIR, 'test_netrc')
+    # assert os.path.exists(netrc)
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.logging_level = 'INFO'
+    test_reader = rdc.FileMetadataReader()
     test_executor = ec.Scrape(
         test_config,
-        tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz'),
-        __name__,
+        tc.TestStorageName(entry=f'{tc.TEST_FILES_DIR}/correct.fits'),
         observable=None,
         meta_visitors=[],
-        header_reader_client=Mock(autospec=True),
+        metadata_reader=test_reader,
     )
     try:
         if not os.path.exists(test_executor.working_dir):
@@ -558,11 +367,9 @@ def test_scrape(test_config):
         _clean_up_dir(test_executor.working_dir)
 
 
-@patch('caom2pipe.manage_composable.read_obs_from_file')
-def test_data_scrape_execute(read_obs_mock, test_config):
+def test_data_scrape_execute(test_config):
     test_config.log_to_file = True
     test_data_visitors = [TestVisit]
-    read_obs_mock.side_effect = _read_obs
     # run the test
     test_executor = ec.DataScrape(
         test_config,
@@ -570,8 +377,16 @@ def test_data_scrape_execute(read_obs_mock, test_config):
         test_data_visitors,
         observable=None,
     )
-    test_executor.execute(None)
-    assert read_obs_mock.called, 'read obs call missed'
+    try:
+        if not os.path.exists(test_executor.working_dir):
+            os.mkdir(test_executor.working_dir)
+        copy(
+            f'{tc.TEST_DATA_DIR}/fpf_start_obs.xml',
+            f'{tc.TEST_DATA_DIR}/test_obs_id.xml',
+        )
+        test_executor.execute(None)
+    finally:
+        _clean_up_dir(test_executor.working_dir)
 
 
 def test_organize_executes_chooser(test_config):
@@ -587,64 +402,57 @@ def test_organize_executes_chooser(test_config):
     test_chooser = tc.TestChooser()
     test_oe = ec.OrganizeExecutes(
         test_config,
-        'command_name',
         [],
         [],
         test_chooser,
         cadc_client=Mock(autospec=True, return_value=None),
         caom_client=caom_client,
-        header_reader_client=Mock(autospec=True),
+        metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 1
-    assert isinstance(executors[0], ec.LocalMetaDeleteCreate)
+    assert isinstance(executors[0], ec.MetaVisitDeleteCreate)
     assert executors[0].stream == 'TEST', 'stream'
     assert executors[0].working_dir == os.path.join(
         tc.THIS_DIR, 'test_obs_id'
     ), 'working_dir'
-    assert caom_client.read.called, 'read should be called'
-    caom_client.read.reset()
 
     test_config.use_local_files = False
     test_config.task_types = [mc.TaskType.INGEST]
     test_oe = ec.OrganizeExecutes(
         test_config,
-        'command_name',
         [],
         [],
         test_chooser,
         cadc_client=Mock(autospec=True, return_value=None),
         caom_client=caom_client,
+        metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 1
-    assert isinstance(executors[0], ec.MetaDeleteCreate)
-    assert caom_client.read.called, 'read should be called'
+    assert isinstance(executors[0], ec.MetaVisitDeleteCreate)
 
 
 def test_organize_executes_client_existing(test_config):
     test_obs_id = tc.TestStorageName()
     test_config.features.use_clients = True
     repo_client_mock = Mock(autospec=True)
-    # repo_client_mock.read.side_effect = _read_obs2
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.use_local_files = False
     test_oe = ec.OrganizeExecutes(
         test_config,
-        'command_name',
         [],
         [],
         cadc_client=Mock(autospec=True),
         caom_client=repo_client_mock,
-        header_reader_client=Mock(autospec=True),
+        metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 1
-    assert isinstance(executors[0], ec.MetaUpdate)
-    assert repo_client_mock.read.called, 'mock not called'
+    assert isinstance(executors[0], ec.MetaVisit)
 
 
 def test_organize_executes_client_visit(test_config):
@@ -656,12 +464,11 @@ def test_organize_executes_client_visit(test_config):
     repo_client_mock.read.side_effect = _read_obs2
     test_oe = ec.OrganizeExecutes(
         test_config,
-        'command_name',
         [],
         [],
         cadc_client=Mock(autospec=True),
         caom_client=repo_client_mock,
-        header_reader_client=Mock(autospec=True),
+        metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
@@ -781,17 +588,17 @@ def test_organize_executes_client_do_one(test_config):
     test_config.task_types = [mc.TaskType.SCRAPE]
     test_oe = ec.OrganizeExecutes(
         test_config,
-        TEST_APP,
         [],
         [],
         chooser=None,
         cadc_client=Mock(autospec=True),
         caom_client=repo_client_mock,
+        metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 1
-    assert isinstance(executors[0], ec.ScrapeUpdate), f'{type(executors[0])}'
+    assert isinstance(executors[0], ec.Scrape), f'{type(executors[0])}'
 
     test_config.task_types = [
         mc.TaskType.STORE,
@@ -800,78 +607,70 @@ def test_organize_executes_client_do_one(test_config):
     ]
     test_oe = ec.OrganizeExecutes(
         test_config,
-        TEST_APP,
         [],
         [],
         chooser=None,
         cadc_client=Mock(autospec=True),
         caom_client=repo_client_mock,
+        metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 3
     assert (isinstance(executors[0], ec.Store), type(executors[0]))
-    assert isinstance(executors[1], ec.LocalMetaCreate)
+    assert isinstance(executors[1], ec.MetaVisit)
     assert isinstance(executors[2], ec.LocalDataVisit)
-    assert repo_client_mock.read.called, 'mock should be called'
-    assert repo_client_mock.read.reset()
 
     test_config.use_local_files = False
     test_config.task_types = [mc.TaskType.INGEST, mc.TaskType.MODIFY]
     test_oe = ec.OrganizeExecutes(
         test_config,
-        TEST_APP,
         [],
         [],
         chooser=None,
         cadc_client=Mock(autospec=True),
         caom_client=repo_client_mock,
+        metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 2
-    assert isinstance(executors[0], ec.MetaCreate)
+    assert isinstance(executors[0], ec.MetaVisit)
     assert isinstance(executors[1], ec.DataVisit)
-    assert repo_client_mock.read.called, 'mock should be called'
 
     test_config.use_local_files = True
     test_config.task_types = [mc.TaskType.INGEST, mc.TaskType.MODIFY]
     test_oe = ec.OrganizeExecutes(
         test_config,
-        TEST_APP,
         [],
         [],
         chooser=None,
         cadc_client=Mock(autospec=True),
         caom_client=repo_client_mock,
+        metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 2
-    assert isinstance(executors[0], ec.LocalMetaCreate)
+    assert isinstance(executors[0], ec.MetaVisit)
     assert isinstance(executors[1], ec.LocalDataVisit)
-    assert repo_client_mock.read.called, 'mock should be called'
-    assert repo_client_mock.read.reset()
-    repo_client_mock.read.side_effect = _read_obs2
 
     test_config.task_types = [mc.TaskType.SCRAPE, mc.TaskType.MODIFY]
     test_config.use_local_files = True
     test_oe = ec.OrganizeExecutes(
         test_config,
-        TEST_APP,
         [],
         [],
         chooser=None,
         cadc_client=Mock(autospec=True),
         caom_client=repo_client_mock,
+        metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 2
-    assert isinstance(executors[0], ec.ScrapeUpdate)
+    assert isinstance(executors[0], ec.Scrape)
     assert isinstance(executors[1], ec.DataScrape)
-    assert repo_client_mock.read.called, 'mock should be called'
-    assert repo_client_mock.read.reset()
 
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.use_local_files = False
@@ -879,19 +678,17 @@ def test_organize_executes_client_do_one(test_config):
     ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
     test_oe = ec.OrganizeExecutes(
         test_config,
-        TEST_APP,
         [],
         [],
         chooser=test_chooser,
         cadc_client=Mock(autospec=True),
         caom_client=repo_client_mock,
+        metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 1
-    assert isinstance(executors[0], ec.MetaDeleteCreate)
-    assert repo_client_mock.read.called, 'mock should be called'
-    assert repo_client_mock.read.reset()
+    assert isinstance(executors[0], ec.MetaVisitDeleteCreate)
 
 
 @patch('caom2utils.data_util.StorageClientWrapper')
@@ -900,6 +697,11 @@ def test_data_visit(client_mock, test_config):
     test_repo_client = Mock(autospec=True)
     test_repo_client.read.side_effect = tc.mock_read
     dv_mock = Mock(autospec=True)
+    dv_mock.visit.return_value = SimpleObservation(
+        collection='test_collection',
+        observation_id='test_obs_id',
+        algorithm=Algorithm('exposure'),
+    )
     test_data_visitors = [dv_mock]
     test_observable = Mock(autospec=True)
     test_sn = mc.StorageName(
@@ -919,7 +721,6 @@ def test_data_visit(client_mock, test_config):
         client_mock,
         test_repo_client,
         test_data_visitors,
-        mc.TaskType.VISIT,
         test_observable,
         test_transferrer,
     )
@@ -952,7 +753,6 @@ def test_store(test_config):
     test_config.working_directory = tc.TEST_DATA_DIR
     test_sn = tc.TestStorageName()
     test_sn.source_names = ['vos:goliaths/nonexistent.fits.gz']
-    test_command = 'collection2caom2'
     test_data_client = Mock(autospec=True)
     test_observable = Mock(autospec=True)
     test_transferrer = Mock(autospec=True)
@@ -960,7 +760,6 @@ def test_store(test_config):
     test_subject = ec.Store(
         test_config,
         test_sn,
-        test_command,
         test_data_client,
         test_observable,
         test_transferrer,
@@ -1002,11 +801,10 @@ def test_local_store(test_config):
         with open(test_sn.source_names[0], 'w') as f:
             f.write('test content')
 
-    test_command = 'collection2caom2'
     test_data_client = Mock(autospec=True)
     test_observable = Mock(autospec=True)
     test_subject = ec.LocalStore(
-        test_config, test_sn, test_command, test_data_client, test_observable
+        test_config, test_sn, test_data_client, test_observable
     )
     assert test_subject is not None, 'expect construction'
     test_subject.execute(None)
@@ -1069,7 +867,6 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     test_subject = ec.LocalStore(
         test_config,
         test_sn,
-        'TEST_STORE',
         client_mock,
         observable_mock,
     )
@@ -1099,7 +896,6 @@ def test_store_newer_files_only_flag_client(
     test_subject = ec.LocalStore(
         test_config,
         test_sn,
-        'TEST_STORE',
         client_mock,
         observable_mock,
     )
@@ -1130,6 +926,11 @@ def test_data_visit_params():
     test_caom_client = Mock(autospec=True)
     test_caom_client.read.side_effect = _read_obs2
     data_visitor = Mock(autospec=True)
+    data_visitor.visit.return_value = SimpleObservation(
+        collection='test_collection',
+        observation_id='test_obs_id',
+        algorithm=Algorithm('exposure'),
+    )
     test_data_visitors = [data_visitor]
     test_observable = Mock(autospec=True)
     test_transferrer = Mock(autospec=True)
@@ -1142,7 +943,6 @@ def test_data_visit_params():
             test_cadc_client,
             test_caom_client,
             test_data_visitors,
-            test_config.task_types[0],
             test_observable,
             test_transferrer,
         )

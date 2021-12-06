@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2019.                            (c) 2019.
+#  (c) 2021.                            (c) 2021.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -61,83 +62,35 @@
 #  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 #                                       <http://www.gnu.org/licenses/>.
 #
-#  $Revision: 4 $
+#  : 4 $
 #
 # ***********************************************************************
 #
-import os
 
-from caom2 import SimpleObservation, Algorithm
-from caom2pipe import execute_composable as ec
+from os.path import basename
 from caom2pipe import manage_composable as mc
+from caom2pipe import reader_composable
+import test_conf as tc
 
 
-THIS_DIR = os.path.dirname(os.path.realpath(__file__))
-TEST_DATA_DIR = os.path.join(THIS_DIR, 'data')
-TEST_FILES_DIR = '/test_files'
-TEST_OBS_FILE = os.path.join(TEST_DATA_DIR, 'test_obs_id.fits.xml')
-
-
-class TestStorageName(mc.StorageName):
-    def __init__(
-        self, obs_id=None, file_name=None, uri=None, entry=None
-    ):
-        super().__init__(
-            'test_obs_id',
-            'TEST',
-            '*',
-            'test_file.fits.gz',
-            entry=entry,
-            scheme='cadc',
-        )
-        self.url = 'https://test_url/test_file.fits.gz'
-        self._source_names = [entry]
-        self._destination_uris = ['cadc:TEST/test_file.fits.gz']
-
-    def is_valid(self):
-        return True
-
-
-class TestChooser(ec.OrganizeChooser):
-    def __init(self):
-        super().__init__()
-
-    def needs_delete(self):
-        return True
-
-    def use_compressed(self, ignore):
-        return True
-
-
-def mock_read(collection, obs_id):
-    return SimpleObservation(
-        collection=collection,
-        observation_id=obs_id,
-        algorithm=Algorithm('exposure'),
+def test_file_reader():
+    test_subject = reader_composable.FileReader()
+    test_fqn = f'{tc.TEST_FILES_DIR}/correct.fits'
+    test_uri = 'cadc:TEST/correct.fits'
+    test_storage_name = mc.StorageName(
+        entry=test_fqn,
+        source_names=[test_fqn],
+        destination_uris=[test_uri],
     )
-
-
-def mock_get_file(collection, f_name, **kwargs):
-    dest_fqn = kwargs.get('destination')
-    with open(dest_fqn, 'w') as f:
-        f.write(f'{collection} {f_name}\n')
-
-
-def mock_copy(source, destination):
-    with open(destination, 'w') as f:
-        f.write('test content')
-    return os.stat(destination).st_size
-
-
-def mock_si_get(id, dest):
-    mock_copy(id, dest)
-
-
-def mock_copy_md5(source, destination, **kwargs):
-    return mock_copy(source, destination)
-
-
-def mock_get_node(uri, **kwargs):
-    node = type('', (), {})()
-    node.props = {'length': 42, 'MD5': '1234'}
-    return node
+    test_subject.get(test_storage_name)
+    assert len(test_subject.metadata) == 1, 'wrong metadata'
+    test_result = test_subject.metadata.get(test_uri)
+    assert test_result is not None, 'expect a result'
+    assert test_result.file_info.id == basename(test_fqn), 'wrong uri'
+    assert test_result.file_info.file_type == 'application/fits', 'wrong type'
+    assert test_result.file_info.size == 197442, 'wrong size'
+    assert (
+        test_result.file_info.md5sum == '053b0780633ebab084b19050c0a58620'
+    ), 'wrong md5sum'
+    test_subject.reset()
+    assert len(test_subject.metadata) == 0, 'should be no metadata'
