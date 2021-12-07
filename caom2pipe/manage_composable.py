@@ -1488,7 +1488,12 @@ class PreviewVisitor:
         # keys are uris, values are lists, where the 0th entry is a file name,
         # and the 1th entry is the artifact type
         self._previews = {}
+        self._report = None
         self._logger.debug(self)
+
+    @property
+    def report(self):
+        return self._report
 
     def __str__(self):
         return (
@@ -1509,7 +1514,8 @@ class PreviewVisitor:
         self._logger.info(
             f'Completed preview augmentation for {observation.observation_id}.'
         )
-        return {'artifacts': count}
+        self._report = {'artifacts': count}
+        return observation
 
     def add_preview(
         self,
