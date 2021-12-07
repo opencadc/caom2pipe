@@ -193,6 +193,7 @@ class CaomExecute:
         self.supports_latest_client = config.features.supports_latest_client
         self._metadata_reader = metadata_reader
         self._observation = None
+        self._observation_exists = False
 
     def __str__(self):
         return (
@@ -204,34 +205,44 @@ class CaomExecute:
             f'   working_dir: {self.working_dir}\n'
         )
 
-    def _repo_cmd_create_client(self):
-        """Create an observation instance from the input parameter."""
-        clc.repo_create(
-            self.caom_repo_client, self._observation, self.observable.metrics
-        )
-
-    def _repo_cmd_update_client(self):
-        """Update an existing observation instance.  Assumes the obs_id
-        values are set correctly."""
-        clc.repo_update(
-            self.caom_repo_client, self._observation, self.observable.metrics
-        )
-
-    def _repo_cmd_read_client(self):
+    def _caom2_read(self):
         """Retrieve the existing observation model metadata."""
-        return clc.repo_get(
+        self._observation = clc.repo_get(
             self.caom_repo_client,
             self.collection,
             self._storage_name.obs_id,
             self.observable.metrics,
         )
+        self._observation_exists = False if self._observation is None else True
 
-    def _repo_cmd_delete_client(self):
+    def _caom2_store(self):
+        """Update an existing observation instance.  Assumes the obs_id
+        values are set correctly."""
+        if self._observation_exists:
+            clc.repo_update(
+                self.caom_repo_client,
+                self._observation,
+                self.observable.metrics,
+            )
+        else:
+            clc.repo_create(
+                self.caom_repo_client,
+                self._observation,
+                self.observable.metrics,
+            )
+
+    def _caom2_delete_create(self):
         """Delete an observation instance based on an input parameter."""
-        clc.repo_delete(
+        if self._observation_exists:
+            clc.repo_delete(
+                self.caom_repo_client,
+                self._observation.collection,
+                self._observation.observation_id,
+                self.observable.metrics,
+            )
+        clc.repo_create(
             self.caom_repo_client,
-            self._observation.collection,
-            self._observation.observation_id,
+            self._observation,
             self.observable.metrics,
         )
 
@@ -241,9 +252,9 @@ class CaomExecute:
     def _read_model(self):
         """Read an observation into memory from an XML file on disk."""
         self._observation = None
-        logging.error(self.model_fqn)
         if os.path.exists(self.model_fqn):
             self._observation = mc.read_obs_from_file(self.model_fqn)
+        self._observation_exists = False if self._observation is None else True
 
     def _visit_meta(self):
         """Execute metadata-only visitors on an Observation in
@@ -283,18 +294,6 @@ class CaomExecute:
         }
         return lookup.get(logging_level, ('', logging.info))
 
-    @staticmethod
-    def repo_cmd_get_client(
-        caom_repo_client, collection, observation_id, metrics
-    ):
-        """Execute the CAOM2Repo 'read' operation using the client instance
-        from this class.
-        :return an Observation instance, or None, if the observation id
-        does not exist."""
-        return clc.repo_get(
-            caom_repo_client, collection, observation_id, metrics
-        )
-
 
 class MetaVisitDeleteCreate(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
@@ -331,7 +330,7 @@ class MetaVisitDeleteCreate(CaomExecute):
         self.logger.debug('the steps:')
 
         self.logger.debug('retrieve the existing observation')
-        self._observation = self._repo_cmd_read_client()
+        self._caom2_read()
 
         self.logger.debug('write the observation to disk for next step')
         self._write_model()
@@ -342,11 +341,8 @@ class MetaVisitDeleteCreate(CaomExecute):
         self.logger.debug('write the observation to disk for debugging')
         self._write_model()
 
-        self.logger.debug('the observation exists, delete it')
-        self._repo_cmd_delete_client()
-
-        self.logger.debug('store the xml')
-        self._repo_cmd_create_client()
+        self.logger.debug('the observation exists, delete it, then store it')
+        self._caom2_delete_create()
 
         self.logger.debug('End execute')
 
@@ -386,7 +382,7 @@ class MetaVisit(CaomExecute):
         self._metadata_reader.get(self._storage_name)
 
         self.logger.debug('retrieve the existing observation, if it exists')
-        self._observation = self._repo_cmd_read_client()
+        self._caom2_read()
 
         self.logger.debug('the metadata visitors')
         self._visit_meta()
@@ -395,7 +391,7 @@ class MetaVisit(CaomExecute):
         self._write_model()
 
         self.logger.debug('store the xml')
-        self._repo_cmd_update_client()
+        self._caom2_store()
 
         self.logger.debug('End execute')
 
@@ -442,7 +438,7 @@ class DataVisit(CaomExecute):
             self._transferrer.get(entry, local_fqn)
 
         self.logger.debug('get the observation for the existing model')
-        self._observation = self._repo_cmd_read_client()
+        self._caom2_read()
 
         self.logger.debug('execute the data visitors')
         self._visit_data()
@@ -451,7 +447,7 @@ class DataVisit(CaomExecute):
         self._write_model()
 
         self.logger.debug('store the updated xml')
-        self._repo_cmd_update_client()
+        self._caom2_store()
 
         self._logger.debug('End execute.')
 
@@ -507,7 +503,7 @@ class LocalDataVisit(DataVisit):
         self._logger.debug(f'Begin execute')
 
         self._logger.debug('get the observation for the existing model')
-        self._observation = self._repo_cmd_read_client()
+        self._caom2_read()
 
         self._logger.debug('execute the data visitors')
         self._visit_data()
@@ -516,7 +512,7 @@ class LocalDataVisit(DataVisit):
         self._write_model()
 
         self._logger.debug('store the updated xml')
-        self._repo_cmd_update_client()
+        self._caom2_store()
 
         self._logger.debug(f'End execute')
 

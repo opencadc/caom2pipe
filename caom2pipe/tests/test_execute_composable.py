@@ -681,7 +681,6 @@ def test_organize_executes_client_do_one(test_config):
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.use_local_files = False
     test_chooser = tc.TestChooser()
-    ec.CaomExecute.repo_cmd_get_client = Mock(return_value=_read_obs(None))
     test_oe = ec.OrganizeExecutes(
         test_config,
         [],

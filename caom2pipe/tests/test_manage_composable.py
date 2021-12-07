@@ -737,16 +737,16 @@ def test_visit():
 
     try:
         test_subject = TestVisitor(**kwargs)
-        test_result = test_subject.visit(obs)
+        test_observation = test_subject.visit(obs)
     except Exception as e:
         assert False, f'{str(e)}'
 
-    assert test_result is not None, f'expect a result'
+    assert test_observation is not None, f'expect a result'
 
     check_number = 1
     end_artifact_count = 3
     expected_call_count = 1
-    assert test_result['artifacts'] == check_number, 'artifact not added'
+    assert test_subject.report['artifacts'] == check_number, 'artifact not added'
     assert (
         len(obs.planes[test_product_id].artifacts) == end_artifact_count
     ), f'new artifacts'
