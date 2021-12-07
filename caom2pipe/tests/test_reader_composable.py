@@ -74,7 +74,7 @@ import test_conf as tc
 
 
 def test_file_reader():
-    test_subject = reader_composable.FileReader()
+    test_subject = reader_composable.FileMetadataReader()
     test_fqn = f'{tc.TEST_FILES_DIR}/correct.fits'
     test_uri = 'cadc:TEST/correct.fits'
     test_storage_name = mc.StorageName(

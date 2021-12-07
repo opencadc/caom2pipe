@@ -983,9 +983,11 @@ class OrganizeExecutes:
                     if hasattr(entry, '_cadc_client'):
                         entry.cadc_client = self._cadc_client
         for task_type in self.task_types:
-            self._logger.debug(task_type)
             if task_type == mc.TaskType.SCRAPE:
                 if self.config.use_local_files:
+                    self._logger.debug(
+                        f'Choosing executor Scrape for {task_type}.'
+                    )
                     executors.append(
                         Scrape(
                             self.config,
@@ -1003,6 +1005,9 @@ class OrganizeExecutes:
                     )
             elif task_type == mc.TaskType.STORE:
                 if self.config.use_local_files:
+                    self._logger.debug(
+                        f'Choosing executor LocalStore for {task_type}.'
+                    )
                     executors.append(
                         LocalStore(
                             self.config,
@@ -1012,6 +1017,9 @@ class OrganizeExecutes:
                         )
                     )
                 else:
+                    self._logger.debug(
+                        f'Choosing executor Store for {task_type}.'
+                    )
                     executors.append(
                         Store(
                             self.config,
@@ -1023,6 +1031,10 @@ class OrganizeExecutes:
                     )
             elif task_type == mc.TaskType.INGEST:
                 if self.chooser is not None and self.chooser.needs_delete():
+                    self._logger.debug(
+                        f'Choosing executor MetaVisitDeleteCreate for '
+                        f'{task_type}.'
+                    )
                     executors.append(
                         MetaVisitDeleteCreate(
                             self.config,
@@ -1035,6 +1047,9 @@ class OrganizeExecutes:
                         )
                     )
                 else:
+                    self._logger.debug(
+                        f'Choosing executor MetaVisit for {task_type}.'
+                    )
                     executors.append(
                         MetaVisit(
                             self.config,
@@ -1042,8 +1057,8 @@ class OrganizeExecutes:
                             self._cadc_client,
                             self._caom_client,
                             self._meta_visitors,
-                            self._metadata_reader,
                             self.observable,
+                            self._metadata_reader,
                         )
                     )
             elif task_type == mc.TaskType.MODIFY:
@@ -1054,6 +1069,10 @@ class OrganizeExecutes:
                                 and len(executors) > 0
                                 and isinstance(executors[0], Scrape)
                         ):
+                            self._logger.debug(
+                                f'Choosing executor DataScrape for '
+                                f'{task_type}.'
+                            )
                             executors.append(
                                 DataScrape(
                                     self.config,
@@ -1063,6 +1082,10 @@ class OrganizeExecutes:
                                 )
                             )
                         else:
+                            self._logger.debug(
+                                f'Choosing executor LocalDataVisit for '
+                                f'{task_type}.'
+                            )
                             executors.append(
                                 LocalDataVisit(
                                     self.config,
@@ -1074,6 +1097,9 @@ class OrganizeExecutes:
                                 )
                             )
                     else:
+                        self._logger.debug(
+                            f'Choosing executor DataVisit for {task_type}.'
+                        )
                         executors.append(
                             DataVisit(
                                 self.config,
@@ -1091,6 +1117,9 @@ class OrganizeExecutes:
                         f'{storage_name.file_name}.'
                     )
             elif task_type == mc.TaskType.VISIT:
+                self._logger.debug(
+                    f'Choosing executor MetaVisit for {task_type}.'
+                )
                 executors.append(
                     MetaVisit(
                         self.config,
@@ -1131,8 +1160,7 @@ class OrganizeExecutes:
                 self._create_workspace(storage_name.obs_id)
                 for executor in executors:
                     self._logger.info(
-                        f'Step {executor.task_type} with '
-                        f'{executor.__class__.__name__} for '
+                        f'Task with {executor.__class__.__name__} for '
                         f'{storage_name.obs_id}'
                     )
                     executor.execute(context=None)
@@ -1152,6 +1180,7 @@ class OrganizeExecutes:
             self._logger.debug(traceback.format_exc())
             result = -1
         finally:
+            self._metadata_reader.reset()
             self._clean_up_workspace(storage_name.obs_id)
             self._unset_file_logging()
         return result

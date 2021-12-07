@@ -73,7 +73,7 @@ import os
 from datetime import datetime, timedelta
 
 import dateutil.tz
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 from cadcdata import FileInfo
 from caom2pipe import data_source_composable as dsc
@@ -127,6 +127,7 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
 def test_run_state(client_mock):
     client_mock.metadata_client.read.side_effect = tc.mock_read
     client_mock.data_client.get_file.side_effect = tc.mock_get_file
+    metadata_reader_mock = Mock(autospec=True)
 
     test_wd = '/usr/src/app/caom2pipe/int_test'
     caom2pipe_bookmark = 'caom2_timestamp'
@@ -185,7 +186,6 @@ def test_run_state(client_mock):
     try:
         test_result = rc.run_by_state(
             bookmark_name=caom2pipe_bookmark,
-            command_name='collection2caom2',
             config=test_config,
             end_time=test_end_time,
             name_builder=test_builder,
@@ -193,6 +193,7 @@ def test_run_state(client_mock):
             modify_transfer=transferrer,
             store_transfer=transferrer,
             clients=client_mock,
+            metadata_reader=metadata_reader_mock,
         )
 
         assert test_result is not None, 'expect a result'
@@ -265,7 +266,7 @@ def test_run_state_v(client_mock):
         size=42,
         md5sum='9473fdd0d880a43c21b7778d34872157',
     )
-
+    metadata_reader_mock = Mock(autospec=True)
     test_wd = '/usr/src/app/caom2pipe/int_test'
     caom2pipe_bookmark = 'caom2_timestamp'
     test_config = mc.Config()
@@ -323,7 +324,6 @@ def test_run_state_v(client_mock):
     try:
         test_result = rc.run_by_state(
             bookmark_name=caom2pipe_bookmark,
-            command_name='collection2caom2',
             config=test_config,
             end_time=test_end_time,
             name_builder=test_builder,
@@ -331,6 +331,7 @@ def test_run_state_v(client_mock):
             modify_transfer=transferrer,
             store_transfer=transferrer,
             clients=client_mock,
+            metadata_reader=metadata_reader_mock,
         )
 
         assert test_result is not None, 'expect a result'

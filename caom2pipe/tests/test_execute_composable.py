@@ -479,17 +479,23 @@ def test_organize_executes_client_visit(test_config):
 
 def test_do_one(test_config):
     test_config.task_types = []
-    test_organizer = ec.OrganizeExecutes(test_config, 'test2caom2', [], [])
+    test_reader = Mock(autospec=True)
+    test_organizer = ec.OrganizeExecutes(
+        test_config, 'test2caom2', [], [], metadata_reader=test_reader
+    )
     # no client
     test_result = test_organizer.do_one(tc.TestStorageName())
     assert test_result is not None
     assert test_result == -1
+    assert test_reader.reset.called, 'reset should be called'
+    assert test_reader.reset.call_count == 1, 'wrong call count first time'
 
     # client
     test_config.features.use_clients = True
     test_result = test_organizer.do_one(tc.TestStorageName())
     assert test_result is not None
     assert test_result == -1
+    assert test_reader.reset.call_count == 2, 'wrong call count second time'
 
 
 def test_storage_name():
