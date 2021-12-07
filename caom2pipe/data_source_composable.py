@@ -109,7 +109,7 @@ class DataSource:
         time-boxes for now, as it's the only in-use requirement)
     - a time-boxed directory listing
     - an implementation of the work_composable.work class, which returns a
-        list of work todo as a method implementation
+        deque of work todo as a method implementation
     """
 
     def __init__(self, config=None):
@@ -125,10 +125,10 @@ class DataSource:
         pass
 
     def get_work(self):
-        return []
+        return deque()
 
     def get_time_box_work(self, prev_exec_time, exec_time):
-        return []
+        return deque()
 
     @property
     def start_time_ts(self):
@@ -165,7 +165,7 @@ class ListDirDataSource(DataSource):
             f'{self.__class__.__name__}.'
         )
         file_list = os.listdir(self._config.working_directory)
-        work = []
+        work = deque()
         for f in file_list:
             f_name = None
             if f.endswith('.fits') or f.endswith('.fits.gz'):
@@ -200,7 +200,7 @@ class ListDirDataSource(DataSource):
                 self._logger.debug(f'{f_name} added to work list.')
                 work.append(f_name)
         # ensure unique entries
-        temp = list(set(work))
+        temp = deque(set(work))
         self._logger.debug(f'End get_work in {self.__class__.__name__}.')
         return temp
 
@@ -220,7 +220,7 @@ class ListDirSeparateDataSource(DataSource):
         self._source_directories = config.data_sources
         self._extensions = config.data_source_extensions
         self._recursive = recursive
-        self._work = []
+        self._work = deque()
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_work(self):
@@ -339,7 +339,7 @@ class TodoFileDataSource(DataSource):
             f'Begin get_work from {self._config.work_fqn} in '
             f'{self.__class__.__name__}'
         )
-        work = []
+        work = deque()
         with open(self._config.work_fqn) as f:
             for line in f:
                 temp = line.strip()

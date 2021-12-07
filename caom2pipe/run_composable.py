@@ -184,7 +184,10 @@ class TodoRunner:
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _build_todo_list(self):
-        self._logger.debug('Begin _build_todo_list.')
+        self._logger.debug(
+            f'Begin _build_todo_list with '
+            f'{self._data_source.__class__.__name__}.'
+        )
         self._todo_list = self._data_source.get_work()
         self._organizer.complete_record_count = len(self._todo_list)
         self._logger.info(
@@ -253,7 +256,8 @@ class TodoRunner:
     def _run_todo_list(self):
         self._logger.debug('Begin _run_todo_list.')
         result = 0
-        for entry in self._todo_list:
+        while len(self._todo_list) > 0:
+            entry = self._todo_list.popleft()
             result |= self._process_entry(entry)
         self._finish_run()
         self._logger.debug('End _run_todo_list.')
