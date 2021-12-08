@@ -329,7 +329,10 @@ class MetaVisitDeleteCreate(CaomExecute):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
-        self.logger.debug('retrieve the existing observation')
+        self.logger.debug('retrieve the headers')
+        self._metadata_reader.get(self._storage_name)
+
+        self.logger.debug('retrieve the observation if it exists')
         self._caom2_read()
 
         self.logger.debug('write the observation to disk for next step')
@@ -381,7 +384,7 @@ class MetaVisit(CaomExecute):
         self.logger.debug('retrieve the headers')
         self._metadata_reader.get(self._storage_name)
 
-        self.logger.debug('retrieve the existing observation, if it exists')
+        self.logger.debug('retrieve the observation if it exists')
         self._caom2_read()
 
         self.logger.debug('the metadata visitors')
