@@ -88,11 +88,13 @@ class MetadataReader:
         self._headers = {}  # astropy.io.fits.Headers
         self._file_info = {}  # cadcdata.FileInfo
 
-    def get_file_info(self, uri):
-        return self._file_info.get(uri)
+    @property
+    def file_info(self):
+        return self._file_info
 
-    def get_headers(self, uri):
-        return self._headers.get(uri)
+    @property
+    def headers(self):
+        return self._headers
 
     def set(self, storage_name):
         """Retrieves the Header and FileInfo information."""

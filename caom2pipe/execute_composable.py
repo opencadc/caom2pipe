@@ -194,7 +194,7 @@ class CaomExecute:
         self._metadata_reader = metadata_reader
         self._observation = None
         # track whether the caom2repo call will be a create or an update
-        self._update_needed = False
+        self._caom2_update_needed = False
 
     def __str__(self):
         return (
@@ -214,12 +214,14 @@ class CaomExecute:
             self._storage_name.obs_id,
             self.observable.metrics,
         )
-        self._update_needed = False if self._observation is None else True
+        self._caom2_update_needed = (
+            False if self._observation is None else True
+        )
 
     def _caom2_store(self):
         """Update an existing observation instance.  Assumes the obs_id
         values are set correctly."""
-        if self._update_needed:
+        if self._caom2_update_needed:
             clc.repo_update(
                 self.caom_repo_client,
                 self._observation,
@@ -234,7 +236,7 @@ class CaomExecute:
 
     def _caom2_delete_create(self):
         """Delete an observation instance based on an input parameter."""
-        if self._update_needed:
+        if self._caom2_update_needed:
             clc.repo_delete(
                 self.caom_repo_client,
                 self._observation.collection,
@@ -255,7 +257,9 @@ class CaomExecute:
         self._observation = None
         if os.path.exists(self.model_fqn):
             self._observation = mc.read_obs_from_file(self.model_fqn)
-        self._update_needed = False if self._observation is None else True
+        self._caom2_update_needed = (
+            False if self._observation is None else True
+        )
 
     def _visit_meta(self):
         """Execute metadata-only visitors on an Observation in

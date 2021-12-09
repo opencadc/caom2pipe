@@ -83,19 +83,21 @@ def test_file_reader():
         destination_uris=[test_uri],
     )
     test_subject.set(test_storage_name)
-    assert len(test_subject._headers) == 1, 'wrong headers'
-    assert len(test_subject._file_info) == 1, 'wrong file_info'
-    test_header_result = test_subject.get_headers(test_uri)
+    test_header_result = test_subject.headers
     assert test_header_result is not None, 'expect a header result'
-    assert len(test_header_result) == 6, 'wrong header count'
-    test_file_info_result = test_subject.get_file_info(test_uri)
-    assert test_file_info_result is not None, 'expect a result'
-    assert test_file_info_result.id == basename(test_fqn), 'wrong uri'
-    assert test_file_info_result.file_type == 'application/fits', 'wrong type'
-    assert test_file_info_result.size == 197442, 'wrong size'
+    assert len(test_header_result) == 1, 'wrong headers'
+    test_headers = test_header_result.pop(test_uri)
+    assert len(test_headers) == 6, 'wrong header count'
+    test_file_info_result = test_subject.file_info
+    assert len(test_file_info_result) == 1, 'wrong file_info'
+    test_file_info = test_file_info_result.pop(test_uri)
+    assert test_file_info is not None, 'expect a result'
+    assert test_file_info.id == basename(test_fqn), 'wrong uri'
+    assert test_file_info.file_type == 'application/fits', 'wrong type'
+    assert test_file_info.size == 197442, 'wrong size'
     assert (
-            test_file_info_result.md5sum == '053b0780633ebab084b19050c0a58620'
+            test_file_info.md5sum == '053b0780633ebab084b19050c0a58620'
     ), 'wrong md5sum'
     test_subject.reset()
-    assert len(test_subject._headers) == 0, 'should be no headers'
-    assert len(test_subject._file_info) == 0, 'should be no file_info'
+    assert len(test_subject.headers) == 0, 'should be no headers'
+    assert len(test_subject.file_info) == 0, 'should be no file_info'
