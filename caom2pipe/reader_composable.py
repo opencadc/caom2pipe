@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2020.                            (c) 2020.
+#  (c) 2021.                            (c) 2021.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -66,27 +67,83 @@
 # ***********************************************************************
 #
 
-from caom2pipe import manage_composable as mc
-from caom2pipe import visitor_composable as vc
+from caom2utils import data_util
 
-import test_conf
+__all__ = ['MetadataReader']
 
 
-def test_cleanup():
-    test_subject = vc.ArtifactCleanupVisitor(archive='VLASS')
-    assert test_subject is not None, 'expect construction'
-    test_obs = mc.read_obs_from_file(
-        f'{test_conf.TEST_DATA_DIR}/fpf_start_obs.xml'
-    )
-    test_product_id = 'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
-    assert len(test_obs.planes[test_product_id].artifacts) == 2, 'initial'
-    test_f_name = (
-        'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
-        'image.pbcor.tt0.subim.fits'
-    )
-    kwargs = {'url': test_f_name}
-    result = test_subject.visit(test_obs, **kwargs)
-    assert result is not None, 'expect a result'
-    assert result.get('artifacts') == 1, 'wrong number of artifacts affected'
-    assert result.get('planes') == 0, 'wrong number of planes affected'
-    assert len(test_obs.planes[test_product_id].artifacts) == 1, 'no deletion'
+class MetadataReader:
+    """Wrap the mechanism for retrieving metadata that is used to create a
+    CAOM2 record, and to make decisions about how to create that record. Use
+    cases are:
+        - FITS files on local disk
+        - CADC storage client
+        - Gemini http client
+        - VOSpace client
+
+    TODO - how to handle thumbnails and previews
+    """
+
+    def __init__(self):
+        self._headers = {}  # astropy.io.fits.Headers
+        self._file_info = {}  # cadcdata.FileInfo
+
+    @property
+    def file_info(self):
+        return self._file_info
+
+    @property
+    def headers(self):
+        return self._headers
+
+    def set(self, storage_name):
+        """Retrieves the Header and FileInfo information."""
+
+    def reset(self):
+        self._headers = {}
+        self._file_info = {}
+
+
+class FileMetadataReader(MetadataReader):
+    """Use case: FITS files on local disk."""
+
+    def __init__(self):
+        super().__init__()
+
+    def set(self, storage_name):
+        for index, entry in enumerate(storage_name.destination_uris):
+            if '.fits' in entry:
+                self._headers[entry] = (
+                    data_util.get_local_headers_from_fits(
+                        storage_name.source_names[index]
+                    )
+                )
+            else:
+                self._headers[entry] = []
+            self._file_info[entry] = data_util.get_local_file_info(
+                storage_name.source_names[index]
+            )
+
+
+class StorageClientReader(MetadataReader):
+    """Use case: CADC storage."""
+
+    def __init__(self, client):
+        """
+
+        :param client: StorageClientWrapper instance
+        """
+        super().__init__()
+        self._client = client
+
+    def set(self, storage_name):
+        for index, entry in enumerate(storage_name.destination_uris):
+            if '.fits' in entry:
+                self._headers[entry] = (
+                    self._client.get_head(storage_name.source_names[index])
+                )
+            else:
+                self._headers[entry] = []
+            self._file_info[entry] = self._client.info(
+                storage_name.source_names[index]
+            )

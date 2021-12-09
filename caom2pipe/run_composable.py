@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -84,12 +83,12 @@ import traceback
 from collections import deque
 from datetime import datetime, timezone
 
-from caom2pipe import astro_composable as ac
 from caom2pipe import client_composable as cc
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
-from caom2pipe import name_builder_composable
 from caom2pipe import data_source_composable
+from caom2pipe import name_builder_composable
+from caom2pipe import reader_composable
 from caom2pipe import transfer_composable
 
 __all__ = [
@@ -102,7 +101,7 @@ __all__ = [
 ]
 
 
-class RunnerReport(object):
+class RunnerReport:
     """
     This class contains metrics for reporting on pipeline runs.
     """
@@ -165,7 +164,7 @@ class RunnerReport(object):
         return msg
 
 
-class TodoRunner(object):
+class TodoRunner:
     """
     This class brings together the mechanisms for identifying the
     lists of work to be done (DataSource extensions), and the mechanisms for
@@ -185,12 +184,14 @@ class TodoRunner(object):
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _build_todo_list(self):
-        self._logger.debug('Begin _build_todo_list.')
+        self._logger.debug(
+            f'Begin _build_todo_list with '
+            f'{self._data_source.__class__.__name__}.'
+        )
         self._todo_list = self._data_source.get_work()
         self._organizer.complete_record_count = len(self._todo_list)
         self._logger.info(
-            f'Processing {self._organizer.complete_record_count} '
-            f'{self._organizer._command_name} records.'
+            f'Processing {self._organizer.complete_record_count} records.'
         )
         self._logger.debug('End _build_todo_list.')
 
@@ -255,7 +256,8 @@ class TodoRunner(object):
     def _run_todo_list(self):
         self._logger.debug('Begin _run_todo_list.')
         result = 0
-        for entry in self._todo_list:
+        while len(self._todo_list) > 0:
+            entry = self._todo_list.popleft()
             result |= self._process_entry(entry)
         self._finish_run()
         self._logger.debug('End _run_todo_list.')
@@ -330,7 +332,7 @@ class StateRunner(TodoRunner):
         bookmark_name,
         max_ts=None,
     ):
-        super(StateRunner, self).__init__(
+        super().__init__(
             config, organizer, builder, data_source
         )
         self._bookmark_name = bookmark_name
@@ -350,9 +352,8 @@ class StateRunner(TodoRunner):
         save_time_dt = datetime.utcfromtimestamp(save_time)
         with open(self._config.progress_fqn, 'a') as progress:
             progress.write(
-                f'{datetime.now()} {self._organizer.command_name} current:: '
-                f'{save_time_dt} {count} since:: {start_time_dt}:: '
-                f'{cumulative_count}\n'
+                f'{datetime.now()} current:: {save_time_dt} {count} '
+                f'since:: {start_time_dt}:: {cumulative_count}\n'
             )
 
     def _wrap_state_save(self, state, save_time):
@@ -460,7 +461,7 @@ class StateRunner(TodoRunner):
         )
         self._logger.info('==================================================')
         self._logger.info(
-            f'Done {self._organizer.command_name}, saved state is '
+            f'Done for {self._bookmark_name}, saved state is '
             f'{datetime.utcfromtimestamp(exec_time)}'
         )
         self._logger.info(
@@ -473,7 +474,7 @@ class StateRunner(TodoRunner):
 
 def _set_logging(config):
     formatter = logging.Formatter(
-        '%(asctime)s:%(levelname)-8s:%(name)-36s:%(lineno)-4d:%(message)s'
+        '%(asctime)s:%(levelname)-8s:%(name)-12s:%(lineno)-4d:%(message)s'
     )
     for handler in logging.getLogger().handlers:
         handler.setLevel(config.logging_level)
@@ -506,13 +507,13 @@ def run_by_todo(
     config=None,
     name_builder=None,
     chooser=None,
-    command_name=None,
     source=None,
     meta_visitors=[],
     data_visitors=[],
     modify_transfer=None,
     store_transfer=None,
     clients=None,
+    metadata_reader=None,
 ):
     """A default implementation for using the TodoRunner.
 
@@ -520,8 +521,6 @@ def run_by_todo(
     :param name_builder NameBuilder extension that creates an instance of
         a StorageName extension, from an entry from a DataSourceComposable
         listing
-    :param command_name string that represents the specific pipeline
-        application name
     :param source DataSource implementation, if there's a special data source
     :param meta_visitors list of modules with visit methods, that expect
         the metadata of a work file to exist on disk
@@ -538,6 +537,7 @@ def run_by_todo(
         data from a source for storage at CADC, probably an HTTP or FTP site.
         Don't try to guess what this one is.
     :param clients: ClientCollection instance
+    :param metadata_reader: MetadataReader instance
     """
     if config is None:
         config = mc.Config()
@@ -563,9 +563,15 @@ def run_by_todo(
         modify_transfer, config, clients.data_client
     )
 
+    if metadata_reader is None:
+        if config.use_local_files:
+            metadata_reader = reader_composable.FileMetadataReader()
+        else:
+            metadata_reader = reader_composable.StorageClientReader(
+                clients.data_client
+            )
     organizer = ec.OrganizeExecutes(
         config,
-        command_name,
         meta_visitors,
         data_visitors,
         chooser,
@@ -573,6 +579,7 @@ def run_by_todo(
         modify_transfer,
         cadc_client=clients.data_client,
         caom_client=clients.metadata_client,
+        metadata_reader=metadata_reader,
     )
 
     runner = TodoRunner(config, organizer, name_builder, source)
@@ -585,7 +592,6 @@ def run_by_todo(
 def run_by_state(
     config=None,
     name_builder=None,
-    command_name=None,
     bookmark_name=None,
     meta_visitors=[],
     data_visitors=[],
@@ -595,6 +601,7 @@ def run_by_state(
     modify_transfer=None,
     store_transfer=None,
     clients=None,
+    metadata_reader=None,
 ):
     """A default implementation for using the StateRunner.
 
@@ -602,8 +609,6 @@ def run_by_state(
     :param name_builder NameBuilder extension that creates an instance of
         a StorageName extension, from an entry from a DataSourceComposable
         listing
-    :param command_name string that represents the specific pipeline
-        application name
     :param bookmark_name string that represents the state.yml lookup value
     :param meta_visitors list of modules with visit methods, that expect
         the metadata of a work file to exist on disk
@@ -623,6 +628,7 @@ def run_by_state(
         data from a source for storage at CADC, probably an HTTP or FTP site.
         Don't try to guess what this one is.
     :param clients instance of ClientsCollection, if one was required
+    :param metadata_reader instance of MetadataReader
     """
     if config is None:
         config = mc.Config()
@@ -651,9 +657,16 @@ def run_by_state(
         modify_transfer, config, clients.data_client
     )
 
+    if metadata_reader is None:
+        if config.use_local_files:
+            metadata_reader = reader_composable.FileMetadataReader()
+        else:
+            metadata_reader = reader_composable.StorageClientReader(
+                clients.data_client
+            )
+
     organizer = ec.OrganizeExecutes(
         config,
-        command_name,
         meta_visitors,
         data_visitors,
         chooser,
@@ -661,6 +674,7 @@ def run_by_state(
         modify_transfer,
         clients.data_client,
         clients.metadata_client,
+        metadata_reader,
     )
 
     runner = StateRunner(
@@ -675,18 +689,17 @@ def run_by_state(
 def run_single(
     config,
     storage_name,
-    command_name,
     meta_visitors,
     data_visitors,
     chooser=None,
     store_transfer=None,
     modify_transfer=None,
+    metadata_reader=None,
 ):
     """Process a single entry by StorageName detail.
 
     :param config mc.Config
     :param storage_name instance of StorageName for the collection
-    :param command_name extension of fits2caom2 for the collection
     :param meta_visitors List of metadata visit methods.
     :param data_visitors List of data visit methods.
     :param chooser OrganizeChooser instance for detailed CaomExecute
@@ -699,6 +712,7 @@ def run_single(
         files are usually stored at CADC, so it's probably a CadcTransfer
         instance, but this allows for the case that a file is never stored
         at CADC. Try to guess what this one is.
+    :param metadata_reader MetadataReader instance
     """
     # TODO - this does not follow the current implementation pattern -
     # maybe there's a rethink required
@@ -709,9 +723,15 @@ def run_single(
     modify_transfer = _set_modify_transfer(
         modify_transfer, config, clients.data_client
     )
+    if metadata_reader is None:
+        if config.use_local_files:
+            metadata_reader = reader_composable.FileMetadataReader()
+        else:
+            metadata_reader = reader_composable.StorageClientReader(
+                clients.data_client
+            )
     organizer = ec.OrganizeExecutes(
         config,
-        command_name,
         meta_visitors,
         data_visitors,
         chooser,
@@ -719,6 +739,7 @@ def run_single(
         modify_transfer,
         clients.data_client,
         clients.metadata_client,
+        metadata_reader,
     )
     organizer.complete_record_count = 1
     organizer.choose(storage_name)

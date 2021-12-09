@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -70,7 +69,7 @@
 import os
 import pytest
 import shutil
-from mock import patch, Mock
+from unittest.mock import patch, Mock
 
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc

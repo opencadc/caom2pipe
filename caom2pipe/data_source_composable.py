@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -97,7 +96,7 @@ __all__ = [
 ]
 
 
-class DataSource(object):
+class DataSource:
     """
     The mechanisms for identifying the lists of work to be done (otherwise
     known as which class instantiates the extension of the DataSource class)
@@ -110,7 +109,7 @@ class DataSource(object):
         time-boxes for now, as it's the only in-use requirement)
     - a time-boxed directory listing
     - an implementation of the work_composable.work class, which returns a
-        list of work todo as a method implementation
+        deque of work todo as a method implementation
     """
 
     def __init__(self, config=None):
@@ -126,10 +125,10 @@ class DataSource(object):
         pass
 
     def get_work(self):
-        return []
+        return deque()
 
     def get_time_box_work(self, prev_exec_time, exec_time):
-        return []
+        return deque()
 
     @property
     def start_time_ts(self):
@@ -156,7 +155,7 @@ class ListDirDataSource(DataSource):
     """
 
     def __init__(self, config, chooser):
-        super(ListDirDataSource, self).__init__(config)
+        super().__init__(config)
         self._chooser = chooser
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -166,7 +165,7 @@ class ListDirDataSource(DataSource):
             f'{self.__class__.__name__}.'
         )
         file_list = os.listdir(self._config.working_directory)
-        work = []
+        work = deque()
         for f in file_list:
             f_name = None
             if f.endswith('.fits') or f.endswith('.fits.gz'):
@@ -201,7 +200,7 @@ class ListDirDataSource(DataSource):
                 self._logger.debug(f'{f_name} added to work list.')
                 work.append(f_name)
         # ensure unique entries
-        temp = list(set(work))
+        temp = deque(set(work))
         self._logger.debug(f'End get_work in {self.__class__.__name__}.')
         return temp
 
@@ -217,11 +216,11 @@ class ListDirSeparateDataSource(DataSource):
     """
 
     def __init__(self, config, recursive=True):
-        super(ListDirSeparateDataSource, self).__init__(config)
+        super().__init__(config)
         self._source_directories = config.data_sources
         self._extensions = config.data_source_extensions
         self._recursive = recursive
-        self._work = []
+        self._work = deque()
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_work(self):
@@ -267,7 +266,7 @@ class ListDirTimeBoxDataSource(DataSource):
         :param config: manage_composable.Config
         :param recursive: True if sub-directories should also be checked
         """
-        super(ListDirTimeBoxDataSource, self).__init__(config)
+        super().__init__(config)
         self._source_directories = config.data_sources
         self._extensions = config.data_source_extensions
         self._recursive = recursive
@@ -332,7 +331,7 @@ class TodoFileDataSource(DataSource):
     """
 
     def __init__(self, config):
-        super(TodoFileDataSource, self).__init__(config)
+        super().__init__(config)
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_work(self):
@@ -340,7 +339,7 @@ class TodoFileDataSource(DataSource):
             f'Begin get_work from {self._config.work_fqn} in '
             f'{self.__class__.__name__}'
         )
-        work = []
+        work = deque()
         with open(self._config.work_fqn) as f:
             for line in f:
                 temp = line.strip()
@@ -359,7 +358,7 @@ class QueryTimeBoxDataSource(DataSource):
     """
 
     def __init__(self, config, preview_suffix='jpg'):
-        super(QueryTimeBoxDataSource, self).__init__(config)
+        super().__init__(config)
         self._preview_suffix = preview_suffix
         subject = clc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
@@ -429,7 +428,7 @@ class QueryTimeBoxDataSourceTS(DataSource):
     """
 
     def __init__(self, config, preview_suffix='jpg'):
-        super(QueryTimeBoxDataSourceTS, self).__init__(config)
+        super().__init__(config)
         self._preview_suffix = preview_suffix
         subject = clc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
@@ -481,7 +480,7 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
     For when use_local_files: True and cleanup_when_storing: True
     """
     def __init__(self, config, cadc_client, recursive=True):
-        super(UseLocalFilesDataSource, self).__init__(config)
+        super().__init__(config)
         self._cadc_client = cadc_client
         self._cleanup_when_storing = config.cleanup_files_when_storing
         self._cleanup_failure_directory = config.cleanup_failure_destination
@@ -531,7 +530,7 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
         :param entry: os.DirEntry
         """
         copy_file = True
-        if super(UseLocalFilesDataSource, self).default_filter(entry):
+        if super().default_filter(entry):
             if entry.name.startswith('.'):
                 # skip dot files
                 copy_file = False
@@ -681,7 +680,7 @@ class VaultDataSource(ListDirTimeBoxDataSource):
     """
 
     def __init__(self, vault_client, config, recursive=True):
-        super(VaultDataSource, self).__init__(config, recursive)
+        super().__init__(config, recursive)
         self._vault_client = vault_client
         self._source_directories = config.data_sources
         self._data_source_extensions = config.data_source_extensions

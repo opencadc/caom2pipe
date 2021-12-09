@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2020.                            (c) 2020.
+#  (c) 2021.                            (c) 2021.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -66,27 +67,37 @@
 # ***********************************************************************
 #
 
+from os.path import basename
 from caom2pipe import manage_composable as mc
-from caom2pipe import visitor_composable as vc
+from caom2pipe import reader_composable
+import test_conf as tc
 
-import test_conf
 
-
-def test_cleanup():
-    test_subject = vc.ArtifactCleanupVisitor(archive='VLASS')
-    assert test_subject is not None, 'expect construction'
-    test_obs = mc.read_obs_from_file(
-        f'{test_conf.TEST_DATA_DIR}/fpf_start_obs.xml'
+def test_file_reader():
+    test_subject = reader_composable.FileMetadataReader()
+    test_fqn = f'{tc.TEST_FILES_DIR}/correct.fits'
+    test_uri = 'cadc:TEST/correct.fits'
+    test_storage_name = mc.StorageName(
+        entry=test_fqn,
+        source_names=[test_fqn],
+        destination_uris=[test_uri],
     )
-    test_product_id = 'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
-    assert len(test_obs.planes[test_product_id].artifacts) == 2, 'initial'
-    test_f_name = (
-        'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
-        'image.pbcor.tt0.subim.fits'
-    )
-    kwargs = {'url': test_f_name}
-    result = test_subject.visit(test_obs, **kwargs)
-    assert result is not None, 'expect a result'
-    assert result.get('artifacts') == 1, 'wrong number of artifacts affected'
-    assert result.get('planes') == 0, 'wrong number of planes affected'
-    assert len(test_obs.planes[test_product_id].artifacts) == 1, 'no deletion'
+    test_subject.set(test_storage_name)
+    test_header_result = test_subject.headers
+    assert test_header_result is not None, 'expect a header result'
+    assert len(test_header_result) == 1, 'wrong headers'
+    test_headers = test_header_result.pop(test_uri)
+    assert len(test_headers) == 6, 'wrong header count'
+    test_file_info_result = test_subject.file_info
+    assert len(test_file_info_result) == 1, 'wrong file_info'
+    test_file_info = test_file_info_result.pop(test_uri)
+    assert test_file_info is not None, 'expect a result'
+    assert test_file_info.id == basename(test_fqn), 'wrong uri'
+    assert test_file_info.file_type == 'application/fits', 'wrong type'
+    assert test_file_info.size == 197442, 'wrong size'
+    assert (
+            test_file_info.md5sum == '053b0780633ebab084b19050c0a58620'
+    ), 'wrong md5sum'
+    test_subject.reset()
+    assert len(test_subject.headers) == 0, 'should be no headers'
+    assert len(test_subject.file_info) == 0, 'should be no file_info'

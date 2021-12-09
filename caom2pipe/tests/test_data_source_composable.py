@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -77,7 +76,7 @@ from astropy.table import Table
 from cadctap import CadcTapClient
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from mock import Mock, patch
+from unittest.mock import Mock, patch
 
 from cadcdata import FileInfo
 from caom2pipe import data_source_composable as dsc

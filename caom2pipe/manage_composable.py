@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -173,7 +172,7 @@ class CadcException(Exception):
     pass
 
 
-class Features(object):
+class Features:
     """Boolean feature flag implementation."""
 
     def __init__(self):
@@ -246,7 +245,7 @@ class Features(object):
 
     def __str__(self):
         return ' '.join(
-            '{} {}'.format(ii, getattr(self, ii)) for ii in vars(self)
+            f'{ii} {getattr(self, ii)}' for ii in vars(self)
         )
 
 
@@ -259,11 +258,9 @@ class TaskType(Enum):
     INGEST = 'ingest'  # create/update a CAOM instance from metadata only
     MODIFY = 'modify'  # data access observation visitors
     VISIT = 'visit'  # metadata access observation visitors
-    # update a CAOM instance using CAOM metadata as input and knowledge
-    INGEST_OBS = 'ingest_obs'
 
 
-class State(object):
+class State:
     """Persist information between pipeline invocations.
 
     Currently the State class persists the concept of a bookmark, which is the
@@ -322,7 +319,7 @@ class State(object):
             write_as_yaml(self.content, self.fqn)
 
 
-class Rejected(object):
+class Rejected:
     """Persist information between pipeline invocations about the observation
     IDs that will fail a particular TaskType.
     """
@@ -422,7 +419,7 @@ class Rejected(object):
         return result
 
 
-class Metrics(object):
+class Metrics:
     """
     A class to capture execution metrics.
     """
@@ -477,7 +474,7 @@ def minimize_on_keyword(x, candidate):
     return result
 
 
-class Observable(object):
+class Observable:
     """
     A class to contain all the classes that maintain information between
     pipeline execution instances.
@@ -496,7 +493,7 @@ class Observable(object):
         return self._metrics
 
 
-class Cache(object):
+class Cache:
     """Abstract-like class to store persistent information that originates
     from outside of a pipeline invocation.
     """
@@ -538,7 +535,7 @@ class Cache(object):
         write_as_yaml(self._cache, self._fqn)
 
 
-class CaomName(object):
+class CaomName:
     """The naming rules for making and decomposing CAOM URIs (i.e. Observation
     URIs, Plane URIs, and archive URIs, all isolated in one class. There are
     probably OMM assumptions built in, but those will slowly go away :)."""
@@ -605,7 +602,7 @@ class CaomName(object):
         return file_name
 
 
-class Config(object):
+class Config:
     """Configuration information that remains the same for all steps and all
     work in a pipeline execution."""
 
@@ -1321,7 +1318,7 @@ class Config(object):
     def count_retries(self):
         result = []
         if os.path.exists(self.retry_fqn):
-            with open(self.retry_fqn, 'r') as f:
+            with open(self.retry_fqn) as f:
                 result = f.readlines()
         return len(result)
 
@@ -1453,7 +1450,7 @@ class PreviewMeta:
     mime_type: str = 'image/jpeg'
 
 
-class PreviewVisitor(object):
+class PreviewVisitor:
     """
     Common code for creating thumbnails and previews. Must be extended with
     the code that does the actual generation of thumbnail and preview
@@ -1491,7 +1488,12 @@ class PreviewVisitor(object):
         # keys are uris, values are lists, where the 0th entry is a file name,
         # and the 1th entry is the artifact type
         self._previews = {}
+        self._report = None
         self._logger.debug(self)
+
+    @property
+    def report(self):
+        return self._report
 
     def __str__(self):
         return (
@@ -1512,7 +1514,8 @@ class PreviewVisitor(object):
         self._logger.info(
             f'Completed preview augmentation for {observation.observation_id}.'
         )
-        return {'artifacts': count}
+        self._report = {'artifacts': count}
+        return observation
 
     def add_preview(
         self,
@@ -1576,7 +1579,7 @@ class PreviewVisitor(object):
                 )
 
 
-class StorageName(object):
+class StorageName:
     """
     This class encapsulates:
     - naming rules for a collection, for example:
@@ -1841,7 +1844,7 @@ class StorageName(object):
         return '.jpg' in entry
 
 
-class Validator(object):
+class Validator:
     """
     Compares the state of CAOM entries at CADC with the state of the source
     of the data. Identifies files that are in CAOM entries that do not exist
@@ -2450,7 +2453,7 @@ def read_from_file(fqn):
     """
     if not os.path.exists(fqn):
         raise CadcException(f'Could not find {fqn}')
-    with open(fqn, 'r') as f:
+    with open(fqn) as f:
         return f.readlines()
 
 
@@ -3116,7 +3119,7 @@ class ValueRepairCache(Cache):
     VALUE_REPAIR = 'value_repair'
 
     def __init__(self):
-        super(ValueRepairCache, self).__init__()
+        super().__init__()
         self._value_repair = self.get_from(ValueRepairCache.VALUE_REPAIR)
         self._key = None
         self._values = None

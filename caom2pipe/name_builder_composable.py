@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -82,7 +81,7 @@ __all__ = [
 ]
 
 
-class StorageNameBuilder(object):
+class StorageNameBuilder:
     """
     The mechanisms for translating a list of work into a collection-specific
     name (otherwise known as which class instantiates the extension of the
@@ -112,7 +111,7 @@ class StorageNameBuilder(object):
 
 class StorageNameInstanceBuilder(StorageNameBuilder):
     def __init__(self, collection):
-        super(StorageNameInstanceBuilder, self).__init__()
+        super().__init__()
         self._collection = collection
 
     def build(self, entry):
@@ -131,7 +130,7 @@ class EntryBuilder(StorageNameBuilder):
     """
 
     def __init__(self, storage_name):
-        super(EntryBuilder, self).__init__()
+        super().__init__()
         self._storage_name = storage_name
 
     def build(self, entry):
@@ -145,7 +144,7 @@ class ObsIDBuilder(StorageNameBuilder):
     """
 
     def __init__(self, storage_name):
-        super(ObsIDBuilder, self).__init__()
+        super().__init__()
         self._storage_name = storage_name
 
     def build(self, entry):
@@ -159,7 +158,7 @@ class GuessingBuilder(StorageNameBuilder):
     """
 
     def __init__(self, storage_name):
-        super(GuessingBuilder, self).__init__()
+        super().__init__()
         self._storage_name = storage_name
         self._logger = logging.getLogger(self.__class__.__name__)
 

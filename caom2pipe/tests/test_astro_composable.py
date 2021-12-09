@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -69,7 +68,7 @@
 
 import math
 
-from mock import patch, Mock
+from unittest.mock import patch, Mock
 import test_conf as tc
 
 from astropy.io import fits
