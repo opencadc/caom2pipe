@@ -67,26 +67,15 @@
 # ***********************************************************************
 #
 
-from dataclasses import dataclass
-from cadcdata import FileInfo
 from caom2utils import data_util
 
-__all__ = ['FileMetadata', 'MetadataReader']
-
-
-@dataclass
-class FileMetadata:
-    """
-    Keep the FITS header, and FileInfo together, because they need the
-    same client/session to retrieve them. It's coupling for efficiency
-    and (an attempt at) politeness to data providers.
-    """
-    headers: []  # astropy.io.fits.Headers
-    file_info: FileInfo
+__all__ = ['MetadataReader']
 
 
 class MetadataReader:
-    """Wrap the mechanism for reading a FileMetadata. Use cases are:
+    """Wrap the mechanism for retrieving metadata that is used to create a
+    CAOM2 record, and to make decisions about how to create that record. Use
+    cases are:
         - FITS files on local disk
         - CADC storage client
         - Gemini http client
@@ -96,41 +85,46 @@ class MetadataReader:
     """
 
     def __init__(self):
-        self._metadata = {}
+        self._headers = {}  # astropy.io.fits.Headers
+        self._file_info = {}  # cadcdata.FileInfo
 
-    @property
-    def metadata(self):
-        return self._metadata
+    def get_file_info(self, uri):
+        return self._file_info.get(uri)
 
-    def get(self, storage_name):
-        """:returns a dict where the key is an Artifact URI, and the
-        value is a FileMetadata instance."""
-        return self._metadata
+    def get_headers(self, uri):
+        return self._headers.get(uri)
+
+    def set(self, storage_name):
+        """Retrieves the Header and FileInfo information."""
 
     def reset(self):
-        self._metadata = {}
+        self._headers = {}
+        self._file_info = {}
 
 
 class FileMetadataReader(MetadataReader):
+    """Use case: FITS files on local disk."""
 
     def __init__(self):
         super().__init__()
 
-    def get(self, storage_name):
-        for index, entry in enumerate(storage_name.source_names):
-            file_meta_data = FileMetadata([], None)
-            if '.fits' in storage_name.file_uri:
-                file_meta_data.headers = (
-                    data_util.get_local_headers_from_fits(entry)
+    def set(self, storage_name):
+        for index, entry in enumerate(storage_name.destination_uris):
+            if '.fits' in entry:
+                self._headers[entry] = (
+                    data_util.get_local_headers_from_fits(
+                        storage_name.source_names[index]
+                    )
                 )
-            file_meta_data.file_info = data_util.get_local_file_info(entry)
-            self._metadata[storage_name.destination_uris[index]] = (
-                file_meta_data
+            else:
+                self._headers[entry] = []
+            self._file_info[entry] = data_util.get_local_file_info(
+                storage_name.source_names[index]
             )
-        return self._metadata
 
 
 class StorageClientReader(MetadataReader):
+    """Use case: CADC storage."""
 
     def __init__(self, client):
         """
@@ -140,14 +134,14 @@ class StorageClientReader(MetadataReader):
         super().__init__()
         self._client = client
 
-    def get(self, storage_name):
-        file_meta_data = FileMetadata([], None)
-        if '.fits' in storage_name.file_uri:
-            file_meta_data.headers = self._client.get_head(
-                storage_name.file_uri
+    def set(self, storage_name):
+        for index, entry in enumerate(storage_name.destination_uris):
+            if '.fits' in entry:
+                self._headers[entry] = (
+                    self._client.get_head(storage_name.source_names[index])
+                )
+            else:
+                self._headers[entry] = []
+            self._file_info[entry] = self._client.info(
+                storage_name.source_names[index]
             )
-        else:
-            file_meta_data.headers = []
-        file_meta_data.file_info = self._client.info(storage_name.file_uri)
-        self._metadata = {storage_name.file_uri: file_meta_data}
-        return self._metadata

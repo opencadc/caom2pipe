@@ -193,7 +193,8 @@ class CaomExecute:
         self.supports_latest_client = config.features.supports_latest_client
         self._metadata_reader = metadata_reader
         self._observation = None
-        self._observation_exists = False
+        # track whether the caom2repo call will be a create or an update
+        self._update_needed = False
 
     def __str__(self):
         return (
@@ -213,12 +214,12 @@ class CaomExecute:
             self._storage_name.obs_id,
             self.observable.metrics,
         )
-        self._observation_exists = False if self._observation is None else True
+        self._update_needed = False if self._observation is None else True
 
     def _caom2_store(self):
         """Update an existing observation instance.  Assumes the obs_id
         values are set correctly."""
-        if self._observation_exists:
+        if self._update_needed:
             clc.repo_update(
                 self.caom_repo_client,
                 self._observation,
@@ -233,7 +234,7 @@ class CaomExecute:
 
     def _caom2_delete_create(self):
         """Delete an observation instance based on an input parameter."""
-        if self._observation_exists:
+        if self._update_needed:
             clc.repo_delete(
                 self.caom_repo_client,
                 self._observation.collection,
@@ -254,7 +255,7 @@ class CaomExecute:
         self._observation = None
         if os.path.exists(self.model_fqn):
             self._observation = mc.read_obs_from_file(self.model_fqn)
-        self._observation_exists = False if self._observation is None else True
+        self._update_needed = False if self._observation is None else True
 
     def _visit_meta(self):
         """Execute metadata-only visitors on an Observation in
@@ -265,7 +266,7 @@ class CaomExecute:
                 'cadc_client': self.cadc_client,
                 'stream': self.stream,
                 'storage_name': self._storage_name,
-                'file_metadata': self._metadata_reader.metadata,
+                'metadata_reader': self._metadata_reader,
                 'observable': self.observable,
             }
             for visitor in self.meta_visitors:
@@ -329,8 +330,8 @@ class MetaVisitDeleteCreate(CaomExecute):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
-        self.logger.debug('retrieve the headers')
-        self._metadata_reader.get(self._storage_name)
+        self.logger.debug('Retrieve input metadata')
+        self._metadata_reader.set(self._storage_name)
 
         self.logger.debug('retrieve the observation if it exists')
         self._caom2_read()
@@ -381,8 +382,8 @@ class MetaVisit(CaomExecute):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
-        self.logger.debug('retrieve the headers')
-        self._metadata_reader.get(self._storage_name)
+        self.logger.debug('retrieve input metadata')
+        self._metadata_reader.set(self._storage_name)
 
         self.logger.debug('retrieve the observation if it exists')
         self._caom2_read()
@@ -673,8 +674,8 @@ class Scrape(CaomExecute):
     def execute(self, context):
         self.logger.debug('Begin execute')
 
-        self.logger.debug('Get the headers')
-        self._metadata_reader.get(self._storage_name)
+        self.logger.debug('Retrieve input metadata')
+        self._metadata_reader.set(self._storage_name)
 
         self.logger.debug('get observation for the existing model from disk')
         self._read_model()
@@ -776,9 +777,6 @@ class OrganizeExecutes:
         processing is done.
         """
         working_dir = os.path.join(self.config.working_directory, obs_id)
-        self._logger.debug(
-            f'Remove working directory {working_dir} and contents.'
-        )
         if (
             os.path.exists(working_dir)
             and mc.TaskType.SCRAPE not in self.config.task_types
@@ -786,6 +784,9 @@ class OrganizeExecutes:
             for ii in os.listdir(working_dir):
                 os.remove(os.path.join(working_dir, ii))
             os.rmdir(working_dir)
+        self._logger.debug(
+            f'Removed working directory {working_dir} and contents.'
+        )
 
     def _create_workspace(self, obs_id):
         """Create the working area if it does not already exist."""

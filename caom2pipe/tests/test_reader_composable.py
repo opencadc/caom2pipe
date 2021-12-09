@@ -82,15 +82,20 @@ def test_file_reader():
         source_names=[test_fqn],
         destination_uris=[test_uri],
     )
-    test_subject.get(test_storage_name)
-    assert len(test_subject.metadata) == 1, 'wrong metadata'
-    test_result = test_subject.metadata.get(test_uri)
-    assert test_result is not None, 'expect a result'
-    assert test_result.file_info.id == basename(test_fqn), 'wrong uri'
-    assert test_result.file_info.file_type == 'application/fits', 'wrong type'
-    assert test_result.file_info.size == 197442, 'wrong size'
+    test_subject.set(test_storage_name)
+    assert len(test_subject._headers) == 1, 'wrong headers'
+    assert len(test_subject._file_info) == 1, 'wrong file_info'
+    test_header_result = test_subject.get_headers(test_uri)
+    assert test_header_result is not None, 'expect a header result'
+    assert len(test_header_result) == 6, 'wrong header count'
+    test_file_info_result = test_subject.get_file_info(test_uri)
+    assert test_file_info_result is not None, 'expect a result'
+    assert test_file_info_result.id == basename(test_fqn), 'wrong uri'
+    assert test_file_info_result.file_type == 'application/fits', 'wrong type'
+    assert test_file_info_result.size == 197442, 'wrong size'
     assert (
-        test_result.file_info.md5sum == '053b0780633ebab084b19050c0a58620'
+            test_file_info_result.md5sum == '053b0780633ebab084b19050c0a58620'
     ), 'wrong md5sum'
     test_subject.reset()
-    assert len(test_subject.metadata) == 0, 'should be no metadata'
+    assert len(test_subject._headers) == 0, 'should be no headers'
+    assert len(test_subject._file_info) == 0, 'should be no file_info'
