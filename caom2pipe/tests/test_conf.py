@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -83,7 +82,7 @@ class TestStorageName(mc.StorageName):
     def __init__(
         self, obs_id=None, file_name=None, uri=None, entry=None
     ):
-        super(TestStorageName, self).__init__(
+        super().__init__(
             'test_obs_id',
             'TEST',
             '*',
@@ -101,9 +100,9 @@ class TestStorageName(mc.StorageName):
 
 class TestChooser(ec.OrganizeChooser):
     def __init(self):
-        super(TestChooser, self).__init__()
+        super().__init__()
 
-    def needs_delete(self, observation):
+    def needs_delete(self):
         return True
 
     def use_compressed(self, ignore):

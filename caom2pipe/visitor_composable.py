@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -73,7 +72,7 @@ from caom2 import Observation
 from caom2pipe import manage_composable as mc
 
 
-class ArtifactCleanupVisitor(object):
+class ArtifactCleanupVisitor:
     """
     Common code for removing artifacts from an Observation. Over-ride
     'check_for_delete' method, if the characteristics of the deletion change.

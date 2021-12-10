@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -76,7 +75,7 @@ import os
 from astropy.table import Table
 from datetime import datetime, timedelta, timezone
 
-from mock import Mock, patch, ANY, call
+from unittest.mock import Mock, patch, call
 import test_conf as tc
 
 from caom2 import SimpleObservation, Algorithm
@@ -96,15 +95,13 @@ TEST_SOURCE = (
 )
 
 
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local')
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out_local')
+@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
 @patch('caom2pipe.manage_composable.read_obs_from_file')
 @patch('caom2pipe.manage_composable.write_obs_to_file')
 def test_run_todo_list_dir_data_source(
     write_obs_mock,
     read_obs_mock,
-    fits2caom2_in_out_mock,
-    fits2caom2_mock,
+    visit_meta_mock,
     test_config,
 ):
     read_obs_mock.side_effect = _mock_read
@@ -116,27 +113,23 @@ def test_run_todo_list_dir_data_source(
 
     test_chooser = ec.OrganizeChooser()
     test_result = rc.run_by_todo(
-        config=test_config, chooser=test_chooser, command_name=TEST_COMMAND
+        config=test_config, chooser=test_chooser
     )
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
-    if fits2caom2_mock.called:
-        fits2caom2_mock.assert_called_with(connected=False)
-    else:
-        assert fits2caom2_in_out_mock.called, 'expect fits2caom2 in/out call'
+    assert visit_meta_mock.called, 'expect visit call'
+    visit_meta_mock.assert_called_with()
     assert write_obs_mock.called, 'expect write call'
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_local')
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out_local')
+@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
 @patch('caom2pipe.manage_composable.read_obs_from_file')
 @patch('caom2pipe.manage_composable.write_obs_to_file')
 def test_run_todo_list_dir_data_source_v(
     write_obs_mock,
     read_obs_mock,
-    fits2caom2_in_out_mock,
-    fits2caom2_mock,
+    visit_meta_mock,
     clients_mock,
     test_config,
 ):
@@ -147,13 +140,11 @@ def test_run_todo_list_dir_data_source_v(
     test_config.data_source_extensions = ['.fits']
     test_config.task_types = [mc.TaskType.SCRAPE]
     test_config.features.supports_latest_client = True
-    test_result = rc.run_by_todo(config=test_config, command_name=TEST_COMMAND)
+    test_result = rc.run_by_todo(config=test_config)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
-    if fits2caom2_mock.called:
-        fits2caom2_mock.assert_called_with(connected=False)
-    else:
-        assert fits2caom2_in_out_mock.called, 'expect fits2caom2 in/out call'
+    assert visit_meta_mock.called, 'expect visit call'
+    visit_meta_mock.assert_called_with()
     assert read_obs_mock.called, 'read_obs not called'
     assert write_obs_mock.called, 'write_obs mock not called'
     assert not (
@@ -212,7 +203,6 @@ def test_run_todo_list_dir_data_source_invalid_fname_v(
             config=test_config,
             chooser=test_chooser,
             name_builder=test_builder,
-            command_name=TEST_COMMAND,
         )
         assert test_result is not None, 'expect a result'
         assert test_result == -1, 'expect failure, because of file naming'
@@ -239,7 +229,7 @@ def test_run_todo_file_data_source(clients_mock, test_config):
         SimpleObservation(
             collection=test_config.collection,
             observation_id='def',
-            algorithm=Algorithm(str('test')),
+            algorithm=Algorithm('test'),
         )
     )
 
@@ -252,7 +242,7 @@ def test_run_todo_file_data_source(clients_mock, test_config):
 
     test_chooser = ec.OrganizeChooser()
     test_result = rc.run_by_todo(
-        config=test_config, chooser=test_chooser, command_name=TEST_COMMAND
+        config=test_config, chooser=test_chooser
     )
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
@@ -273,7 +263,7 @@ def test_run_todo_file_data_source_v(clients_mock, test_config):
         return_value=SimpleObservation(
             collection=test_config.collection,
             observation_id='def',
-            algorithm=Algorithm(str('test')),
+            algorithm=Algorithm('test'),
         )
     )
 
@@ -286,7 +276,7 @@ def test_run_todo_file_data_source_v(clients_mock, test_config):
 
     test_chooser = ec.OrganizeChooser()
     test_result = rc.run_by_todo(
-        config=test_config, chooser=test_chooser, command_name=TEST_COMMAND
+        config=test_config, chooser=test_chooser
     )
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
@@ -308,23 +298,18 @@ def test_run_todo_file_data_source_v(clients_mock, test_config):
 @patch('caom2pipe.data_source_composable.CadcTapClient')
 @patch('caom2pipe.client_composable.query_tap_client')
 @patch(
-    'caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd_in_out',
-    autospec=True,
+    'caom2pipe.execute_composable.MetaVisit._visit_meta'
 )
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd')
 def test_run_state(
-    fits2caom2_mock,
-    fits2caom2_in_out_mock,
+    visit_meta_mock,
     tap_query_mock,
     tap_mock,
     clients_mock,
     test_config,
 ):
     # tap_mock is used by the data_source_composable class
-    fits2caom2_mock.side_effect = _mock_write
-    clients_mock.return_value.metadata_client.read.side_effect = Mock(
-        return_value=None
-    )
+    visit_meta_mock.side_effect = _mock_visit
+    clients_mock.return_value.metadata_client.read.side_effect = _mock_read2
     tap_query_mock.side_effect = _mock_get_work
 
     test_end_time = datetime.fromtimestamp(1579740838, tz=timezone.utc)
@@ -350,16 +335,13 @@ def test_run_state(
     test_result = rc.run_by_state(
         config=test_config,
         chooser=test_chooser,
-        command_name=TEST_COMMAND,
         bookmark_name=TEST_BOOKMARK,
         end_time=test_end_time,
     )
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
-    if fits2caom2_mock.called:
-        fits2caom2_mock.assert_called_once_with()
-    elif fits2caom2_in_out_mock.called:
-        fits2caom2_in_out_mock.assert_called_once_with(ANY)
+    assert visit_meta_mock.called, 'expect visit meta call'
+    visit_meta_mock.assert_called_once_with()
 
     test_state = mc.State(STATE_FILE)
     test_bookmark = test_state.get_bookmark(TEST_BOOKMARK)
@@ -375,29 +357,24 @@ def test_run_state(
     # test that runner does nothing when times haven't changed
     start_time = test_end_time
     _write_state(start_time)
-    fits2caom2_mock.reset_mock()
-    fits2caom2_in_out_mock.reset_mock()
+    visit_meta_mock.reset_mock()
     test_result = rc.run_by_state(
         config=test_config,
         chooser=test_chooser,
-        command_name=TEST_COMMAND,
         bookmark_name=TEST_BOOKMARK,
         end_time=test_end_time,
     )
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
-    assert not fits2caom2_mock.called, 'expect no fits2caom2 call'
-    assert (
-        not fits2caom2_in_out_mock.called
-    ), 'expect no update fits2caom2 call'
+    assert not visit_meta_mock.called, 'expect no visit_meta call'
 
 
 @patch('caom2pipe.data_source_composable.CadcTapClient')
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.client_composable.query_tap_client')
-@patch('caom2pipe.execute_composable.CaomExecute._fits2caom2_cmd')
+@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
 def test_run_state_log_to_file_true(
-    fits2caom2_mock,
+    visit_meta_mock,
     tap_mock,
     clients_mock,
     tap_mock2,
@@ -412,10 +389,10 @@ def test_run_state_log_to_file_true(
             return_value=SimpleObservation(
                 collection=test_config.collection,
                 observation_id='def',
-                algorithm=Algorithm(str('test')),
+                algorithm=Algorithm('test'),
             )
         )
-        fits2caom2_mock.side_effect = _mock_write
+        visit_meta_mock.side_effect = _mock_visit
         tap_mock.side_effect = _mock_get_work
 
         test_end_time = datetime.fromtimestamp(1579740838)
@@ -444,7 +421,6 @@ def test_run_state_log_to_file_true(
         test_result = rc.run_by_state(
             config=test_config,
             chooser=test_chooser,
-            command_name='collection2caom2',
             bookmark_name=TEST_BOOKMARK,
             end_time=test_end_time,
         )
@@ -484,7 +460,6 @@ def test_run_todo_list_dir_data_source_exception(
         test_result = rc.run_by_todo(
             config=test_config,
             chooser=test_chooser,
-            command_name=TEST_COMMAND,
             source=test_data_source,
         )
         assert test_result is not None, 'expect a result'
@@ -530,7 +505,7 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config):
     test_config.retry_decay = 0
     _write_todo(test_config)
 
-    test_result = rc.run_by_todo(config=test_config, command_name=TEST_COMMAND)
+    test_result = rc.run_by_todo(config=test_config)
 
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect failure'
@@ -620,7 +595,6 @@ def test_run_single(do_mock, get_access_mock, test_config):
     test_result = rc.run_single(
         test_config,
         test_storage_name,
-        'test_command',
         meta_visitors=None,
         data_visitors=None,
     )
@@ -951,15 +925,27 @@ def _mock_write():
         SimpleObservation(
             collection='test_collection',
             observation_id='ghi',
-            algorithm=Algorithm(str('test')),
+            algorithm=Algorithm('test'),
         ),
         fqn,
     )
+
+
+def _mock_read2(ign1, ign2):
+    return _mock_read(None)
 
 
 def _mock_read(ignore_fqn):
     return SimpleObservation(
         collection='test_collection',
         observation_id='ghi',
-        algorithm=Algorithm(str('test')),
+        algorithm=Algorithm('test'),
+    )
+
+
+def _mock_visit():
+    return SimpleObservation(
+        collection='test_collection',
+        observation_id='ghi',
+        algorithm=Algorithm('test'),
     )

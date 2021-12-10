@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -93,7 +92,7 @@ def test_read_write_obs_with_file():
         SimpleObservation(
             collection='test_collection',
             observation_id='test_obs_id',
-            algorithm=Algorithm(str('exposure')),
+            algorithm=Algorithm('exposure'),
         ),
         TEST_OBS_FILE,
     )
@@ -435,7 +434,7 @@ def test_state():
     test_subject.save_state('gemini_timestamp', test_result + timedelta(3))
     test_subject.save_state('neossat_context', test_context)
 
-    with open(TEST_STATE_FILE, 'r') as f:
+    with open(TEST_STATE_FILE) as f:
         text = f.readlines()
         compare = ''.join(ii for ii in text)
         assert '2019-07-23' not in compare, 'content not updated'
@@ -485,7 +484,7 @@ def test_increment_time():
 @patch('requests.get')
 def test_http_get(mock_req):
     # Response mock
-    class Object(object):
+    class Object:
         def __init__(self):
             self.headers = {
                 'Date': 'Thu, 25 Jul 2019 16:10:02 GMT',
@@ -502,7 +501,7 @@ def test_http_get(mock_req):
             pass
 
         def iter_content(self, chunk_size):
-            return ['aaa'.encode(), 'bbb'.encode()]
+            return [b'aaa', b'bbb']
 
         def __enter__(self):
             return self
@@ -561,7 +560,7 @@ def test_create_dir():
 
 class TestValidator(mc.Validator):
     def __init__(self, source_name, preview_suffix):
-        super(TestValidator, self).__init__(
+        super().__init__(
             source_name, preview_suffix=preview_suffix
         )
 
@@ -685,7 +684,7 @@ def test_query_tap(caps_mock, base_mock, test_config):
 def test_visit():
     class TestVisitor(mc.PreviewVisitor):
         def __init__(self, **kwargs):
-            super(TestVisitor, self).__init__(archive='VLASS', **kwargs)
+            super().__init__(archive='VLASS', **kwargs)
 
         def generate_plots(self, obs_id):
             fqn = f'{self._working_dir}/{self._storage_name.prev}'
@@ -702,7 +701,7 @@ def test_visit():
 
     class VisitStorageName(tc.TestStorageName):
         def __init__(self):
-            super(VisitStorageName, self).__init__()
+            super().__init__()
             self._source_names = [self.file_uri]
 
         @property
@@ -738,16 +737,16 @@ def test_visit():
 
     try:
         test_subject = TestVisitor(**kwargs)
-        test_result = test_subject.visit(obs)
+        test_observation = test_subject.visit(obs)
     except Exception as e:
         assert False, f'{str(e)}'
 
-    assert test_result is not None, f'expect a result'
+    assert test_observation is not None, f'expect a result'
 
     check_number = 1
     end_artifact_count = 3
     expected_call_count = 1
-    assert test_result['artifacts'] == check_number, 'artifact not added'
+    assert test_subject.report['artifacts'] == check_number, 'artifact not added'
     assert (
         len(obs.planes[test_product_id].artifacts) == end_artifact_count
     ), f'new artifacts'
