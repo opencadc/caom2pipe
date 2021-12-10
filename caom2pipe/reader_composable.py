@@ -140,10 +140,10 @@ class StorageClientReader(MetadataReader):
         for index, entry in enumerate(storage_name.destination_uris):
             if '.fits' in entry:
                 self._headers[entry] = (
-                    self._client.get_head(storage_name.source_names[index])
+                    self._client.get_head(storage_name.destination_uris[index])
                 )
             else:
                 self._headers[entry] = []
             self._file_info[entry] = self._client.info(
-                storage_name.source_names[index]
+                storage_name.destination_uris[index]
             )
