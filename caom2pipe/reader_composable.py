@@ -67,9 +67,21 @@
 # ***********************************************************************
 #
 
-from caom2utils import data_util
+from io import BytesIO
+import logging
+import traceback
 
-__all__ = ['MetadataReader']
+from caom2utils import data_util
+from caom2pipe import client_composable as clc
+from caom2pipe import manage_composable as mc
+
+
+__all__ = [
+    'FileMetadataReader',
+    'MetadataReader',
+    'StorageClientReader',
+    'VaultReader',
+]
 
 
 class MetadataReader:
@@ -146,4 +158,44 @@ class StorageClientReader(MetadataReader):
                 self._headers[entry] = []
             self._file_info[entry] = self._client.info(
                 storage_name.destination_uris[index]
+            )
+
+
+class VaultReader(MetadataReader):
+    """Use case: vault."""
+
+    def __init__(self, client):
+        """
+
+        :param client: vos.Client instance
+        """
+        super().__init__()
+        self._client = client
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def _get_headers(self, storage_name):
+        try:
+            b = BytesIO()
+            b.name = storage_name
+            self._client.copy(storage_name, b, head=True)
+            fits_header = b.getvalue().decode('ascii')
+            b.close()
+            return data_util.make_headers_from_string(fits_header)
+        except Exception as e:
+            self._logger.debug(traceback.format_exc())
+            raise mc.CadcException(
+                f'Did not retrieve {storage_name} header because {e}'
+            )
+
+    def set(self, storage_name):
+        for index, entry in enumerate(storage_name.destination_uris):
+            if '.fits' in entry:
+                self._headers[entry] = (
+                    self._client.get_head(storage_name.destination_uris[index])
+                )
+            else:
+                self._headers[entry] = []
+            self._file_info[entry] = clc.vault_info(
+                self._client,
+                storage_name.destination_uris[index],
             )
