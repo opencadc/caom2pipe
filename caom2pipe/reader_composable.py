@@ -67,8 +67,8 @@
 # ***********************************************************************
 #
 
-from io import BytesIO
 import logging
+import tempfile
 import traceback
 
 from caom2utils import data_util
@@ -175,12 +175,11 @@ class VaultReader(MetadataReader):
 
     def _get_headers(self, storage_name):
         try:
-            b = BytesIO()
-            b.name = storage_name
-            self._client.copy(storage_name, b, head=True)
-            fits_header = b.getvalue().decode('ascii')
-            b.close()
-            return data_util.make_headers_from_string(fits_header)
+            tmp_file = tempfile.NamedTemporaryFile()
+            self._client.copy(storage_name, tmp_file.name, head=True)
+            temp_header = data_util.get_local_file_headers(tmp_file.name)
+            tmp_file.close()
+            return temp_header
         except Exception as e:
             self._logger.debug(traceback.format_exc())
             raise mc.CadcException(
