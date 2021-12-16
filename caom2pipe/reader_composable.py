@@ -188,14 +188,13 @@ class VaultReader(MetadataReader):
             )
 
     def set(self, storage_name):
-        for index, entry in enumerate(storage_name.destination_uris):
+        for index, entry in enumerate(storage_name.source_names):
             if '.fits' in entry:
                 self._headers[entry] = (
-                    self._client.get_head(storage_name.destination_uris[index])
+                    self._get_headers(storage_name.source_names[index])
                 )
             else:
                 self._headers[entry] = []
             self._file_info[entry] = clc.vault_info(
-                self._client,
-                storage_name.destination_uris[index],
+                self._client, storage_name.source_names[index]
             )
