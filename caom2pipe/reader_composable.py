@@ -67,9 +67,21 @@
 # ***********************************************************************
 #
 
-from caom2utils import data_util
+import logging
+import tempfile
+import traceback
 
-__all__ = ['MetadataReader']
+from caom2utils import data_util
+from caom2pipe import client_composable as clc
+from caom2pipe import manage_composable as mc
+
+
+__all__ = [
+    'FileMetadataReader',
+    'MetadataReader',
+    'StorageClientReader',
+    'VaultReader',
+]
 
 
 class MetadataReader:
@@ -146,4 +158,42 @@ class StorageClientReader(MetadataReader):
                 self._headers[entry] = []
             self._file_info[entry] = self._client.info(
                 storage_name.destination_uris[index]
+            )
+
+
+class VaultReader(MetadataReader):
+    """Use case: vault."""
+
+    def __init__(self, client):
+        """
+
+        :param client: vos.Client instance
+        """
+        super().__init__()
+        self._client = client
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def _get_headers(self, storage_name):
+        try:
+            tmp_file = tempfile.NamedTemporaryFile()
+            self._client.copy(storage_name, tmp_file.name, head=True)
+            temp_header = data_util.get_local_file_headers(tmp_file.name)
+            tmp_file.close()
+            return temp_header
+        except Exception as e:
+            self._logger.debug(traceback.format_exc())
+            raise mc.CadcException(
+                f'Did not retrieve {storage_name} header because {e}'
+            )
+
+    def set(self, storage_name):
+        for index, entry in enumerate(storage_name.source_names):
+            if '.fits' in entry:
+                self._headers[entry] = (
+                    self._get_headers(storage_name.source_names[index])
+                )
+            else:
+                self._headers[entry] = []
+            self._file_info[entry] = clc.vault_info(
+                self._client, storage_name.source_names[index]
             )

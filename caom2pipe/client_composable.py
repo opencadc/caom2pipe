@@ -90,7 +90,7 @@ from astropy.table import Table
 from cadctap import CadcTapClient
 from cadcutils import net, exceptions
 from cadcdata import FileInfo
-from caom2utils import StorageClientWrapper
+from caom2utils.data_util import StorageClientWrapper
 from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 from caom2repo import CAOM2RepoClient

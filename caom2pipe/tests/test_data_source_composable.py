@@ -196,20 +196,27 @@ def test_vault_list_dir_data_source():
         'size': 0,
     }
     node1.uri = 'vos://cadc.nrc.ca!vault/goliaths/wrong/900898p_moc.fits'
+    node1.type = 'vos:DataNode'
     node2 = type('', (), {})()
     node2.props = {
         'size': 12,
     }
     node2.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/abc.fits'
+    node2.type = 'vos:DataNode'
     node3 = type('', (), {})()
     node3.props = {
         'size': 12,
     }
     node3.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/abc.txt'
+    node3.type = 'vos:DataNode'
+    node4 = type('', (), {})()
+    node4.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc'
+    node4.type = 'vos:ContainerNode'
+    node4.node_list = [node1, node2, node3]
 
     test_vos_client = Mock()
     test_vos_client.listdir.side_effect = _query_mock
-    test_vos_client.get_node.side_effect = [node1, node2, node3]
+    test_vos_client.get_node.side_effect = [node4, node1, node2, node3]
     test_config = mc.Config()
     test_config.get_executors()
     test_config.data_sources = ['vos:goliaths/wrong']
@@ -219,7 +226,10 @@ def test_vault_list_dir_data_source():
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a test result'
     assert len(test_result) == 1, 'wrong number of results'
-    assert 'vos:goliaths/wrong/abc.fits' in test_result, 'wrong result'
+    test_entry = test_result.popleft()
+    assert (
+        'vos://cadc.nrc.ca!vault/goliaths/moc/abc.fits' == test_entry
+    ), 'wrong result'
 
 
 def test_list_dir_time_box_data_source():
@@ -321,27 +331,22 @@ def test_vault_list_dir_time_box_data_source():
         'size': 14,
     }
     node1.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
+    node1.type = 'vos:DataNode'
     node2 = type('', (), {})()
     node2.props = {
         'date': '2020-09-13 19:55:03.067000+00:00',
         'size': 12,
     }
     node2.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/994899p_moc.fits'
-    node1.isdir = Mock(return_value=False)
-    node2.isdir = Mock(return_value=False)
+    node2.type = 'vos:DataNode'
 
-    def _glob_mock(ignore_source_directory):
-        return [1, 2]
-
-    def _get_node_mock(target):
-        if target == 1:
-            return node1
-        else:
-            return node2
+    node3 = type('', (), {})()
+    node3.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc'
+    node3.type = 'vos:ContainerNode'
+    node3.node_list = [node1, node2]
 
     test_vos_client = Mock()
-    test_vos_client.glob.side_effect = _glob_mock
-    test_vos_client.get_node.side_effect = _get_node_mock
+    test_vos_client.get_node.side_effect = [node3, node1, node2]
     test_config = mc.Config()
     test_config.get_executors()
     test_config.data_sources = ['vos:goliaths/wrong']

@@ -707,27 +707,26 @@ class VaultDataSource(ListDirTimeBoxDataSource):
 
     def get_work(self):
         self._logger.debug('Begin get_work.')
-        work = []
+        work = deque()
         for source_directory in self._source_directories:
-            file_list = self._vault_client.listdir(source_directory)
-            for f_name in file_list:
-                fqn = f'{source_directory}/{f_name}'
-                target_node = self._vault_client.get_node(fqn)
-                if self.default_filter(target_node):
-                    work.append(fqn)
-                    self._logger.debug(f'{fqn} added to work list.')
-        # ensure unique entries
-        temp = list(set(work))
+            self._logger.debug(
+                f'Searching {source_directory} for work to do.'
+            )
+            self._find_work(source_directory, work)
         self._logger.debug('End get_work.')
-        return temp
+        return work
 
     def _append_work(self, prev_exec_time, exec_time, entry):
         self._logger.info(f'Search for work in {entry}.')
-        targets = self._vault_client.glob(f'{entry}/*')
-        for target in targets:
+        # force = True means do not use the cache
+        node = self._vault_client.get_node(entry, limit=None, force=True)
+        while node.type == 'vos:LinkNode':
+            uri = node.target
+            node = self._vault_client.get_node(uri, limit=None, force=True)
+        for target in node.node_list:
             target_node = self._vault_client.get_node(target)
             target_node_mtime = mc.make_time_tz(target_node.props.get('date'))
-            if target_node.isdir() and self._recursive:
+            if target_node.type == 'vos:ContainerNode' and self._recursive:
                 if exec_time >= target_node_mtime >= prev_exec_time:
                     self._append_work(
                         prev_exec_time, exec_time, target_node.uri
@@ -744,6 +743,22 @@ class VaultDataSource(ListDirTimeBoxDataSource):
                         self._logger.info(
                             f'Add {target_node.uri} to work list.'
                         )
+
+    def _find_work(self, source_directory, work):
+        node = self._vault_client.get_node(
+            source_directory, limit=None, force=True
+        )
+        while node.type == 'vos:LinkNode':
+            uri = node.target
+            node = self._vault_client.get_node(uri, limit=None, force=True)
+        for entry in node.node_list:
+            if entry.type == 'vos:ContainerNode' and self._recursive:
+                self._find_work(entry.uri, work)
+            else:
+                if self.default_filter(entry):
+                    self._logger.info(f'Add {entry.uri} to work list.')
+                    work.append(entry.uri)
+                    break
 
     def default_filter(self, target_node):
         """
