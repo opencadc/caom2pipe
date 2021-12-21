@@ -86,11 +86,11 @@ __all__ = [
     'ListDirDataSource',
     'ListDirSeparateDataSource',
     'ListDirTimeBoxDataSource',
+    'LocalFilesDataSource',
     'QueryTimeBoxDataSource',
     'QueryTimeBoxDataSourceTS',
     'StateRunnerMeta',
     'TodoFileDataSource',
-    'UseLocalFilesDataSource',
     'VaultDataSource',
 ]
 
@@ -323,158 +323,7 @@ class ListDirTimeBoxDataSource(DataSource):
                             )
 
 
-class TodoFileDataSource(DataSource):
-    """
-    Implements the identification of the work to be done, by reading the
-    contents of a file.
-    """
-
-    def __init__(self, config):
-        super().__init__(config)
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    def get_work(self):
-        self._logger.debug(
-            f'Begin get_work from {self._config.work_fqn} in '
-            f'{self.__class__.__name__}'
-        )
-        work = deque()
-        with open(self._config.work_fqn) as f:
-            for line in f:
-                temp = line.strip()
-                if len(temp) > 0:
-                    # ignore empty lines
-                    self._logger.debug(f'Adding entry {temp} to work list.')
-                    work.append(temp)
-        self._logger.debug(f'End get_work in {self.__class__.__name__}')
-        return work
-
-
-class QueryTimeBoxDataSource(DataSource):
-    """
-    Implements the identification of the work to be done, by querying a
-    TAP service, in time-boxed chunks.
-    """
-
-    def __init__(self, config, preview_suffix='jpg'):
-        super().__init__(config)
-        self._preview_suffix = preview_suffix
-        subject = clc.define_subject(config)
-        self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    def get_time_box_work(self, prev_exec_time, exec_time):
-        """
-        Get a set of file names from an archive. Limit the entries by
-        time-boxing on ingestDate, and don't include previews.
-
-        :param prev_exec_time datetime start of the timestamp chunk
-        :param exec_time datetime end of the timestamp chunk
-        :return: a list of file names in the CADC storage system
-        """
-        # container timezone is UTC, ad timezone is Pacific
-        db_fmt = '%Y-%m-%d %H:%M:%S.%f'
-        prev_exec_time_pz = datetime.strftime(
-            prev_exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt
-        )
-        exec_time_pz = datetime.strftime(
-            exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt
-        )
-        self._logger.debug(f'Begin get_work.')
-        query = (
-            f"SELECT fileName, ingestDate FROM archive_files WHERE "
-            f"archiveName = '{self._config.archive}' "
-            f"AND fileName not like '%{self._preview_suffix}' "
-            f"AND ingestDate > '{prev_exec_time_pz}' "
-            f"AND ingestDate <= '{exec_time_pz}' "
-            "ORDER BY ingestDate ASC "
-        )
-        self._logger.debug(query)
-        result = deque()
-        rows = clc.query_tap_client(query, self._client)
-        for row in rows:
-            result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
-        return result
-
-
-def is_offset_aware(dt):
-    """
-    Raises CadcException if tzinfo is not set
-    :param dt:
-    :return: a datetime.timestamp with tzinfo set
-    """
-    if dt.tzinfo is None:
-        raise mc.CadcException(f'Expect tzinfo to be set for {dt}')
-    return dt
-
-
-@dataclass
-class StateRunnerMeta:
-    # how to refer to the item of work to be processed
-    entry_name: str
-    # offset-aware timestamp associated with item of work
-    entry_ts: datetime.timestamp  # = field(default_factory=is_offset_aware)
-
-
-class QueryTimeBoxDataSourceTS(DataSource):
-    """
-    Implements the identification of the work to be done, by querying a
-    TAP service, in time-boxed chunks. The time values are timestamps
-    (floats).
-
-    Deprecate the QueryTimeBoxDataSource class in favour of this
-    implementation.
-    """
-
-    def __init__(self, config, preview_suffix='jpg'):
-        super().__init__(config)
-        self._preview_suffix = preview_suffix
-        subject = clc.define_subject(config)
-        self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    def get_time_box_work(self, prev_exec_time, exec_time):
-        """
-        Get a set of file names from an archive. Limit the entries by
-        time-boxing on ingestDate, and don't include previews.
-
-        :param prev_exec_time timestamp start of the time-boxed chunk
-        :param exec_time timestamp end of the time-boxed chunk
-        :return: a list of StateRunnerMeta instances in the CADC storage
-            system
-        """
-        # container timezone is UTC, ad timezone is Pacific
-        db_fmt = '%Y-%m-%d %H:%M:%S.%f'
-        prev_exec_time_pz = datetime.strftime(
-            datetime.utcfromtimestamp(prev_exec_time).astimezone(
-                tz.gettz('US/Pacific')
-            ),
-            db_fmt,
-        )
-        exec_time_pz = datetime.strftime(
-            datetime.utcfromtimestamp(exec_time).astimezone(
-                tz.gettz('US/Pacific')
-            ),
-            db_fmt,
-        )
-        self._logger.debug(f'Begin get_work.')
-        query = (
-            f"SELECT fileName, ingestDate FROM archive_files WHERE "
-            f"archiveName = '{self._config.archive}' "
-            f"AND fileName NOT LIKE '%{self._preview_suffix}' "
-            f"AND ingestDate > '{prev_exec_time_pz}' "
-            f"AND ingestDate <= '{exec_time_pz}' "
-            "ORDER BY ingestDate ASC "
-        )
-        self._logger.debug(query)
-        rows = clc.query_tap_client(query, self._client)
-        result = deque()
-        for row in rows:
-            result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
-        return result
-
-
-class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
+class LocalFilesDataSource(ListDirTimeBoxDataSource):
     """
     For when use_local_files: True and cleanup_when_storing: True
     """
@@ -699,6 +548,157 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
                     f'Failed to move {fqn} to {destination}'
                 )
                 raise mc.CadcException(e)
+
+
+class TodoFileDataSource(DataSource):
+    """
+    Implements the identification of the work to be done, by reading the
+    contents of a file.
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def get_work(self):
+        self._logger.debug(
+            f'Begin get_work from {self._config.work_fqn} in '
+            f'{self.__class__.__name__}'
+        )
+        work = deque()
+        with open(self._config.work_fqn) as f:
+            for line in f:
+                temp = line.strip()
+                if len(temp) > 0:
+                    # ignore empty lines
+                    self._logger.debug(f'Adding entry {temp} to work list.')
+                    work.append(temp)
+        self._logger.debug(f'End get_work in {self.__class__.__name__}')
+        return work
+
+
+class QueryTimeBoxDataSource(DataSource):
+    """
+    Implements the identification of the work to be done, by querying a
+    TAP service, in time-boxed chunks.
+    """
+
+    def __init__(self, config, preview_suffix='jpg'):
+        super().__init__(config)
+        self._preview_suffix = preview_suffix
+        subject = clc.define_subject(config)
+        self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def get_time_box_work(self, prev_exec_time, exec_time):
+        """
+        Get a set of file names from an archive. Limit the entries by
+        time-boxing on ingestDate, and don't include previews.
+
+        :param prev_exec_time datetime start of the timestamp chunk
+        :param exec_time datetime end of the timestamp chunk
+        :return: a list of file names in the CADC storage system
+        """
+        # container timezone is UTC, ad timezone is Pacific
+        db_fmt = '%Y-%m-%d %H:%M:%S.%f'
+        prev_exec_time_pz = datetime.strftime(
+            prev_exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt
+        )
+        exec_time_pz = datetime.strftime(
+            exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt
+        )
+        self._logger.debug(f'Begin get_work.')
+        query = (
+            f"SELECT fileName, ingestDate FROM archive_files WHERE "
+            f"archiveName = '{self._config.archive}' "
+            f"AND fileName not like '%{self._preview_suffix}' "
+            f"AND ingestDate > '{prev_exec_time_pz}' "
+            f"AND ingestDate <= '{exec_time_pz}' "
+            "ORDER BY ingestDate ASC "
+        )
+        self._logger.debug(query)
+        result = deque()
+        rows = clc.query_tap_client(query, self._client)
+        for row in rows:
+            result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
+        return result
+
+
+def is_offset_aware(dt):
+    """
+    Raises CadcException if tzinfo is not set
+    :param dt:
+    :return: a datetime.timestamp with tzinfo set
+    """
+    if dt.tzinfo is None:
+        raise mc.CadcException(f'Expect tzinfo to be set for {dt}')
+    return dt
+
+
+@dataclass
+class StateRunnerMeta:
+    # how to refer to the item of work to be processed
+    entry_name: str
+    # offset-aware timestamp associated with item of work
+    entry_ts: datetime.timestamp  # = field(default_factory=is_offset_aware)
+
+
+class QueryTimeBoxDataSourceTS(DataSource):
+    """
+    Implements the identification of the work to be done, by querying a
+    TAP service, in time-boxed chunks. The time values are timestamps
+    (floats).
+
+    Deprecate the QueryTimeBoxDataSource class in favour of this
+    implementation.
+    """
+
+    def __init__(self, config, preview_suffix='jpg'):
+        super().__init__(config)
+        self._preview_suffix = preview_suffix
+        subject = clc.define_subject(config)
+        self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def get_time_box_work(self, prev_exec_time, exec_time):
+        """
+        Get a set of file names from an archive. Limit the entries by
+        time-boxing on ingestDate, and don't include previews.
+
+        :param prev_exec_time timestamp start of the time-boxed chunk
+        :param exec_time timestamp end of the time-boxed chunk
+        :return: a list of StateRunnerMeta instances in the CADC storage
+            system
+        """
+        # container timezone is UTC, ad timezone is Pacific
+        db_fmt = '%Y-%m-%d %H:%M:%S.%f'
+        prev_exec_time_pz = datetime.strftime(
+            datetime.utcfromtimestamp(prev_exec_time).astimezone(
+                tz.gettz('US/Pacific')
+            ),
+            db_fmt,
+        )
+        exec_time_pz = datetime.strftime(
+            datetime.utcfromtimestamp(exec_time).astimezone(
+                tz.gettz('US/Pacific')
+            ),
+            db_fmt,
+        )
+        self._logger.debug(f'Begin get_work.')
+        query = (
+            f"SELECT fileName, ingestDate FROM archive_files WHERE "
+            f"archiveName = '{self._config.archive}' "
+            f"AND fileName NOT LIKE '%{self._preview_suffix}' "
+            f"AND ingestDate > '{prev_exec_time_pz}' "
+            f"AND ingestDate <= '{exec_time_pz}' "
+            "ORDER BY ingestDate ASC "
+        )
+        self._logger.debug(query)
+        rows = clc.query_tap_client(query, self._client)
+        result = deque()
+        for row in rows:
+            result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
+        return result
 
 
 class VaultDataSource(ListDirTimeBoxDataSource):
