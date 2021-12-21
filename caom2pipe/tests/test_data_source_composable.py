@@ -81,6 +81,7 @@ from unittest.mock import Mock, patch
 from cadcdata import FileInfo
 from caom2pipe import data_source_composable as dsc
 from caom2pipe import manage_composable as mc
+from caom2pipe import reader_composable as rdc
 
 import test_conf as tc
 
@@ -407,6 +408,7 @@ def test_transfer_check_fits_verify():
     test_already_successful_source = Path(
         '/test_files/already_successful.fits'
     )
+    test_reader = rdc.FileMetadataReader()
 
     def mock_info(uri):
         return FileInfo(
@@ -417,10 +419,11 @@ def test_transfer_check_fits_verify():
 
     def _at_cfht(test_start_ts, test_end_ts):
         test_config.cleanup_files_when_storing = True
+        test_config.retry_failures = False
         cadc_client_mock = Mock(autospec=True)
         cadc_client_mock.info.side_effect = mock_info
         test_subject = dsc.UseLocalFilesDataSource(
-            test_config, cadc_client_mock
+            test_config, cadc_client_mock, test_reader
         )
 
         assert test_subject is not None, 'expect construction to work'
@@ -449,7 +452,7 @@ def test_transfer_check_fits_verify():
 
         # and after the transfer
         for test_entry in test_result:
-            test_subject.clean_up(test_entry)
+            test_subject.clean_up(test_entry, current_count=0)
         assert not test_correct_file.exists(), 'correct file at source'
         assert not moved_success.exists(), 'correct file at destination'
         assert moved_failure.exists(), 'correct file at destination'
@@ -465,7 +468,7 @@ def test_transfer_check_fits_verify():
         cadc_client_mock = Mock(autospec=True)
         cadc_client_mock.info.side_effect = mock_info
         test_subject = dsc.UseLocalFilesDataSource(
-            test_config, cadc_client_mock
+            test_config, cadc_client_mock, test_reader
         )
         assert test_subject is not None, 'expect construction to work'
         test_result = test_subject.get_time_box_work(
@@ -487,7 +490,7 @@ def test_transfer_check_fits_verify():
             assert not moved.exists(), 'file at destination'
         # clean up should do nothing
         for test_entry in test_result:
-            test_subject.clean_up(test_entry)
+            test_subject.clean_up(test_entry, current_count=0)
         for f in [
             test_empty_file,
             test_broken_file,
@@ -510,7 +513,7 @@ def test_transfer_check_fits_verify():
             cadc_client_mock = Mock(autospec=True)
             cadc_client_mock.info.side_effect = mock_info
             test_subject = dsc.UseLocalFilesDataSource(
-                test_config, cadc_client_mock
+                test_config, cadc_client_mock, test_reader
             )
             with pytest.raises(mc.CadcException):
                 test_result = test_subject.get_time_box_work(
@@ -570,6 +573,7 @@ def test_transfer_fails(check_fits_mock):
     test_correct_file_1 = Path('/cfht_source/correct_1.fits.gz')
     test_correct_file_2 = Path('/cfht_source/correct_2.fits.gz')
     test_correct_source = Path('/test_files/correct.fits.gz')
+    test_reader = rdc.FileMetadataReader()
 
     for entry in [
         test_failure_directory,
@@ -592,7 +596,7 @@ def test_transfer_fails(check_fits_mock):
 
     cadc_client_mock = Mock(autospec=True)
     test_subject = dsc.UseLocalFilesDataSource(
-        test_config, cadc_client_mock
+        test_config, cadc_client_mock, test_reader
     )
     assert test_subject is not None, 'ctor failure'
     test_result = test_subject.get_work()
@@ -612,7 +616,7 @@ def test_transfer_fails(check_fits_mock):
 
     cadc_client_mock.info.side_effect = [match, different]
     for test_entry in test_result:
-        test_subject.clean_up(test_entry)
+        test_subject.clean_up(test_entry, current_count=0)
 
     assert not test_correct_file_1.exists(), 'file 1 should be moved'
     assert not test_correct_file_2.exists(), 'file 2 should be moved'

@@ -863,14 +863,8 @@ class OrganizeExecutes:
         reason = mc.Rejected.known_failure(stack_trace)
         if reason == mc.Rejected.NO_REASON:
             with open(self.retry_fqn, 'a') as retry:
-                if (
-                    hasattr(storage_name, '_entry')
-                    and storage_name.entry is not None
-                ):
-                    retry.write(f'{storage_name.entry}\n')
-                else:
-                    for entry in storage_name.source_names:
-                        retry.write(f'{entry}\n')
+                for entry in storage_name.source_names:
+                    retry.write(f'{entry}\n')
         else:
             self.observable.rejected.record(reason, storage_name.obs_id)
             self._rejected_count += 1

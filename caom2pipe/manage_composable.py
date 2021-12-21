@@ -181,7 +181,6 @@ class Features:
         self._supports_catalog = True
         self._supports_latest_client = False
         self._supports_multiple_files = True
-        self._expects_retry = True
 
     @property
     def run_in_airflow(self):
@@ -232,16 +231,6 @@ class Features:
     @supports_multiple_files.setter
     def supports_multiple_files(self, value):
         self._supports_multiple_files = value
-
-    @property
-    def expects_retry(self):
-        """If true, will execute any specific code for running retries
-        based on retries_log.txt content."""
-        return self._expects_retry
-
-    @expects_retry.setter
-    def expects_retry(self, value):
-        self._expects_retry = value
 
     def __str__(self):
         return ' '.join(
@@ -636,6 +625,7 @@ class Config:
         self.retry_fqn = None
         self._retry_failures = False
         self._retry_count = 1
+        self._retry_decay = 1
         self._proxy_file_name = None
         # the fully qualified name for the file
         self.proxy_fqn = None
@@ -950,6 +940,20 @@ class Config:
         self._retry_count = value
 
     @property
+    def retry_decay(self):
+        """factor applied to how long the application will wait before
+        retrying the entries in the retries.txt file.
+
+        Default is 1 minute, a value of 0.25 will result in a 15 second delay,
+        a value of 10 will result in a 10 minute delay.
+        """
+        return self._retry_decay
+
+    @retry_decay.setter
+    def retry_decay(self, value):
+        self._retry_decay = value
+
+    @property
     def rejected_directory(self):
         """the directory where rejected entry files are written, by default
         will be the log file directory"""
@@ -1156,6 +1160,7 @@ class Config:
             f'  report_fqn:: {self.report_fqn}\n'
             f'  resource_id:: {self.resource_id}\n'
             f'  retry_count:: {self.retry_count}\n'
+            f'  retry_decay:: {self.retry_decay}\n'
             f'  retry_failures:: {self.retry_failures}\n'
             f'  retry_file_name:: {self.retry_file_name}\n'
             f'  retry_fqn:: {self.retry_fqn}\n'
@@ -1264,6 +1269,7 @@ class Config:
             self.retry_file_name = config.get('retry_file_name', 'retries.txt')
             self.retry_failures = config.get('retry_failures', False)
             self.retry_count = config.get('retry_count', 1)
+            self.retry_decay = config.get('retry_decay', 1)
             self.rejected_file_name = config.get(
                 'rejected_file_name', 'rejected.yml'
             )
@@ -1333,12 +1339,7 @@ class Config:
             need to attempt to retry the pipeline execution for any entries.
         """
         result = True
-        if (
-            self.features is not None
-            and self.features.expects_retry
-            and self.retry_failures
-            and self.log_to_file
-        ):
+        if self.retry_failures:
             meta = get_file_meta(self.retry_fqn)
             if meta['size'] == 0:
                 logging.info(
@@ -3174,7 +3175,16 @@ class ValueRepairCache(Cache):
     def _repair_attribute(self, entity, attribute_name):
         try:
             attribute_value = getattr(entity, attribute_name)
-            if attribute_value not in self._values.values():
+            attribute_repr = (
+                attribute_value.value
+                if isinstance(attribute_value, Enum)
+                else attribute_value
+            )
+            if (
+                'any' in self._values.keys()
+                or 'none' in self._values.keys()
+                or attribute_repr in self._values.keys()
+            ):
                 for original, fix in self._values.items():
                     if attribute_value is None and original != 'none':
                         self._logger.info(

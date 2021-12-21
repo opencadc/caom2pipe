@@ -75,7 +75,7 @@ import os
 from astropy.table import Table
 from datetime import datetime, timedelta, timezone
 
-from unittest.mock import Mock, patch, ANY
+from unittest.mock import Mock, patch, call
 import test_conf as tc
 
 from caom2 import SimpleObservation, Algorithm
@@ -183,7 +183,7 @@ def test_run_todo_list_dir_data_source_invalid_fname_v(
 
     class TestStorageName(mc.StorageName):
         def __init__(self, entry):
-            self._obs_id = os.path.basename(entry)
+            super().__init__(obs_id=os.path.basename(entry))
             self._source_names = [entry]
 
         def is_valid(self):
@@ -486,9 +486,10 @@ def test_run_todo_list_dir_data_source_exception(
         ), 'scrape, should be no data client call'
 
 
+@patch('caom2pipe.data_source_composable.TodoFileDataSource.clean_up')
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
-def test_run_todo_retry(do_one_mock, clients_mock, test_config):
+def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config):
     test_config.features.supports_latest_client = True
     (
         retry_success_fqn,
@@ -501,6 +502,7 @@ def test_run_todo_retry(do_one_mock, clients_mock, test_config):
     test_config.work_fqn = f'{tc.TEST_DATA_DIR}/todo.txt'
     test_config.log_to_file = True
     test_config.retry_failures = True
+    test_config.retry_decay = 0
     _write_todo(test_config)
 
     test_result = rc.run_by_todo(config=test_config)
@@ -519,6 +521,10 @@ def test_run_todo_retry(do_one_mock, clients_mock, test_config):
     assert not (
         clients_mock.return_value.data_client.get_file_info.called
     ), 'do_one is mocked, should be no data client call'
+    assert source_mock.called, 'clean_up should be called'
+    assert source_mock.call_count == 2, 'clean_up should be called two times'
+    calls = [call('test_obs_id.fits.gz', 0), call('test_obs_id.fits.gz', 1)]
+    source_mock.assert_has_calls(calls)
 
 
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')

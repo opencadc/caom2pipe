@@ -14,3 +14,5 @@ value_repair:
     calibration: none
   observation.intent:
     none: science
+  chunk.position.coordsys:
+    NONE: none
