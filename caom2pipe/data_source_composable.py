@@ -369,14 +369,14 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         """
         self._logger.debug(f'Begin clean_up with {entry}')
         if (
-                self._cleanup_when_storing
-                and (
+            self._cleanup_when_storing
+            and (
                 (not self._retry_failures)
                 or (
-                        self._retry_failures
-                        and current_count >= self._retry_count
+                    self._retry_failures
+                    and current_count >= self._retry_count
                 )
-        )
+            )
         ):
             if isinstance(entry, str):
                 fqn = entry
@@ -496,10 +496,10 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             self._metadata_reader.set_file_info(temp_storage_name)
 
             if (
-                    cadc_meta is not None
-                    and self._metadata_reader.file_info.get(
-                destination_name
-            ).md5sum == cadc_meta.md5sum
+                cadc_meta is not None
+                and self._metadata_reader.file_info.get(
+                    destination_name
+                ).md5sum == cadc_meta.md5sum
             ):
                 result = False
         else:
