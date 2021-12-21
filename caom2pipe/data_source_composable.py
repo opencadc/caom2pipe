@@ -86,11 +86,11 @@ __all__ = [
     'ListDirDataSource',
     'ListDirSeparateDataSource',
     'ListDirTimeBoxDataSource',
+    'LocalFilesDataSource',
     'QueryTimeBoxDataSource',
     'QueryTimeBoxDataSourceTS',
     'StateRunnerMeta',
     'TodoFileDataSource',
-    'UseLocalFilesDataSource',
     'VaultDataSource',
 ]
 
@@ -323,6 +323,233 @@ class ListDirTimeBoxDataSource(DataSource):
                             )
 
 
+class LocalFilesDataSource(ListDirTimeBoxDataSource):
+    """
+    For when use_local_files: True and cleanup_when_storing: True
+    """
+    def __init__(self, config, cadc_client, metadata_reader, recursive=True):
+        super().__init__(config)
+        self._retry_failures = config.retry_failures
+        self._retry_count = config.retry_count
+        self._cadc_client = cadc_client
+        self._cleanup_when_storing = config.cleanup_files_when_storing
+        self._cleanup_failure_directory = config.cleanup_failure_destination
+        self._cleanup_success_directory = config.cleanup_success_destination
+        self._store_modified_files_only = config.store_modified_files_only
+        self._supports_latest_client = config.features.supports_latest_client
+        self._source_directories = config.data_sources
+        self._archive = config.archive
+        self._collection = config.collection
+        self._recursive = recursive
+        self._metadata_reader = metadata_reader
+        self._logger = logging.getLogger(self.__class__.__name__)
+        self._is_connected = config.is_connected
+        if not self._is_connected:
+            # assume iterative testing is the objective for SCRAPE'ing,
+            # and over-ride the configuration that will undermine that
+            # behaviour.
+            self._cleanup_when_storing = False
+            self._logger.info(
+                'SCRAPE\'ing data - over-riding config.yml clean-up.'
+            )
+
+    def clean_up(self, entry, current_count=0):
+        """
+        Move a file to the success or failure location, depending on
+        whether a file with the same checksum is at CADC.
+
+        Move the file only after all retries (as specified in config.yml)
+        have been attempted. Note that this cleanup behaviour will be assigned
+        to the TodoFileDataSource during a retry.
+
+        :param entry: either a data_source_composable.StateRunnerMeta instance
+            or an str, depending on whether the clean-up is invoked from a
+            time-boxed or all-in-one invocation.
+        :param current_count: int how many retries have been executed
+        """
+        self._logger.debug(f'Begin clean_up with {entry}')
+        if (
+                self._cleanup_when_storing
+                and (
+                (not self._retry_failures)
+                or (
+                        self._retry_failures
+                        and current_count >= self._retry_count
+                )
+        )
+        ):
+            if isinstance(entry, str):
+                fqn = entry
+            else:
+                fqn = entry.entry_name
+            self._logger.debug(f'Clean up {fqn}')
+            if self._check_md5sum(fqn):
+                # the transfer itself failed, so track as a failure
+                self._move_action(fqn, self._cleanup_failure_directory)
+            else:
+                self._move_action(fqn, self._cleanup_success_directory)
+        self._logger.debug('End clean_up.')
+
+    def default_filter(self, entry):
+        """
+        :param entry: os.DirEntry
+        """
+        copy_file = True
+        if super().default_filter(entry):
+            if entry.name.startswith('.'):
+                # skip dot files
+                copy_file = False
+            elif '.hdf5' in entry.name:
+                # no hdf5 validation
+                pass
+            elif ac.check_fits(entry.path):
+                # only transfer files that pass the FITS verification
+                if self._store_modified_files_only:
+                    # only transfer files with a different MD5 checksum
+                    copy_file = self._check_md5sum(entry.path)
+                    if not copy_file and self._cleanup_when_storing:
+                        self._logger.warning(
+                            f'{entry.path} has the same md5sum at CADC. Not '
+                            f'transferring.'
+                        )
+                        # KW - 23-06-21
+                        # if the file already exists, with the same
+                        # checksum, at CADC, Kanoa says move it to the
+                        # 'succeeded' directory.
+                        self._move_action(
+                            entry.path, self._cleanup_success_directory
+                        )
+            else:
+                if self._cleanup_when_storing:
+                    self._logger.warning(
+                        f'Moving {entry.path} to '
+                        f'{self._cleanup_failure_directory}'
+                    )
+                    self._move_action(
+                        entry.path, self._cleanup_failure_directory
+                    )
+                copy_file = False
+        else:
+            copy_file = False
+        self._logger.debug(
+            f'Done default_filter says copy_file is {copy_file} for {entry}'
+        )
+        return copy_file
+
+    def get_work(self):
+        self._logger.debug(f'Begin get_work.')
+        for source in self._source_directories:
+            self._logger.info(f'Look in {source} for work.')
+            self._find_work(source)
+        self._logger.debug('End get_work')
+        return self._work
+
+    def _append_work(self, prev_exec_time, exec_time, entry_path):
+        with os.scandir(entry_path) as dir_listing:
+            for entry in dir_listing:
+                if entry.is_dir() and self._recursive:
+                    entry_stats = entry.stat()
+                    if exec_time >= entry_stats.st_mtime >= prev_exec_time:
+                        self._append_work(
+                            prev_exec_time, exec_time, entry.path
+                        )
+                else:
+                    # order the stats check before the default_filter check,
+                    # because CFHT likes to work with tens of thousands of
+                    # files, not a few, and the default filter is the one
+                    # that opens and reads every file to see if it's a valid
+                    # FITS file
+                    #
+                    # send the dir_listing value
+                    # skip dot files, but have a special exclusion, because
+                    # otherwise the entry.stat() call will sometimes fail.
+                    if not entry.name.startswith('.'):
+                        entry_stats = entry.stat()
+                        if (
+                                exec_time
+                                >= entry_stats.st_mtime
+                                >= prev_exec_time
+                        ):
+                            if self.default_filter(entry):
+                                self._temp[entry_stats.st_mtime].append(
+                                    entry.path
+                                )
+
+    def _check_md5sum(self, entry_path):
+        """
+        :return: boolean False if the metadata is the same locally as at
+            CADC, True otherwise
+        """
+        # get the metadata locally
+        result = True
+        if self._is_connected:
+            # get the CADC FileInfo
+            f_name = os.path.basename(entry_path)
+            scheme = 'cadc' if self._supports_latest_client else 'ad'
+            destination_name = mc.build_uri(self._collection, f_name, scheme)
+            cadc_meta = self._cadc_client.info(destination_name)
+
+            # get the local FileInfo
+            temp_storage_name = mc.StorageName()
+            temp_storage_name.source_names = [entry_path]
+            temp_storage_name.destination_uris = [destination_name]
+            self._metadata_reader.set_file_info(temp_storage_name)
+
+            if (
+                    cadc_meta is not None
+                    and self._metadata_reader.file_info.get(
+                destination_name
+            ).md5sum == cadc_meta.md5sum
+            ):
+                result = False
+        else:
+            self._logger.debug(
+                f'SCRAPE\'ing data - no md5sum checking with CADC for '
+                f'{entry_path}.'
+            )
+        temp_text = 'different' if result else 'same'
+        self._logger.debug(
+            f'Done _check_md5sum for {entry_path} result is {temp_text} at '
+            f'CADC.'
+        )
+        return result
+
+    def _find_work(self, entry_path):
+        with os.scandir(entry_path) as dir_listing:
+            for entry in dir_listing:
+                if entry.is_dir() and self._recursive:
+                    self._find_work(entry.path)
+                else:
+                    if self.default_filter(entry):
+                        self._logger.info(
+                            f'Adding {entry.path} to work list.'
+                        )
+                        self._work.append(entry.path)
+
+    def _move_action(self, fqn, destination):
+        # if move when storing is enabled, move to an after-action location
+        if self._cleanup_when_storing:
+            # shutil.move is atomic if it's within a file system, which I
+            # believe is the description Kanoa gave. It also supports
+            # the same behaviour as
+            # https://www.gnu.org/software/coreutils/manual/html_node/
+            # mv-invocation.html#mv-invocation when copying between
+            # file systems for moving a single file.
+            try:
+                f_name = os.path.basename(fqn)
+                # if the destination is a fully-qualified name, an
+                # over-write will succeed
+                dest_fqn = os.path.join(destination, f_name)
+                self._logger.debug(f'Moving {fqn} to {dest_fqn}')
+                shutil.move(fqn, dest_fqn)
+            except Exception as e:
+                self._logger.debug(traceback.format_exc())
+                self._logger.error(
+                    f'Failed to move {fqn} to {destination}'
+                )
+                raise mc.CadcException(e)
+
+
 class TodoFileDataSource(DataSource):
     """
     Implements the identification of the work to be done, by reading the
@@ -472,233 +699,6 @@ class QueryTimeBoxDataSourceTS(DataSource):
         for row in rows:
             result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
         return result
-
-
-class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
-    """
-    For when use_local_files: True and cleanup_when_storing: True
-    """
-    def __init__(self, config, cadc_client, metadata_reader, recursive=True):
-        super().__init__(config)
-        self._retry_failures = config.retry_failures
-        self._retry_count = config.retry_count
-        self._cadc_client = cadc_client
-        self._cleanup_when_storing = config.cleanup_files_when_storing
-        self._cleanup_failure_directory = config.cleanup_failure_destination
-        self._cleanup_success_directory = config.cleanup_success_destination
-        self._store_modified_files_only = config.store_modified_files_only
-        self._supports_latest_client = config.features.supports_latest_client
-        self._source_directories = config.data_sources
-        self._archive = config.archive
-        self._collection = config.collection
-        self._recursive = recursive
-        self._metadata_reader = metadata_reader
-        self._logger = logging.getLogger(self.__class__.__name__)
-        self._is_connected = config.is_connected
-        if not self._is_connected:
-            # assume iterative testing is the objective for SCRAPE'ing,
-            # and over-ride the configuration that will undermine that
-            # behaviour.
-            self._cleanup_when_storing = False
-            self._logger.info(
-                'SCRAPE\'ing data - over-riding config.yml clean-up.'
-            )
-
-    def clean_up(self, entry, current_count=0):
-        """
-        Move a file to the success or failure location, depending on
-        whether a file with the same checksum is at CADC.
-
-        Move the file only after all retries (as specified in config.yml)
-        have been attempted. Note that this cleanup behaviour will be assigned
-        to the TodoFileDataSource during a retry.
-
-        :param entry: either a data_source_composable.StateRunnerMeta instance
-            or an str, depending on whether the clean-up is invoked from a
-            time-boxed or all-in-one invocation.
-        :param current_count: int how many retries have been executed
-        """
-        self._logger.debug(f'Begin clean_up with {entry}')
-        if (
-            self._cleanup_when_storing
-            and (
-                (not self._retry_failures)
-                or (
-                    self._retry_failures
-                    and current_count >= self._retry_count
-                )
-            )
-        ):
-            if isinstance(entry, str):
-                fqn = entry
-            else:
-                fqn = entry.entry_name
-            self._logger.debug(f'Clean up {fqn}')
-            if self._check_md5sum(fqn):
-                # the transfer itself failed, so track as a failure
-                self._move_action(fqn, self._cleanup_failure_directory)
-            else:
-                self._move_action(fqn, self._cleanup_success_directory)
-        self._logger.debug('End clean_up.')
-
-    def default_filter(self, entry):
-        """
-        :param entry: os.DirEntry
-        """
-        copy_file = True
-        if super().default_filter(entry):
-            if entry.name.startswith('.'):
-                # skip dot files
-                copy_file = False
-            elif '.hdf5' in entry.name:
-                # no hdf5 validation
-                pass
-            elif ac.check_fits(entry.path):
-                # only transfer files that pass the FITS verification
-                if self._store_modified_files_only:
-                    # only transfer files with a different MD5 checksum
-                    copy_file = self._check_md5sum(entry.path)
-                    if not copy_file and self._cleanup_when_storing:
-                        self._logger.warning(
-                            f'{entry.path} has the same md5sum at CADC. Not '
-                            f'transferring.'
-                        )
-                        # KW - 23-06-21
-                        # if the file already exists, with the same
-                        # checksum, at CADC, Kanoa says move it to the
-                        # 'succeeded' directory.
-                        self._move_action(
-                            entry.path, self._cleanup_success_directory
-                        )
-            else:
-                if self._cleanup_when_storing:
-                    self._logger.warning(
-                        f'Moving {entry.path} to '
-                        f'{self._cleanup_failure_directory}'
-                    )
-                    self._move_action(
-                        entry.path, self._cleanup_failure_directory
-                    )
-                copy_file = False
-        else:
-            copy_file = False
-        self._logger.debug(
-            f'Done default_filter says copy_file is {copy_file} for {entry}'
-        )
-        return copy_file
-
-    def get_work(self):
-        self._logger.debug(f'Begin get_work.')
-        for source in self._source_directories:
-            self._logger.info(f'Look in {source} for work.')
-            self._find_work(source)
-        self._logger.debug('End get_work')
-        return self._work
-
-    def _append_work(self, prev_exec_time, exec_time, entry_path):
-        with os.scandir(entry_path) as dir_listing:
-            for entry in dir_listing:
-                if entry.is_dir() and self._recursive:
-                    entry_stats = entry.stat()
-                    if exec_time >= entry_stats.st_mtime >= prev_exec_time:
-                        self._append_work(
-                            prev_exec_time, exec_time, entry.path
-                        )
-                else:
-                    # order the stats check before the default_filter check,
-                    # because CFHT likes to work with tens of thousands of
-                    # files, not a few, and the default filter is the one
-                    # that opens and reads every file to see if it's a valid
-                    # FITS file
-                    #
-                    # send the dir_listing value
-                    # skip dot files, but have a special exclusion, because
-                    # otherwise the entry.stat() call will sometimes fail.
-                    if not entry.name.startswith('.'):
-                        entry_stats = entry.stat()
-                        if (
-                                exec_time
-                                >= entry_stats.st_mtime
-                                >= prev_exec_time
-                        ):
-                            if self.default_filter(entry):
-                                self._temp[entry_stats.st_mtime].append(
-                                    entry.path
-                                )
-
-    def _check_md5sum(self, entry_path):
-        """
-        :return: boolean False if the metadata is the same locally as at
-            CADC, True otherwise
-        """
-        # get the metadata locally
-        result = True
-        if self._is_connected:
-            # get the CADC FileInfo
-            f_name = os.path.basename(entry_path)
-            scheme = 'cadc' if self._supports_latest_client else 'ad'
-            destination_name = mc.build_uri(self._collection, f_name, scheme)
-            cadc_meta = self._cadc_client.info(destination_name)
-
-            # get the local FileInfo
-            temp_storage_name = mc.StorageName()
-            temp_storage_name.source_names = [entry_path]
-            temp_storage_name.destination_uris = [destination_name]
-            self._metadata_reader.set_file_info(temp_storage_name)
-
-            if (
-                cadc_meta is not None
-                and self._metadata_reader.file_info.get(
-                    destination_name
-                ).md5sum == cadc_meta.md5sum
-            ):
-                result = False
-        else:
-            self._logger.debug(
-                f'SCRAPE\'ing data - no md5sum checking with CADC for '
-                f'{entry_path}.'
-            )
-        temp_text = 'different' if result else 'same'
-        self._logger.debug(
-            f'Done _check_md5sum for {entry_path} result is {temp_text} at '
-            f'CADC.'
-        )
-        return result
-
-    def _find_work(self, entry_path):
-        with os.scandir(entry_path) as dir_listing:
-            for entry in dir_listing:
-                if entry.is_dir() and self._recursive:
-                    self._find_work(entry.path)
-                else:
-                    if self.default_filter(entry):
-                        self._logger.info(
-                            f'Adding {entry.path} to work list.'
-                        )
-                        self._work.append(entry.path)
-
-    def _move_action(self, fqn, destination):
-        # if move when storing is enabled, move to an after-action location
-        if self._cleanup_when_storing:
-            # shutil.move is atomic if it's within a file system, which I
-            # believe is the description Kanoa gave. It also supports
-            # the same behaviour as
-            # https://www.gnu.org/software/coreutils/manual/html_node/
-            # mv-invocation.html#mv-invocation when copying between
-            # file systems for moving a single file.
-            try:
-                f_name = os.path.basename(fqn)
-                # if the destination is a fully-qualified name, an
-                # over-write will succeed
-                dest_fqn = os.path.join(destination, f_name)
-                self._logger.debug(f'Moving {fqn} to {dest_fqn}')
-                shutil.move(fqn, dest_fqn)
-            except Exception as e:
-                self._logger.debug(traceback.format_exc())
-                self._logger.error(
-                    f'Failed to move {fqn} to {destination}'
-                )
-                raise mc.CadcException(e)
 
 
 class VaultDataSource(ListDirTimeBoxDataSource):

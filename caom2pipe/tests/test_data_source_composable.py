@@ -422,7 +422,7 @@ def test_transfer_check_fits_verify():
         test_config.retry_failures = False
         cadc_client_mock = Mock(autospec=True)
         cadc_client_mock.info.side_effect = mock_info
-        test_subject = dsc.UseLocalFilesDataSource(
+        test_subject = dsc.LocalFilesDataSource(
             test_config, cadc_client_mock, test_reader
         )
 
@@ -467,7 +467,7 @@ def test_transfer_check_fits_verify():
         test_config.features.supports_latest_client = True
         cadc_client_mock = Mock(autospec=True)
         cadc_client_mock.info.side_effect = mock_info
-        test_subject = dsc.UseLocalFilesDataSource(
+        test_subject = dsc.LocalFilesDataSource(
             test_config, cadc_client_mock, test_reader
         )
         assert test_subject is not None, 'expect construction to work'
@@ -512,7 +512,7 @@ def test_transfer_check_fits_verify():
             test_config.cleanup_files_when_storing = True
             cadc_client_mock = Mock(autospec=True)
             cadc_client_mock.info.side_effect = mock_info
-            test_subject = dsc.UseLocalFilesDataSource(
+            test_subject = dsc.LocalFilesDataSource(
                 test_config, cadc_client_mock, test_reader
             )
             with pytest.raises(mc.CadcException):
@@ -595,7 +595,7 @@ def test_transfer_fails(check_fits_mock):
     test_config.cleanup_success_destination = test_success_directory.as_posix()
 
     cadc_client_mock = Mock(autospec=True)
-    test_subject = dsc.UseLocalFilesDataSource(
+    test_subject = dsc.LocalFilesDataSource(
         test_config, cadc_client_mock, test_reader
     )
     assert test_subject is not None, 'ctor failure'
