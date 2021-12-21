@@ -3175,7 +3175,16 @@ class ValueRepairCache(Cache):
     def _repair_attribute(self, entity, attribute_name):
         try:
             attribute_value = getattr(entity, attribute_name)
-            if attribute_value not in self._values.values():
+            attribute_repr = (
+                attribute_value.value
+                if isinstance(attribute_value, Enum)
+                else attribute_value
+            )
+            if (
+                'any' in self._values.keys()
+                or 'none' in self._values.keys()
+                or attribute_repr in self._values.keys()
+            ):
                 for original, fix in self._values.items():
                     if attribute_value is None and original != 'none':
                         self._logger.info(

@@ -77,7 +77,6 @@ from datetime import datetime
 from dateutil import tz
 
 from cadctap import CadcTapClient
-from caom2utils import data_util
 from caom2pipe import astro_composable as ac
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
@@ -479,7 +478,7 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
     """
     For when use_local_files: True and cleanup_when_storing: True
     """
-    def __init__(self, config, cadc_client, recursive=True):
+    def __init__(self, config, cadc_client, metadata_reader, recursive=True):
         super().__init__(config)
         self._retry_failures = config.retry_failures
         self._retry_count = config.retry_count
@@ -493,6 +492,7 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
         self._archive = config.archive
         self._collection = config.collection
         self._recursive = recursive
+        self._metadata_reader = metadata_reader
         self._logger = logging.getLogger(self.__class__.__name__)
         self._is_connected = config.is_connected
         if not self._is_connected:
@@ -583,7 +583,7 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
         else:
             copy_file = False
         self._logger.debug(
-            f'Done default_filter copy_file is {copy_file} for {entry}'
+            f'Done default_filter says copy_file is {copy_file} for {entry}'
         )
         return copy_file
 
@@ -634,13 +634,24 @@ class UseLocalFilesDataSource(ListDirTimeBoxDataSource):
         # get the metadata locally
         result = True
         if self._is_connected:
-            local_meta = data_util.get_local_file_info(entry_path)
-            # get the metadata at CADC
+            # get the CADC FileInfo
             f_name = os.path.basename(entry_path)
             scheme = 'cadc' if self._supports_latest_client else 'ad'
             destination_name = mc.build_uri(self._collection, f_name, scheme)
             cadc_meta = self._cadc_client.info(destination_name)
-            if cadc_meta is not None and local_meta.md5sum == cadc_meta.md5sum:
+
+            # get the local FileInfo
+            temp_storage_name = mc.StorageName()
+            temp_storage_name.source_names = [entry_path]
+            temp_storage_name.destination_uris = [destination_name]
+            self._metadata_reader.set_file_info(temp_storage_name)
+
+            if (
+                cadc_meta is not None
+                and self._metadata_reader.file_info.get(
+                    destination_name
+                ).md5sum == cadc_meta.md5sum
+            ):
                 result = False
         else:
             self._logger.debug(

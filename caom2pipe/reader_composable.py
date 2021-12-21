@@ -93,10 +93,14 @@ class MetadataReader:
         - Gemini http client
         - VOSpace client
 
+    Users of this class hierarchy should be able to reduce the number of
+    times file headers and FileInfo are retrieved for the same file.
+
     TODO - how to handle thumbnails and previews
     """
 
     def __init__(self):
+        # dicts are indexed by mc.StorageName.destination_uris
         self._headers = {}  # astropy.io.fits.Headers
         self._file_info = {}  # cadcdata.FileInfo
 
@@ -108,8 +112,37 @@ class MetadataReader:
     def headers(self):
         return self._headers
 
+    def _retrieve_file_info(self, source_name):
+        return None
+
+    def _retrieve_headers(self, source_name):
+        return None
+
     def set(self, storage_name):
-        """Retrieves the Header and FileInfo information."""
+        """Retrieves the Header and FileInfo information to memory."""
+        self.set_headers(storage_name)
+        self.set_file_info(storage_name)
+
+    def set_file_info(self, storage_name):
+        """Retrieves FileInfo information to memory."""
+        for index, entry in enumerate(storage_name.destination_uris):
+            if entry not in self._file_info.keys():
+                self._file_info[entry] = self._retrieve_file_info(
+                    storage_name.source_names[index]
+                )
+
+    def set_headers(self, storage_name):
+        """Retrieves the Header information to memory."""
+        for index, entry in enumerate(storage_name.destination_uris):
+            if entry not in self._headers.keys():
+                if '.fits' in entry:
+                    self._headers[entry] = (
+                        self._retrieve_headers(
+                            storage_name.source_names[index]
+                        )
+                    )
+                else:
+                    self._headers[entry] = []
 
     def reset(self):
         self._headers = {}
@@ -122,19 +155,11 @@ class FileMetadataReader(MetadataReader):
     def __init__(self):
         super().__init__()
 
-    def set(self, storage_name):
-        for index, entry in enumerate(storage_name.destination_uris):
-            if '.fits' in entry:
-                self._headers[entry] = (
-                    data_util.get_local_headers_from_fits(
-                        storage_name.source_names[index]
-                    )
-                )
-            else:
-                self._headers[entry] = []
-            self._file_info[entry] = data_util.get_local_file_info(
-                storage_name.source_names[index]
-            )
+    def _retrieve_file_info(self, source_name):
+        return data_util.get_local_file_info(source_name)
+
+    def _retrieve_headers(self, source_name):
+        return data_util.get_local_headers_from_fits(source_name)
 
 
 class StorageClientReader(MetadataReader):
@@ -148,17 +173,11 @@ class StorageClientReader(MetadataReader):
         super().__init__()
         self._client = client
 
-    def set(self, storage_name):
-        for index, entry in enumerate(storage_name.destination_uris):
-            if '.fits' in entry:
-                self._headers[entry] = (
-                    self._client.get_head(storage_name.destination_uris[index])
-                )
-            else:
-                self._headers[entry] = []
-            self._file_info[entry] = self._client.info(
-                storage_name.destination_uris[index]
-            )
+    def _retrieve_file_info(self, source_name):
+        return self._client.info(source_name)
+
+    def _retrieve_headers(self, source_name):
+        return self._client.get_head(source_name)
 
 
 class VaultReader(MetadataReader):
@@ -173,27 +192,18 @@ class VaultReader(MetadataReader):
         self._client = client
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def _get_headers(self, storage_name):
+    def _retrieve_file_info(self, source_name):
+        return clc.vault_info(self._client, source_name)
+
+    def _retrieve_headers(self, source_name):
         try:
             tmp_file = tempfile.NamedTemporaryFile()
-            self._client.copy(storage_name, tmp_file.name, head=True)
+            self._client.copy(source_name, tmp_file.name, head=True)
             temp_header = data_util.get_local_file_headers(tmp_file.name)
             tmp_file.close()
             return temp_header
         except Exception as e:
             self._logger.debug(traceback.format_exc())
             raise mc.CadcException(
-                f'Did not retrieve {storage_name} header because {e}'
-            )
-
-    def set(self, storage_name):
-        for index, entry in enumerate(storage_name.source_names):
-            if '.fits' in entry:
-                self._headers[entry] = (
-                    self._get_headers(storage_name.source_names[index])
-                )
-            else:
-                self._headers[entry] = []
-            self._file_info[entry] = clc.vault_info(
-                self._client, storage_name.source_names[index]
+                f'Did not retrieve {source_name} header because {e}'
             )
