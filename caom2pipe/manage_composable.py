@@ -1610,6 +1610,7 @@ class StorageName:
         entry=None,
         source_names=[],
         destination_uris=[],
+        uri_name=None,
     ):
         """
 
@@ -1649,6 +1650,8 @@ class StorageName:
         self._source_names = source_names
         self._destination_uris = destination_uris
         self._entry = entry
+        # because the collection is CFHTMEGAPIPE, and the URI is CFHTSG
+        self._uri_name = collection if uri_name is None else uri_name
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def __str__(self):
@@ -1670,7 +1673,7 @@ class StorageName:
     def file_uri(self):
         """The ad URI for the file. Assumes compression."""
         return (
-            f'{self.scheme}:{self.collection}/{self.file_name}'
+            f'{self.scheme}:{self._uri_name}/{self.file_name}'
             f'{self._compression}'
         )
 
