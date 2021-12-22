@@ -79,6 +79,7 @@ from caom2 import CoordFunction1D, DerivedObservation, Provenance
 from caom2 import CoordBounds1D, TypedList, ProductType
 from caom2.diff import get_differences
 from caom2utils import ObsBlueprint, GenericParser, FitsParser
+from caom2utils import update_artifact_meta
 
 from caom2pipe import astro_composable as ac
 from caom2pipe import client_composable as clc
@@ -103,6 +104,7 @@ __all__ = [
     'do_something_to_chunks',
     'exec_footprintfinder',
     'find_plane_and_artifact',
+    'Fits2caom2Visitor',
     'get_obs_id_from_cadc',
     'is_composite',
     'make_plane_uri',
@@ -110,6 +112,7 @@ __all__ = [
     'reset_energy',
     'reset_observable',
     'reset_position',
+    'TelescopeMapping',
     'undo_astropy_cdfix_call',
     'update_observation_members',
     'update_observation_members_filtered',
@@ -1101,7 +1104,21 @@ class TelescopeMapping:
             bp.set('Artifact.metaProducer', meta_producer)
             bp.set('Chunk.metaProducer', meta_producer)
 
+    def _update_artifact(self, artifact, caom_repo_client=None):
+        return
+
     def update(self, observation, file_info, caom_repo_client=None):
+        for plane in observation.planes.values():
+            for artifact in plane.artifacts.values():
+                if artifact.uri != self._storage_name.file_uri:
+                    self._logger.debug(
+                        f'Artifact uri is {artifact.uri} but working on '
+                        f'{self._storage_name.file_uri}. Continuing.'
+                    )
+                    continue
+                update_artifact_meta(artifact, file_info)
+                self._update_artifact(artifact, caom_repo_client)
+
         return observation
 
 
@@ -1125,7 +1142,6 @@ class Fits2caom2Visitor:
     def visit(self):
         for uri, file_info in self._metadata_reader.file_info.items():
             headers = self._metadata_reader.headers.get(uri)
-            logging.error(f'uri {uri} header len {len(headers)}')
             telescope_data = self._get_mapping(headers)
             blueprint = ObsBlueprint(instantiated_class=telescope_data)
             telescope_data.accumulate_blueprint(blueprint)
