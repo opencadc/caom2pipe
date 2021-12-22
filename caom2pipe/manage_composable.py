@@ -111,7 +111,6 @@ __all__ = [
     'check_param',
     'convert_to_days',
     'convert_to_ts',
-    'decompose_lineage',
     'exec_cmd',
     'exec_cmd_info',
     'exec_cmd_redirect',
@@ -126,7 +125,6 @@ __all__ = [
     'get_endpoint_session',
     'get_file_meta',
     'get_keyword',
-    'get_lineage',
     'http_get',
     'increment_time',
     'increment_time_tz',
@@ -1659,7 +1657,6 @@ class StorageName:
             f'          obs_id: {self.obs_id}\n'
             f'       file_name: {self.file_name}\n'
             f'        file_uri: {self.file_uri}\n'
-            f'         lineage: {self.lineage}\n'
             f'      product_id: {self.product_id}\n'
             f'    source_names: {self.source_names}\n'
             f'destination_uris: {self.destination_uris}'
@@ -1773,12 +1770,6 @@ class StorageName:
     @mime_type.setter
     def mime_type(self, value):
         self._mime_type = value
-
-    @property
-    def lineage(self):
-        """The value provided to the --lineage parameter for
-        fits2caom2 extensions."""
-        return f'{self.product_id}/{self.file_uri}'
 
     @property
     def source_names(self):
@@ -2372,20 +2363,6 @@ def create_dir(dir_name):
         os.makedirs(dir_name, mode=0o775)
 
 
-def decompose_lineage(lineage):
-    """Returns a product id and an artifact uri from the command line."""
-    try:
-        result = lineage.split('/', 1)
-        return result[0], result[1]
-    except Exception as e:
-        logging.debug(
-            f'Lineage {lineage} caused error {e}. Expected '
-            f'product_id/ad:ARCHIVE/FILE_NAME'
-        )
-        logging.debug(traceback.format_exc())
-        raise CadcException('Expected product_id/ad:ARCHIVE/FILE_NAME')
-
-
 def decompose_uri(uri):
     """
     Returns a scheme, path (maybe an archive), and a file name from the
@@ -2516,18 +2493,6 @@ def get_keyword(headers, keyword):
     if result is None and len(headers) > 1:
         result = headers[1].get(keyword)
     return result
-
-
-def get_lineage(archive, product_id, file_name, scheme='ad'):
-    """Construct an instance of the caom2gen lineage parameter.
-    :param archive archive name at CADC.
-    :param product_id CAOM2 Plane unique identifier.
-    :param file_name String representation of the file name.
-    :param scheme Usually 'ad', otherwise an indication of external storage.
-    :return str understood by the caom2gen application, lineage parameter
-        value
-    """
-    return f'{product_id}/{scheme}:{archive}/{file_name}'
 
 
 def get_artifact_metadata(

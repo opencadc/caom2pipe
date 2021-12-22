@@ -268,6 +268,7 @@ class CaomExecute:
             kwargs = {
                 'working_directory': self.working_dir,
                 'cadc_client': self.cadc_client,
+                'caom_repo_client': self.caom_repo_client,
                 'stream': self.stream,
                 'storage_name': self._storage_name,
                 'metadata_reader': self._metadata_reader,
