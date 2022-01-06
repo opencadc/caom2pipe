@@ -68,6 +68,7 @@
 
 import logging
 import os
+import traceback
 
 from datetime import datetime
 
@@ -78,6 +79,8 @@ from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
 from caom2 import CoordFunction1D, DerivedObservation, Provenance
 from caom2 import CoordBounds1D, TypedList, ProductType
 from caom2.diff import get_differences
+from caom2utils import ObsBlueprint, GenericParser, FitsParser
+from caom2utils import update_artifact_meta
 
 from caom2pipe import astro_composable as ac
 from caom2pipe import client_composable as clc
@@ -102,6 +105,7 @@ __all__ = [
     'do_something_to_chunks',
     'exec_footprintfinder',
     'find_plane_and_artifact',
+    'Fits2caom2Visitor',
     'get_obs_id_from_cadc',
     'is_composite',
     'make_plane_uri',
@@ -109,6 +113,7 @@ __all__ = [
     'reset_energy',
     'reset_observable',
     'reset_position',
+    'TelescopeMapping',
     'undo_astropy_cdfix_call',
     'update_observation_members',
     'update_observation_members_filtered',
@@ -1071,3 +1076,119 @@ def undo_astropy_cdfix_call(chunk, time_delta):
         and chunk.time.axis.function.delta == 1.0
     ):
         chunk.time.axis.function.delta = 0.0
+
+
+class TelescopeMapping:
+    """
+    A default implementation for building up and applying an ObsBlueprint
+    map for a file, and then doing any n:n (FITS keywords:CAOM2 keywords)
+    mapping, using the 'update' method.
+    """
+
+    def __init__(self, storage_name, headers):
+        self._storage_name = storage_name
+        self._headers = headers
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def accumulate_blueprint(self, bp, application=None):
+        """
+        Configure the telescope-specific ObsBlueprint at the CAOM model
+        Observation level.
+        """
+        self._logger.debug(
+            f'Begin accumulate_blueprint for {self._storage_name.file_uri}'
+        )
+        if application is not None:
+            meta_producer = mc.get_version(application)
+            bp.set('Observation.metaProducer', meta_producer)
+            bp.set('Plane.metaProducer', meta_producer)
+            bp.set('Artifact.metaProducer', meta_producer)
+            bp.set('Chunk.metaProducer', meta_producer)
+
+    def _update_artifact(self, artifact, caom_repo_client=None):
+        return
+
+    def update(self, observation, file_info, caom_repo_client=None):
+        self._logger.debug(f'Begin update for {observation.observation_id}')
+        for plane in observation.planes.values():
+            for artifact in plane.artifacts.values():
+                if artifact.uri != self._storage_name.file_uri:
+                    self._logger.debug(
+                        f'Artifact uri is {artifact.uri} but working on '
+                        f'{self._storage_name.file_uri}. Continuing.'
+                    )
+                    continue
+                update_artifact_meta(artifact, file_info)
+                self._update_artifact(artifact, caom_repo_client)
+
+        self._logger.debug('End update')
+        return observation
+
+
+class Fits2caom2Visitor:
+    """
+    Use a TelescopeMapping specialization instance to create a CAOM2
+    record, as expected by the execute_composable.MetaVisits class.
+    """
+
+    def __init__(self, observation, **kwargs):
+        self._observation = observation
+        self._storage_name = kwargs.get('storage_name')
+        self._metadata_reader = kwargs.get('metadata_reader')
+        self._caom_repo_client = kwargs.get('caom_repo_client')
+        self._dump_config = False
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def _get_mapping(self, headers):
+        return TelescopeMapping(self._storage_name, headers)
+
+    def visit(self):
+        for uri, file_info in self._metadata_reader.file_info.items():
+            headers = self._metadata_reader.headers.get(uri)
+            telescope_data = self._get_mapping(headers)
+            blueprint = ObsBlueprint(instantiated_class=telescope_data)
+            telescope_data.accumulate_blueprint(blueprint)
+
+            if len(headers) == 0:
+                self._logger.debug(
+                    f'No headers, using a GenericParser for '
+                    f'{self._storage_name.file_uri}'
+                )
+                parser = GenericParser(blueprint, uri)
+            else:
+                self._logger.debug(
+                    f'Using a FitsParser for {self._storage_name.file_uri}'
+                )
+                parser = FitsParser(headers, blueprint, uri)
+
+            if self._dump_config:
+                print(f'Blueprint for {uri}: {blueprint}')
+
+            if self._observation is None:
+                if blueprint._get('DerivedObservation.members') is None:
+                    self._logger.debug('Build a SimpleObservation')
+                    self._observation = SimpleObservation(
+                        collection=self._storage_name.collection,
+                        observation_id=self._storage_name.obs_id,
+                        algorithm=Algorithm('exposure'),
+                    )
+                else:
+                    self._logger.debug('Build a DerivedObservation')
+                    self._observation = DerivedObservation(
+                        collection=self._storage_name.collection,
+                        observation_id=self._storage_name.obs_id,
+                        algorithm=Algorithm('composite'),
+                    )
+
+            parser.augment_observation(
+                observation=self._observation,
+                artifact_uri=uri,
+                product_id=self._storage_name.product_id,
+            )
+
+            self._observation = telescope_data.update(
+                self._observation,
+                file_info,
+                self._caom_repo_client,
+            )
+        return self._observation

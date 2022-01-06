@@ -234,18 +234,6 @@ def test_exec_cmd_redirect():
     assert os.stat(fqn).st_size > 0
 
 
-def test_decompose_lineage():
-    test_product_id = 'product_id'
-    test_uri = 'ad:STARS/galaxies.fits.gz'
-    test_lineage = f'{test_product_id}/{test_uri}'
-    actual_product_id, actual_uri = mc.decompose_lineage(test_lineage)
-    assert actual_product_id == test_product_id, f'expected {test_product_id}'
-    assert actual_uri == test_uri, f'expected {test_uri}'
-
-    with pytest.raises(mc.CadcException):
-        mc.decompose_lineage('')
-
-
 def test_decompose_uri():
     test_uri = 'ad:STARS/galaxies.fits.gz'
     scheme, path, f_name = mc.decompose_uri(test_uri)
@@ -327,13 +315,6 @@ def test_write_to_file():
 
     mc.write_to_file(test_fqn, '\n'.join(content))
     assert os.path.exists(test_fqn)
-
-
-def test_get_lineage():
-    result = mc.get_lineage(
-        'TEST_COLLECTION', 'TEST_PRODUCT_ID', 'TEST_FILE_NAME.fits'
-    )
-    assert result == 'TEST_PRODUCT_ID/ad:TEST_COLLECTION/TEST_FILE_NAME.fits'
 
 
 def test_get_artifact_metadata():
@@ -805,7 +786,7 @@ def test_make_time():
     test_dict = {
         '2012-12-12T12:13:15': datetime(2012, 12, 12, 12, 13, 15),
         # %b %d %H:%M
-        'Mar 12 12:12': datetime(2021, 3, 12, 12, 12),
+        'Mar 12 12:12': datetime(2022, 3, 12, 12, 12),
         # %Y-%m-%dHST%H:%M:%S
         '2020-12-12HST12:12:12': datetime(2020, 12, 12, 22, 12, 12),
     }
