@@ -68,6 +68,7 @@
 
 import logging
 import os
+import traceback
 
 from datetime import datetime
 
@@ -1108,6 +1109,7 @@ class TelescopeMapping:
         return
 
     def update(self, observation, file_info, caom_repo_client=None):
+        self._logger.debug(f'Begin update for {observation.observation_id}')
         for plane in observation.planes.values():
             for artifact in plane.artifacts.values():
                 if artifact.uri != self._storage_name.file_uri:
@@ -1119,6 +1121,7 @@ class TelescopeMapping:
                 update_artifact_meta(artifact, file_info)
                 self._update_artifact(artifact, caom_repo_client)
 
+        self._logger.debug('End update')
         return observation
 
 
