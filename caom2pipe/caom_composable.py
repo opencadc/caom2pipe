@@ -68,6 +68,7 @@
 
 import logging
 import os
+import traceback
 
 from datetime import datetime
 
@@ -796,12 +797,14 @@ def is_composite(headers, keyword_prefix='IMCMB'):
     CompositeObservation, in one marvelous function."""
     result = False
 
-    # look in the last header - IMCMB keywords are not in the zero'th header
-    header = headers[-1]
-    for ii in header:
-        if ii.startswith(keyword_prefix):
-            result = True
-            break
+    if len(headers) > 0:
+        # look in the last header - IMCMB keywords are not in the zero'th
+        # header
+        header = headers[-1]
+        for ii in header:
+            if ii.startswith(keyword_prefix):
+                result = True
+                break
     return result
 
 
@@ -1108,6 +1111,7 @@ class TelescopeMapping:
         return
 
     def update(self, observation, file_info, caom_repo_client=None):
+        self._logger.debug(f'Begin update for {observation.observation_id}')
         for plane in observation.planes.values():
             for artifact in plane.artifacts.values():
                 if artifact.uri != self._storage_name.file_uri:
@@ -1119,6 +1123,7 @@ class TelescopeMapping:
                 update_artifact_meta(artifact, file_info)
                 self._update_artifact(artifact, caom_repo_client)
 
+        self._logger.debug('End update')
         return observation
 
 
@@ -1140,6 +1145,7 @@ class Fits2caom2Visitor:
         return TelescopeMapping(self._storage_name, headers)
 
     def visit(self):
+        self._logger.debug('Begin visit')
         for uri, file_info in self._metadata_reader.file_info.items():
             headers = self._metadata_reader.headers.get(uri)
             telescope_data = self._get_mapping(headers)
@@ -1188,4 +1194,5 @@ class Fits2caom2Visitor:
                 file_info,
                 self._caom_repo_client,
             )
+        self._logger.debug(f'End visit')
         return self._observation

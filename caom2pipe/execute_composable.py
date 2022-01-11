@@ -965,6 +965,8 @@ class OrganizeExecutes:
         processed."""
         if self.config.log_to_file:
             logging.getLogger().removeHandler(self._log_h)
+            self._log_h.flush()
+            self._log_h.close()
 
     def choose(self, storage_name):
         """The logic that decides which descendants of CaomExecute to
