@@ -246,7 +246,7 @@ class TodoRunner:
             # this or any other exception at this point
             result = -1
         try:
-            self._data_source.clean_up(entry, current_count)
+            self._data_source.clean_up(entry, result, current_count)
         except Exception as e:
             self._logger.info(
                 f'Cleanup failed for {storage_name.entry} with {e}'

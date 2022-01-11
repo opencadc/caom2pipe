@@ -120,7 +120,7 @@ class DataSource:
             self._extensions = config.data_source_extensions
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def clean_up(self, entry, current_count):
+    def clean_up(self, entry, execution_result, current_count):
         pass
 
     def get_work(self):
@@ -353,7 +353,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 'SCRAPE\'ing data - over-riding config.yml clean-up.'
             )
 
-    def clean_up(self, entry, current_count=0):
+    def clean_up(self, entry, execution_result, current_count=0):
         """
         Move a file to the success or failure location, depending on
         whether a file with the same checksum is at CADC.
@@ -365,6 +365,8 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         :param entry: either a data_source_composable.StateRunnerMeta instance
             or an str, depending on whether the clean-up is invoked from a
             time-boxed or all-in-one invocation.
+        :param execution_result: int if it's 0, it's ok to clean up,
+            regardless of how many times a file has been processed
         :param current_count: int how many retries have been executed
         """
         self._logger.debug(f'Begin clean_up with {entry}')
@@ -375,6 +377,9 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 or (
                     self._retry_failures
                     and current_count >= self._retry_count
+                )
+                or (
+                    self._retry_failures and execution_result == 0
                 )
             )
         ):
