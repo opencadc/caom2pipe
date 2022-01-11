@@ -507,6 +507,7 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config):
 
     test_result = rc.run_by_todo(config=test_config)
 
+    # what should happen when a failure execution occurs
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect failure'
     _check_log_files(
@@ -523,8 +524,24 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config):
     ), 'do_one is mocked, should be no data client call'
     assert source_mock.called, 'clean_up should be called'
     assert source_mock.call_count == 2, 'clean_up should be called two times'
-    calls = [call('test_obs_id.fits.gz', 0), call('test_obs_id.fits.gz', 1)]
+    calls = [call('test_obs_id.fits.gz', -1, 0), call('test_obs_id.fits.gz', -1, 1)]
     source_mock.assert_has_calls(calls)
+
+    # what should happen when successful execution occurs
+    source_mock.reset_mock()
+    do_one_mock.reset_mock()
+    do_one_mock.side_effect = None
+    do_one_mock.return_value = 0
+    test_result = rc.run_by_todo(config=test_config)
+
+    assert test_result is not None, 'expect a result'
+    assert test_result == 0, 'expect success'
+    _check_log_files(
+        test_config, retry_success_fqn, retry_failure_fqn, retry_retry_fqn
+    )
+    assert do_one_mock.called, 'expect do_one call'
+    assert do_one_mock.call_count == 1, 'wrong number of calls'
+    source_mock.assert_called_with('test_obs_id.fits.gz', 0, 0)
 
 
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
@@ -902,14 +919,10 @@ def _mock_query(arg1, arg2, arg3):
 def _mock_do_one(arg1):
     assert isinstance(arg1, mc.StorageName), 'expect StorageName instance'
     if arg1.obs_id == 'TEST_OBS_ID':
-        assert (
-            arg1.lineage == 'TEST_OBS_ID/ad:OMM/TEST_OBS_ID.fits.gz'
-        ), 'wrong lineage'
         assert arg1.file_name == 'TEST_OBS_ID.fits', 'wrong file name'
         with open(f'{tc.TEST_DATA_DIR}/retry.txt', 'w') as f:
             f.write(f'ghi.fits.gz')
     elif arg1.obs_id == 'ghi':
-        assert arg1.lineage == 'ghi/ad:OMM/ghi.fits.gz', 'wrong lineage'
         assert arg1.file_name == 'ghi.fits', 'wrong file name'
     else:
         assert False, f'unexpected obs id {arg1.obs_id}'
