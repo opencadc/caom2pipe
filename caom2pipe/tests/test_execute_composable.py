@@ -173,7 +173,7 @@ def test_client_visit(test_config):
 
         test_executor.execute(None)
         repo_client_mock.read.assert_called_with(
-            'OMM', 'test_obs_id'
+            'TEST', 'test_obs_id'
         ), 'read call missed'
         assert repo_client_mock.update.called, 'update call missed'
         assert test_observer.metrics.observe.called, 'observe not called'
@@ -299,7 +299,7 @@ def test_data_local_execute(test_config):
     # check that things worked as expected - no cleanup
     assert repo_client_mock.read.called, 'read call missed'
     repo_client_mock.read.assert_called_with(
-        'OMM', 'test_obs_id'
+        'TEST', 'test_obs_id'
     ), 'wrong repo client read args'
     assert repo_client_mock.update.called, 'update call missed'
     assert test_observer.metrics.observe.called, 'observe not called'
@@ -738,7 +738,7 @@ def test_data_visit(client_mock, test_config):
             f'{tc.THIS_DIR}/test_obs_id', test_sn.destination_uris[0]
         ), 'wrong get call args'
         test_repo_client.read.assert_called_with(
-            'OMM', 'test_obs_id'
+            'TEST', 'test_obs_id'
         ), 'wrong values'
         assert test_repo_client.update.called, 'expect an execution'
         # TODO - why is the log file directory NOT the working directory?
