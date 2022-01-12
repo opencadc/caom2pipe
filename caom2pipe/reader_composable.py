@@ -103,6 +103,7 @@ class MetadataReader:
         # dicts are indexed by mc.StorageName.destination_uris
         self._headers = {}  # astropy.io.fits.Headers
         self._file_info = {}  # cadcdata.FileInfo
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     @property
     def file_info(self):
@@ -127,6 +128,7 @@ class MetadataReader:
         """Retrieves FileInfo information to memory."""
         for index, entry in enumerate(storage_name.destination_uris):
             if entry not in self._file_info.keys():
+                self._logger.debug(f'Retrieve FileInfo for {entry}')
                 self._file_info[entry] = self._retrieve_file_info(
                     storage_name.source_names[index]
                 )
@@ -136,6 +138,7 @@ class MetadataReader:
         for index, entry in enumerate(storage_name.destination_uris):
             if entry not in self._headers.keys():
                 if '.fits' in entry:
+                    self._logger.debug(f'Retrieve headers for {entry}')
                     self._headers[entry] = (
                         self._retrieve_headers(
                             storage_name.source_names[index]

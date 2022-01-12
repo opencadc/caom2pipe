@@ -1147,6 +1147,7 @@ class Fits2caom2Visitor:
     def visit(self):
         self._logger.debug('Begin visit')
         for uri, file_info in self._metadata_reader.file_info.items():
+            self._logger.debug(f'Build observation for {uri}')
             headers = self._metadata_reader.headers.get(uri)
             telescope_data = self._get_mapping(headers)
             blueprint = ObsBlueprint(instantiated_class=telescope_data)
