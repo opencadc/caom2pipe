@@ -163,7 +163,12 @@ class FileMetadataReader(MetadataReader):
 
 
 class StorageClientReader(MetadataReader):
-    """Use case: CADC storage."""
+    """Use case: CADC storage.
+
+    The storage_name.destination_uris are always the CADC storage reference,
+    so if this specialization is being used, rely on that naming,
+    instead of using the source names, which is the default implementation.
+    """
 
     def __init__(self, client):
         """
@@ -173,11 +178,22 @@ class StorageClientReader(MetadataReader):
         super().__init__()
         self._client = client
 
-    def _retrieve_file_info(self, source_name):
-        return self._client.info(source_name)
+    def set_file_info(self, storage_name):
+        """Retrieves FileInfo information to memory."""
+        for entry in storage_name.destination_uris:
+            if entry not in self._file_info.keys():
+                self._file_info[entry] = self._client.info(entry)
 
-    def _retrieve_headers(self, source_name):
-        return self._client.get_head(source_name)
+    def set_headers(self, storage_name):
+        """Retrieves the Header information to memory."""
+        for entry in storage_name.destination_uris:
+            logging.error(f'{entry} {self._headers.keys()} {entry in self._headers.keys()}')
+            if entry not in self._headers.keys():
+                logging.error('where is the other call?')
+                if '.fits' in entry:
+                    self._headers[entry] = self._client.get_head(entry)
+                else:
+                    self._headers[entry] = []
 
 
 class VaultReader(MetadataReader):
