@@ -96,6 +96,11 @@ class MetadataReader:
     Users of this class hierarchy should be able to reduce the number of
     times file headers and FileInfo are retrieved for the same file.
 
+    Use the source for determining FileInfo information because comparing
+    the md5sum at the source to CADC storage is how to determine whether or
+    not a file needs to be pushed to CADC for storage, should storing files be
+    part of the execution.
+
     TODO - how to handle thumbnails and previews
     """
 
@@ -190,9 +195,7 @@ class StorageClientReader(MetadataReader):
     def set_headers(self, storage_name):
         """Retrieves the Header information to memory."""
         for entry in storage_name.destination_uris:
-            logging.error(f'{entry} {self._headers.keys()} {entry in self._headers.keys()}')
             if entry not in self._headers.keys():
-                logging.error('where is the other call?')
                 if '.fits' in entry:
                     self._headers[entry] = self._client.get_head(entry)
                 else:
