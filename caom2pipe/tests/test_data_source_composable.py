@@ -190,7 +190,7 @@ def test_storage_time_box_query(query_mock):
 
 def test_vault_list_dir_data_source():
     def _query_mock(ignore_source_directory):
-        return ['abc.txt', 'abc.fits', '900898p_moc.fits']
+        return ['abc.txt', 'abc.fits', 'def.fits', '900898p_moc.fits']
 
     node1 = type('', (), {})()
     node1.props = {
@@ -213,11 +213,17 @@ def test_vault_list_dir_data_source():
     node4 = type('', (), {})()
     node4.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc'
     node4.type = 'vos:ContainerNode'
-    node4.node_list = [node1, node2, node3]
+    node5 = type('', (), {})()
+    node5.props = {
+        'size': 12,
+    }
+    node5.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/def.fits'
+    node5.type = 'vos:DataNode'
+    node4.node_list = [node1, node2, node3, node5]
 
     test_vos_client = Mock()
     test_vos_client.listdir.side_effect = _query_mock
-    test_vos_client.get_node.side_effect = [node4, node1, node2, node3]
+    test_vos_client.get_node.side_effect = [node4, node1, node2, node3, node5]
     test_config = mc.Config()
     test_config.get_executors()
     test_config.data_sources = ['vos:goliaths/wrong']
@@ -226,10 +232,14 @@ def test_vault_list_dir_data_source():
     assert test_subject is not None, 'expect a test_subject'
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a test result'
-    assert len(test_result) == 1, 'wrong number of results'
+    assert len(test_result) == 2, 'wrong number of results'
     test_entry = test_result.popleft()
     assert (
         'vos://cadc.nrc.ca!vault/goliaths/moc/abc.fits' == test_entry
+    ), 'wrong result'
+    test_entry = test_result.popleft()
+    assert (
+        'vos://cadc.nrc.ca!vault/goliaths/moc/def.fits' == test_entry
     ), 'wrong result'
 
 

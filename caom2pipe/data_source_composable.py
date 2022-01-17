@@ -774,7 +774,6 @@ class VaultDataSource(ListDirTimeBoxDataSource):
                 if self.default_filter(entry):
                     self._logger.info(f'Add {entry.uri} to work list.')
                     work.append(entry.uri)
-                    break
 
     def default_filter(self, target_node):
         """
