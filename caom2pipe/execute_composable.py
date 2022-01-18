@@ -647,7 +647,7 @@ class LocalStore(Store):
         self.logger.debug('Begin execute')
 
         self.logger.debug(
-            f'Store {len(self._storage_name.source_names)} files to ad.'
+            f'Store {len(self._storage_name.source_names)} files to CADC.'
         )
         for index, entry in enumerate(self._storage_name.source_names):
             self.logger.debug(f'store the input file {entry}')

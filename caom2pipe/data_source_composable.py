@@ -353,6 +353,9 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 'SCRAPE\'ing data - over-riding config.yml clean-up.'
             )
 
+    def get_collection(self, ignore=None):
+        return self._collection
+
     def clean_up(self, entry, execution_result, current_count=0):
         """
         Move a file to the success or failure location, depending on
@@ -491,7 +494,9 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             # get the CADC FileInfo
             f_name = os.path.basename(entry_path)
             scheme = 'cadc' if self._supports_latest_client else 'ad'
-            destination_name = mc.build_uri(self._collection, f_name, scheme)
+            destination_name = mc.build_uri(
+                self.get_collection(f_name), f_name, scheme
+            )
             cadc_meta = self._cadc_client.info(destination_name)
 
             # get the local FileInfo
