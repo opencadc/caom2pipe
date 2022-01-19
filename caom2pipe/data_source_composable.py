@@ -350,7 +350,15 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             # behaviour.
             self._cleanup_when_storing = False
             self._logger.info(
-                'SCRAPE\'ing data - over-riding config.yml clean-up.'
+                'SCRAPE\'ing data - over-riding config.yml '
+                'cleanup_files_when_storing setting.'
+            )
+        if mc.TaskType.STORE not in config.task_types:
+            # do not clean up files unless the STORE task is configured
+            self._cleanup_when_storing = False
+            self._logger.info(
+                'Not STORE\'ing data - ignore config.yml '
+                'cleanup_files_when_storing setting.'
             )
 
     def get_collection(self, ignore=None):

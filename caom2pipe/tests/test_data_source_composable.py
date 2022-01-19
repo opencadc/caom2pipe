@@ -429,6 +429,7 @@ def test_transfer_check_fits_verify():
 
     def _at_cfht(test_start_ts, test_end_ts):
         test_config.cleanup_files_when_storing = True
+        test_config.task_types = [mc.TaskType.STORE]
         test_config.retry_failures = False
         cadc_client_mock = Mock(autospec=True)
         cadc_client_mock.info.side_effect = mock_info
@@ -444,7 +445,8 @@ def test_transfer_check_fits_verify():
         ), 'wrong result'
 
         for entry in [test_empty_file, test_broken_file]:
-            assert not entry.exists(), 'file at source'
+            # both should fail the ac.check_fits call
+            assert not entry.exists(), f'file at source {entry}'
             moved = Path(test_failure_directory, entry.name)
             assert moved.exists(), 'file at destination'
 
@@ -522,6 +524,7 @@ def test_transfer_check_fits_verify():
         shutil.move = Mock(side_effect=_move_mock)
         try:
             test_config.cleanup_files_when_storing = True
+            test_config.task_types = [mc.TaskType.STORE]
             cadc_client_mock = Mock(autospec=True)
             cadc_client_mock.info.side_effect = mock_info
             test_subject = dsc.LocalFilesDataSource(
@@ -601,6 +604,7 @@ def test_transfer_fails(check_fits_mock):
 
     test_config = mc.Config()
     test_config.data_sources = [test_source_directory.as_posix()]
+    test_config.task_types = [mc.TaskType.STORE]
     test_config.data_source_extensions = ['.fits.gz']
     test_config.cleanup_files_when_storing = True
     test_config.cleanup_failure_destination = test_failure_directory.as_posix()
