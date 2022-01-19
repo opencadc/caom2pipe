@@ -487,9 +487,16 @@ def test_transfer_check_fits_verify():
         test_result = test_subject.get_time_box_work(
             test_start_ts, test_end_ts
         )
-        assert len(test_result) == 1, 'wrong number of results returned'
+        assert len(test_result) == 3, 'wrong number of results returned'
         assert (
                 test_result[0].entry_name == '/cfht_source/correct.fits.gz'
+        ), 'wrong result'
+        assert (
+            test_result[1].entry_name == '/cfht_source/same_file.fits'
+        ), 'wrong result'
+        assert (
+            test_result[2].entry_name ==
+            '/cfht_source/already_successful.fits'
         ), 'wrong result'
         for f in [
             test_empty_file,

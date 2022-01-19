@@ -410,31 +410,34 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         """
         :param entry: os.DirEntry
         """
-        copy_file = True
+        work_with_file = True
         if super().default_filter(entry):
             if entry.name.startswith('.'):
                 # skip dot files
-                copy_file = False
+                work_with_file = False
             elif '.hdf5' in entry.name:
                 # no hdf5 validation
                 pass
             elif ac.check_fits(entry.path):
-                # only transfer files that pass the FITS verification
-                if self._store_modified_files_only:
-                    # only transfer files with a different MD5 checksum
-                    copy_file = self._check_md5sum(entry.path)
-                    if not copy_file and self._cleanup_when_storing:
-                        self._logger.warning(
-                            f'{entry.path} has the same md5sum at CADC. Not '
-                            f'transferring.'
-                        )
-                        # KW - 23-06-21
-                        # if the file already exists, with the same
-                        # checksum, at CADC, Kanoa says move it to the
-                        # 'succeeded' directory.
-                        self._move_action(
-                            entry.path, self._cleanup_success_directory
-                        )
+                # only work with files that pass the FITS verification
+                if self._cleanup_when_storing:
+                    if self._store_modified_files_only:
+                        # only transfer files with a different MD5 checksum
+                        work_with_file = self._check_md5sum(entry.path)
+                        if not work_with_file:
+                            self._logger.warning(
+                                f'{entry.path} has the same md5sum at CADC. '
+                                f'Not transferring.'
+                            )
+                            # KW - 23-06-21
+                            # if the file already exists, with the same
+                            # checksum, at CADC, Kanoa says move it to the
+                            # 'succeeded' directory.
+                            self._move_action(
+                                entry.path, self._cleanup_success_directory
+                            )
+                else:
+                    work_with_file = True
             else:
                 if self._cleanup_when_storing:
                     self._logger.warning(
@@ -444,13 +447,14 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     self._move_action(
                         entry.path, self._cleanup_failure_directory
                     )
-                copy_file = False
+                work_with_file = False
         else:
-            copy_file = False
+            work_with_file = False
         self._logger.debug(
-            f'Done default_filter says copy_file is {copy_file} for {entry}'
+            f'Done default_filter says work_with_file is '
+            f'{work_with_file} for {entry}'
         )
-        return copy_file
+        return work_with_file
 
     def get_work(self):
         self._logger.debug(f'Begin get_work.')
