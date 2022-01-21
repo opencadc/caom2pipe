@@ -923,3 +923,15 @@ def test_extract_file_name_from_uri():
         '/usr/src/app/data/abc.fits.gz'
     )
     assert test_result == 'abc.fits.gz', 'wrong fqn'
+
+
+def test_use_vos():
+    test_config = mc.Config()
+    test_config.data_sources = []
+    assert test_config.use_vos is False, 'empty data source'
+    test_config.data_sources = ['vos:abc.fits']
+    assert test_config.use_vos is True, 'one vos data source'
+    test_config.data_sources = ['https://localhost', 'vos:abc.fits']
+    assert test_config.use_vos is True, 'mixed data source'
+    test_config.data_sources = ['/data/vos/2022', '/data/vos/2021']
+    assert test_config.use_vos is False, 'use_local_files data source'

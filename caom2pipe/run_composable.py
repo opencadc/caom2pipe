@@ -495,6 +495,21 @@ def _set_logging(config):
         handler.setFormatter(formatter)
 
 
+def _set_metadata_reader(config, clients):
+    if config.use_local_files:
+        metadata_reader = reader_composable.FileMetadataReader()
+    else:
+        if config.use_vos:
+            metadata_reader = reader_composable.VaultReader(
+                clients.vo_client
+            )
+        else:
+            metadata_reader = reader_composable.StorageClientReader(
+                clients.data_client
+            )
+    return metadata_reader
+
+
 def _set_modify_transfer(modify_transfer, config, client):
     if modify_transfer is None:
         if not config.use_local_files:
@@ -570,6 +585,10 @@ def run_by_todo(
             source = data_source_composable.ListDirSeparateDataSource(
                 config, recursive=config.recurse_data_sources
             )
+        elif config.use_vos:
+            source = data_source_composable.VaultDataSource(
+                clients.vo_client, config, config.recurse_data_sources
+            )
         else:
             source = data_source_composable.TodoFileDataSource(config)
 
@@ -578,12 +597,8 @@ def run_by_todo(
     )
 
     if metadata_reader is None:
-        if config.use_local_files:
-            metadata_reader = reader_composable.FileMetadataReader()
-        else:
-            metadata_reader = reader_composable.StorageClientReader(
-                clients.data_client
-            )
+        metadata_reader = _set_metadata_reader(config, clients)
+
     organizer = ec.OrganizeExecutes(
         config,
         meta_visitors,
@@ -662,7 +677,14 @@ def run_by_state(
                 config, recursive=config.recurse_data_sources
             )
         else:
-            source = data_source_composable.QueryTimeBoxDataSourceTS(config)
+            if config.use_vos:
+                source = data_source_composable.VaultDataSource(
+                    clients.vo_client
+                )
+            else:
+                source = data_source_composable.QueryTimeBoxDataSourceTS(
+                    config
+                )
 
     if end_time is None:
         end_time = get_utc_now_tz()
@@ -672,12 +694,7 @@ def run_by_state(
     )
 
     if metadata_reader is None:
-        if config.use_local_files:
-            metadata_reader = reader_composable.FileMetadataReader()
-        else:
-            metadata_reader = reader_composable.StorageClientReader(
-                clients.data_client
-            )
+        metadata_reader = _set_metadata_reader(config, clients)
 
     organizer = ec.OrganizeExecutes(
         config,
