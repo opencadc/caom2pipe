@@ -139,6 +139,7 @@ class ClientCollection:
         self._metadata_client = None
         self._data_client = None
         self._query_client = None
+        self._vo_client = None
         self._metrics = None
         self._logger = logging.getLogger(self.__class__.__name__)
         self._init(config)
@@ -158,6 +159,14 @@ class ClientCollection:
     @property
     def query_client(self):
         return self._query_client
+
+    @property
+    def vo_client(self):
+        return self._vo_client
+
+    @vo_client.setter
+    def vo_client(self, value):
+        self._vo_client = value
 
     def _init(self, config):
         if mc.TaskType.SCRAPE in config.task_types:

@@ -1123,6 +1123,16 @@ class Config:
     def source_host(self, value):
         self._source_host = value
 
+    @property
+    def use_vos(self):
+        """"""
+        result = False
+        for entry in self._data_sources:
+            if entry.startswith('vos:'):
+                result = True
+                break
+        return result
+
     def __str__(self):
         return (
             f'\nFrom {os.getcwd()}/config.yml:\n'

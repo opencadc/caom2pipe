@@ -166,7 +166,6 @@ class CaomExecute:
             self.log_level_as,
         ) = self._specify_logging_level_param(config.logging_level)
         self.root_dir = config.working_directory
-        self.collection = config.collection
         self.working_dir = os.path.join(self.root_dir, storage_name.obs_id)
 
         if config.log_to_file:
@@ -210,13 +209,17 @@ class CaomExecute:
         """Retrieve the existing observation model metadata."""
         self._observation = clc.repo_get(
             self.caom_repo_client,
-            self.collection,
+            self._storage_name.collection,
             self._storage_name.obs_id,
             self.observable.metrics,
         )
         self._caom2_update_needed = (
             False if self._observation is None else True
         )
+        if self._caom2_update_needed:
+            self.logger.debug(
+                f'Found observation {self._observation.observation_id}'
+            )
 
     def _caom2_store(self):
         """Update an existing observation instance.  Assumes the obs_id
@@ -387,7 +390,10 @@ class MetaVisit(CaomExecute):
         self.logger.debug('Begin execute')
         self.logger.debug('the steps:')
 
-        self.logger.debug('retrieve input metadata')
+        self.logger.debug(
+            f'retrieve input metadata with '
+            f'{self._metadata_reader.__class__.__name__}'
+        )
         self._metadata_reader.set(self._storage_name)
 
         self.logger.debug('retrieve the observation if it exists')
@@ -641,7 +647,7 @@ class LocalStore(Store):
         self.logger.debug('Begin execute')
 
         self.logger.debug(
-            f'Store {len(self._storage_name.source_names)} files to ad.'
+            f'Store {len(self._storage_name.source_names)} files to CADC.'
         )
         for index, entry in enumerate(self._storage_name.source_names):
             self.logger.debug(f'store the input file {entry}')

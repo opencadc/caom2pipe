@@ -96,6 +96,11 @@ class MetadataReader:
     Users of this class hierarchy should be able to reduce the number of
     times file headers and FileInfo are retrieved for the same file.
 
+    Use the source for determining FileInfo information because comparing
+    the md5sum at the source to CADC storage is how to determine whether or
+    not a file needs to be pushed to CADC for storage, should storing files be
+    part of the execution.
+
     TODO - how to handle thumbnails and previews
     """
 
@@ -103,6 +108,7 @@ class MetadataReader:
         # dicts are indexed by mc.StorageName.destination_uris
         self._headers = {}  # astropy.io.fits.Headers
         self._file_info = {}  # cadcdata.FileInfo
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     @property
     def file_info(self):
@@ -127,6 +133,7 @@ class MetadataReader:
         """Retrieves FileInfo information to memory."""
         for index, entry in enumerate(storage_name.destination_uris):
             if entry not in self._file_info.keys():
+                self._logger.debug(f'Retrieve FileInfo for {entry}')
                 self._file_info[entry] = self._retrieve_file_info(
                     storage_name.source_names[index]
                 )
@@ -136,6 +143,7 @@ class MetadataReader:
         for index, entry in enumerate(storage_name.destination_uris):
             if entry not in self._headers.keys():
                 if '.fits' in entry:
+                    self._logger.debug(f'Retrieve headers for {entry}')
                     self._headers[entry] = (
                         self._retrieve_headers(
                             storage_name.source_names[index]
@@ -187,9 +195,7 @@ class StorageClientReader(MetadataReader):
     def set_headers(self, storage_name):
         """Retrieves the Header information to memory."""
         for entry in storage_name.destination_uris:
-            logging.error(f'{entry} {self._headers.keys()} {entry in self._headers.keys()}')
             if entry not in self._headers.keys():
-                logging.error('where is the other call?')
                 if '.fits' in entry:
                     self._headers[entry] = self._client.get_head(entry)
                 else:
