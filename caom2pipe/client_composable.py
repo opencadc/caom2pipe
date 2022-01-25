@@ -156,6 +156,11 @@ class ClientCollection:
     def metrics(self):
         return self._metrics
 
+    @metrics.setter
+    def metrics(self, value):
+        self._data_client._metrics = value
+        self._metrics = value
+
     @property
     def query_client(self):
         return self._query_client
@@ -174,16 +179,17 @@ class ClientCollection:
                 f'SCRAPE\'ing data - no clients will be initialized.'
             )
         else:
+            if self._metrics is None:
+                self._metrics = mc.Metrics(config)
             subject = define_subject(config)
             self._metadata_client = CAOM2RepoClient(
                 subject, config.logging_level, config.resource_id
             )
-            self._data_client = declare_client(config)
+            self._data_client = declare_client(config, self._metrics)
             if config.tap_id is not None:
                 self._query_client = CadcTapClient(
                     subject=subject, resource_id=config.tap_id
                 )
-        self._metrics = mc.Metrics(config)
 
 
 def client_get(client, working_directory, file_name, source, metrics):
@@ -302,7 +308,7 @@ def data_put_fqn(
     metrics.observe(start, end, file_size, 'put', 'data', source_name)
 
 
-def declare_client(config):
+def declare_client(config, metrics=None):
     """Common code to set the client used for interacting with CADC
     storage."""
     subject = define_subject(config)
@@ -310,7 +316,7 @@ def declare_client(config):
         using_storage_inventory=config.features.supports_latest_client,
         resource_id=config.storage_inventory_resource_id,
         subject=subject,
-        metrics=mc.Metrics(config),
+        metrics=metrics,
     )
     return cadc_client
 
