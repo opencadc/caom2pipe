@@ -83,12 +83,12 @@ from caom2pipe import manage_composable as mc
 
 __all__ = [
     'DataSource',
+    'data_source_factory',
     'ListDirDataSource',
     'ListDirSeparateDataSource',
     'ListDirTimeBoxDataSource',
     'LocalFilesDataSource',
     'QueryTimeBoxDataSource',
-    'QueryTimeBoxDataSourceTS',
     'StateRunnerMeta',
     'TodoFileDataSource',
     'VaultDataSource',
@@ -214,11 +214,11 @@ class ListDirSeparateDataSource(DataSource):
     to use as a source of files, and how to identify files of interest.
     """
 
-    def __init__(self, config, recursive=True):
+    def __init__(self, config):
         super().__init__(config)
         self._source_directories = config.data_sources
         self._extensions = config.data_source_extensions
-        self._recursive = recursive
+        self._recursive = config.recurse_data_sources
         self._work = deque()
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -259,16 +259,15 @@ class ListDirTimeBoxDataSource(DataSource):
       very long time, and a lot of memory, in glob/walk
     """
 
-    def __init__(self, config, recursive=True):
+    def __init__(self, config):
         """
 
         :param config: manage_composable.Config
-        :param recursive: True if sub-directories should also be checked
         """
         super().__init__(config)
         self._source_directories = config.data_sources
         self._extensions = config.data_source_extensions
-        self._recursive = recursive
+        self._recursive = config.recurse_data_sources
         self._work = deque()
         self._temp = defaultdict(list)
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -599,53 +598,6 @@ class TodoFileDataSource(DataSource):
         return work
 
 
-class QueryTimeBoxDataSource(DataSource):
-    """
-    Implements the identification of the work to be done, by querying a
-    TAP service, in time-boxed chunks.
-    """
-
-    def __init__(self, config, preview_suffix='jpg'):
-        super().__init__(config)
-        self._preview_suffix = preview_suffix
-        subject = clc.define_subject(config)
-        self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    def get_time_box_work(self, prev_exec_time, exec_time):
-        """
-        Get a set of file names from an archive. Limit the entries by
-        time-boxing on ingestDate, and don't include previews.
-
-        :param prev_exec_time datetime start of the timestamp chunk
-        :param exec_time datetime end of the timestamp chunk
-        :return: a list of file names in the CADC storage system
-        """
-        # container timezone is UTC, ad timezone is Pacific
-        db_fmt = '%Y-%m-%d %H:%M:%S.%f'
-        prev_exec_time_pz = datetime.strftime(
-            prev_exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt
-        )
-        exec_time_pz = datetime.strftime(
-            exec_time.astimezone(tz.gettz('US/Pacific')), db_fmt
-        )
-        self._logger.debug(f'Begin get_work.')
-        query = (
-            f"SELECT fileName, ingestDate FROM archive_files WHERE "
-            f"archiveName = '{self._config.archive}' "
-            f"AND fileName not like '%{self._preview_suffix}' "
-            f"AND ingestDate > '{prev_exec_time_pz}' "
-            f"AND ingestDate <= '{exec_time_pz}' "
-            "ORDER BY ingestDate ASC "
-        )
-        self._logger.debug(query)
-        result = deque()
-        rows = clc.query_tap_client(query, self._client)
-        for row in rows:
-            result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
-        return result
-
-
 def is_offset_aware(dt):
     """
     Raises CadcException if tzinfo is not set
@@ -665,7 +617,7 @@ class StateRunnerMeta:
     entry_ts: datetime.timestamp  # = field(default_factory=is_offset_aware)
 
 
-class QueryTimeBoxDataSourceTS(DataSource):
+class QueryTimeBoxDataSource(DataSource):
     """
     Implements the identification of the work to be done, by querying a
     TAP service, in time-boxed chunks. The time values are timestamps
@@ -731,8 +683,8 @@ class VaultDataSource(ListDirTimeBoxDataSource):
     The directory listing may be time-boxed.
     """
 
-    def __init__(self, vault_client, config, recursive=True):
-        super().__init__(config, recursive)
+    def __init__(self, vault_client, config):
+        super().__init__(config)
         self._vault_client = vault_client
         self._source_directories = config.data_sources
         self._data_source_extensions = config.data_source_extensions
@@ -808,3 +760,23 @@ class VaultDataSource(ListDirTimeBoxDataSource):
             else:
                 return True
         return False
+
+
+def data_source_factory(config, clients, state):
+    """
+    :param config: manage_composable.Config
+    :param clients: client_composable.ClientCollection
+    :param state: bool True is the DataSource is time-boxed.
+    :return:
+    """
+    if config.use_local_files:
+        source = ListDirSeparateDataSource(config)
+    else:
+        if config.use_vos and clients.vo_client is not None:
+            source = VaultDataSource(clients.vo_client, config)
+        else:
+            if state:
+                source = QueryTimeBoxDataSource(config)
+            else:
+                source = TodoFileDataSource(config)
+    return source

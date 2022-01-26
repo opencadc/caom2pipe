@@ -77,6 +77,7 @@ __all__ = [
     'CadcTransfer',
     'FtpTransfer',
     'HttpTransfer',
+    'modify_transfer_factory',
     'Transfer',
     'VoFitsCleanupTransfer',
     'VoFitsTransfer',
@@ -367,3 +368,11 @@ class VoFitsCleanupTransfer(VoFitsTransfer):
                 )
                 raise mc.CadcException(e)
         self._logger.debug('Done _move_action')
+
+
+def modify_transfer_factory(config, clients):
+    modify_transfer = None
+    if not config.use_local_files:
+        modify_transfer = CadcTransfer()
+        modify_transfer.client = clients.data_client
+    return modify_transfer

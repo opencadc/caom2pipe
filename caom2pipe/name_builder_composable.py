@@ -73,6 +73,7 @@ from urllib.parse import urlparse
 from caom2pipe import manage_composable as mc
 
 __all__ = [
+    'builder_factory',
     'EntryBuilder',
     'GuessingBuilder',
     'ObsIDBuilder',
@@ -110,17 +111,22 @@ class StorageNameBuilder:
 
 
 class StorageNameInstanceBuilder(StorageNameBuilder):
-    def __init__(self, collection):
+    def __init__(self, config):
         super().__init__()
-        self._collection = collection
+        self._collection = config.collection
+        self._scheme = (
+            'cadc' if config.features.supports_latest_client else 'ad'
+        )
 
     def build(self, entry):
+        uri = mc.build_uri(self._collection, basename(entry), self._scheme)
         return mc.StorageName(
             obs_id=mc.StorageName.remove_extensions(entry),
             collection=self._collection,
             fname_on_disk=entry,
             entry=entry,
             source_names=[entry],
+            destination_uris=[uri],
         )
 
 
@@ -175,3 +181,7 @@ class GuessingBuilder(StorageNameBuilder):
         else:
             result = self._storage_name(uri=entry, entry=entry)
         return result
+
+
+def builder_factory(config):
+    return StorageNameInstanceBuilder(config)

@@ -81,7 +81,9 @@ def test_storage_name_builder():
 
 
 def test_storage_name_instance_builder():
-    test_subject = nbc.StorageNameInstanceBuilder('TEST_COLLECTION')
+    test_config = mc.Config()
+    test_config.collection = 'TEST_COLLECTION'
+    test_subject = nbc.StorageNameInstanceBuilder(test_config)
     test_result = test_subject.build('test_storage_name.fits')
     assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
     assert test_result.collection == 'TEST_COLLECTION', 'wrong collection'

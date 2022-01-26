@@ -79,6 +79,7 @@ from caom2pipe import manage_composable as mc
 __all__ = [
     'FileMetadataReader',
     'MetadataReader',
+    'reader_factory',
     'StorageClientReader',
     'VaultReader',
 ]
@@ -229,3 +230,15 @@ class VaultReader(MetadataReader):
             raise mc.CadcException(
                 f'Did not retrieve {source_name} header because {e}'
             )
+
+
+def reader_factory(config, clients):
+    metadata_reader = None
+    if config.use_local_files:
+        metadata_reader = FileMetadataReader()
+    else:
+        if config.use_vos and clients.vo_client is not None:
+            metadata_reader = VaultReader(clients.vo_client)
+    if metadata_reader is None:
+        metadata_reader = StorageClientReader(clients.data_client)
+    return metadata_reader

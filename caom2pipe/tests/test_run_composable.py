@@ -108,9 +108,10 @@ def test_run_todo_list_dir_data_source(
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.use_local_files = True
     test_config.task_types = [mc.TaskType.SCRAPE]
-    test_config.data_sources = [tc.TEST_FILES_DIR]
+    test_config.data_sources = [
+        os.path.join(tc.TEST_FILES_DIR, 'sub_directory')
+    ]
     test_config.data_source_extensions = ['.fits']
-
     test_chooser = ec.OrganizeChooser()
     test_result = rc.run_by_todo(
         config=test_config, chooser=test_chooser
@@ -136,7 +137,9 @@ def test_run_todo_list_dir_data_source_v(
     read_obs_mock.side_effect = _mock_read
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.use_local_files = True
-    test_config.data_sources = [tc.TEST_FILES_DIR]
+    test_config.data_sources = [
+        os.path.join(tc.TEST_FILES_DIR, 'sub_directory')
+    ]
     test_config.data_source_extensions = ['.fits']
     test_config.task_types = [mc.TaskType.SCRAPE]
     test_config.features.supports_latest_client = True

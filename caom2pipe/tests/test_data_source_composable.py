@@ -177,7 +177,9 @@ def test_storage_time_box_query(query_mock):
     exec_date = utc_now - timedelta(seconds=1800)
     try:
         test_subject = dsc.QueryTimeBoxDataSource(test_config)
-        test_result = test_subject.get_time_box_work(prev_exec_date, exec_date)
+        test_result = test_subject.get_time_box_work(
+            prev_exec_date.timestamp(), exec_date.timestamp()
+        )
         assert test_result is not None, 'expect result'
         assert len(test_result) == 3, 'wrong number of results'
         assert (
@@ -291,9 +293,8 @@ def test_list_dir_time_box_data_source():
             test_entry.entry_name == test_file_1
         ), 'wrong expected file, order matters since should be sorted deque'
 
-        test_subject = dsc.ListDirTimeBoxDataSource(
-            test_config, recursive=False
-        )
+        test_config.recurse_data_sources = False
+        test_subject = dsc.ListDirTimeBoxDataSource(test_config)
         test_result = test_subject.get_time_box_work(
             test_prev_exec_time, test_exec_time
         )
@@ -326,7 +327,8 @@ def test_list_dir_separate_data_source():
     assert len(test_result) == 76, 'expect contents in the result'
     assert '/test_files/sub_directory/abc.fits' in test_result, 'wrong entry'
 
-    test_subject = dsc.ListDirSeparateDataSource(test_config, recursive=False)
+    test_config.recurse_data_sources = False
+    test_subject = dsc.ListDirSeparateDataSource(test_config)
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a non-recursive result'
     assert len(test_result) == 74, 'expect contents in non-recursive result'
