@@ -508,21 +508,30 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             destination_name = mc.build_uri(
                 self.get_collection(f_name), f_name, scheme
             )
-            cadc_meta = self._cadc_client.info(destination_name)
+            try:
+                cadc_meta = self._cadc_client.info(destination_name)
+            except Exception as e:
+                self._logger.error(
+                    f'info call failed for {destination_name} with {e}'
+                )
+                self._logger.debug(traceback.format_exc())
+                cadc_meta = None
 
-            # get the local FileInfo
-            temp_storage_name = mc.StorageName()
-            temp_storage_name.source_names = [entry_path]
-            temp_storage_name.destination_uris = [destination_name]
-            self._metadata_reader.set_file_info(temp_storage_name)
+            if cadc_meta is None:
+                result = True
+            else:
+                # get the local FileInfo
+                temp_storage_name = mc.StorageName()
+                temp_storage_name.source_names = [entry_path]
+                temp_storage_name.destination_uris = [destination_name]
+                self._metadata_reader.set_file_info(temp_storage_name)
 
-            if (
-                cadc_meta is not None
-                and self._metadata_reader.file_info.get(
-                    destination_name
-                ).md5sum == cadc_meta.md5sum
-            ):
-                result = False
+                if (
+                    self._metadata_reader.file_info.get(
+                        destination_name
+                    ).md5sum == cadc_meta.md5sum
+                ):
+                    result = False
         else:
             self._logger.debug(
                 f'SCRAPE\'ing data - no md5sum checking with CADC for '
