@@ -945,6 +945,84 @@ def test_run_store_ingest_failure(
             os.chdir(cwd)
 
 
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+@patch('caom2pipe.execute_composable.CaomExecute._caom2_store')
+@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
+@patch('caom2pipe.data_source_composable.TodoFileDataSource.get_work')
+@patch('caom2pipe.client_composable.CAOM2RepoClient')
+@patch('caom2pipe.client_composable.StorageClientWrapper')
+def test_run_ingest(
+    data_client_mock,
+    repo_client_mock,
+    data_source_mock,
+    meta_visit_mock,
+    caom2_store_mock,
+    access_url_mock,
+):
+    access_url_mock.return_value = 'https://localhost:8080'
+    temp_deque = deque()
+    test_f_name = '1319558w.fits.fz'
+    temp_deque.append(test_f_name)
+    data_source_mock.return_value = temp_deque
+    repo_client_mock.return_value.read.return_value = None
+    data_client_mock.return_value.get_head.return_value = [
+        {'INSTRUME': 'WIRCam'},
+    ]
+
+    data_client_mock.return_value.info.return_value = FileInfo(
+        id=test_f_name,
+        file_type='application/fits',
+        md5sum='abcdef',
+    )
+
+    cwd = os.getcwd()
+    with TemporaryDirectory() as tmp_dir_name:
+        os.chdir(tmp_dir_name)
+        test_config = mc.Config()
+        test_config.working_directory = tmp_dir_name
+        test_config.task_types = [mc.TaskType.INGEST]
+        test_config.logging_level = 'INFO'
+        test_config.collection = 'CFHT'
+        test_config.proxy_file_name = 'cadcproxy.pem'
+        test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
+        test_config.features.supports_latest_client = False
+        test_config.use_local_files = False
+        mc.Config.write_to_file(test_config)
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
+        getcwd_orig = os.getcwd
+        os.getcwd = Mock(return_value=tmp_dir_name)
+        try:
+            test_data_source = dsc.TodoFileDataSource(test_config)
+            test_result = rc.run_by_todo(source=test_data_source)
+            assert test_result is not None, 'expect result'
+            assert test_result == 0, 'expect success'
+            assert repo_client_mock.return_value.read.called, 'read called'
+            assert data_client_mock.return_value.info.called, 'info'
+            assert (
+                data_client_mock.return_value.info.call_count == 1
+            ), 'wrong number of info calls'
+            data_client_mock.return_value.info.assert_called_with(
+                f'ad:CFHT/{test_f_name}',
+            )
+            assert (
+                data_client_mock.return_value.get_head.called
+            ), 'get_head should be called'
+            assert (
+                data_client_mock.return_value.get_head.call_count == 1
+            ), 'wrong number of get_heads'
+            data_client_mock.return_value.get_head.assert_called_with(
+                f'ad:CFHT/{test_f_name}',
+            )
+            assert meta_visit_mock.called, '_visit_meta call'
+            assert meta_visit_mock.call_count == 1, '_visit_meta call count'
+            assert caom2_store_mock.called, '_caom2_store call'
+            assert caom2_store_mock.call_count == 1, '_caom2_store call count'
+        finally:
+            os.getcwd = getcwd_orig
+            os.chdir(cwd)
+
+
 def _clean_up_log_files(test_config):
     retry_success_fqn = (
         f'{tc.TEST_DATA_DIR}_0/' f'{test_config.success_log_file_name}'
