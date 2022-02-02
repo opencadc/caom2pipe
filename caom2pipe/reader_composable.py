@@ -234,7 +234,7 @@ class VaultReader(MetadataReader):
 
 def reader_factory(config, clients):
     metadata_reader = None
-    if config.use_local_files:
+    if config.use_local_files or mc.TaskType.SCRAPE in config.task_types:
         metadata_reader = FileMetadataReader()
     else:
         if config.use_vos and clients.vo_client is not None:
