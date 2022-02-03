@@ -73,11 +73,15 @@ import glob
 import os
 
 from astropy.table import Table
+from collections import deque
 from datetime import datetime, timedelta, timezone
+from tempfile import TemporaryDirectory
 
 from unittest.mock import Mock, patch, call
 import test_conf as tc
 
+from cadcdata import FileInfo
+from cadcutils import exceptions
 from caom2 import SimpleObservation, Algorithm
 from caom2pipe import data_source_composable as dsc
 from caom2pipe import execute_composable as ec
@@ -108,9 +112,10 @@ def test_run_todo_list_dir_data_source(
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.use_local_files = True
     test_config.task_types = [mc.TaskType.SCRAPE]
-    test_config.data_sources = [tc.TEST_FILES_DIR]
+    test_config.data_sources = [
+        os.path.join(tc.TEST_FILES_DIR, 'sub_directory')
+    ]
     test_config.data_source_extensions = ['.fits']
-
     test_chooser = ec.OrganizeChooser()
     test_result = rc.run_by_todo(
         config=test_config, chooser=test_chooser
@@ -136,7 +141,9 @@ def test_run_todo_list_dir_data_source_v(
     read_obs_mock.side_effect = _mock_read
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.use_local_files = True
-    test_config.data_sources = [tc.TEST_FILES_DIR]
+    test_config.data_sources = [
+        os.path.join(tc.TEST_FILES_DIR, 'sub_directory')
+    ]
     test_config.data_source_extensions = ['.fits']
     test_config.task_types = [mc.TaskType.SCRAPE]
     test_config.features.supports_latest_client = True
@@ -833,6 +840,187 @@ def test_time_box_once_through(test_config):
     # assert test_state.get_bookmark(TEST_BOOKMARK) == \
     #     datetime(2019, 7, 23, 12, 20)
     # assert test_work.todo_call_count == 1, 'wrong todo call count'
+
+
+@patch('caom2pipe.execute_composable.CaomExecute._caom2_store')
+@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+@patch('caom2pipe.reader_composable.FileMetadataReader._retrieve_headers')
+@patch('caom2pipe.reader_composable.FileMetadataReader._retrieve_file_info')
+@patch('caom2pipe.data_source_composable.LocalFilesDataSource._move_action')
+@patch('caom2pipe.data_source_composable.LocalFilesDataSource.get_work')
+@patch('caom2pipe.client_composable.CAOM2RepoClient')
+@patch('caom2pipe.client_composable.StorageClientWrapper')
+def test_run_store_ingest_failure(
+    data_client_mock,
+    repo_client_mock,
+    get_work_mock,
+    cleanup_mock,
+    reader_file_info_mock,
+    reader_headers_mock,
+    access_mock,
+    visit_meta_mock,
+    caom2_store_mock,
+):
+    access_mock.return_value = 'https://localhost'
+    temp_deque = deque()
+    temp_deque.append('/data/dao_c122_2021_005157_e.fits')
+    temp_deque.append('/data/dao_c122_2021_005157.fits')
+    get_work_mock.return_value = temp_deque
+    repo_client_mock.return_value.read.return_value = None
+    reader_headers_mock.return_value = [{'OBSMODE': 'abc'}]
+    def _file_info_mock(uri):
+        return FileInfo(
+            id=uri,
+            file_type='application/fits',
+            md5sum='md5:def',
+        )
+
+    # this is the exception raised in data_util.StorageClientWrapper, as
+    # the mc.CadcException definition is not available to that package
+    data_client_mock.return_value.put.side_effect = (
+        exceptions.UnexpectedException
+    )
+    # mock a series of failures with the CADC service
+    data_client_mock.return_value.info.side_effect = (
+        exceptions.UnexpectedException
+    )
+    reader_file_info_mock.side_effect = _file_info_mock
+    cwd = os.getcwd()
+    with TemporaryDirectory() as tmp_dir_name:
+        os.chdir(tmp_dir_name)
+        test_config = mc.Config()
+        test_config.working_directory = tmp_dir_name
+        test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
+        test_config.use_local_files = True
+        test_config.cleanup_files_when_storing = True
+        test_config.cleanup_failure_destination = '/data/failure'
+        test_config.cleanup_success_destination = '/data/success'
+        test_config.data_sources = ['/data']
+        test_config.data_source_extensions = ['.fits']
+        test_config.logging_level = 'INFO'
+        test_config.proxy_file_name = 'cadcproxy.pem'
+        test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
+        test_config.features.supports_latest_client = True
+        mc.Config.write_to_file(test_config)
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
+        getcwd_orig = os.getcwd
+        os.getcwd = Mock(return_value=tmp_dir_name)
+        try:
+            data_source = dsc.LocalFilesDataSource(
+                test_config, data_client_mock, Mock(),
+            )
+            test_result = rc.run_by_todo(source=data_source)
+            assert test_result is not None, 'expect result'
+            assert test_result == -1, 'expect failure'
+            # execution stops before this call should be made
+            assert not repo_client_mock.return_value.read.called, 'no read'
+            # make sure data is not really being written to CADC storage :)
+            assert (
+                data_client_mock.return_value.put.called
+            ), 'put should be called'
+            assert (
+                data_client_mock.return_value.put.call_count == 2
+            ), 'wrong number of puts'
+            put_calls = [
+                call('/data', 'cadc:TEST/dao_c122_2021_005157_e.fits', None),
+                call('/data', 'cadc:TEST/dao_c122_2021_005157.fits', None),
+            ]
+            data_client_mock.return_value.put.assert_has_calls(
+                put_calls, any_order=False
+            )
+            assert cleanup_mock.called, 'cleanup'
+            cleanup_calls = [
+                call('/data/dao_c122_2021_005157_e.fits', '/data/failure'),
+                call('/data/dao_c122_2021_005157.fits', '/data/failure'),
+            ]
+            cleanup_mock.assert_has_calls(cleanup_calls), 'wrong cleanup args'
+            assert not visit_meta_mock.called, 'no _visit_meta call'
+            assert not caom2_store_mock.called, 'no _caom2_store call'
+            assert not reader_file_info_mock.called, 'info'
+            assert not reader_headers_mock.called, 'get_head should be called'
+        finally:
+            os.getcwd = getcwd_orig
+            os.chdir(cwd)
+
+
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+@patch('caom2pipe.execute_composable.CaomExecute._caom2_store')
+@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
+@patch('caom2pipe.data_source_composable.TodoFileDataSource.get_work')
+@patch('caom2pipe.client_composable.CAOM2RepoClient')
+@patch('caom2pipe.client_composable.StorageClientWrapper')
+def test_run_ingest(
+    data_client_mock,
+    repo_client_mock,
+    data_source_mock,
+    meta_visit_mock,
+    caom2_store_mock,
+    access_url_mock,
+):
+    access_url_mock.return_value = 'https://localhost:8080'
+    temp_deque = deque()
+    test_f_name = '1319558w.fits.fz'
+    temp_deque.append(test_f_name)
+    data_source_mock.return_value = temp_deque
+    repo_client_mock.return_value.read.return_value = None
+    data_client_mock.return_value.get_head.return_value = [
+        {'INSTRUME': 'WIRCam'},
+    ]
+
+    data_client_mock.return_value.info.return_value = FileInfo(
+        id=test_f_name,
+        file_type='application/fits',
+        md5sum='abcdef',
+    )
+
+    cwd = os.getcwd()
+    with TemporaryDirectory() as tmp_dir_name:
+        os.chdir(tmp_dir_name)
+        test_config = mc.Config()
+        test_config.working_directory = tmp_dir_name
+        test_config.task_types = [mc.TaskType.INGEST]
+        test_config.logging_level = 'INFO'
+        test_config.collection = 'CFHT'
+        test_config.proxy_file_name = 'cadcproxy.pem'
+        test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
+        test_config.features.supports_latest_client = False
+        test_config.use_local_files = False
+        mc.Config.write_to_file(test_config)
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
+        getcwd_orig = os.getcwd
+        os.getcwd = Mock(return_value=tmp_dir_name)
+        try:
+            test_data_source = dsc.TodoFileDataSource(test_config)
+            test_result = rc.run_by_todo(source=test_data_source)
+            assert test_result is not None, 'expect result'
+            assert test_result == 0, 'expect success'
+            assert repo_client_mock.return_value.read.called, 'read called'
+            assert data_client_mock.return_value.info.called, 'info'
+            assert (
+                data_client_mock.return_value.info.call_count == 1
+            ), 'wrong number of info calls'
+            data_client_mock.return_value.info.assert_called_with(
+                f'ad:CFHT/{test_f_name}',
+            )
+            assert (
+                data_client_mock.return_value.get_head.called
+            ), 'get_head should be called'
+            assert (
+                data_client_mock.return_value.get_head.call_count == 1
+            ), 'wrong number of get_heads'
+            data_client_mock.return_value.get_head.assert_called_with(
+                f'ad:CFHT/{test_f_name}',
+            )
+            assert meta_visit_mock.called, '_visit_meta call'
+            assert meta_visit_mock.call_count == 1, '_visit_meta call count'
+            assert caom2_store_mock.called, '_caom2_store call'
+            assert caom2_store_mock.call_count == 1, '_caom2_store call count'
+        finally:
+            os.getcwd = getcwd_orig
+            os.chdir(cwd)
 
 
 def _clean_up_log_files(test_config):

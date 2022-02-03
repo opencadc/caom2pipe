@@ -495,29 +495,6 @@ def _set_logging(config):
         handler.setFormatter(formatter)
 
 
-def _set_metadata_reader(config, clients):
-    if config.use_local_files:
-        metadata_reader = reader_composable.FileMetadataReader()
-    else:
-        if config.use_vos:
-            metadata_reader = reader_composable.VaultReader(
-                clients.vo_client
-            )
-        else:
-            metadata_reader = reader_composable.StorageClientReader(
-                clients.data_client
-            )
-    return metadata_reader
-
-
-def _set_modify_transfer(modify_transfer, config, client):
-    if modify_transfer is None:
-        if not config.use_local_files:
-            modify_transfer = transfer_composable.CadcTransfer()
-            modify_transfer.client = client
-    return modify_transfer
-
-
 def get_utc_now():
     """So that utcnow can be mocked."""
     return datetime.utcnow()
@@ -530,6 +507,41 @@ def get_utc_now_tz():
     :return an offset-aware datetime.datetime
     """
     return datetime.now(tz=timezone.utc)
+
+
+def _common_init(
+        config,
+        clients,
+        name_builder,
+        source,
+        modify_transfer,
+        metadata_reader,
+        state,
+    ):
+    if config is None:
+        config = mc.Config()
+        config.get_executors()
+
+    _set_logging(config)
+
+    if clients is None:
+        clients = cc.ClientCollection(config)
+    if name_builder is None:
+        name_builder = name_builder_composable.builder_factory(config)
+    if source is None:
+        source = data_source_composable.data_source_factory(
+            config, clients, state
+        )
+    if modify_transfer is None:
+        modify_transfer = transfer_composable.modify_transfer_factory(
+            config, clients
+        )
+    if metadata_reader is None:
+        metadata_reader = reader_composable.reader_factory(config, clients)
+
+    return (
+        config, clients, name_builder, source, modify_transfer, metadata_reader
+    )
 
 
 def run_by_todo(
@@ -568,37 +580,22 @@ def run_by_todo(
     :param clients: ClientCollection instance
     :param metadata_reader: MetadataReader instance
     """
-    if config is None:
-        config = mc.Config()
-        config.get_executors()
-    _set_logging(config)
-    if clients is None:
-        clients = cc.ClientCollection(config)
-
-    if name_builder is None:
-        name_builder = name_builder_composable.StorageNameInstanceBuilder(
-            config.collection
+    (
+        config,
+        clients,
+        name_builder,
+        source,
+        modify_transfer,
+        metadata_reader,
+    ) = _common_init(
+            config,
+            clients,
+            name_builder,
+            source,
+            modify_transfer,
+            metadata_reader,
+            False,
         )
-
-    if source is None:
-        if config.use_local_files:
-            source = data_source_composable.ListDirSeparateDataSource(
-                config, recursive=config.recurse_data_sources
-            )
-        elif config.use_vos:
-            source = data_source_composable.VaultDataSource(
-                clients.vo_client, config, config.recurse_data_sources
-            )
-        else:
-            source = data_source_composable.TodoFileDataSource(config)
-
-    modify_transfer = _set_modify_transfer(
-        modify_transfer, config, clients.data_client
-    )
-
-    if metadata_reader is None:
-        metadata_reader = _set_metadata_reader(config, clients)
-
     organizer = ec.OrganizeExecutes(
         config,
         meta_visitors,
@@ -659,42 +656,25 @@ def run_by_state(
     :param clients instance of ClientsCollection, if one was required
     :param metadata_reader instance of MetadataReader
     """
-    if config is None:
-        config = mc.Config()
-        config.get_executors()
-    _set_logging(config)
-    if clients is None:
-        clients = cc.ClientCollection(config)
-
-    if name_builder is None:
-        name_builder = name_builder_composable.StorageNameInstanceBuilder(
-            config.collection
-        )
-
-    if source is None:
-        if config.use_local_files:
-            source = data_source_composable.ListDirTimeBoxDataSource(
-                config, recursive=config.recurse_data_sources
-            )
-        else:
-            if config.use_vos:
-                source = data_source_composable.VaultDataSource(
-                    clients.vo_client
-                )
-            else:
-                source = data_source_composable.QueryTimeBoxDataSourceTS(
-                    config
-                )
+    (
+        config,
+        clients,
+        name_builder,
+        source,
+        modify_transfer,
+        metadata_reader,
+    ) = _common_init(
+        config,
+        clients,
+        name_builder,
+        source,
+        modify_transfer,
+        metadata_reader,
+        True,
+    )
 
     if end_time is None:
         end_time = get_utc_now_tz()
-
-    modify_transfer = _set_modify_transfer(
-        modify_transfer, config, clients.data_client
-    )
-
-    if metadata_reader is None:
-        metadata_reader = _set_metadata_reader(config, clients)
 
     organizer = ec.OrganizeExecutes(
         config,
@@ -751,16 +731,13 @@ def run_single(
     #
     logging.debug(f'Begin run_single {config.work_fqn}')
     clients = cc.ClientCollection(config)
-    modify_transfer = _set_modify_transfer(
-        modify_transfer, config, clients.data_client
-    )
+    if modify_transfer is None:
+        modify_transfer = transfer_composable.modify_transfer_factory(
+            config, clients
+        )
+
     if metadata_reader is None:
-        if config.use_local_files:
-            metadata_reader = reader_composable.FileMetadataReader()
-        else:
-            metadata_reader = reader_composable.StorageClientReader(
-                clients.data_client
-            )
+        metadata_reader = reader_composable.reader_factory(config, clients)
     organizer = ec.OrganizeExecutes(
         config,
         meta_visitors,

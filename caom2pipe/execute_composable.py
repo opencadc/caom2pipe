@@ -775,6 +775,8 @@ class OrganizeExecutes:
         if store_transfer is not None:
             self._store_transfer.observable = self.observable
         self._cadc_client = cadc_client
+        if self._cadc_client is not None:
+            self._cadc_client._metrics = self.observable.metrics
         self._caom_client = caom_client
         self._metadata_reader = metadata_reader
         self._log_h = None
