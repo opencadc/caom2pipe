@@ -1153,7 +1153,7 @@ class Fits2caom2Visitor:
             blueprint = ObsBlueprint(instantiated_class=telescope_data)
             telescope_data.accumulate_blueprint(blueprint)
 
-            if len(headers) == 0:
+            if headers is None or len(headers) == 0:
                 self._logger.debug(
                     f'No headers, using a GenericParser for '
                     f'{self._storage_name.file_uri}'
