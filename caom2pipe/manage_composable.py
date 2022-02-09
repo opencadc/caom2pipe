@@ -1192,10 +1192,12 @@ class Config:
     @staticmethod
     def _obtain_list(key, config, default=[]):
         """Make the configuration file entries into the Enum."""
-        result = default
+        result = []
         if key in config:
             for ii in config[key]:
                 result.append(ii)
+        else:
+            result = default
         return list(set(result))
 
     @staticmethod
