@@ -431,29 +431,25 @@ def look_pull_and_put(
         just the checksum part of ChecksumURI please, or the comparison will
         always fail.
     """
-    retrieve = False
     cadc_meta = cadc_client.info(storage_name)
     if (
         (
             checksum is not None and
             cadc_meta is not None and
-            cadc_meta.md5sum != checksum
+            cadc_meta.md5sum.replace('md5:', '') != checksum
         ) or cadc_meta is None
     ):
         logging.debug(
             f'Different checksums: Source {checksum}, CADC {cadc_meta}'
         )
-        retrieve = True
-    else:
-        logging.info(f'{os.path.basename(fqn)} already exists at CADC.')
-
-    if retrieve:
-        logging.info(
-            f'Retrieving {os.path.basename(fqn)} for storage as '
-            f'{storage_name}'
-        )
         mc.http_get(url, fqn)
         cadc_client.put(os.path.dirname(fqn), storage_name)
+        logging.info(
+            f'Retrieved {os.path.basename(fqn)} for storage as '
+            f'{storage_name}'
+        )
+    else:
+        logging.info(f'{os.path.basename(fqn)} already exists at CADC.')
 
 
 def query_tap_client(query_string, tap_client):
