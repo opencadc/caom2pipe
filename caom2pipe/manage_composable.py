@@ -1192,10 +1192,12 @@ class Config:
     @staticmethod
     def _obtain_list(key, config, default=[]):
         """Make the configuration file entries into the Enum."""
-        result = default
+        result = []
         if key in config:
             for ii in config[key]:
                 result.append(ii)
+        else:
+            result = default
         return list(set(result))
 
     @staticmethod
@@ -1491,8 +1493,15 @@ class PreviewVisitor:
         self._storage_name = kwargs.get('storage_name')
         if self._storage_name is None:
             raise CadcException('Visitor needs a storage_name parameter.')
+        self._metadata_reader = kwargs.get('metadata_reader')
         self._science_file = self._storage_name.file_name
         self._science_fqn = self._storage_name.get_file_fqn(self._working_dir)
+        self._preview_fqn = os.path.join(
+            self._working_dir, self._storage_name.prev
+        )
+        self._thumb_fqn = os.path.join(
+            self._working_dir, self._storage_name.thumb
+        )
         self._delete_list = []
         # keys are uris, values are lists, where the 0th entry is a file name,
         # and the 1th entry is the artifact type
@@ -1586,6 +1595,46 @@ class PreviewVisitor:
                 self._cadc_client.put(
                     self._working_dir, uri, self._stream
                 )
+
+    def _gen_thumbnail(self):
+        self._logger.debug(
+            f'Generating thumbnail for file {self._science_fqn}.'
+        )
+        count = 0
+        if os.path.exists(self._preview_fqn):
+            # keep import local
+            import matplotlib.image as image
+            thumb = image.thumbnail(
+                self._preview_fqn, self._thumb_fqn, scale=0.25
+            )
+            if thumb is not None:
+                count = 1
+        else:
+            self._logger.warning(
+                f'Could not find {self._preview_fqn} for thumbnail '
+                f'generation.'
+            )
+        return count
+
+    def _save_figure(self):
+        self.add_to_delete(self._preview_fqn)
+        count = 1
+        self.add_preview(
+            self._storage_name.prev_uri,
+            self._storage_name.prev,
+            ProductType.PREVIEW,
+            ReleaseType.DATA,
+        )
+        count += self._gen_thumbnail()
+        if count == 2:
+            self.add_preview(
+                self._storage_name.thumb_uri,
+                self._storage_name.thumb,
+                ProductType.THUMBNAIL,
+                ReleaseType.META,
+            )
+            self.add_to_delete(self._thumb_fqn)
+        return count
 
 
 class StorageName:

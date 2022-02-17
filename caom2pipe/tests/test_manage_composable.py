@@ -198,6 +198,7 @@ def test_config_class():
         assert (
             test_config.features.supports_catalog is False
         ), 'modified supports catalog'
+        assert test_config.data_source_extensions == ['.fits.gz'], 'extensions'
     finally:
         os.getcwd = getcwd_orig
 
@@ -334,9 +335,9 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.product_type == ProductType.WEIGHT, 'wrong product type'
-    assert result.content_length == 373, 'wrong length'
+    assert result.content_length == 410, 'wrong length'
     assert (
-        result.content_checksum.uri == 'md5:2d770260e5b7a88d6c943184912d6609'
+        result.content_checksum.uri == 'md5:4252762f594c2a2640ba652ca80d748a'
     ), 'wrong checksum'
 
     # update action
@@ -347,7 +348,7 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert (
-        result.content_checksum.uri == 'md5:2d770260e5b7a88d6c943184912d6609'
+        result.content_checksum.uri == 'md5:4252762f594c2a2640ba652ca80d748a'
     ), 'wrong checksum'
 
 

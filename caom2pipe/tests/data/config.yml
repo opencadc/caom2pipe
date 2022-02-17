@@ -8,6 +8,8 @@ use_local_files: False
 logging_level: DEBUG
 archive: NEOSS
 collection: NEOSSAT
+data_source_extensions:
+  - .fits.gz
 features:
   supports_composite: False
   run_in_airflow: True
