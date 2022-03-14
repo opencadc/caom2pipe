@@ -79,7 +79,7 @@ from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
 from caom2 import CoordFunction1D, DerivedObservation, Provenance
 from caom2 import CoordBounds1D, TypedList, ProductType
 from caom2.diff import get_differences
-from caom2utils import ObsBlueprint, GenericParser, FitsParser
+from caom2utils import ObsBlueprint, BlueprintParser, FitsParser
 from caom2utils import update_artifact_meta
 
 from caom2pipe import astro_composable as ac
@@ -1155,10 +1155,10 @@ class Fits2caom2Visitor:
 
             if headers is None or len(headers) == 0:
                 self._logger.debug(
-                    f'No headers, using a GenericParser for '
+                    f'No headers, using a BlueprintParser for '
                     f'{self._storage_name.file_uri}'
                 )
-                parser = GenericParser(blueprint, uri)
+                parser = BlueprintParser(blueprint, uri)
             else:
                 self._logger.debug(
                     f'Using a FitsParser for {self._storage_name.file_uri}'

@@ -136,9 +136,9 @@ def check_fits(fqn):
     """
     try:
         hdulist = fits.open(fqn, memmap=True, lazy_load_hdus=False)
-        hdulist.verify('warn')
+        hdulist.verify('exception')
         for h in hdulist:
-            h.verify('warn')
+            h.verify('exception')
         hdulist.close()
         logging.debug(f'hdulist verify succeeded for {fqn}')
     except (fits.VerifyError, OSError) as e1:
