@@ -309,7 +309,7 @@ def get_vo_table_session(url, session):
     return vo_table, error_message
 
 
-def build_chunk_energy_bounds(wave, axis):
+def build_chunk_energy_bounds(wave):
     import numpy as np  # limit the  effect on container content
 
     # caom2IngestEspadons.py, l698
