@@ -481,14 +481,15 @@ def repo_create(client, observation, metrics):
             f'{observation.observation_id}. {e}'
         )
     end = current()
-    metrics.observe(
-        start,
-        end,
-        getsizeof(observation),
-        'create',
-        'caom2',
-        observation.observation_id,
-    )
+    if metrics is not None:
+        metrics.observe(
+            start,
+            end,
+            getsizeof(observation),
+            'create',
+            'caom2',
+            observation.observation_id,
+        )
 
 
 def repo_delete(client, collection, obs_id, metrics):
@@ -502,7 +503,8 @@ def repo_delete(client, collection, obs_id, metrics):
             f'Could not delete the observation record for {obs_id}. {e}'
         )
     end = current()
-    metrics.observe(start, end, 0, 'delete', 'caom2', obs_id)
+    if metrics is not None:
+        metrics.observe(start, end, 0, 'delete', 'caom2', obs_id)
 
 
 def repo_get(client, collection, obs_id, metrics):
@@ -512,16 +514,18 @@ def repo_get(client, collection, obs_id, metrics):
     except exceptions.NotFoundException:
         observation = None
     except Exception as e:
-        metrics.observe_failure('read', 'caom2', obs_id)
+        if metrics is not None:
+            metrics.observe_failure('read', 'caom2', obs_id)
         logging.debug(traceback.format_exc())
         raise mc.CadcException(
             f'Could not retrieve an observation record for {obs_id} '
             f'because {e}.'
         )
     end = current()
-    metrics.observe(
-        start, end, getsizeof(observation), 'read', 'caom2', obs_id
-    )
+    if metrics is not None:
+        metrics.observe(
+            start, end, getsizeof(observation), 'read', 'caom2', obs_id
+        )
     return observation
 
 
@@ -530,21 +534,25 @@ def repo_update(client, observation, metrics):
     try:
         client.update(observation)
     except Exception as e:
-        metrics.observe_failure('update', 'caom2', observation.observation_id)
+        if metrics is not None:
+            metrics.observe_failure(
+                'update', 'caom2', observation.observation_id
+            )
         logging.debug(traceback.format_exc())
         raise mc.CadcException(
             f'Could not update an observation record for '
             f'{observation.observation_id}. {e}'
         )
     end = current()
-    metrics.observe(
-        start,
-        end,
-        getsizeof(observation),
-        'update',
-        'caom2',
-        observation.observation_id,
-    )
+    if metrics is not None:
+        metrics.observe(
+            start,
+            end,
+            getsizeof(observation),
+            'update',
+            'caom2',
+            observation.observation_id,
+        )
 
 
 def si_client_info(client, source):
