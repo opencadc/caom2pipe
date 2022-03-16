@@ -564,7 +564,7 @@ def si_client_info(client, source):
     :param source: Artifact URI - where to retrieve the file from.
     """
     try:
-        result = client.cadcinfo(source)
+        result = client.info(source)
     except exceptions.NotFoundException as e1_ignore:
         logging.info(f'cadcinfo:: {source} not found')
         result = None
