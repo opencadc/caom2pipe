@@ -1,0 +1,40 @@
+# HDU 0 in /tmp/abc.fits.fz:
+SIMPLE  =                    T / file does conform to FITS standard             
+BITPIX  =                   16 / number of bits per data pixel                  
+NAXIS   =                    2 / number of data axes                            
+NAXIS1  =                 2000 / length of data axis 1                          
+NAXIS2  =                    2 / length of data axis 2                          
+EXTEND  =                    T / FITS dataset may contain extensions            
+COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy
+COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H 
+                                                                                
+                               /                                                
+BTIME   =                    1 / BASELINE INTEGRATION TIME                      
+UT      = '11:52:49'           / UT at start of exposure                        
+DATE-OBS= '1989-09-03T11:52:49' / UT date/time at start of exposure             
+                                                                                
+RA      = '00:00:00'           / RA determined from OBJECT value                
+DEC     = '00:00:00'           / Dec determined from OBJECT value               
+                                                                                
+LMDAREF =                 4348 / WAVELENGTH REFERENCE POINT                     
+PIXLREF =                 1092 / CORRESPONDING PIXEL REFERENCE                  
+                                                                                
+ORIGIN  = 'NRC-Herzberg'                                                        
+INSTRUME= 'McKellar Spectrograph'                                               
+OBSERVER= 'Holmgren'                                                            
+OBJECT  = 'FE AR ARC'                                                           
+EQUINOX =               2000.0                                                  
+TELESCOP= '1.2-m   '                                                            
+DETECTOR= 'RETICON '                                                            
+OBSMODE = 'single-slit spectroscopy'                                            
+EXPTIME =                   81 / Integration time (s)                           
+UTMIDDLE=    11.89152777777778 / UT at mid-exposure                             
+UT-DATE = '1989-09-03'         / The UT date at start of exposure               
+RELEASE = '1990-09-03T11:52:49' / Date when the proprietary period expires      
+MJD-OBS =    47772.49501157407 / Modified JD at start of exposure               
+EXPNUM  = 'dao_r122_1989_003111' / The unique DAO archive exposure number       
+OBSERVAT= 'DAO     '                                                            
+OBSTYPE = 'comparison'                                                          
+                                                                                
+HISTORY                                                                         
+COMMENT                                                                         

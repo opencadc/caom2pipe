@@ -109,12 +109,14 @@ the same assumptions about execution environment.
 
 """
 
+import bz2
+import gzip
 import logging
 import os
 import traceback
 
 from datetime import datetime
-from shutil import move
+from shutil import copyfileobj, move
 from urllib.parse import urlparse
 
 from caom2pipe import client_composable as clc
@@ -194,6 +196,8 @@ class CaomExecute:
         self._observation = None
         # track whether the caom2repo call will be a create or an update
         self._caom2_update_needed = False
+        self._decompressor = decompressor_factory(
+            config.collection, self.working_dir, self.log_level_as)
 
     def __str__(self):
         return (
@@ -253,7 +257,8 @@ class CaomExecute:
         )
 
     def _cadc_put(self, source_fqn, uri):
-        self.cadc_client.put(os.path.dirname(source_fqn), uri, self.stream)
+        interim_fqn = self._decompressor.fix_compression(source_fqn)
+        self.cadc_client.put(os.path.dirname(interim_fqn), uri, self.stream)
 
     def _read_model(self):
         """Read an observation into memory from an XML file on disk."""
@@ -1193,3 +1198,92 @@ class OrganizeExecutes:
             self._clean_up_workspace(storage_name.obs_id)
             self._unset_file_logging()
         return result
+
+
+def decompressor_factory(collection, working_directory, log_level_as):
+    if collection == 'CFHT':
+        return FitsForCADCCompressor(working_directory, log_level_as)
+    else:
+        return FitsForCADCDecompressor(working_directory, log_level_as)
+
+
+class FitsForCADCDecompressor:
+    """
+    This class ensures that files stored at CADC are uncompressed if arriving
+    with .gz or .bz2 compression.
+
+    CADC storage is object-based. CADC offers cut-out services for FITS files.
+    For this implementation choice and service offering to co-exist, any FITS
+    file stored at CADC can only be compressed using something like fpack.
+
+    JJK - 18-02-22
+    Uncompress all the non-.fz compressed FITS files at CADC.
+    SGw - 15-03-22
+    Re-compress from gz=>fz only CFHT FITS files, because fpack/imcopy adds
+    HDUs.
+    """
+
+    def __init__(self, working_directory, log_level_as):
+        self._working_directory = working_directory
+        self._log_level_as = log_level_as
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def fix_compression(self, fqn):
+        returned_fqn = fqn
+        if '.fits' in fqn:
+            # if the decompressed file is put in the working directory for
+            # the *Execute work, it should be cleaned up just like any other
+            # temporary files, and it should also not interfere with a
+            # "cleanup_files_when_storing" config
+            if fqn.endswith('.gz'):
+                returned_fqn = os.path.join(
+                    self._working_directory,
+                    os.path.basename(fqn).replace('.gz', '')
+                )
+                self._logger.info(
+                    f'Decompressing {fqn} with gunzip to {returned_fqn}'
+                )
+                with gzip.open(fqn, 'rb') as f_in, \
+                     open(returned_fqn, 'wb') as f_out:
+                    # use shutil to control memory consumption
+                    copyfileobj(f_in, f_out)
+            elif fqn.endswith('.bz2'):
+                returned_fqn = os.path.join(
+                    self._working_directory,
+                    os.path.basename(fqn).replace('.bz2', ''),
+                )
+                self._logger.info(
+                    f'Decompressing {fqn} with bz2 to {returned_fqn}'
+                )
+                with open(returned_fqn, 'wb') as f_out, \
+                     bz2.BZ2File(fqn, 'rb') as f_in:
+                    # use shutil to control memory consumption
+                    copyfileobj(f_in, f_out)
+        return returned_fqn
+
+
+class FitsForCADCCompressor(FitsForCADCDecompressor):
+    """
+    The class the implements the recompression.
+    """
+
+    def __init__(self, working_directory, log_level_as):
+        super().__init__(working_directory, log_level_as)
+
+    def fix_compression(self, fqn):
+        returned_fqn = fqn
+        if '.fits' in fqn:
+            returned_fqn = super().fix_compression(fqn)
+            fz_fqn = f'{returned_fqn}.fz'
+            if fz_fqn != fqn:
+                compress_cmd = (
+                    f"imcopy {returned_fqn} '{fz_fqn}[compress]'"
+                )
+                self._logger.debug(f'Executing {compress_cmd}')
+                mc.exec_cmd_array(
+                    ['/bin/bash', '-c', compress_cmd], self._log_level_as
+                )
+                self._logger.info(
+                    f'Changed compressed file from {fqn} to {fz_fqn}'
+                )
+        return returned_fqn

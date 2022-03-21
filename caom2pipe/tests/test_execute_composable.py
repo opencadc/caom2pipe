@@ -66,6 +66,7 @@
 # ***********************************************************************
 #
 
+import logging
 import os
 import pytest
 import sys
@@ -306,7 +307,8 @@ def test_data_local_execute(test_config):
     assert os.path.exists(test_model_fqn), 'observation not written to disk'
 
 
-def test_data_store(test_config):
+@patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
+def test_data_store(fix_mock, test_config):
     test_dir = f'{tc.TEST_DATA_DIR}/test_obs_id'
     if os.path.exists(test_dir):
         os.rmdir(test_dir)
@@ -754,7 +756,8 @@ def test_data_visit(client_mock, test_config):
         _clean_up_dir(test_subject.working_dir)
 
 
-def test_store(test_config):
+@patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
+def test_store(compressor_mock, test_config):
     test_config.working_directory = tc.TEST_DATA_DIR
     test_sn = tc.TestStorageName()
     test_sn.source_names = ['vos:goliaths/nonexistent.fits.gz']
@@ -762,6 +765,7 @@ def test_store(test_config):
     test_observable = Mock(autospec=True)
     test_transferrer = Mock(autospec=True)
     test_transferrer.get.side_effect = _transfer_get_mock
+    compressor_mock.return_value = f'{test_config.working_directory}/test_file.fits'
     test_subject = ec.Store(
         test_config,
         test_sn,
@@ -787,20 +791,22 @@ def test_store(test_config):
         assert test_data_client.put.called, 'data put not called'
         test_data_client.put.assert_called_with(
             '/usr/src/app/caom2pipe/caom2pipe/tests/data/test_obs_id',
-            'cadc:TEST/test_file.fits.gz',
+            'cadc:TEST/test_file.fits',
             'TEST',
         ), 'wrong put call args'
     finally:
         _clean_up_dir(test_subject.working_dir)
 
 
-def test_local_store(test_config):
+@patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
+def test_local_store(compressor_mock, test_config):
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.data_source = ['/test_files/caom2pipe']
     test_config.use_local_files = True
     test_config.store_newer_files_only = False
     test_config.features.supports_latest_client = False
     test_sn = tc.TestStorageName(entry=f'{tc.TEST_DATA_DIR}/test_file.fits.gz')
+    compressor_mock.return_value = test_sn.source_names[0].replace('.gz', '')
 
     if not os.path.exists(test_sn.source_names[0]):
         with open(test_sn.source_names[0], 'w') as f:
@@ -970,6 +976,32 @@ def test_data_visit_params():
     finally:
         _clean_up_dir(test_subject.working_dir)
         _clean_up_dir(test_wd)
+
+
+def test_decompresss():
+    for test_subject in [
+        ec.FitsForCADCDecompressor('/tmp', logging.DEBUG),
+        ec.FitsForCADCCompressor('/tmp', logging.DEBUG),
+    ]:
+        assert test_subject is not None, 'ctor failure'
+        test_files = [
+            '/tmp/abc.tar.gz',
+            '/tmp/def.csv',
+            '/test_files/compression/abc.fits.gz',
+            # '/test_files/compression/ghi.fits.bz2',
+        ]
+
+        for fqn in test_files:
+            test_result = test_subject.fix_compression(fqn)
+
+            if '.fits' in fqn:
+                assert os.path.exists(test_result), f'expect {test_result}'
+                os.unlink(test_result)
+
+                if isinstance(test_subject, ec.FitsForCADCCompressor):
+                    fz_fqn = '/tmp/abc.fits.fz'
+                    assert os.path.exists(fz_fqn), f'expect {fz_fqn}'
+                    os.unlink(fz_fqn)
 
 
 def _transfer_get_mock(entry, fqn):

@@ -261,7 +261,7 @@ def test_define_subject():
 @patch('caom2pipe.manage_composable.http_get')
 def test_look_pull_and_put(http_mock, mock_client):
     test_storage_name = 'cadc:GEMINI/TEST.fits'
-    mock_client.cadcinfo.return_value = FileInfo(
+    mock_client.info.return_value = FileInfo(
         id=test_storage_name,
         size=1234,
         md5sum='9473fdd0d880a43c21b7778d34872157',
@@ -395,7 +395,7 @@ def test_si_client_get(mock_metrics, mock_client):
     test_source = 'gemini:GEMINI/TEST.fits'
     test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
     mock_client.cadcget.side_effect = tc.mock_si_get
-    mock_client.cadcinfo.return_value = FileInfo(
+    mock_client.info.return_value = FileInfo(
         test_source, md5sum='9473fdd0d880a43c21b7778d34872157'
     )
     clc.si_client_get(
