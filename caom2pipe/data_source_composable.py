@@ -523,7 +523,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 # get the local FileInfo
                 temp_storage_name = mc.StorageName()
                 temp_storage_name.source_names = [entry_path]
-                temp_storage_name.destination_uris = [destination_name]
+                temp_storage_name._destination_uris = [destination_name]
                 self._metadata_reader.set_file_info(temp_storage_name)
 
                 if (

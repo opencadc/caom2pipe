@@ -93,13 +93,13 @@ class TestTransfer(transfer_composable.Transfer):
         logging.error(f'source {source_fqn} dest {dest_fqn}')
 
         test_source_fqn = '/caom2pipe_test/1000003f.fits.fz'
-        test_source_uri = 'cadc:TEST/test_file.fits.gz'
+        test_source_uri = 'cadc:TEST/test_file.fits'
         if source_fqn not in [test_source_fqn, test_source_uri]:
             assert False, f'wrong source directory {source_fqn}'
         assert (
             dest_fqn
             in [
-                '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits.gz',
+                '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits',
                 '/usr/src/app/caom2pipe/int_test/test_obs_id/1000003f.fits.fz',
             ]
         ), 'wrong destination directory'
@@ -163,9 +163,8 @@ def test_run_state(client_mock):
         mc.TaskType.INGEST,
         mc.TaskType.MODIFY,
     ]
-    test_config.features.use_file_names = True
-    test_config.features.use_urls = False
     test_config.features.supports_latest_client = False
+    mc.StorageName.scheme = 'ad'
     test_config.use_local_files = False
     test_config.storage_inventory_resource_id = 'ivo://cadc.nrc.ca/test'
 
@@ -339,7 +338,7 @@ def test_run_state_v(client_mock):
         assert client_mock.data_client.put.called, 'expect put call'
         client_mock.data_client.put.assert_called_with(
             '/usr/src/app/caom2pipe/int_test/test_obs_id',
-            'cadc:TEST/test_file.fits.gz',
+            'cadc:TEST/test_file.fits',
             None,
         ), 'wrong call args'
 

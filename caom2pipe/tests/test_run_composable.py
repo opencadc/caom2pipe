@@ -116,6 +116,7 @@ def test_run_todo_list_dir_data_source(
         os.path.join(tc.TEST_FILES_DIR, 'sub_directory')
     ]
     test_config.data_source_extensions = ['.fits']
+    test_config.features.supports_latest_client = False
     test_chooser = ec.OrganizeChooser()
     test_result = rc.run_by_todo(
         config=test_config, chooser=test_chooser
@@ -608,13 +609,14 @@ def test_run_single(do_mock, get_access_mock, test_config):
 
     test_config.state_fqn = STATE_FILE
     test_config.interval = 5
+    test_config.features.supports_latest_client = False
     test_state = mc.State(test_config.state_fqn)
     test_state.save_state('gemini_timestamp', datetime.utcnow())
 
     do_mock.return_value = -1
 
     test_url = 'http://localhost/test_url.fits'
-    test_storage_name = mc.StorageName(url=test_url)
+    test_storage_name = mc.StorageName(source_names=[test_url])
 
     test_result = rc.run_single(
         test_config,
@@ -631,7 +633,9 @@ def test_run_single(do_mock, get_access_mock, test_config):
     test_storage = args[0]
     assert isinstance(test_storage, mc.StorageName), type(test_storage)
     assert test_storage.obs_id is None, 'wrong obs id'
-    assert test_storage.url == test_url, test_storage.url
+    assert (
+        test_storage.destination_uris[0] == 'cadc:OMM/test_url.fits'
+    ), test_storage
 
 
 # TODO - make this work with TodoRunner AND StateRunner

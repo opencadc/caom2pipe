@@ -77,10 +77,9 @@ def test_file_reader():
     test_subject = reader_composable.FileMetadataReader()
     test_fqn = f'{tc.TEST_FILES_DIR}/correct.fits'
     test_uri = 'cadc:TEST/correct.fits'
+    mc.StorageName.collection = 'TEST'
     test_storage_name = mc.StorageName(
-        entry=test_fqn,
         source_names=[test_fqn],
-        destination_uris=[test_uri],
     )
     test_subject.set(test_storage_name)
     test_header_result = test_subject.headers
@@ -101,3 +100,4 @@ def test_file_reader():
     test_subject.reset()
     assert len(test_subject.headers) == 0, 'should be no headers'
     assert len(test_subject.file_info) == 0, 'should be no file_info'
+    mc.StorageName.collection = None

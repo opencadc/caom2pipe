@@ -664,7 +664,9 @@ def test_query_tap(caps_mock, base_mock, test_config):
 
 
 def test_visit():
+
     class TestVisitor(mc.PreviewVisitor):
+
         def __init__(self, **kwargs):
             super().__init__(archive='VLASS', **kwargs)
 
@@ -682,17 +684,13 @@ def test_visit():
             return 1
 
     class VisitStorageName(tc.TestStorageName):
+        mc.StorageName.collection = 'VLASS'
+
         def __init__(self):
-            super().__init__()
+            super().__init__(file_name=test_file_name)
             self._source_names = [self.file_uri]
-
-        @property
-        def product_id(self):
-            return test_product_id
-
-        @property
-        def file_uri(self):
-            return f'ad:VLASS/{test_file_name}'
+            self.set_destination_uris()
+            self._product_id = test_product_id
 
     test_rejected = mc.Rejected(f'{tc.TEST_DATA_DIR}/rejected.yml')
     test_config = mc.Config()
@@ -720,32 +718,36 @@ def test_visit():
     try:
         test_subject = TestVisitor(**kwargs)
         test_observation = test_subject.visit(obs)
+
+        assert test_observation is not None, f'expect a result'
+
+        check_number = 1
+        end_artifact_count = 3
+        expected_call_count = 1
+        assert (
+            test_subject.report['artifacts'] == check_number
+        ), 'artifact not added'
+        assert (
+            len(obs.planes[test_product_id].artifacts) == end_artifact_count
+        ), f'new artifacts'
+
+        test_preview_uri = 'cadc:VLASS/test_obs_id_prev.jpg'
+        assert (
+            test_preview_uri in obs.planes[test_product_id].artifacts.keys()
+        ), 'no preview'
+
+        assert cadc_client_mock.put.called, 'put mock not called'
+        assert (
+            cadc_client_mock.put.call_count == expected_call_count
+        ), 'put called wrong number of times'
+        # it's an ad call, so there's a stream parameter
+        cadc_client_mock.put.assert_called_with(
+            '/test_files', 'cadc:VLASS/test_obs_id_prev.jpg', 'stream'
+        )
     except Exception as e:
         assert False, f'{str(e)}'
-
-    assert test_observation is not None, f'expect a result'
-
-    check_number = 1
-    end_artifact_count = 3
-    expected_call_count = 1
-    assert test_subject.report['artifacts'] == check_number, 'artifact not added'
-    assert (
-        len(obs.planes[test_product_id].artifacts) == end_artifact_count
-    ), f'new artifacts'
-
-    test_preview_uri = 'cadc:TEST/test_obs_id_prev.jpg'
-    assert (
-        test_preview_uri in obs.planes[test_product_id].artifacts.keys()
-    ), 'no preview'
-
-    assert cadc_client_mock.put.called, 'put mock not called'
-    assert (
-        cadc_client_mock.put.call_count == expected_call_count
-    ), 'put called wrong number of times'
-    # it's an ad call, so there's a stream parameter
-    cadc_client_mock.put.assert_called_with(
-        '/test_files', 'cadc:TEST/test_obs_id_prev.jpg', 'stream'
-    )
+    finally:
+        mc.StorageName.collection = None
     # assert False
 
 

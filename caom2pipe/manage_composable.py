@@ -1526,11 +1526,16 @@ class PreviewVisitor:
         if self._storage_name.product_id in observation.planes.keys():
             plane = observation.planes[self._storage_name.product_id]
             if self._storage_name.file_uri in plane.artifacts.keys():
+                self._logger.debug(
+                    f'Preview generation for observation '
+                    f'{observation.observation_id}, plane {plane.product_id}.'
+                )
                 count += self._do_prev(plane, observation.observation_id)
             self._augment_artifacts(plane)
             self._delete_list_of_files()
         self._logger.info(
             f'Completed preview augmentation for {observation.observation_id}.'
+            f'Changed {count} artifacts.'
         )
         self._report = {'artifacts': count}
         return observation
@@ -1642,7 +1647,6 @@ class StorageName:
     This class encapsulates:
     - naming rules for a collection, for example:
         - file name case in storage,
-        - compression extensions
         - naming pattern enforcement
     - cardinality rules for a collection. Specialize for creation support of:
         - observation_id
@@ -1650,68 +1654,50 @@ class StorageName:
         - artifact URI
         - preview URI
         - thumbnail URI
-    - fully-qualified name of a file at it's source, if required. This
-      may be a Linux directory+file name, and HTTP URL, or an IVOA Virtual
+    - source_names: fully-qualified name of a file at it's source, if required.
+      This may be a Linux directory+file name, and HTTP URL, or an IVOA Virtual
       Storage URI.
     """
+
+    # string value for Observation.collection
+    collection = None
+    # regular expression that can be used to determine if a file name or
+    # observation id meets particular patterns.
+    collection_pattern = '.*'
+    # string value for the scheme of the file URI. Defaults to the fall-back
+    # scheme for Storage Inventory
+    scheme = 'cadc'
 
     def __init__(
         self,
         obs_id=None,
-        collection=None,
-        collection_pattern='.*',
-        fname_on_disk=None,
-        scheme='ad',
-        url=None,
-        mime_encoding=None,
-        mime_type='application/fits',
-        compression='.gz',
-        entry=None,
+        product_id=None,
+        file_name=None,
         source_names=[],
-        destination_uris=[],
-        uri_name=None,
     ):
         """
-
         :param obs_id: string value for Observation.observationID
-        :param collection: string value for Observation.collection
-        :param collection_pattern: regular expression that can be used to
-            determine if a file name or observation id meets particular
-            patterns.
-        :param fname_on_disk: string value for the name of a file on disk,
-            which is not necessarily the same thing as the name of the file
-            in storage (i.e. extensions may exist in one location that do
-            not exist in another).
-        :param scheme: string value for the scheme of the file URI.
-        :param url: if the metadata/data is externally available via http,
-            the url for retrieval
-        :param entry: string - the value as obtained from the DataSource,
-            unchanged for use in the retries.txt file.
+        :param product_id: string value for Plane.productID
+        :param file_name: string value of file name
         :param source_names: list of str - the fully-qualified representation
             of files, as represented at the source. Sufficient for retrieval,
             probably includes a scheme.
-        :param destination_uris: list of str - the Artifact URIs as
-            represented at CADC. Sufficient for storing/retrieving to/from
-            CADC.
-        :param scheme: str, should eventually default to 'cadc'
-        :param mime_encoding: str, used for CADC /data storage
-        :param mime_type: str, used for CADC /data storage
         """
-        self.obs_id = obs_id
-        self.collection = collection
-        self.collection_pattern = collection_pattern
-        self.scheme = scheme
-        self.fname_on_disk = fname_on_disk
-        self._url = url
-        self._mime_encoding = mime_encoding
-        self._mime_type = mime_type
-        self._compression = compression
+        self._obs_id = obs_id
+        self._product_id = product_id
+        self._file_name = file_name
         self._source_names = source_names
-        self._destination_uris = destination_uris
-        self._entry = entry
-        # because the collection is CFHTMEGAPIPE, and the URI is CFHTSG
-        self._uri_name = collection if uri_name is None else uri_name
+        # list of str - the Artifact URIs as represented at CADC. Sufficient
+        # for storing/retrieving to/from CADC.
+        self._destination_uris = []
+        # str - the file name with all file type and compression extensions
+        # removed
+        self._file_id = None
         self._logger = logging.getLogger(self.__class__.__name__)
+        self.set_destination_uris()
+        self.set_file_id()
+        self.set_obs_id()
+        self.set_product_id()
 
     def __str__(self):
         return (
@@ -1725,60 +1711,56 @@ class StorageName:
         )
 
     @property
-    def entry(self):
-        return self._entry
-
-    @property
     def file_uri(self):
-        """The ad URI for the file. Assumes compression."""
-        return (
-            f'{self.scheme}:{self._uri_name}/{self.file_name}'
-            f'{self._compression}'
+        """The CADC Storage URI for the file."""
+        return build_uri(
+            scheme=StorageName.scheme,
+            archive=StorageName.collection,
+            file_name=self._file_name.replace('.gz', '').replace('.bz2', ''),
         )
 
     @property
     def file_name(self):
         """The file name."""
-        return f'{self.obs_id}.fits'
-
-    @property
-    def compressed_file_name(self):
-        """The compressed file name - adds the .gz extension."""
-        return f'{self.obs_id}.fits{self._compression}'
+        return self._file_name
 
     @property
     def destination_uris(self):
         return self._destination_uris
 
-    @destination_uris.setter
-    def destination_uris(self, value):
-        self._destination_uris = value
-
     @property
     def model_file_name(self):
         """The file name used on local disk that holds the CAOM2 Observation
         XML."""
-        return f'{self.obs_id}.xml'
+        return f'{self._obs_id}.xml'
 
     @property
     def prev(self):
         """The preview file name for the file."""
-        return f'{self.obs_id}_prev.jpg'
+        return f'{self._obs_id}_prev.jpg'
 
     @property
     def thumb(self):
         """The thumbnail file name for the file."""
-        return f'{self.obs_id}_prev_256.jpg'
+        return f'{self._obs_id}_prev_256.jpg'
 
     @property
     def prev_uri(self):
         """The preview URI."""
-        return self._get_uri(self.prev)
+        return build_uri(
+            scheme=StorageName.scheme,
+            archive=StorageName.collection,
+            file_name=self.prev,
+        )
 
     @property
     def thumb_uri(self):
         """The thumbnail URI."""
-        return self._get_uri(self.thumb)
+        return build_uri(
+            scheme=StorageName.scheme,
+            archive=StorageName.collection,
+            file_name=self.thumb,
+        )
 
     @property
     def obs_id(self):
@@ -1792,46 +1774,13 @@ class StorageName:
     @property
     def log_file(self):
         """The log file name used when running any of the 'execute' steps."""
-        return f'{self.obs_id}.log'
+        return f'{self._obs_id}.log'
 
     @property
     def product_id(self):
         """The relationship between the observation ID of an observation, and
         the product ID of a plane."""
-        return self.obs_id
-
-    @property
-    def fname_on_disk(self):
-        """The file name on disk, which is not necessarily the same as the
-        file name in ad."""
-        return self._fname_on_disk
-
-    @property
-    def url(self):
-        """A URL from where a file can be retrieved."""
-        return self._url
-
-    @url.setter
-    def url(self, value):
-        self._url = value
-
-    @property
-    def mime_encoding(self):
-        """The mime encoding for the file, defaults to None."""
-        return self._mime_encoding
-
-    @mime_encoding.setter
-    def mime_encoding(self, value):
-        self._mime_encoding = value
-
-    @property
-    def mime_type(self):
-        """The mime type for the file, defaults to application/fits."""
-        return self._mime_type
-
-    @mime_type.setter
-    def mime_type(self, value):
-        self._mime_type = value
+        return self._product_id
 
     @property
     def source_names(self):
@@ -1842,10 +1791,6 @@ class StorageName:
         self._source_names = value
 
     @property
-    def external_urls(self):
-        return None
-
-    @property
     def is_feasible(self):
         """
         To support the exclusion of CFHT HDF5 files in the pipeline.
@@ -1853,23 +1798,10 @@ class StorageName:
         """
         return True
 
-    def multiple_files(self, config=None):
-        return []
-
-    @fname_on_disk.setter
-    def fname_on_disk(self, value):
-        self._fname_on_disk = value
-
     def is_valid(self):
         """:return True if the observation ID conforms to naming rules."""
-        pattern = re.compile(self.collection_pattern)
-        return pattern.match(self.obs_id)
-
-    def _get_uri(self, fname):
-        """
-        The Artifact URI for a file, without consideration for compression.
-        """
-        return f'{self.scheme}:{self.collection}/{fname}'
+        pattern = re.compile(StorageName.collection_pattern)
+        return pattern.match(self._file_name)
 
     def get_file_fqn(self, working_directory):
         if (
@@ -1879,8 +1811,39 @@ class StorageName:
         ):
             fqn = self._source_names[0]
         else:
-            fqn = os.path.join(working_directory, self.file_name)
+            fqn = os.path.join(working_directory, self._file_name)
         return fqn
+
+    def set_destination_uris(self):
+        for entry in self._source_names:
+            temp = parse.urlparse(entry)
+            if '.fits' in entry:
+                self._destination_uris.append(
+                    build_uri(
+                        file_name=os.path.basename(
+                            temp.path
+                        ).replace('.gz', '').replace('.bz2', ''),
+                        scheme=StorageName.scheme,
+                        archive=StorageName.collection,
+                    )
+                )
+            else:
+                self._destination_uris.append(entry)
+
+    def set_file_id(self):
+        if self._file_id is None:
+            if self._file_name is not None:
+                self._file_id = StorageName.remove_extensions(self._file_name)
+            elif self._obs_id is not None:
+                self._file_id = self._obs_id
+
+    def set_obs_id(self, **kwargs):
+        if self._obs_id is None:
+            self._obs_id = self._file_id
+
+    def set_product_id(self, **kwargs):
+        if self._product_id is None:
+            self._product_id = self._file_id
 
     @staticmethod
     def remove_extensions(name):
@@ -2122,6 +2085,21 @@ def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
     """
     logging.debug(cmd)
     cmd_array = cmd.split()
+    exec_cmd_array(cmd_array, log_level_as, timeout)
+
+
+def exec_cmd_array(cmd_array, log_level_as=logging.debug, timeout=None):
+    """
+    This does command execution as a subprocess call.
+
+    :param cmd_array array of the command being executed, usually because
+        it's of the form ['/bin/bash', '-c', 'what you really want to do']
+    :param log_level_as control the logging level from the exec call
+    :param timeout value in seconds, after which the process is terminated
+        raising the TimeoutExpired exception.
+    :return None
+    """
+    cmd_text = ' '.join(ii for ii in cmd_array)
     try:
         child = subprocess.Popen(
             cmd_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -2142,18 +2120,20 @@ def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
             logging.error(f'stderr {outerr.decode("utf-8")}')
         if child.returncode != 0 and child.returncode != -9:
             # not killed due to a timeout
-            logging.warning(f'Command {cmd} failed with {child.returncode}.')
+            logging.warning(
+                f'Command {cmd_text} failed with {child.returncode}.'
+            )
             raise CadcException(
-                f'Command {cmd} ::\nreturncode {child.returncode}, \nstdout '
-                f'{output.decode("utf-8")}\' \nstderr '
+                f'Command {cmd_text} ::\nreturncode {child.returncode}, '
+                f'\nstdout {output.decode("utf-8")}\' \nstderr '
                 f'{outerr.decode("utf-8")}\''
             )
     except Exception as e:
         if isinstance(e, CadcException):
             raise e
-        logging.warning(f'Error with command {cmd}:: {e}')
+        logging.warning(f'Error with command {cmd_text}:: {e}')
         logging.debug(traceback.format_exc())
-        raise CadcException(f'Could not execute cmd {cmd}. Exception {e}')
+        raise CadcException(f'Could not execute cmd {cmd_text}. Exception {e}')
 
 
 def exec_cmd_info(cmd):

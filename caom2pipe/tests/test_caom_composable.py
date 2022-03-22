@@ -150,7 +150,7 @@ def test_reset():
     test_chunk = (
         test_obs.planes['VLASS1.2.T07t14.J084202-123000.quicklook.v1']
         .artifacts[
-            'ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
+            'cadc:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
             'image.pbcor.tt0.subim.fits'
         ]
         .parts['0']

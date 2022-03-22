@@ -205,7 +205,6 @@ class CaomExecute:
             f'        obs_id: {self._storage_name.obs_id}\n'
             f'  source_names: {self._storage_name.source_names}\n'
             f'     model_fqn: {self.model_fqn}\n'
-            f'       lineage: {self._storage_name.lineage}\n'
             f'   working_dir: {self.working_dir}\n'
         )
 

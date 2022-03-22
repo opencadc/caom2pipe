@@ -23,8 +23,7 @@ def test_config():
     test_config.rejected_fqn = f'{tc.TEST_DATA_DIR}/rejected.yml'
     test_config.progress_fqn = f'{tc.TEST_DATA_DIR}/progress.txt'
     test_config.resource_id = 'ivo://cadc.nrc.ca/sc2repo'
-    test_config.features.run_in_airflow = False
-    test_config.features.use_file_names = False
+    test_config.features.supports_latest_client = True
     test_config._report_fqn = (
         f'{test_config.log_file_directory}/' f'test_report.txt'
     )
