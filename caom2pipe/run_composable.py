@@ -239,7 +239,7 @@ class TodoRunner:
                 storage_name, e, traceback.format_exc()
             )
             self._logger.info(
-                f'Execution failed for {storage_name.entry} with {e}'
+                f'Execution failed for {storage_name.file_name} with {e}'
             )
             self._logger.debug(traceback.format_exc())
             # keep processing the rest of the entries, so don't throw
@@ -248,9 +248,7 @@ class TodoRunner:
         try:
             self._data_source.clean_up(entry, result, current_count)
         except Exception as e:
-            self._logger.info(
-                f'Cleanup failed for {storage_name.entry} with {e}'
-            )
+            self._logger.info(f'Cleanup failed for {entry} with {e}')
             self._logger.debug(traceback.format_exc())
             result = -1
         self._logger.debug(f'End _process_entry.')
@@ -523,6 +521,8 @@ def _common_init(
         config.get_executors()
 
     _set_logging(config)
+    logging.debug(f'Setting collection to {config.collection} in StorageName.')
+    mc.StorageName.collection = config.collection
 
     if clients is None:
         clients = cc.ClientCollection(config)

@@ -73,7 +73,7 @@ import test_conf
 
 
 def test_cleanup():
-    test_subject = vc.ArtifactCleanupVisitor(archive='VLASS')
+    test_subject = vc.ArtifactCleanupVisitor(archive='VLASS', scheme='cadc')
     assert test_subject is not None, 'expect construction'
     test_obs = mc.read_obs_from_file(
         f'{test_conf.TEST_DATA_DIR}/fpf_start_obs.xml'

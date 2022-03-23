@@ -42,7 +42,7 @@
       </caom2:provenance>
       <caom2:artifacts>
         <caom2:artifact caom2:id="00000000-0000-0000-b591-27680bff6a41">
-          <caom2:uri>ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.image.pbcor.tt0.subim.fits</caom2:uri>
+          <caom2:uri>cadc:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.image.pbcor.tt0.subim.fits</caom2:uri>
           <caom2:productType>science</caom2:productType>
           <caom2:releaseType>data</caom2:releaseType>
           <caom2:contentType>application/fits</caom2:contentType>
@@ -132,7 +132,7 @@
           </caom2:parts>
         </caom2:artifact>
         <caom2:artifact caom2:id="00000000-0000-0000-b511-27680bff6a4b">
-          <caom2:uri>ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.image.pbcor.tt0.rms.subim.fits</caom2:uri>
+          <caom2:uri>cadc:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.image.pbcor.tt0.rms.subim.fits</caom2:uri>
           <caom2:productType>noise</caom2:productType>
           <caom2:releaseType>data</caom2:releaseType>
           <caom2:contentType>application/fits</caom2:contentType>

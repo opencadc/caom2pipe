@@ -140,5 +140,9 @@ class ArtifactCleanupVisitor:
             raise mc.CadcException(
                 'Must have a "url" parameter for ArtifactCleanupVisitor.'
             )
-        candidate_uri = mc.build_uri(self._archive, url)
+        candidate_uri = mc.build_uri(
+            scheme=self._scheme,
+            archive=self._archive,
+            file_name=url,
+        )
         return candidate_uri == uri
