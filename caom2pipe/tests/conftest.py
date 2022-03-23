@@ -7,12 +7,15 @@ import test_conf as tc
 
 @pytest.fixture(scope='function')
 def test_config():
+    mc.StorageName.collection = None
+    mc.StorageName.scheme = 'cadc'
+    mc.StorageName.collection_pattern = '.*'
     test_config = mc.Config()
     test_config.working_directory = tc.THIS_DIR
     test_config.collection = 'OMM'
     test_config.netrc_file = os.path.join(tc.TEST_DATA_DIR, 'test_netrc')
     test_config.work_file = 'todo.txt'
-    test_config.logging_level = 'DEBUG'
+    test_config.logging_level = 'INFO'
     test_config.log_file_directory = tc.TEST_DATA_DIR
     test_config.failure_fqn = f'{tc.TEST_DATA_DIR}/fail.txt'
     test_config.failure_log_file_name = 'fail.txt'

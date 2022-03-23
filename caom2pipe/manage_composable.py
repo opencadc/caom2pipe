@@ -1698,6 +1698,7 @@ class StorageName:
         self.set_file_id()
         self.set_obs_id()
         self.set_product_id()
+        self._logger.debug(self)
 
     def __str__(self):
         return (
@@ -1710,13 +1711,22 @@ class StorageName:
             f'destination_uris: {self.destination_uris}'
         )
 
-    @property
-    def file_uri(self):
-        """The CADC Storage URI for the file."""
+    def _get_uri(self, file_name):
         return build_uri(
             scheme=StorageName.scheme,
             archive=StorageName.collection,
-            file_name=self._file_name.replace('.gz', '').replace('.bz2', ''),
+            file_name=file_name,
+        )
+
+    @property
+    def file_id(self):
+        return self._file_id
+
+    @property
+    def file_uri(self):
+        """The CADC Storage URI for the file."""
+        return self._get_uri(
+            self._file_name.replace('.gz', '').replace('.bz2', '')
         )
 
     @property
@@ -1747,20 +1757,12 @@ class StorageName:
     @property
     def prev_uri(self):
         """The preview URI."""
-        return build_uri(
-            scheme=StorageName.scheme,
-            archive=StorageName.collection,
-            file_name=self.prev,
-        )
+        return self._get_uri(self.prev)
 
     @property
     def thumb_uri(self):
         """The thumbnail URI."""
-        return build_uri(
-            scheme=StorageName.scheme,
-            archive=StorageName.collection,
-            file_name=self.thumb,
-        )
+        return self._get_uri(self.thumb)
 
     @property
     def obs_id(self):
@@ -1789,6 +1791,7 @@ class StorageName:
     @source_names.setter
     def source_names(self, value):
         self._source_names = value
+        self.set_destination_uris()
 
     @property
     def is_feasible(self):
@@ -1819,12 +1822,9 @@ class StorageName:
             temp = parse.urlparse(entry)
             if '.fits' in entry:
                 self._destination_uris.append(
-                    build_uri(
-                        file_name=os.path.basename(
+                    self._get_uri(os.path.basename(
                             temp.path
-                        ).replace('.gz', '').replace('.bz2', ''),
-                        scheme=StorageName.scheme,
-                        archive=StorageName.collection,
+                        ).replace('.gz', '').replace('.bz2', '')
                     )
                 )
             else:

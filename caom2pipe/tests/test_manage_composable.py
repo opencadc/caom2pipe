@@ -746,8 +746,6 @@ def test_visit():
         )
     except Exception as e:
         assert False, f'{str(e)}'
-    finally:
-        mc.StorageName.collection = None
     # assert False
 
 

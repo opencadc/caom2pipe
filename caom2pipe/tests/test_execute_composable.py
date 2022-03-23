@@ -180,7 +180,6 @@ def test_client_visit(test_config):
         assert repo_client_mock.update.called, 'update call missed'
         assert test_observer.metrics.observe.called, 'observe not called'
         assert write_mock.called, 'write mock not called'
-    mc.StorageName.collection = None
 
 
 def test_data_execute(test_config):
@@ -224,7 +223,6 @@ def test_data_execute(test_config):
         assert test_observer.metrics.observe.called, 'observe not called'
     finally:
         _clean_up_dir(test_dir)
-        mc.StorageName.collection = None
 
 
 def test_data_execute_v(test_config):
@@ -232,7 +230,7 @@ def test_data_execute_v(test_config):
     test_config.features.supports_latest_client = True
     test_obs_id = 'test_obs_id'
     test_dir = os.path.join(tc.THIS_DIR, test_obs_id)
-    test_fits_fqn = os.path.join(test_dir, 'test_file.fits.gz')
+    test_fits_fqn = os.path.join(test_dir, 'test_obs_id.fits.gz')
     try:
         if not os.path.exists(test_dir):
             os.mkdir(test_dir, mode=0o755)
@@ -269,13 +267,12 @@ def test_data_execute_v(test_config):
         assert test_observer.metrics.observe.called, 'observe not called'
         assert cadc_client_mock.copy.called, 'copy not called'
         cadc_client_mock.copy.assert_called_with(
-            'cadc:TEST/test_file.fits',
+            'cadc:TEST/test_obs_id.fits',
             test_fits_fqn.replace('.gz', ''),
             send_md5=True,
         ), 'wrong call args'
     finally:
         _clean_up_dir(test_dir)
-        mc.StorageName.collection = None
 
 
 def test_data_local_execute(test_config):
@@ -317,7 +314,6 @@ def test_data_local_execute(test_config):
     assert repo_client_mock.update.called, 'update call missed'
     assert test_observer.metrics.observe.called, 'observe not called'
     assert os.path.exists(test_model_fqn), 'observation not written to disk'
-    mc.StorageName.collection = None
 
 
 @patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
@@ -537,8 +533,6 @@ def test_storage_name():
     assert sn.is_valid()
     x = mc.StorageName.remove_extensions('test_obs_id.fits.header.gz')
     assert x == 'test_obs_id'
-    mc.StorageName.collection = None
-    mc.StorageName.collection_pattern = '.*'
 
 
 def test_caom_name():
@@ -728,6 +722,7 @@ def test_data_visit(client_mock, test_config):
     mc.StorageName.collection_pattern = 'T[\\w+-]+'
     test_sn = mc.StorageName(
         obs_id='test_obs_id',
+        file_name='test_obs_id.fits',
         source_names=['ad:TEST/test_obs_id.fits'],
     )
     test_transferrer = transfer_composable.CadcTransfer()
@@ -766,8 +761,6 @@ def test_data_visit(client_mock, test_config):
         assert kwargs.get('stream') == 'TEST'
     finally:
         _clean_up_dir(test_subject.working_dir)
-        mc.StorageName.collection = None
-        mc.StorageName.collection_pattern = '.*'
 
 
 @patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')

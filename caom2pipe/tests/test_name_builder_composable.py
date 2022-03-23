@@ -72,7 +72,7 @@ from caom2pipe import name_builder_composable as nbc
 import test_conf as tc
 
 
-def test_storage_name_builder():
+def test_storage_name_builder(test_config):
     test_subject = nbc.StorageNameBuilder()
     test_storage_name = tc.TestStorageName()
     assert (
@@ -80,19 +80,16 @@ def test_storage_name_builder():
     ), 'build wrong result'
 
 
-def test_storage_name_instance_builder():
+def test_storage_name_instance_builder(test_config):
     test_config = mc.Config()
     test_config.collection = 'TEST_COLLECTION'
     test_subject = nbc.StorageNameInstanceBuilder(test_config)
     test_result = test_subject.build('test_storage_name.fits')
     assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
     assert test_result.file_name == 'test_storage_name.fits', 'wrong fname'
-    # cleanup after the builder over-rides default values
-    mc.StorageName.collection = None
-    mc.StorageName.scheme = 'cadc'
 
 
-def test_guessing_builder():
+def test_guessing_builder(test_config):
     mc.StorageName.collection = 'TEST'
     test_subject = nbc.GuessingBuilder(mc.StorageName)
     test_result = test_subject.build('test_storage_name.fits.gz')
@@ -100,10 +97,9 @@ def test_guessing_builder():
     assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
     assert test_result.file_uri == 'cadc:TEST/test_storage_name.fits', 'uri'
     assert test_result.file_name == 'test_storage_name.fits.gz', 'wrong fname'
-    mc.StorageName.collection = None
 
 
-def test_guessing_builder_dir():
+def test_guessing_builder_dir(test_config):
     mc.StorageName.collection = 'TEST'
     test_subject = nbc.GuessingBuilder(mc.StorageName)
     test_result = test_subject.build('/data/test_storage_name.fits.gz')
@@ -116,10 +112,9 @@ def test_guessing_builder_dir():
     assert (
         test_result.destination_uris == ['cadc:TEST/test_storage_name.fits']
     ), ' wrong destination uris'
-    mc.StorageName.collection = None
 
 
-def test_obs_id_builder():
+def test_obs_id_builder(test_config):
     mc.StorageName.collection = 'TEST'
     test_subject = nbc.ObsIDBuilder(tc.TestStorageName)
     test_result = test_subject.build('test_obs_id_2')
@@ -127,10 +122,9 @@ def test_obs_id_builder():
     assert test_result.obs_id == 'test_obs_id_2', 'wrong obs_id'
     assert test_result.file_uri == 'cadc:TEST/test_file.fits', 'collection'
     assert test_result.file_name == 'test_file.fits.gz', 'wrong fname'
-    mc.StorageName.collection = None
 
 
-def test_guessing_builder_uri():
+def test_guessing_builder_uri(test_config):
     mc.StorageName.collection = 'TEST'
     test_subject = nbc.GuessingBuilder(mc.StorageName)
     test_result = test_subject.build(
@@ -145,4 +139,3 @@ def test_guessing_builder_uri():
     assert (
             test_result.destination_uris == ['cadc:TEST/test_storage_name.fits']
     ), ' wrong destination uris'
-    mc.StorageName.collection = None

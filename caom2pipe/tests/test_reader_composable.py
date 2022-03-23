@@ -73,12 +73,13 @@ from caom2pipe import reader_composable
 import test_conf as tc
 
 
-def test_file_reader():
+def test_file_reader(test_config):
     test_subject = reader_composable.FileMetadataReader()
     test_fqn = f'{tc.TEST_FILES_DIR}/correct.fits'
     test_uri = 'cadc:TEST/correct.fits'
     mc.StorageName.collection = 'TEST'
     test_storage_name = mc.StorageName(
+        file_name='correct.fits',
         source_names=[test_fqn],
     )
     test_subject.set(test_storage_name)
@@ -100,4 +101,3 @@ def test_file_reader():
     test_subject.reset()
     assert len(test_subject.headers) == 0, 'should be no headers'
     assert len(test_subject.file_info) == 0, 'should be no file_info'
-    mc.StorageName.collection = None
