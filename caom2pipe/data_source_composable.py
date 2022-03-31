@@ -860,7 +860,6 @@ class VaultCleanupDataSource(VaultDataSource):
         collection = self.get_collection(f_name)
         cadc_name = mc.build_uri(collection, f_name, scheme)
         cadc_meta = self._cadc_client.info(cadc_name)
-        logging.error(cadc_meta)
         if cadc_meta is not None and vos_meta.md5sum == cadc_meta.md5sum:
             self._logger.warning(
                 f'{entry_fqn} has the same md5sum at CADC. Not transferring.'

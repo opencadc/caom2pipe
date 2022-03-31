@@ -702,7 +702,7 @@ def vault_info(client, uri):
         return FileInfo(
             id=uri,
             size=mc.to_int(node.props.get('length')),
-            md5sum=node.props.get('MD5'),
+            md5sum=node.props.get('MD5').replace('md5:', ''),
             lastmod=node.props.get('lastmod'),
         )
     except exceptions.NotFoundException as e:
