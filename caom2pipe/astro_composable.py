@@ -163,6 +163,23 @@ def check_fits(fqn):
     return True
 
 
+def check_h5(fqn):
+    """
+    Use h5check to identify non-compliance errors. Currently checking against
+    1.8.
+
+    :param fqn: str fully-qualified file name on local storage
+    :return: bool True if compliant, False otherwise
+    """
+    cmd = f'h5check {fqn}'
+    try:
+        mc.exec_cmd(cmd)
+    except mc.CadcException as e:
+        logging.error(f'h5check failed with {e} when reading {fqn}')
+        return False
+    return True
+
+
 def convert_time(start_time, exposure):
     """Convert a start time and exposure length into an mjd_start and mjd_end
     time."""
