@@ -68,7 +68,7 @@
 
 import math
 
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 import test_conf as tc
 
 from astropy.io import fits
