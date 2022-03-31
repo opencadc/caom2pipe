@@ -1828,7 +1828,9 @@ class StorageName:
                     )
                 )
             else:
-                self._destination_uris.append(entry)
+                self._destination_uris.append(
+                    self._get_uri(os.path.basename(temp.path))
+                )
 
     def set_file_id(self):
         if self._file_id is None:
