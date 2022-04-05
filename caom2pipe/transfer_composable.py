@@ -78,6 +78,7 @@ __all__ = [
     'FtpTransfer',
     'HttpTransfer',
     'modify_transfer_factory',
+    'store_transfer_factory',
     'Transfer',
     'VoFitsCleanupTransfer',
     'VoFitsTransfer',
@@ -376,3 +377,11 @@ def modify_transfer_factory(config, clients):
         modify_transfer = CadcTransfer()
         modify_transfer.client = clients.data_client
     return modify_transfer
+
+
+def store_transfer_factory(config, clients):
+    store_transfer = None
+    if mc.TaskType.STORE in config.task_types:
+        store_transfer = CadcTransfer()
+        store_transfer.client = clients.data_client
+    return store_transfer
