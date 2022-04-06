@@ -1199,6 +1199,7 @@ def _mock_get_compressed_file(working_dir, uri):
         f.write(b"\x1f\x8b\x08\x08\xd0{Lb\x02\xff.abc.fits\x00+I-.QH\xce"
                 b"\xcf+I\xcd+\xe1\x02\x00\xbd\xdfZ'\r\x00\x00\x00")
 
+
 def _mock_get_work(arg1, arg2):
     return _mock_query(None, None, None)
 

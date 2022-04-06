@@ -1228,6 +1228,7 @@ class FitsForCADCDecompressor:
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def fix_compression(self, fqn):
+        self._logger.debug(f'Begin fix_compression with {fqn}')
         returned_fqn = fqn
         if '.fits' in fqn:
             # if the decompressed file is put in the working directory for
@@ -1258,6 +1259,7 @@ class FitsForCADCDecompressor:
                      bz2.BZ2File(fqn, 'rb') as f_in:
                     # use shutil to control memory consumption
                     copyfileobj(f_in, f_out)
+        self._logger.debug(f'End fix_compression with {returned_fqn}')
         return returned_fqn
 
 
@@ -1285,4 +1287,5 @@ class FitsForCADCCompressor(FitsForCADCDecompressor):
                 self._logger.info(
                     f'Changed compressed file from {fqn} to {fz_fqn}'
                 )
+        self._logger.debug(f'End fix_compression with {returned_fqn}')
         return returned_fqn
