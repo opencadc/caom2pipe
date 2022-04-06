@@ -200,14 +200,14 @@ class DecompressionDataSource(DataSource):
             self._scheme, self._collection, f'.fits{self._suffix}'
         )
         self._logger.info(
-            f'Found {self._compressed.shape(0)} SI records with '
+            f'Found {self._compressed.shape[0]} SI records with '
             f'extension .fits{self._suffix}.'
         )
         self._decompressed = self._query_by_extension(
             self._scheme, self._collection, '.fits'
         )
         self._logger.info(
-            f'Found {self._decompressed.shape(0)} SI records with '
+            f'Found {self._decompressed.shape[0]} SI records with '
             f'extension .fits.'
         )
         return self._match_work()
