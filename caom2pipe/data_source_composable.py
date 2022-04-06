@@ -85,6 +85,7 @@ from caom2pipe import manage_composable as mc
 __all__ = [
     'DataSource',
     'data_source_factory',
+    'DecompressionDataSource',
     'ListDirDataSource',
     'ListDirSeparateDataSource',
     'ListDirTimeBoxDataSource',
@@ -146,6 +147,70 @@ class DataSource:
             if entry.name.endswith(extension):
                 return True
         return False
+
+
+class DecompressionDataSource(DataSource):
+    """
+    Implement a Data Source that queries for files in Storage Inventory
+    that are compressed, where there does not exist a corresponding
+    decompressed copy of the file.
+
+    For CFHT, the condition is where there does not exist a corresponding
+    .fz compressed copy of the file.
+    """
+
+    def __init__(self, config, collection, scheme, suffix='.gz'):
+        super().__init__(config)
+        self._suffix = suffix
+        subject = clc.define_subject(config)
+        # the resource_id values are hard-coded - if the referenced instances
+        # of the services aren't available, the query answers are just
+        # considered not available.
+        self._luskan_client = CadcTapClient(
+            subject, resource_id='ivo://cadc.nrc.ca/global/luskan'
+        )
+        self._compressed = None
+        self._decompressed = None
+        self._collection = collection
+        self._scheme = scheme
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def _match_work(self):
+        new_extension = ''
+        if self._collection == 'CFHT':
+            new_extension = '.fz'
+        self._compressed.uri = self._compressed.uri.astype(str).replace(
+            self._suffix, new_extension
+        )
+        return self._compressed[~self._compressed.uri.isin(
+            self._decompressed.uri
+        )]
+
+    def _query_by_extension(self, scheme, collection, extension):
+        # a TAP query to find all the files in SI with a particular extension
+        qs = f"""
+        SELECT A.uri
+        FROM inventory.Artifact AS A
+        WHERE A.uri like '{scheme}:{collection}/%{extension}'
+        """
+        return clc.query_tap_client(qs, self._luskan_client).to_pandas()
+
+    def get_work(self):
+        self._compressed = self._query_by_extension(
+            self._scheme, self._collection, f'.fits{self._suffix}'
+        )
+        self._logger.info(
+            f'Found {self._compressed.shape(0)} SI records with '
+            f'extension .fits{self._suffix}.'
+        )
+        self._decompressed = self._query_by_extension(
+            self._scheme, self._collection, '.fits'
+        )
+        self._logger.info(
+            f'Found {self._decompressed.shape(0)} SI records with '
+            f'extension .fits.'
+        )
+        return self._match_work()
 
 
 class ListDirDataSource(DataSource):
