@@ -187,26 +187,27 @@ class DecompressionDataSource(DataSource):
             self._decompressed.uri
         )]
 
-    def _query_by_extension(self, scheme, collection, extension):
+    def _query_by_extension(self, extension):
         # a TAP query to find all the files in SI with a particular extension
         qs = f"""
         SELECT A.uri
         FROM inventory.Artifact AS A
-        WHERE A.uri like '{scheme}:{collection}/%{extension}'
+        WHERE A.uri like '{self._scheme}:{self._collection}/%{extension}'
         """
         return clc.query_tap_client(qs, self._luskan_client).to_pandas()
 
+    def get_cleanup_work(self):
+        return self._query_by_extension(
+            f'.fits{self._suffix}'
+        ).uri.values.tolist()[1:]
+
     def get_work(self):
-        self._compressed = self._query_by_extension(
-            self._scheme, self._collection, f'.fits{self._suffix}'
-        )
+        self._compressed = self._query_by_extension(f'.fits{self._suffix}')
         self._logger.info(
             f'Found {self._compressed.shape[0]} SI records with '
             f'extension .fits{self._suffix}.'
         )
-        self._decompressed = self._query_by_extension(
-            self._scheme, self._collection, '.fits'
-        )
+        self._decompressed = self._query_by_extension('.fits')
         self._logger.info(
             f'Found {self._decompressed.shape[0]} SI records with '
             f'extension .fits.'

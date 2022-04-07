@@ -73,18 +73,12 @@ import time
 from ray.util import ActorPool
 
 from caom2pipe.client_composable import declare_client
-from caom2pipe.data_source_composable import RenameURIDataSource
+from caom2pipe.data_source_composable import DecompressionDataSource
 from caom2pipe.execute_composable import OrganizeExecutes
 from caom2pipe.manage_composable import Config, StorageName
-from caom2pipe.name_builder_composable import ObsIDBuilder
+from caom2pipe.name_builder_composable import GuessingBuilder
 from caom2pipe.reader_composable import StorageClientReader
-from caom2pipe.visitor_composable import ArtifactURIRenameVisitor
-
-
-def visit(observation, **kwargs):
-    return ArtifactURIRenameVisitor(
-        config.collection, scheme, suffix
-    ).visit(observation, **kwargs)
+from caom2pipe.transfer_composable import CadcTransfer
 
 
 @ray.remote
@@ -93,13 +87,15 @@ class SessionActor:
         StorageName.scheme = scheme
         StorageName.collection = config.collection
         self._client = declare_client(config)
-        self._builder = ObsIDBuilder(StorageName)
+        self._builder = GuessingBuilder(StorageName)
+        self._store_transfer = CadcTransfer()
         self._metadata_reader = StorageClientReader(self._client)
         self._organizer = OrganizeExecutes(
             config, 
-            [__name__],
+            [], 
             [],
             metadata_reader=self._metadata_reader,
+            store_transfer=self._store_transfer,
             cadc_client=self._client,
         )
 
@@ -116,11 +112,11 @@ start = time.time()
 ray.init()
 config = Config()
 config.get_executors()
+# work_to_do = TodoFileDataSource(config).get_work()
 scheme = 'gemini' if config.collection == 'GEMINI' else 'cadc'
-suffix = '.gz'  # unless it == .bz2
-work_to_do = RenameURIDataSource(
+work_to_do = DecompressionDataSource(
     config, config.collection, scheme
-).get_work()
+).get_cleanup_work()
 print(f'{len(work_to_do)} records to process')
 
 MAX_ACTORS = 2
@@ -136,8 +132,8 @@ gen = actor_pool.map_unordered(
 
 success = 0
 failure = 0
-for entry in gen:
-    if entry == 0:
+for gg in gen:
+    if gg == 0:
         success += 1
     else:
         failure += 1
