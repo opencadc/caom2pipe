@@ -69,7 +69,6 @@
 import logging
 
 from os.path import basename
-from urllib.parse import urlparse
 from caom2pipe import manage_composable as mc
 
 __all__ = [
@@ -113,20 +112,17 @@ class StorageNameBuilder:
 class StorageNameInstanceBuilder(StorageNameBuilder):
     def __init__(self, config):
         super().__init__()
-        self._collection = config.collection
         self._scheme = (
             'cadc' if config.features.supports_latest_client else 'ad'
         )
+        mc.StorageName.scheme = self._scheme
+        mc.StorageName.collection = config.collection
 
     def build(self, entry):
-        uri = mc.build_uri(self._collection, basename(entry), self._scheme)
         return mc.StorageName(
             obs_id=mc.StorageName.remove_extensions(entry),
-            collection=self._collection,
-            fname_on_disk=entry,
-            entry=entry,
+            file_name=entry,
             source_names=[entry],
-            destination_uris=[uri],
         )
 
 
@@ -155,7 +151,7 @@ class ObsIDBuilder(StorageNameBuilder):
         self._storage_name = storage_name
 
     def build(self, entry):
-        return self._storage_name(obs_id=entry, entry=entry)
+        return self._storage_name(obs_id=entry)
 
 
 class GuessingBuilder(StorageNameBuilder):
@@ -173,14 +169,10 @@ class GuessingBuilder(StorageNameBuilder):
         self._logger.debug(
             f'Build a {self._storage_name.__name__} instance with {entry}.'
         )
-        temp = urlparse(entry)
-        if temp.scheme is None or temp.scheme == '':
-            result = self._storage_name(
-                file_name=(basename(temp.path)), entry=entry
-            )
-        else:
-            result = self._storage_name(uri=entry, entry=entry)
-        return result
+        return self._storage_name(
+            file_name=(basename(entry)),
+            source_names=[entry],
+        )
 
 
 def builder_factory(config):

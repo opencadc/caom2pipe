@@ -239,7 +239,7 @@ class TodoRunner:
                 storage_name, e, traceback.format_exc()
             )
             self._logger.info(
-                f'Execution failed for {storage_name.entry} with {e}'
+                f'Execution failed for {storage_name.file_name} with {e}'
             )
             self._logger.debug(traceback.format_exc())
             # keep processing the rest of the entries, so don't throw
@@ -248,9 +248,7 @@ class TodoRunner:
         try:
             self._data_source.clean_up(entry, result, current_count)
         except Exception as e:
-            self._logger.info(
-                f'Cleanup failed for {storage_name.entry} with {e}'
-            )
+            self._logger.info(f'Cleanup failed for {entry} with {e}')
             self._logger.debug(traceback.format_exc())
             result = -1
         self._logger.debug(f'End _process_entry.')
@@ -510,19 +508,22 @@ def get_utc_now_tz():
 
 
 def _common_init(
-        config,
-        clients,
-        name_builder,
-        source,
-        modify_transfer,
-        metadata_reader,
-        state,
-    ):
+    config,
+    clients,
+    name_builder,
+    source,
+    modify_transfer,
+    metadata_reader,
+    state,
+    store_transfer,
+):
     if config is None:
         config = mc.Config()
         config.get_executors()
 
     _set_logging(config)
+    logging.debug(f'Setting collection to {config.collection} in StorageName.')
+    mc.StorageName.collection = config.collection
 
     if clients is None:
         clients = cc.ClientCollection(config)
@@ -539,8 +540,19 @@ def _common_init(
     if metadata_reader is None:
         metadata_reader = reader_composable.reader_factory(config, clients)
 
+    if store_transfer is None:
+        store_transfer = transfer_composable.store_transfer_factory(
+            config, clients
+        )
+
     return (
-        config, clients, name_builder, source, modify_transfer, metadata_reader
+        config,
+        clients,
+        name_builder,
+        source,
+        modify_transfer,
+        metadata_reader,
+        store_transfer,
     )
 
 
@@ -587,6 +599,7 @@ def run_by_todo(
         source,
         modify_transfer,
         metadata_reader,
+        store_transfer,
     ) = _common_init(
             config,
             clients,
@@ -595,6 +608,7 @@ def run_by_todo(
             modify_transfer,
             metadata_reader,
             False,
+            store_transfer,
         )
     organizer = ec.OrganizeExecutes(
         config,
@@ -663,6 +677,7 @@ def run_by_state(
         source,
         modify_transfer,
         metadata_reader,
+        store_transfer,
     ) = _common_init(
         config,
         clients,
@@ -671,6 +686,7 @@ def run_by_state(
         modify_transfer,
         metadata_reader,
         True,
+        store_transfer,
     )
 
     if end_time is None:

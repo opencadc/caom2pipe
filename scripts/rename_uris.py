@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2019.                            (c) 2019.
+#  (c) 2021.                            (c) 2021.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -61,81 +62,49 @@
 #  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 #                                       <http://www.gnu.org/licenses/>.
 #
-#  $Revision: 4 $
+#  : 4 $
 #
 # ***********************************************************************
 #
 
-from caom2pipe import manage_composable as mc
-from caom2pipe import name_builder_composable as nbc
+from threading import get_native_id
 
-import test_conf as tc
-
-
-def test_storage_name_builder(test_config):
-    test_subject = nbc.StorageNameBuilder()
-    test_storage_name = tc.TestStorageName()
-    assert (
-        test_subject.build(test_storage_name) == test_storage_name
-    ), 'build wrong result'
+from cadcutils.net import Subject
+from caom2utils.data_util import StorageClientWrapper
+from caom2utils.fits2caom2 import update_artifact_meta
 
 
-def test_storage_name_instance_builder(test_config):
-    test_config = mc.Config()
-    test_config.collection = 'TEST_COLLECTION'
-    test_subject = nbc.StorageNameInstanceBuilder(test_config)
-    test_result = test_subject.build('test_storage_name.fits')
-    assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
-    assert test_result.file_name == 'test_storage_name.fits', 'wrong fname'
+thread_clients = {}
 
 
-def test_guessing_builder(test_config):
-    mc.StorageName.collection = 'TEST'
-    test_subject = nbc.GuessingBuilder(mc.StorageName)
-    test_result = test_subject.build('test_storage_name.fits.gz')
-    # note TestStorageName has its own hard-coded values
-    assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
-    assert test_result.file_uri == 'cadc:TEST/test_storage_name.fits', 'uri'
-    assert test_result.file_name == 'test_storage_name.fits.gz', 'wrong fname'
+def visit(self, observation, **kwargs):
+    artifact_count = 0
+    thread_id = get_native_id()
+    data_client = thread_clients.get(thread_id)
+    if data_client is None and thread_id is not None:
+        subject = Subject(certificate='/usr/src/app/cadcproxy.pem')
+        data_client = StorageClientWrapper(
+            subject, resource_id='ivo://cadc.nrc.ca/global/minoc'
+        )
+        thread_clients[thread_id] = data_client
 
+    for plane in observation.planes.values():
+        for artifact in plane.artifacts.values():
+            if artifact.uri.endswith(self._suffix):
+                new_artifact_uri = artifact.uri.replace(self._suffix, '')
+                file_info = data_client.info(new_artifact_uri)
+                if file_info is not None:
+                    old_artifact_uri = artifact.uri
+                    artifact.uri = new_artifact_uri
+                    update_artifact_meta(artifact, file_info)
+                    self._logger.info(
+                        f'Renamed URI from {old_artifact_uri} to '
+                        f'{artifact.uri}, updated contentChecksum, '
+                        f'contentLength.'
+                    )
+                    artifact_count += 1
 
-def test_guessing_builder_dir(test_config):
-    mc.StorageName.collection = 'TEST'
-    test_subject = nbc.GuessingBuilder(mc.StorageName)
-    test_result = test_subject.build('/data/test_storage_name.fits.gz')
-
-    assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
-    assert test_result.file_name == 'test_storage_name.fits.gz', 'wrong fname'
-    assert (
-        test_result.source_names == ['/data/test_storage_name.fits.gz']
-    ), 'wrong source names'
-    assert (
-        test_result.destination_uris == ['cadc:TEST/test_storage_name.fits']
-    ), ' wrong destination uris'
-
-
-def test_obs_id_builder(test_config):
-    mc.StorageName.collection = 'TEST'
-    test_subject = nbc.ObsIDBuilder(tc.TestStorageName)
-    test_result = test_subject.build('test_obs_id_2')
-    # note TestStorageName has its own hard-coded values
-    assert test_result.obs_id == 'test_obs_id_2', 'wrong obs_id'
-    assert test_result.file_uri == 'cadc:TEST/test_file.fits', 'collection'
-    assert test_result.file_name == 'test_file.fits.gz', 'wrong fname'
-
-
-def test_guessing_builder_uri(test_config):
-    mc.StorageName.collection = 'TEST'
-    test_subject = nbc.GuessingBuilder(mc.StorageName)
-    test_result = test_subject.build(
-        'https://localhost/data/test_storage_name.fits'
+    self._logger.info(
+        f'Updated URIs and content for {artifact_count} artifacts.'
     )
-    # note TestStorageName has its own hard-coded values
-    assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
-    assert (
-            test_result.source_names ==
-            ['https://localhost/data/test_storage_name.fits']
-    ), 'wrong source names'
-    assert (
-            test_result.destination_uris == ['cadc:TEST/test_storage_name.fits']
-    ), ' wrong destination uris'
+    return observation

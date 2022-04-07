@@ -69,7 +69,10 @@
 import logging
 
 from caom2 import Observation
-from caom2pipe import manage_composable as mc
+from caom2pipe.manage_composable import build_uri, CadcException, check_param
+
+
+__all__ = ['ArtifactCleanupVisitor']
 
 
 class ArtifactCleanupVisitor:
@@ -84,7 +87,7 @@ class ArtifactCleanupVisitor:
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def visit(self, observation, **kwargs):
-        mc.check_param(observation, Observation)
+        check_param(observation, Observation)
         plane_count = 0
         artifact_count = 0
         plane_temp = []
@@ -137,8 +140,12 @@ class ArtifactCleanupVisitor:
         """
         url = kwargs.get('url')
         if url is None:
-            raise mc.CadcException(
+            raise CadcException(
                 'Must have a "url" parameter for ArtifactCleanupVisitor.'
             )
-        candidate_uri = mc.build_uri(self._archive, url)
+        candidate_uri = build_uri(
+            scheme=self._scheme,
+            archive=self._archive,
+            file_name=url,
+        )
         return candidate_uri == uri

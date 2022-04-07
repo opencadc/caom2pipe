@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2019.                            (c) 2019.
+#  (c) 2021.                            (c) 2021.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -61,81 +62,85 @@
 #  <http://www.gnu.org/licenses/>.      pas le cas, consultez :
 #                                       <http://www.gnu.org/licenses/>.
 #
-#  $Revision: 4 $
+#  : 4 $
 #
 # ***********************************************************************
 #
 
-from caom2pipe import manage_composable as mc
-from caom2pipe import name_builder_composable as nbc
+import ray
+import time
 
-import test_conf as tc
+from ray.util import ActorPool
 
-
-def test_storage_name_builder(test_config):
-    test_subject = nbc.StorageNameBuilder()
-    test_storage_name = tc.TestStorageName()
-    assert (
-        test_subject.build(test_storage_name) == test_storage_name
-    ), 'build wrong result'
-
-
-def test_storage_name_instance_builder(test_config):
-    test_config = mc.Config()
-    test_config.collection = 'TEST_COLLECTION'
-    test_subject = nbc.StorageNameInstanceBuilder(test_config)
-    test_result = test_subject.build('test_storage_name.fits')
-    assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
-    assert test_result.file_name == 'test_storage_name.fits', 'wrong fname'
+from caom2pipe.client_composable import declare_client
+from caom2pipe.data_source_composable import DecompressionDataSource
+from caom2pipe.execute_composable import OrganizeExecutes
+from caom2pipe.manage_composable import Config, StorageName
+from caom2pipe.name_builder_composable import GuessingBuilder
+from caom2pipe.reader_composable import StorageClientReader
+from caom2pipe.transfer_composable import CadcTransfer
 
 
-def test_guessing_builder(test_config):
-    mc.StorageName.collection = 'TEST'
-    test_subject = nbc.GuessingBuilder(mc.StorageName)
-    test_result = test_subject.build('test_storage_name.fits.gz')
-    # note TestStorageName has its own hard-coded values
-    assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
-    assert test_result.file_uri == 'cadc:TEST/test_storage_name.fits', 'uri'
-    assert test_result.file_name == 'test_storage_name.fits.gz', 'wrong fname'
+@ray.remote
+class SessionActor:
+    def __init__(self):
+        StorageName.scheme = scheme
+        StorageName.collection = config.collection
+        self._client = declare_client(config)
+        self._builder = GuessingBuilder(StorageName)
+        self._store_transfer = CadcTransfer()
+        self._metadata_reader = StorageClientReader(self._client)
+        self._organizer = OrganizeExecutes(
+            config, 
+            [], 
+            [],
+            metadata_reader=self._metadata_reader,
+            store_transfer=self._store_transfer,
+            cadc_client=self._client,
+        )
+
+    def do_one(self, entry):
+        # _set_logging(config)
+        storage_name = self._builder.build(entry)
+        self._organizer.choose(storage_name)
+        return self._organizer.do_one(storage_name)
 
 
-def test_guessing_builder_dir(test_config):
-    mc.StorageName.collection = 'TEST'
-    test_subject = nbc.GuessingBuilder(mc.StorageName)
-    test_result = test_subject.build('/data/test_storage_name.fits.gz')
+start = time.time()
+# uncomment the following to get a glimpse at what ray is doing
+# environ['RAY_LOG_TO_STDERR'] = '1'
+ray.init()
+config = Config()
+config.get_executors()
+# work_to_do = TodoFileDataSource(config).get_work()
+scheme = 'gemini' if config.collection == 'GEMINI' else 'cadc'
+work_to_do = DecompressionDataSource(
+    config, config.collection, scheme
+).get_cleanup_work()
+print(f'{len(work_to_do)} records to process')
 
-    assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
-    assert test_result.file_name == 'test_storage_name.fits.gz', 'wrong fname'
-    assert (
-        test_result.source_names == ['/data/test_storage_name.fits.gz']
-    ), 'wrong source names'
-    assert (
-        test_result.destination_uris == ['cadc:TEST/test_storage_name.fits']
-    ), ' wrong destination uris'
+MAX_ACTORS = 2
+x = list()
+for ii in range(MAX_ACTORS):
+    y = SessionActor.remote()
+    x.append(y)
+actor_pool = ActorPool(x)
 
+gen = actor_pool.map_unordered(
+    lambda a, v: a.do_one.remote(v), work_to_do
+)
 
-def test_obs_id_builder(test_config):
-    mc.StorageName.collection = 'TEST'
-    test_subject = nbc.ObsIDBuilder(tc.TestStorageName)
-    test_result = test_subject.build('test_obs_id_2')
-    # note TestStorageName has its own hard-coded values
-    assert test_result.obs_id == 'test_obs_id_2', 'wrong obs_id'
-    assert test_result.file_uri == 'cadc:TEST/test_file.fits', 'collection'
-    assert test_result.file_name == 'test_file.fits.gz', 'wrong fname'
+success = 0
+failure = 0
+for gg in gen:
+    if gg == 0:
+        success += 1
+    else:
+        failure += 1
+end = time.time()
+print(f'per task overhead (ms) ={(end - start)*1000/len(work_to_do)}')
+print(f'duration is {end-start}')
+print(f'{success} successes')
+print(f'{failure} failures')
+print(f'{len(work_to_do)} total')
 
-
-def test_guessing_builder_uri(test_config):
-    mc.StorageName.collection = 'TEST'
-    test_subject = nbc.GuessingBuilder(mc.StorageName)
-    test_result = test_subject.build(
-        'https://localhost/data/test_storage_name.fits'
-    )
-    # note TestStorageName has its own hard-coded values
-    assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
-    assert (
-            test_result.source_names ==
-            ['https://localhost/data/test_storage_name.fits']
-    ), 'wrong source names'
-    assert (
-            test_result.destination_uris == ['cadc:TEST/test_storage_name.fits']
-    ), ' wrong destination uris'

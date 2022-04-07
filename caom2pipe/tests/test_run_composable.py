@@ -86,6 +86,7 @@ from caom2 import SimpleObservation, Algorithm
 from caom2pipe import data_source_composable as dsc
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
+from caom2pipe import name_builder_composable as nbc
 from caom2pipe import run_composable as rc
 from caom2pipe import name_builder_composable as b
 
@@ -116,6 +117,7 @@ def test_run_todo_list_dir_data_source(
         os.path.join(tc.TEST_FILES_DIR, 'sub_directory')
     ]
     test_config.data_source_extensions = ['.fits']
+    test_config.features.supports_latest_client = False
     test_chooser = ec.OrganizeChooser()
     test_result = rc.run_by_todo(
         config=test_config, chooser=test_chooser
@@ -608,13 +610,15 @@ def test_run_single(do_mock, get_access_mock, test_config):
 
     test_config.state_fqn = STATE_FILE
     test_config.interval = 5
+    test_config.features.supports_latest_client = False
     test_state = mc.State(test_config.state_fqn)
     test_state.save_state('gemini_timestamp', datetime.utcnow())
 
     do_mock.return_value = -1
 
     test_url = 'http://localhost/test_url.fits'
-    test_storage_name = mc.StorageName(url=test_url)
+    mc.StorageName.collection = test_config.collection
+    test_storage_name = mc.StorageName(source_names=[test_url])
 
     test_result = rc.run_single(
         test_config,
@@ -631,7 +635,9 @@ def test_run_single(do_mock, get_access_mock, test_config):
     test_storage = args[0]
     assert isinstance(test_storage, mc.StorageName), type(test_storage)
     assert test_storage.obs_id is None, 'wrong obs id'
-    assert test_storage.url == test_url, test_storage.url
+    assert (
+        test_storage.destination_uris[0] == 'cadc:OMM/test_url.fits'
+    ), test_storage
 
 
 # TODO - make this work with TodoRunner AND StateRunner
@@ -861,6 +867,7 @@ def test_run_store_ingest_failure(
     access_mock,
     visit_meta_mock,
     caom2_store_mock,
+    test_config,
 ):
     access_mock.return_value = 'https://localhost'
     temp_deque = deque()
@@ -889,7 +896,6 @@ def test_run_store_ingest_failure(
     cwd = os.getcwd()
     with TemporaryDirectory() as tmp_dir_name:
         os.chdir(tmp_dir_name)
-        test_config = mc.Config()
         test_config.working_directory = tmp_dir_name
         test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
         test_config.use_local_files = True
@@ -924,8 +930,8 @@ def test_run_store_ingest_failure(
                 data_client_mock.return_value.put.call_count == 2
             ), 'wrong number of puts'
             put_calls = [
-                call('/data', 'cadc:TEST/dao_c122_2021_005157_e.fits', None),
-                call('/data', 'cadc:TEST/dao_c122_2021_005157.fits', None),
+                call('/data', 'cadc:OMM/dao_c122_2021_005157_e.fits', None),
+                call('/data', 'cadc:OMM/dao_c122_2021_005157.fits', None),
             ]
             data_client_mock.return_value.put.assert_has_calls(
                 put_calls, any_order=False
@@ -958,6 +964,7 @@ def test_run_ingest(
     meta_visit_mock,
     caom2_store_mock,
     access_url_mock,
+    test_config,
 ):
     access_url_mock.return_value = 'https://localhost:8080'
     temp_deque = deque()
@@ -978,7 +985,6 @@ def test_run_ingest(
     cwd = os.getcwd()
     with TemporaryDirectory() as tmp_dir_name:
         os.chdir(tmp_dir_name)
-        test_config = mc.Config()
         test_config.working_directory = tmp_dir_name
         test_config.task_types = [mc.TaskType.INGEST]
         test_config.logging_level = 'INFO'
@@ -1021,6 +1027,113 @@ def test_run_ingest(
         finally:
             os.getcwd = getcwd_orig
             os.chdir(cwd)
+
+
+@patch('caom2pipe.client_composable.vault_info')
+@patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+@patch('vos.vos.Client')
+def test_vo_with_cleanup(
+    vo_client_mock, access_mock, fix_mock, vault_info_mock, test_config
+):
+    access_mock.return_value = 'https://localhost'
+    test_obs_id = 'sky_cam_image'
+    test_f_name = f'{test_obs_id}.fits.gz'
+    getcwd_orig = os.getcwd
+    vo_client_mock.listdir.return_value = ['sky_cam_image.fits.gz']
+    vo_client_mock.isdir.return_value = False
+    vo_client_mock.status.return_value = False
+    test_file_info = FileInfo(
+        id=test_f_name,
+        file_type='application/fits',
+        md5sum='abcdef',
+    )
+    vault_info_mock.return_value = test_file_info
+    clients_mock = Mock()
+    clients_mock.vo_client = vo_client_mock
+    clients_mock.data_client.info.side_effect = [None, test_file_info]
+    store_transfer_mock = Mock(autospec=True)
+    cwd = os.getcwd()
+    with TemporaryDirectory() as tmp_dir_name:
+        os.chdir(tmp_dir_name)
+        fix_mock.return_value = f'{tmp_dir_name}/{test_f_name}'
+        test_config.working_directory = tmp_dir_name
+        test_config.task_types = [mc.TaskType.STORE]
+        test_config.logging_level = 'INFO'
+        test_config.collection = 'DAO'
+        test_config.proxy_file_name = 'cadcproxy.pem'
+        test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
+        test_config.features.supports_latest_client = True
+        test_config.data_sources = ['vos:goliaths/DAOTest']
+        test_config.data_source_extensions = ['.fits.gz']
+        test_config.cleanup_files_when_storing = True
+        test_config.cleanup_failure_destination = 'vos:goliaths/DAOTest/fail'
+        test_config.cleanup_success_destination = 'vos:goliaths/DAOTest/pass'
+        test_config.store_modified_files_only = True
+        mc.Config.write_to_file(test_config)
+        test_builder = nbc.GuessingBuilder(mc.StorageName)
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
+        os.getcwd = Mock(return_value=tmp_dir_name)
+        try:
+            # execution
+            test_result = rc.run_by_todo(
+                clients=clients_mock,
+                store_transfer=store_transfer_mock,
+                name_builder=test_builder,
+            )
+            assert test_result is not None, 'expect a result'
+            assert test_result == 0, 'expect success'
+            assert fix_mock.called, 'fix_compression call'
+            fix_mock.assert_called_with(
+                f'{tmp_dir_name}/sky_cam_image/{test_f_name}'
+            ), 'wrong fix_compression call'
+            assert vo_client_mock.move.called, 'vo mock call'
+            vo_client_mock.move.assert_called_with(
+                'vos:goliaths/DAOTest/sky_cam_image.fits.gz',
+                'vos:goliaths/DAOTest/pass/sky_cam_image.fits.gz'
+            ), 'move args'
+            assert clients_mock.data_client.put.called, 'put call'
+            clients_mock.data_client.put.assert_called_with(
+                tmp_dir_name, 'cadc:DAO/sky_cam_image.fits', None
+            ), 'wrong put call args'
+        finally:
+            os.getcwd = getcwd_orig
+            os.chdir(cwd)
+
+
+@patch('caom2pipe.data_source_composable.TodoFileDataSource.get_work')
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+def test_store_from_to_cadc(clients_mock, get_work_mock, test_config):
+    # mimic a decompression event
+    test_f_name = 'abc.fits'
+    test_config.task_types = [mc.TaskType.STORE]
+    test_config.features.supports_latest_client = True
+    test_config.logging_level = 'DEBUG'
+    test_return_value = deque()
+    test_return_value.append(
+        f'cadc:{test_config.collection}/{test_f_name}.gz',
+    )
+    get_work_mock.return_value = test_return_value
+    clients_mock.return_value.data_client.get.side_effect = _mock_get_compressed_file
+    test_builder = nbc.GuessingBuilder(mc.StorageName)
+    test_result = rc.run_by_todo(
+        test_config,
+        test_builder,
+    )
+
+    assert test_result == 0, 'expect success'
+    assert clients_mock.return_value.data_client.get.called, 'get call'
+    assert clients_mock.return_value.data_client.put.called, 'put call'
+    clients_mock.return_value.data_client.get.assert_called_with(
+        '/usr/src/app/caom2pipe/caom2pipe/tests/abc',
+        f'cadc:{test_config.collection}/{test_f_name}.gz'
+    ), 'wrong get params'
+    clients_mock.return_value.data_client.put.assert_called_with(
+        '/usr/src/app/caom2pipe/caom2pipe/tests/abc',
+        f'cadc:{test_config.collection}/{test_f_name}',
+        None,  # stream
+    ), 'wrong put params'
 
 
 def _clean_up_log_files(test_config):
@@ -1078,6 +1191,13 @@ def _write_todo(test_config):
 
 
 call_count = 0
+
+
+def _mock_get_compressed_file(working_dir, uri):
+    fqn = f'{working_dir}/{os.path.basename(uri)}'
+    with open(fqn, 'wb') as f:
+        f.write(b"\x1f\x8b\x08\x08\xd0{Lb\x02\xff.abc.fits\x00+I-.QH\xce"
+                b"\xcf+I\xcd+\xe1\x02\x00\xbd\xdfZ'\r\x00\x00\x00")
 
 
 def _mock_get_work(arg1, arg2):
