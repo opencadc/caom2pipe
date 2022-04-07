@@ -69,7 +69,11 @@
 import logging
 
 from caom2 import Observation
-from caom2pipe import manage_composable as mc
+from caom2utils.fits2caom2 import update_artifact_meta
+from caom2pipe.manage_composable import build_uri, CadcException, check_param
+
+
+__all__ = ['ArtifactCleanupVisitor', 'ArtifactURIRenameVisitor']
 
 
 class ArtifactCleanupVisitor:
@@ -84,7 +88,7 @@ class ArtifactCleanupVisitor:
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def visit(self, observation, **kwargs):
-        mc.check_param(observation, Observation)
+        check_param(observation, Observation)
         plane_count = 0
         artifact_count = 0
         plane_temp = []
@@ -137,12 +141,51 @@ class ArtifactCleanupVisitor:
         """
         url = kwargs.get('url')
         if url is None:
-            raise mc.CadcException(
+            raise CadcException(
                 'Must have a "url" parameter for ArtifactCleanupVisitor.'
             )
-        candidate_uri = mc.build_uri(
+        candidate_uri = build_uri(
             scheme=self._scheme,
             archive=self._archive,
             file_name=url,
         )
         return candidate_uri == uri
+
+
+class ArtifactURIRenameVisitor:
+    """
+    Common code for renaming artifacts in an Observation, and setting
+    the associated FileInfo values to the Storage Inventory values for the new
+    Artifact URI.
+    """
+
+    def __init__(self, collection, scheme, suffix='.gz'):
+        self._collection = collection
+        self._scheme = scheme
+        self._suffix = suffix
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def visit(self, observation, **kwargs):
+        metadata_reader = kwargs.get('metadata_reader')
+        check_param(observation, Observation)
+        artifact_count = 0
+        for plane in observation.planes.values():
+            for artifact in plane.artifacts.values():
+                if artifact.uri.endswith(self._suffix):
+                    new_artifact_uri = artifact.uri.replace(self._suffix, '')
+                    file_info = metadata_reader.file_info.get(new_artifact_uri)
+                    if file_info is not None:
+                        old_artifact_uri = artifact.uri
+                        artifact.uri = new_artifact_uri
+                        update_artifact_meta(artifact, file_info)
+                        self._logger.info(
+                            f'Renamed URI from {old_artifact_uri} to '
+                            f'{artifact.uri}, updated contentChecksum, '
+                            f'contentLength.'
+                        )
+                        artifact_count += 1
+
+        self._logger.info(
+            f'Updated URIs and content for {artifact_count} artifacts.'
+        )
+        return observation
