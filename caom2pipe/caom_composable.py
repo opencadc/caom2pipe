@@ -1205,4 +1205,4 @@ class Fits2caom2Visitor:
 #             )
 #             self._observation = None
 
-        return self._observation
+            return self._observation
