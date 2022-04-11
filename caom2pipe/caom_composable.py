@@ -1146,63 +1146,54 @@ class Fits2caom2Visitor:
 
     def visit(self):
         self._logger.debug('Begin visit')
-        try:
-            for uri, file_info in self._metadata_reader.file_info.items():
-                self._logger.debug(f'Build observation for {uri}')
-                headers = self._metadata_reader.headers.get(uri)
-                telescope_data = self._get_mapping(headers)
-                blueprint = ObsBlueprint(instantiated_class=telescope_data)
-                telescope_data.accumulate_blueprint(blueprint)
+        for uri, file_info in self._metadata_reader.file_info.items():
+            self._logger.debug(f'Build observation for {uri}')
+            headers = self._metadata_reader.headers.get(uri)
+            telescope_data = self._get_mapping(headers)
+            blueprint = ObsBlueprint(instantiated_class=telescope_data)
+            telescope_data.accumulate_blueprint(blueprint)
 
-                if headers is None or len(headers) == 0:
-                    self._logger.debug(
-                        f'No headers, using a GenericParser for '
-                        f'{self._storage_name.file_uri}'
+            if headers is None or len(headers) == 0:
+                self._logger.debug(
+                    f'No headers, using a GenericParser for '
+                    f'{self._storage_name.file_uri}'
+                )
+                parser = GenericParser(blueprint, uri)
+            else:
+                self._logger.debug(
+                    f'Using a FitsParser for {self._storage_name.file_uri}'
+                )
+                parser = FitsParser(headers, blueprint, uri)
+
+            if self._dump_config:
+                print(f'Blueprint for {uri}: {blueprint}')
+
+            if self._observation is None:
+                if blueprint._get('DerivedObservation.members') is None:
+                    self._logger.debug('Build a SimpleObservation')
+                    self._observation = SimpleObservation(
+                        collection=self._storage_name.collection,
+                        observation_id=self._storage_name.obs_id,
+                        algorithm=Algorithm('exposure'),
                     )
-                    parser = GenericParser(blueprint, uri)
                 else:
-                    self._logger.debug(
-                        f'Using a FitsParser for {self._storage_name.file_uri}'
+                    self._logger.debug('Build a DerivedObservation')
+                    self._observation = DerivedObservation(
+                        collection=self._storage_name.collection,
+                        observation_id=self._storage_name.obs_id,
+                        algorithm=Algorithm('composite'),
                     )
-                    parser = FitsParser(headers, blueprint, uri)
 
-                if self._dump_config:
-                    print(f'Blueprint for {uri}: {blueprint}')
+            parser.augment_observation(
+                observation=self._observation,
+                artifact_uri=uri,
+                product_id=self._storage_name.product_id,
+            )
 
-                if self._observation is None:
-                    if blueprint._get('DerivedObservation.members') is None:
-                        self._logger.debug('Build a SimpleObservation')
-                        self._observation = SimpleObservation(
-                            collection=self._storage_name.collection,
-                            observation_id=self._storage_name.obs_id,
-                            algorithm=Algorithm('exposure'),
-                        )
-                    else:
-                        self._logger.debug('Build a DerivedObservation')
-                        self._observation = DerivedObservation(
-                            collection=self._storage_name.collection,
-                            observation_id=self._storage_name.obs_id,
-                            algorithm=Algorithm('composite'),
-                        )
-
-                parser.augment_observation(
-                    observation=self._observation,
-                    artifact_uri=uri,
-                    product_id=self._storage_name.product_id,
-                )
-
-                self._observation = telescope_data.update(
-                    self._observation,
-                    file_info,
-                    self._caom_repo_client,
-                )
-            self._logger.debug(f'End visit')
-#         except Caom2Exception as e:
-#             self._logger.debug(traceback.format_exc())
-#             self._logger.warning(
-#                 f'CAOM2 record creation failed for {self._storage_name.obs_id}'
-#                 f':{self._storage_name.file_name} with {e}'
-#             )
-#             self._observation = None
-
-            return self._observation
+            self._observation = telescope_data.update(
+                self._observation,
+                file_info,
+                self._caom_repo_client,
+            )
+        self._logger.debug(f'End visit')
+        return self._observation
