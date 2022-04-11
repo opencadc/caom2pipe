@@ -80,7 +80,7 @@ from caom2 import CoordFunction1D, DerivedObservation, Provenance
 from caom2 import CoordBounds1D, TypedList, ProductType
 from caom2.diff import get_differences
 from caom2utils import ObsBlueprint, GenericParser, FitsParser
-from caom2utils import update_artifact_meta, Caom2Exception
+from caom2utils import update_artifact_meta  # , Caom2Exception
 
 from caom2pipe import astro_composable as ac
 from caom2pipe import client_composable as clc
@@ -1197,12 +1197,12 @@ class Fits2caom2Visitor:
                     self._caom_repo_client,
                 )
             self._logger.debug(f'End visit')
-        except Caom2Exception as e:
-            self._logger.debug(traceback.format_exc())
-            self._logger.warning(
-                f'CAOM2 record creation failed for {self._storage_name.obs_id}'
-                f':{self._storage_name.file_name} with {e}'
-            )
-            self._observation = None
+#         except Caom2Exception as e:
+#             self._logger.debug(traceback.format_exc())
+#             self._logger.warning(
+#                 f'CAOM2 record creation failed for {self._storage_name.obs_id}'
+#                 f':{self._storage_name.file_name} with {e}'
+#             )
+#             self._observation = None
 
         return self._observation
