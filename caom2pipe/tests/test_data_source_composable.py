@@ -383,12 +383,12 @@ def test_vault_list_dir_time_box_data_source(test_config):
     assert test_result is not None, 'expect a test result'
     assert len(test_result) == 1, 'wrong number of results'
     assert (
-            'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits' ==
-            test_result[0].entry_name
+        'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
+        == test_result[0].entry_name
     ), 'wrong name result'
     assert (
-            datetime(2020, 9, 15, 19, 55, 3, 67000, tzinfo=timezone.utc) ==
-            test_result[0].entry_ts
+        datetime(2020, 9, 15, 19, 55, 3, 67000, tzinfo=timezone.utc)
+        == test_result[0].entry_ts
     ), 'wrong ts result'
 
 
@@ -434,10 +434,12 @@ def test_transfer_check_fits_verify(test_config):
         )
 
         assert test_subject is not None, 'expect construction to work'
-        test_result = test_subject.get_time_box_work(test_start_ts, test_end_ts)
+        test_result = test_subject.get_time_box_work(
+            test_start_ts, test_end_ts
+        )
         assert len(test_result) == 1, 'wrong number of results returned'
         assert (
-                test_result[0].entry_name == '/cfht_source/correct.fits.gz'
+            test_result[0].entry_name == '/cfht_source/correct.fits.gz'
         ), 'wrong result'
 
         for entry in [test_empty_file, test_broken_file]:
@@ -485,14 +487,13 @@ def test_transfer_check_fits_verify(test_config):
         )
         assert len(test_result) == 3, 'wrong number of results returned'
         assert (
-                test_result[0].entry_name == '/cfht_source/correct.fits.gz'
+            test_result[0].entry_name == '/cfht_source/correct.fits.gz'
         ), 'wrong result'
         assert (
             test_result[1].entry_name == '/cfht_source/same_file.fits'
         ), 'wrong result'
         assert (
-            test_result[2].entry_name ==
-            '/cfht_source/already_successful.fits'
+            test_result[2].entry_name == '/cfht_source/already_successful.fits'
         ), 'wrong result'
         for f in [
             test_empty_file,
@@ -544,7 +545,7 @@ def test_transfer_check_fits_verify(test_config):
         for entry in [
             test_failure_directory,
             test_success_directory,
-            test_source_directory
+            test_source_directory,
         ]:
             if not entry.exists():
                 entry.mkdir()
@@ -567,10 +568,12 @@ def test_transfer_check_fits_verify(test_config):
         test_config.use_local_files = True
         test_config.data_sources = [test_source_directory.as_posix()]
         test_config.data_source_extensions = ['.fits', '.fits.gz', '.fits.fz']
-        test_config.cleanup_success_destination = \
+        test_config.cleanup_success_destination = (
             test_success_directory.as_posix()
-        test_config.cleanup_failure_destination = \
+        )
+        test_config.cleanup_failure_destination = (
             test_failure_directory.as_posix()
+        )
         test_config.store_modified_files_only = True
 
         test(
@@ -595,7 +598,7 @@ def test_transfer_fails(check_fits_mock, test_config):
     for entry in [
         test_failure_directory,
         test_success_directory,
-        test_source_directory
+        test_source_directory,
     ]:
         if not entry.exists():
             entry.mkdir()

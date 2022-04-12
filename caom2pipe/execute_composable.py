@@ -183,8 +183,9 @@ class CaomExecute:
         self.stream = None
         if hasattr(config, 'stream'):
             self.stream = (
-                None if config.features.supports_latest_client else
-                config.stream
+                None
+                if config.features.supports_latest_client
+                else config.stream
             )
         self.meta_visitors = meta_visitors
         self.observable = observable
@@ -197,7 +198,8 @@ class CaomExecute:
         # track whether the caom2repo call will be a create or an update
         self._caom2_update_needed = False
         self._decompressor = decompressor_factory(
-            config.collection, self.working_dir, self.log_level_as)
+            config.collection, self.working_dir, self.log_level_as
+        )
 
     def __str__(self):
         return (
@@ -655,9 +657,7 @@ class LocalStore(Store):
         )
         for index, entry in enumerate(self._storage_name.source_names):
             self.logger.debug(f'store the input file {entry}')
-            self._cadc_put(
-                entry, self._storage_name.destination_uris[index]
-            )
+            self._cadc_put(entry, self._storage_name.destination_uris[index])
 
         self.logger.debug('End execute')
 
@@ -729,8 +729,7 @@ class OrganizeExecutes:
         chooser=None,
         store_transfer=None,
         modify_transfer=None,
-        cadc_client=None,
-        caom_client=None,
+        clients=None,
         metadata_reader=None,
     ):
         """
@@ -747,9 +746,7 @@ class OrganizeExecutes:
         :param chooser:
         :param store_transfer Transfer implementation for retrieving files
         :param modify_transfer Transfer implementation for retrieving files
-        :param cadc_client CadcDataClient/vos.Client, depending on the
-            Features.supports_latest_client flag value
-        :param caom_client CAOM2RepoClient
+        :param clients ClientCollection instance
         :param metadata_reader client instance for reading headers,
             passed on to to_caom2_client.
         """
@@ -778,10 +775,10 @@ class OrganizeExecutes:
             self._modify_transfer.observable = self.observable
         if store_transfer is not None:
             self._store_transfer.observable = self.observable
-        self._cadc_client = cadc_client
-        if self._cadc_client is not None:
-            self._cadc_client._metrics = self.observable.metrics
-        self._caom_client = caom_client
+        if clients is not None:
+            clients.metrics = self.observable.metrics
+            self._cadc_client = clients.data_client
+            self._caom_client = clients.metadata_client
         self._metadata_reader = metadata_reader
         self._log_h = None
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -1078,9 +1075,9 @@ class OrganizeExecutes:
                 if storage_name.is_feasible:
                     if self.config.use_local_files:
                         if (
-                                executors is not None
-                                and len(executors) > 0
-                                and isinstance(executors[0], Scrape)
+                            executors is not None
+                            and len(executors) > 0
+                            and isinstance(executors[0], Scrape)
                         ):
                             self._logger.debug(
                                 f'Choosing executor DataScrape for '
@@ -1238,13 +1235,14 @@ class FitsForCADCDecompressor:
             if fqn.endswith('.gz'):
                 returned_fqn = os.path.join(
                     self._working_directory,
-                    os.path.basename(fqn).replace('.gz', '')
+                    os.path.basename(fqn).replace('.gz', ''),
                 )
                 self._logger.info(
                     f'Decompressing {fqn} with gunzip to {returned_fqn}'
                 )
-                with gzip.open(fqn, 'rb') as f_in, \
-                     open(returned_fqn, 'wb') as f_out:
+                with gzip.open(fqn, 'rb') as f_in, open(
+                    returned_fqn, 'wb'
+                ) as f_out:
                     # use shutil to control memory consumption
                     copyfileobj(f_in, f_out)
             elif fqn.endswith('.bz2'):
@@ -1255,8 +1253,9 @@ class FitsForCADCDecompressor:
                 self._logger.info(
                     f'Decompressing {fqn} with bz2 to {returned_fqn}'
                 )
-                with open(returned_fqn, 'wb') as f_out, \
-                     bz2.BZ2File(fqn, 'rb') as f_in:
+                with open(returned_fqn, 'wb') as f_out, bz2.BZ2File(
+                    fqn, 'rb'
+                ) as f_in:
                     # use shutil to control memory consumption
                     copyfileobj(f_in, f_out)
         self._logger.debug(f'End fix_compression with {returned_fqn}')
@@ -1277,9 +1276,7 @@ class FitsForCADCCompressor(FitsForCADCDecompressor):
             returned_fqn = super().fix_compression(fqn)
             fz_fqn = f'{returned_fqn}.fz'
             if fz_fqn != fqn:
-                compress_cmd = (
-                    f"imcopy {returned_fqn} '{fz_fqn}[compress]'"
-                )
+                compress_cmd = f"imcopy {returned_fqn} '{fz_fqn}[compress]'"
                 self._logger.debug(f'Executing {compress_cmd}')
                 mc.exec_cmd_array(
                     ['/bin/bash', '-c', compress_cmd], self._log_level_as

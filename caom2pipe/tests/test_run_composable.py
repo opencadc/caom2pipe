@@ -118,10 +118,9 @@ def test_run_todo_list_dir_data_source(
     ]
     test_config.data_source_extensions = ['.fits']
     test_config.features.supports_latest_client = False
+    test_config.logging_level = 'DEBUG'
     test_chooser = ec.OrganizeChooser()
-    test_result = rc.run_by_todo(
-        config=test_config, chooser=test_chooser
-    )
+    test_result = rc.run_by_todo(config=test_config, chooser=test_chooser)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert visit_meta_mock.called, 'expect visit call'
@@ -250,9 +249,7 @@ def test_run_todo_file_data_source(clients_mock, test_config):
     test_config.log_to_file = True
 
     test_chooser = ec.OrganizeChooser()
-    test_result = rc.run_by_todo(
-        config=test_config, chooser=test_chooser
-    )
+    test_result = rc.run_by_todo(config=test_config, chooser=test_chooser)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert os.path.exists(test_config.success_fqn), 'expect success file'
@@ -284,9 +281,7 @@ def test_run_todo_file_data_source_v(clients_mock, test_config):
     test_config.log_to_file = True
 
     test_chooser = ec.OrganizeChooser()
-    test_result = rc.run_by_todo(
-        config=test_config, chooser=test_chooser
-    )
+    test_result = rc.run_by_todo(config=test_config, chooser=test_chooser)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert os.path.exists(test_config.success_fqn), 'expect success file'
@@ -306,9 +301,7 @@ def test_run_todo_file_data_source_v(clients_mock, test_config):
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.data_source_composable.CadcTapClient')
 @patch('caom2pipe.client_composable.query_tap_client')
-@patch(
-    'caom2pipe.execute_composable.MetaVisit._visit_meta'
-)
+@patch('caom2pipe.execute_composable.MetaVisit._visit_meta')
 def test_run_state(
     visit_meta_mock,
     tap_query_mock,
@@ -533,7 +526,10 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config):
     ), 'do_one is mocked, should be no data client call'
     assert source_mock.called, 'clean_up should be called'
     assert source_mock.call_count == 2, 'clean_up should be called two times'
-    calls = [call('test_obs_id.fits.gz', -1, 0), call('test_obs_id.fits.gz', -1, 1)]
+    calls = [
+        call('test_obs_id.fits.gz', -1, 0),
+        call('test_obs_id.fits.gz', -1, 1),
+    ]
     source_mock.assert_has_calls(calls)
 
     # what should happen when successful execution occurs
@@ -876,6 +872,7 @@ def test_run_store_ingest_failure(
     get_work_mock.return_value = temp_deque
     repo_client_mock.return_value.read.return_value = None
     reader_headers_mock.return_value = [{'OBSMODE': 'abc'}]
+
     def _file_info_mock(uri):
         return FileInfo(
             id=uri,
@@ -915,7 +912,9 @@ def test_run_store_ingest_failure(
         os.getcwd = Mock(return_value=tmp_dir_name)
         try:
             data_source = dsc.LocalFilesDataSource(
-                test_config, data_client_mock, Mock(),
+                test_config,
+                data_client_mock,
+                Mock(),
             )
             test_result = rc.run_by_todo(source=data_source)
             assert test_result is not None, 'expect result'
@@ -1091,7 +1090,7 @@ def test_vo_with_cleanup(
             assert vo_client_mock.move.called, 'vo mock call'
             vo_client_mock.move.assert_called_with(
                 'vos:goliaths/DAOTest/sky_cam_image.fits.gz',
-                'vos:goliaths/DAOTest/pass/sky_cam_image.fits.gz'
+                'vos:goliaths/DAOTest/pass/sky_cam_image.fits.gz',
             ), 'move args'
             assert clients_mock.data_client.put.called, 'put call'
             clients_mock.data_client.put.assert_called_with(
@@ -1115,7 +1114,9 @@ def test_store_from_to_cadc(clients_mock, get_work_mock, test_config):
         f'cadc:{test_config.collection}/{test_f_name}.gz',
     )
     get_work_mock.return_value = test_return_value
-    clients_mock.return_value.data_client.get.side_effect = _mock_get_compressed_file
+    clients_mock.return_value.data_client.get.side_effect = (
+        _mock_get_compressed_file
+    )
     test_builder = nbc.GuessingBuilder(mc.StorageName)
     test_result = rc.run_by_todo(
         test_config,
@@ -1127,7 +1128,7 @@ def test_store_from_to_cadc(clients_mock, get_work_mock, test_config):
     assert clients_mock.return_value.data_client.put.called, 'put call'
     clients_mock.return_value.data_client.get.assert_called_with(
         '/usr/src/app/caom2pipe/caom2pipe/tests/abc',
-        f'cadc:{test_config.collection}/{test_f_name}.gz'
+        f'cadc:{test_config.collection}/{test_f_name}.gz',
     ), 'wrong get params'
     clients_mock.return_value.data_client.put.assert_called_with(
         '/usr/src/app/caom2pipe/caom2pipe/tests/abc',
@@ -1196,8 +1197,10 @@ call_count = 0
 def _mock_get_compressed_file(working_dir, uri):
     fqn = f'{working_dir}/{os.path.basename(uri)}'
     with open(fqn, 'wb') as f:
-        f.write(b"\x1f\x8b\x08\x08\xd0{Lb\x02\xff.abc.fits\x00+I-.QH\xce"
-                b"\xcf+I\xcd+\xe1\x02\x00\xbd\xdfZ'\r\x00\x00\x00")
+        f.write(
+            b"\x1f\x8b\x08\x08\xd0{Lb\x02\xff.abc.fits\x00+I-.QH\xce"
+            b"\xcf+I\xcd+\xe1\x02\x00\xbd\xdfZ'\r\x00\x00\x00"
+        )
 
 
 def _mock_get_work(arg1, arg2):

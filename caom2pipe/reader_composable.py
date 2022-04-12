@@ -145,10 +145,8 @@ class MetadataReader:
             if entry not in self._headers.keys():
                 if '.fits' in entry:
                     self._logger.debug(f'Retrieve headers for {entry}')
-                    self._headers[entry] = (
-                        self._retrieve_headers(
-                            storage_name.source_names[index]
-                        )
+                    self._headers[entry] = self._retrieve_headers(
+                        storage_name.source_names[index]
                     )
                 else:
                     self._headers[entry] = []

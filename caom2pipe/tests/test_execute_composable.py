@@ -186,9 +186,7 @@ def test_data_execute(test_config):
     mc.StorageName.collection = 'TEST'
     test_obs_id = 'test_obs_id'
     test_dir = os.path.join(tc.THIS_DIR, test_obs_id)
-    test_fits_fqn = os.path.join(
-        test_dir, tc.TestStorageName().file_name
-    )
+    test_fits_fqn = os.path.join(test_dir, tc.TestStorageName().file_name)
     try:
         if not os.path.exists(test_dir):
             os.mkdir(test_dir, mode=0o755)
@@ -411,8 +409,6 @@ def test_organize_executes_chooser(test_config):
     log_file_directory = os.path.join(tc.THIS_DIR, 'logs')
     test_config.log_file_directory = log_file_directory
     test_config.features.supports_composite = True
-    caom_client = Mock(autospec=True)
-    caom_client.read.side_effect = _read_obs2
 
     test_config.task_types = [mc.TaskType.INGEST]
     test_chooser = tc.TestChooser()
@@ -421,8 +417,7 @@ def test_organize_executes_chooser(test_config):
         [],
         [],
         test_chooser,
-        cadc_client=Mock(autospec=True, return_value=None),
-        caom_client=caom_client,
+        clients=Mock(autospec=True, return_value=None),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -441,8 +436,7 @@ def test_organize_executes_chooser(test_config):
         [],
         [],
         test_chooser,
-        cadc_client=Mock(autospec=True, return_value=None),
-        caom_client=caom_client,
+        clients=Mock(autospec=True, return_value=None),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -454,15 +448,13 @@ def test_organize_executes_chooser(test_config):
 def test_organize_executes_client_existing(test_config):
     test_obs_id = tc.TestStorageName()
     test_config.features.use_clients = True
-    repo_client_mock = Mock(autospec=True)
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.use_local_files = False
     test_oe = ec.OrganizeExecutes(
         test_config,
         [],
         [],
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -476,21 +468,21 @@ def test_organize_executes_client_visit(test_config):
     test_config.features.use_clients = True
     test_config.task_types = [mc.TaskType.VISIT]
     test_config.use_local_files = False
-    repo_client_mock = Mock(autospec=True)
-    repo_client_mock.read.side_effect = _read_obs2
+    clients_mock = Mock(autospec=True)
     test_oe = ec.OrganizeExecutes(
         test_config,
         [],
         [],
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=clients_mock,
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 1
     assert isinstance(executors[0], ec.MetaVisit)
-    assert not repo_client_mock.read.called, 'mock should not be called?'
+    assert (
+        not clients_mock.return_value.metadata_client.read.called
+    ), 'mock should not be called?'
 
 
 def test_do_one(test_config):
@@ -596,17 +588,13 @@ def test_organize_executes_client_do_one(test_config):
     test_config.features.use_clients = True
     retry_file_name = 'retries.txt'
     test_config.retry_file_name = retry_file_name
-    repo_client_mock = Mock(autospec=True)
-    repo_client_mock.read.return_value = None
-
     test_config.task_types = [mc.TaskType.SCRAPE]
     test_oe = ec.OrganizeExecutes(
         test_config,
         [],
         [],
         chooser=None,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -624,8 +612,7 @@ def test_organize_executes_client_do_one(test_config):
         [],
         [],
         chooser=None,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -642,8 +629,7 @@ def test_organize_executes_client_do_one(test_config):
         [],
         [],
         chooser=None,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -659,8 +645,7 @@ def test_organize_executes_client_do_one(test_config):
         [],
         [],
         chooser=None,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -676,8 +661,7 @@ def test_organize_executes_client_do_one(test_config):
         [],
         [],
         chooser=None,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -694,8 +678,7 @@ def test_organize_executes_client_do_one(test_config):
         [],
         [],
         chooser=test_chooser,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -895,9 +878,7 @@ def test_store_newer_files_only_flag(client_mock, test_config):
 
 
 @patch('caom2utils.data_util.StorageClientWrapper')
-def test_store_newer_files_only_flag_client(
-    client_mock, test_config
-):
+def test_store_newer_files_only_flag_client(client_mock, test_config):
     # just like the previous test, except supports_latest_client = True
     # first test case
     # flag set to True, file is older at CADC, supports_latest_client = False

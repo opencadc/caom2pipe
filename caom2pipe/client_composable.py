@@ -158,7 +158,8 @@ class ClientCollection:
 
     @metrics.setter
     def metrics(self, value):
-        self._data_client._metrics = value
+        if self._data_client is not None:
+            self._data_client._metrics = value
         self._metrics = value
 
     @property
@@ -179,13 +180,11 @@ class ClientCollection:
                 f'SCRAPE\'ing data - no clients will be initialized.'
             )
         else:
-            if self._metrics is None:
-                self._metrics = mc.Metrics(config)
             subject = define_subject(config)
             self._metadata_client = CAOM2RepoClient(
                 subject, config.logging_level, config.resource_id
             )
-            self._data_client = declare_client(config, self._metrics)
+            self._data_client = declare_client(config)
             if config.tap_id is not None:
                 self._query_client = CadcTapClient(
                     subject=subject, resource_id=config.tap_id
@@ -416,9 +415,7 @@ def get_cadc_meta_client_v(storage_name, cadc_client):
     return FileMeta(f_size, f_md5sum)
 
 
-def look_pull_and_put(
-    storage_name, fqn, url, cadc_client, checksum
-):
+def look_pull_and_put(storage_name, fqn, url, cadc_client, checksum):
     """Checks to see if a file exists at CADC. If yes, stop. If no,
     pull via https to local storage, then put to CADC storage.
 
@@ -433,12 +430,10 @@ def look_pull_and_put(
     """
     cadc_meta = cadc_client.info(storage_name)
     if (
-        (
-            checksum is not None and
-            cadc_meta is not None and
-            cadc_meta.md5sum.replace('md5:', '') != checksum
-        ) or cadc_meta is None
-    ):
+        checksum is not None
+        and cadc_meta is not None
+        and cadc_meta.md5sum.replace('md5:', '') != checksum
+    ) or cadc_meta is None:
         logging.debug(
             f'Different checksums: Source {checksum}, CADC {cadc_meta}'
         )
@@ -637,8 +632,9 @@ def si_client_get_headers(client, storage_name):
         return ac.make_headers_from_string(fits_header)
     except Exception as e:
         logging.debug(traceback.format_exc())
-        raise mc.CadcException(f'Did not retrieve {storage_name} header '
-                               f'because {e}')
+        raise mc.CadcException(
+            f'Did not retrieve {storage_name} header ' f'because {e}'
+        )
 
 
 def si_client_put(client, fqn, storage_name, metrics):
