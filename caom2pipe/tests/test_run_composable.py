@@ -1102,6 +1102,40 @@ def test_vo_with_cleanup(
             os.chdir(cwd)
 
 
+@patch('caom2pipe.data_source_composable.TodoFileDataSource.get_work')
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+def test_store_from_to_cadc(clients_mock, get_work_mock, test_config):
+    # mimic a decompression event
+    test_f_name = 'abc.fits'
+    test_config.task_types = [mc.TaskType.STORE]
+    test_config.features.supports_latest_client = True
+    test_config.logging_level = 'DEBUG'
+    test_return_value = deque()
+    test_return_value.append(
+        f'cadc:{test_config.collection}/{test_f_name}.gz',
+    )
+    get_work_mock.return_value = test_return_value
+    clients_mock.return_value.data_client.get.side_effect = _mock_get_compressed_file
+    test_builder = nbc.GuessingBuilder(mc.StorageName)
+    test_result = rc.run_by_todo(
+        test_config,
+        test_builder,
+    )
+
+    assert test_result == 0, 'expect success'
+    assert clients_mock.return_value.data_client.get.called, 'get call'
+    assert clients_mock.return_value.data_client.put.called, 'put call'
+    clients_mock.return_value.data_client.get.assert_called_with(
+        '/usr/src/app/caom2pipe/caom2pipe/tests/abc',
+        f'cadc:{test_config.collection}/{test_f_name}.gz'
+    ), 'wrong get params'
+    clients_mock.return_value.data_client.put.assert_called_with(
+        '/usr/src/app/caom2pipe/caom2pipe/tests/abc',
+        f'cadc:{test_config.collection}/{test_f_name}',
+        None,  # stream
+    ), 'wrong put params'
+
+
 def _clean_up_log_files(test_config):
     retry_success_fqn = (
         f'{tc.TEST_DATA_DIR}_0/' f'{test_config.success_log_file_name}'
@@ -1157,6 +1191,13 @@ def _write_todo(test_config):
 
 
 call_count = 0
+
+
+def _mock_get_compressed_file(working_dir, uri):
+    fqn = f'{working_dir}/{os.path.basename(uri)}'
+    with open(fqn, 'wb') as f:
+        f.write(b"\x1f\x8b\x08\x08\xd0{Lb\x02\xff.abc.fits\x00+I-.QH\xce"
+                b"\xcf+I\xcd+\xe1\x02\x00\xbd\xdfZ'\r\x00\x00\x00")
 
 
 def _mock_get_work(arg1, arg2):

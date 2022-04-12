@@ -1201,7 +1201,6 @@ class Fits2caom2Visitor:
                     file_info,
                     self._caom_repo_client,
                 )
-            self._logger.debug(f'End visit')
         except Caom2Exception as e:
             self._logger.debug(traceback.format_exc())
             self._logger.warning(
@@ -1210,4 +1209,5 @@ class Fits2caom2Visitor:
             )
             self._observation = None
 
+        self._logger.debug(f'End visit')
         return self._observation

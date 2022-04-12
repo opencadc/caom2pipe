@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2020.                            (c) 2020.
+#  (c) 2021.                            (c) 2021.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -66,86 +67,44 @@
 # ***********************************************************************
 #
 
-import logging
+from threading import get_native_id
 
-from caom2 import Observation
-from caom2pipe.manage_composable import build_uri, CadcException, check_param
-
-
-__all__ = ['ArtifactCleanupVisitor']
+from cadcutils.net import Subject
+from caom2utils.data_util import StorageClientWrapper
+from caom2utils.fits2caom2 import update_artifact_meta
 
 
-class ArtifactCleanupVisitor:
-    """
-    Common code for removing artifacts from an Observation. Over-ride
-    'check_for_delete' method, if the characteristics of the deletion change.
-    """
+thread_clients = {}
 
-    def __init__(self, archive, scheme='ad'):
-        self._archive = archive
-        self._scheme = scheme
-        self._logger = logging.getLogger(self.__class__.__name__)
 
-    def visit(self, observation, **kwargs):
-        check_param(observation, Observation)
-        plane_count = 0
-        artifact_count = 0
-        plane_temp = []
-        for plane in observation.planes.values():
-            artifact_temp = []
-            for artifact in plane.artifacts.values():
-                if self.check_for_delete(artifact.uri, **kwargs):
-                    artifact_temp.append(artifact.uri)
-
-            artifact_delete_list = list(set(artifact_temp))
-            for entry in artifact_delete_list:
-                self._logger.warning(
-                    f'Removing artifact {entry} from observation '
-                    f'{observation.observation_id}, plane {plane.product_id}.'
-                )
-                artifact_count += 1
-                observation.planes[plane.product_id].artifacts.pop(entry)
-
-            if len(plane.artifacts) == 0:
-                plane_temp.append(plane.product_id)
-
-        plane_delete_list = list(set(plane_temp))
-        for entry in plane_delete_list:
-            self._logger.warning(
-                f'Removing plane {entry} from observation '
-                f'{observation.observation_id}.'
-            )
-            plane_count += 1
-            observation.planes.pop(entry)
-
-        self._logger.info(
-            f'Completed artifact cleanup augmentation for '
-            f'{observation.observation_id}. Removed {artifact_count} '
-            f'artifacts, {plane_count} planes from the observation.'
+def visit(self, observation, **kwargs):
+    artifact_count = 0
+    thread_id = get_native_id()
+    data_client = thread_clients.get(thread_id)
+    if data_client is None and thread_id is not None:
+        subject = Subject(certificate='/usr/src/app/cadcproxy.pem')
+        data_client = StorageClientWrapper(
+            subject, resource_id='ivo://cadc.nrc.ca/global/minoc'
         )
-        return {
-            'artifacts': artifact_count,
-            'planes': plane_count,
-        }
+        thread_clients[thread_id] = data_client
 
-    def check_for_delete(self, uri, **kwargs):
-        """
-        Return True if an artifact should be deleted from an Observation in
-        a collection.
+    for plane in observation.planes.values():
+        for artifact in plane.artifacts.values():
+            if artifact.uri.endswith(self._suffix):
+                new_artifact_uri = artifact.uri.replace(self._suffix, '')
+                file_info = data_client.info(new_artifact_uri)
+                if file_info is not None:
+                    old_artifact_uri = artifact.uri
+                    artifact.uri = new_artifact_uri
+                    update_artifact_meta(artifact, file_info)
+                    self._logger.info(
+                        f'Renamed URI from {old_artifact_uri} to '
+                        f'{artifact.uri}, updated contentChecksum, '
+                        f'contentLength.'
+                    )
+                    artifact_count += 1
 
-        :param uri:
-        :param kwargs: Assume the 'url' entry in kwargs is actually a file
-            name for the default implementation.
-        :return:
-        """
-        url = kwargs.get('url')
-        if url is None:
-            raise CadcException(
-                'Must have a "url" parameter for ArtifactCleanupVisitor.'
-            )
-        candidate_uri = build_uri(
-            scheme=self._scheme,
-            archive=self._archive,
-            file_name=url,
-        )
-        return candidate_uri == uri
+    self._logger.info(
+        f'Updated URIs and content for {artifact_count} artifacts.'
+    )
+    return observation

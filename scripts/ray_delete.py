@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2020.                            (c) 2020.
+#  (c) 2021.                            (c) 2021.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -66,86 +67,80 @@
 # ***********************************************************************
 #
 
-import logging
+import ray
+import time
 
-from caom2 import Observation
-from caom2pipe.manage_composable import build_uri, CadcException, check_param
+from ray.util import ActorPool
+
+from caom2pipe.client_composable import declare_client
+from caom2pipe.data_source_composable import DecompressionDataSource
+from caom2pipe.execute_composable import OrganizeExecutes
+from caom2pipe.manage_composable import Config, StorageName
+from caom2pipe.name_builder_composable import GuessingBuilder
+from caom2pipe.reader_composable import StorageClientReader
+from caom2pipe.transfer_composable import CadcTransfer
 
 
-__all__ = ['ArtifactCleanupVisitor']
-
-
-class ArtifactCleanupVisitor:
-    """
-    Common code for removing artifacts from an Observation. Over-ride
-    'check_for_delete' method, if the characteristics of the deletion change.
-    """
-
-    def __init__(self, archive, scheme='ad'):
-        self._archive = archive
-        self._scheme = scheme
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    def visit(self, observation, **kwargs):
-        check_param(observation, Observation)
-        plane_count = 0
-        artifact_count = 0
-        plane_temp = []
-        for plane in observation.planes.values():
-            artifact_temp = []
-            for artifact in plane.artifacts.values():
-                if self.check_for_delete(artifact.uri, **kwargs):
-                    artifact_temp.append(artifact.uri)
-
-            artifact_delete_list = list(set(artifact_temp))
-            for entry in artifact_delete_list:
-                self._logger.warning(
-                    f'Removing artifact {entry} from observation '
-                    f'{observation.observation_id}, plane {plane.product_id}.'
-                )
-                artifact_count += 1
-                observation.planes[plane.product_id].artifacts.pop(entry)
-
-            if len(plane.artifacts) == 0:
-                plane_temp.append(plane.product_id)
-
-        plane_delete_list = list(set(plane_temp))
-        for entry in plane_delete_list:
-            self._logger.warning(
-                f'Removing plane {entry} from observation '
-                f'{observation.observation_id}.'
-            )
-            plane_count += 1
-            observation.planes.pop(entry)
-
-        self._logger.info(
-            f'Completed artifact cleanup augmentation for '
-            f'{observation.observation_id}. Removed {artifact_count} '
-            f'artifacts, {plane_count} planes from the observation.'
+@ray.remote
+class SessionActor:
+    def __init__(self):
+        StorageName.scheme = scheme
+        StorageName.collection = config.collection
+        self._client = declare_client(config)
+        self._builder = GuessingBuilder(StorageName)
+        self._store_transfer = CadcTransfer()
+        self._metadata_reader = StorageClientReader(self._client)
+        self._organizer = OrganizeExecutes(
+            config, 
+            [], 
+            [],
+            metadata_reader=self._metadata_reader,
+            store_transfer=self._store_transfer,
+            cadc_client=self._client,
         )
-        return {
-            'artifacts': artifact_count,
-            'planes': plane_count,
-        }
 
-    def check_for_delete(self, uri, **kwargs):
-        """
-        Return True if an artifact should be deleted from an Observation in
-        a collection.
+    def do_one(self, entry):
+        # _set_logging(config)
+        storage_name = self._builder.build(entry)
+        self._organizer.choose(storage_name)
+        return self._organizer.do_one(storage_name)
 
-        :param uri:
-        :param kwargs: Assume the 'url' entry in kwargs is actually a file
-            name for the default implementation.
-        :return:
-        """
-        url = kwargs.get('url')
-        if url is None:
-            raise CadcException(
-                'Must have a "url" parameter for ArtifactCleanupVisitor.'
-            )
-        candidate_uri = build_uri(
-            scheme=self._scheme,
-            archive=self._archive,
-            file_name=url,
-        )
-        return candidate_uri == uri
+
+start = time.time()
+# uncomment the following to get a glimpse at what ray is doing
+# environ['RAY_LOG_TO_STDERR'] = '1'
+ray.init()
+config = Config()
+config.get_executors()
+# work_to_do = TodoFileDataSource(config).get_work()
+scheme = 'gemini' if config.collection == 'GEMINI' else 'cadc'
+work_to_do = DecompressionDataSource(
+    config, config.collection, scheme
+).get_cleanup_work()
+print(f'{len(work_to_do)} records to process')
+
+MAX_ACTORS = 2
+x = list()
+for ii in range(MAX_ACTORS):
+    y = SessionActor.remote()
+    x.append(y)
+actor_pool = ActorPool(x)
+
+gen = actor_pool.map_unordered(
+    lambda a, v: a.do_one.remote(v), work_to_do
+)
+
+success = 0
+failure = 0
+for gg in gen:
+    if gg == 0:
+        success += 1
+    else:
+        failure += 1
+end = time.time()
+print(f'per task overhead (ms) ={(end - start)*1000/len(work_to_do)}')
+print(f'duration is {end-start}')
+print(f'{success} successes')
+print(f'{failure} failures')
+print(f'{len(work_to_do)} total')
+

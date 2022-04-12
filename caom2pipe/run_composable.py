@@ -508,14 +508,15 @@ def get_utc_now_tz():
 
 
 def _common_init(
-        config,
-        clients,
-        name_builder,
-        source,
-        modify_transfer,
-        metadata_reader,
-        state,
-    ):
+    config,
+    clients,
+    name_builder,
+    source,
+    modify_transfer,
+    metadata_reader,
+    state,
+    store_transfer,
+):
     if config is None:
         config = mc.Config()
         config.get_executors()
@@ -539,8 +540,19 @@ def _common_init(
     if metadata_reader is None:
         metadata_reader = reader_composable.reader_factory(config, clients)
 
+    if store_transfer is None:
+        store_transfer = transfer_composable.store_transfer_factory(
+            config, clients
+        )
+
     return (
-        config, clients, name_builder, source, modify_transfer, metadata_reader
+        config,
+        clients,
+        name_builder,
+        source,
+        modify_transfer,
+        metadata_reader,
+        store_transfer,
     )
 
 
@@ -587,6 +599,7 @@ def run_by_todo(
         source,
         modify_transfer,
         metadata_reader,
+        store_transfer,
     ) = _common_init(
             config,
             clients,
@@ -595,6 +608,7 @@ def run_by_todo(
             modify_transfer,
             metadata_reader,
             False,
+            store_transfer,
         )
     organizer = ec.OrganizeExecutes(
         config,
@@ -663,6 +677,7 @@ def run_by_state(
         source,
         modify_transfer,
         metadata_reader,
+        store_transfer,
     ) = _common_init(
         config,
         clients,
@@ -671,6 +686,7 @@ def run_by_state(
         modify_transfer,
         metadata_reader,
         True,
+        store_transfer,
     )
 
     if end_time is None:

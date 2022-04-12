@@ -85,11 +85,13 @@ from caom2pipe import manage_composable as mc
 __all__ = [
     'DataSource',
     'data_source_factory',
+    'DecompressionDataSource',
     'ListDirDataSource',
     'ListDirSeparateDataSource',
     'ListDirTimeBoxDataSource',
     'LocalFilesDataSource',
     'QueryTimeBoxDataSource',
+    'RenameURIDataSource',
     'StateRunnerMeta',
     'TodoFileDataSource',
     'VaultDataSource',
@@ -146,6 +148,73 @@ class DataSource:
             if entry.name.endswith(extension):
                 return True
         return False
+
+
+class DecompressionDataSource(DataSource):
+    """
+    Implement a Data Source that queries for files in Storage Inventory
+    that are compressed, where there does not exist a corresponding
+    decompressed copy of the file.
+
+    For CFHT, the condition is where there does not exist a corresponding
+    .fz compressed copy of the file.
+    """
+
+    def __init__(self, config, collection, scheme, suffix='.gz'):
+        super().__init__(config)
+        self._suffix = suffix
+        subject = clc.define_subject(config)
+        # the resource_id values are hard-coded - if the referenced instances
+        # of the services aren't available, the query answers are just
+        # considered not available.
+        self._luskan_client = CadcTapClient(
+            subject, resource_id='ivo://cadc.nrc.ca/global/luskan'
+        )
+        self._compressed = None
+        self._decompressed = None
+        self._collection = collection
+        self._scheme = scheme
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def _match_work(self):
+        new_extension = ''
+        if self._collection == 'CFHT':
+            new_extension = '.fz'
+        self._compressed.uri = self._compressed.uri.astype(str).replace(
+            self._suffix, new_extension
+        )
+        return self._compressed[~self._compressed.uri.isin(
+            self._decompressed.uri
+        )]
+
+    def _query_by_extension(self, extension):
+        # a TAP query to find all the files in SI with a particular extension
+        qs = f"""
+        SELECT A.uri
+        FROM inventory.Artifact AS A
+        WHERE A.uri like '{self._scheme}:{self._collection}/%{extension}'
+        """
+        return clc.query_tap_client(qs, self._luskan_client).to_pandas()
+
+    def get_cleanup_work(self):
+        return self._query_by_extension(
+            f'.fits{self._suffix}'
+        ).uri.values.tolist()[1:]
+
+    def get_work(self):
+        self._compressed = self._query_by_extension(f'.fits{self._suffix}')
+        self._logger.info(
+            f'Found {self._compressed.shape[0]} SI records with '
+            f'extension .fits{self._suffix}.'
+        )
+        self._decompressed = self._query_by_extension('.fits')
+        self._logger.info(
+            f'Found {self._decompressed.shape[0]} SI records with '
+            f'extension .fits.'
+        )
+        # make a list for ray, skip the first entry, which is the text header
+        # string 'uri'
+        return self._match_work().uri.values.tolist()[1:]
 
 
 class ListDirDataSource(DataSource):
@@ -684,6 +753,45 @@ class QueryTimeBoxDataSource(DataSource):
         for row in rows:
             result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
         return result
+
+
+class RenameURIDataSource(DataSource):
+    """
+    Implement a Data Source that queries for CAOM2 records that have a
+    URI that references a compressed file.
+    """
+
+    def __init__(self, config, collection, scheme, suffix='.gz'):
+        super().__init__(config)
+        self._suffix = suffix
+        subject = clc.define_subject(config)
+        # the resource_id values are hard-coded - if the referenced instances
+        # of the services aren't available, the query answers are just
+        # considered not available.
+        self._argus_client = CadcTapClient(
+            subject, resource_id='ivo://cadc.nrc.ca/argus'
+        )
+        self._collection = collection
+        self._scheme = scheme
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def _query(self):
+        # a TAP query to find all the observationID values in CAOM2 with a
+        # particular extension
+        qs = f"""
+        SELECT O.observationID
+        FROM caom2.Observation AS O
+        JOIN caom2.Plane AS P ON O.obsID = P.obsID
+        JOIN caom2.Artifact AS A ON A.planeID = P.planeID
+        WHERE O.collection = '{self._collection}'
+        AND A.uri LIKE f'{self._scheme}:{self._collection}/%.fits{self._suffix}
+        """
+        return clc.query_tap_client(qs, self._argus_client).to_pandas()
+
+    def get_work(self):
+        # make a list for ray, skip the first entry, which is the text header
+        # string 'observationID'
+        return self._query().observationID.values.tolist()[1:]
 
 
 class VaultDataSource(ListDirTimeBoxDataSource):
