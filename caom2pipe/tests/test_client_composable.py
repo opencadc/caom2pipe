@@ -129,8 +129,8 @@ def test_client_put_failure(mock_metrics):
             f.write('test content')
 
     mock_client = Mock()
-    mock_client.cadcput.side_effect = (
-        exceptions.UnexpectedException('error state')
+    mock_client.cadcput.side_effect = exceptions.UnexpectedException(
+        'error state'
     )
     test_destination = 'cadc:GEMINI/TEST.fits'
     with pytest.raises(mc.CadcException):
@@ -165,7 +165,9 @@ def test_client_get_failure(mock_client):
             test_metrics,
         )
     assert len(test_metrics.failures) == 1, 'wrong failures'
-    assert test_metrics.failures['si']['cadcget']['TEST_get.fits'] == 1, 'count'
+    assert (
+        test_metrics.failures['si']['cadcget']['TEST_get.fits'] == 1
+    ), 'count'
 
 
 @patch('vos.vos.Client')

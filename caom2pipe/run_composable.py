@@ -344,9 +344,7 @@ class StateRunner(TodoRunner):
         bookmark_name,
         max_ts=None,
     ):
-        super().__init__(
-            config, organizer, builder, data_source
-        )
+        super().__init__(config, organizer, builder, data_source)
         self._bookmark_name = bookmark_name
         max_ts_in_s = None
         if max_ts is not None:
@@ -601,15 +599,15 @@ def run_by_todo(
         metadata_reader,
         store_transfer,
     ) = _common_init(
-            config,
-            clients,
-            name_builder,
-            source,
-            modify_transfer,
-            metadata_reader,
-            False,
-            store_transfer,
-        )
+        config,
+        clients,
+        name_builder,
+        source,
+        modify_transfer,
+        metadata_reader,
+        False,
+        store_transfer,
+    )
     organizer = ec.OrganizeExecutes(
         config,
         meta_visitors,
@@ -617,8 +615,7 @@ def run_by_todo(
         chooser,
         store_transfer,
         modify_transfer,
-        cadc_client=clients.data_client,
-        caom_client=clients.metadata_client,
+        clients=clients,
         metadata_reader=metadata_reader,
     )
 
@@ -699,8 +696,7 @@ def run_by_state(
         chooser,
         store_transfer,
         modify_transfer,
-        clients.data_client,
-        clients.metadata_client,
+        clients,
         metadata_reader,
     )
 
@@ -761,8 +757,7 @@ def run_single(
         chooser,
         store_transfer,
         modify_transfer,
-        clients.data_client,
-        clients.metadata_client,
+        clients,
         metadata_reader,
     )
     organizer.complete_record_count = 1

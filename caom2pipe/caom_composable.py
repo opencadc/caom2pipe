@@ -412,9 +412,7 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
     logging.debug(f'End build_temporal_wcs_bounds.')
 
 
-def change_to_composite(
-    observation, algorithm_name='composite'
-):
+def change_to_composite(observation, algorithm_name='composite'):
     """For the case where a SimpleObservation needs to become a
     DerivedObservation."""
     temp = DerivedObservation(
@@ -872,10 +870,9 @@ def _update_plane_provenance(
                 value = header.get(keyword)
                 prov_obs_id, prov_prod_id = repair(value, obs_id)
                 if prov_obs_id is not None and prov_prod_id is not None:
-                    obs_member_uri_str = \
-                        mc.CaomName.make_obs_uri_from_obs_id(
-                            collection, prov_obs_id
-                        )
+                    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(
+                        collection, prov_obs_id
+                    )
                     obs_member_uri = ObservationURI(obs_member_uri_str)
                     plane_uri = PlaneURI.get_plane_uri(
                         obs_member_uri, prov_prod_id
@@ -922,7 +919,9 @@ def update_plane_provenance_from_values(
     :return:
     """
     logging.debug(f'Begin update_plane_provenance_from_values')
-    plane_inputs = TypedSet(PlaneURI,)
+    plane_inputs = TypedSet(
+        PlaneURI,
+    )
     for value in values:
         prov_obs_id, prov_prod_id = repair(value, obs_id)
         if prov_obs_id is not None and prov_prod_id is not None:

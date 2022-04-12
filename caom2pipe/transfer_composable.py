@@ -208,6 +208,7 @@ class FitsTransfer(Transfer):
 
     def check(self, dest_fqn, original_fqn):
         from astropy.io import fits
+
         try:
             hdulist = fits.open(dest_fqn, memmap=True, lazy_load_hdus=False)
             hdulist.verify('warn')

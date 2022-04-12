@@ -72,7 +72,7 @@ import time
 
 from ray.util import ActorPool
 
-from caom2pipe.client_composable import declare_client
+from caom2pipe.client_composable import ClientCollection
 from caom2pipe.data_source_composable import DecompressionDataSource
 from caom2pipe.execute_composable import OrganizeExecutes
 from caom2pipe.manage_composable import Config, StorageName
@@ -86,17 +86,17 @@ class SessionActor:
     def __init__(self):
         StorageName.scheme = scheme
         StorageName.collection = config.collection
-        self._client = declare_client(config)
+        self._client = ClientCollection(config)
         self._builder = GuessingBuilder(StorageName)
         self._store_transfer = CadcTransfer()
         self._metadata_reader = StorageClientReader(self._client)
         self._organizer = OrganizeExecutes(
-            config, 
-            [], 
+            config,
             [],
-            metadata_reader=self._metadata_reader,
+            [],
             store_transfer=self._store_transfer,
-            cadc_client=self._client,
+            clients=self._client,
+            metadata_reader=self._metadata_reader,
         )
 
     def do_one(self, entry):
