@@ -1136,7 +1136,7 @@ class Fits2caom2Visitor:
         self._observation = observation
         self._storage_name = kwargs.get('storage_name')
         self._metadata_reader = kwargs.get('metadata_reader')
-        self._caom_repo_client = kwargs.get('caom_repo_client')
+        self._clients = kwargs.get('clients')
         self._dump_config = False
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -1193,7 +1193,7 @@ class Fits2caom2Visitor:
                 self._observation = telescope_data.update(
                     self._observation,
                     file_info,
-                    self._caom_repo_client,
+                    self._clients.metadata_client,
                 )
             self._logger.debug(f'End visit')
         except Caom2Exception as e:
