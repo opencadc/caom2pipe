@@ -134,26 +134,23 @@ class CaomExecute:
         self,
         config,
         storage_name,
-        cadc_client,
-        caom_repo_client,
         meta_visitors,
         observable,
         metadata_reader,
+        clients,
     ):
         """
         :param config: Configurable parts of execution, as stored in
             manage_composable.Config.
         :param storage_name: An instance of StorageName.
-        :param cadc_client: Instance of CadcDataClient or Client. Used for
-            CADC storage service access.
-        :param caom_repo_client: Instance of CAOM2Repo client. Used for
-            caom2 repository service access.
         :param meta_visitors: List of classes with a
             'visit(observation, **kwargs)' method signature. Requires access
             to metadata only.
         :param observable: things that last longer than a pipeline execution
         :param metadata_reader: instance of MetadataReader, for retrieving
             metadata, for implementations that visit on metadata only.
+        :param clients: instance of ClientCollection, for passing around
+            long-lived https sessions, mostly
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(config.logging_level)
@@ -178,8 +175,10 @@ class CaomExecute:
             self.model_fqn = os.path.join(
                 self.working_dir, storage_name.model_file_name
             )
-        self.cadc_client = cadc_client
-        self.caom_repo_client = caom_repo_client
+        if clients is not None:
+            self.cadc_client = clients.data_client
+            self.caom_repo_client = clients.metadata_client
+        self._clients = clients
         self.stream = None
         if hasattr(config, 'stream'):
             self.stream = (
@@ -276,8 +275,7 @@ class CaomExecute:
         if self.meta_visitors is not None and len(self.meta_visitors) > 0:
             kwargs = {
                 'working_directory': self.working_dir,
-                'cadc_client': self.cadc_client,
-                'caom_repo_client': self.caom_repo_client,
+                'clients': self._clients,
                 'stream': self.stream,
                 'storage_name': self._storage_name,
                 'metadata_reader': self._metadata_reader,
@@ -323,20 +321,18 @@ class MetaVisitDeleteCreate(CaomExecute):
         self,
         config,
         storage_name,
-        cadc_client,
-        caom_repo_client,
         meta_visitors,
         observable,
         metadata_reader,
+        clients,
     ):
         super().__init__(
             config,
             storage_name,
-            cadc_client,
-            caom_repo_client,
             meta_visitors,
             observable,
             metadata_reader,
+            clients=clients,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -375,20 +371,18 @@ class MetaVisit(CaomExecute):
         self,
         config,
         storage_name,
-        cadc_client,
-        caom_repo_client,
         meta_visitors,
         observable,
         metadata_reader,
+        clients,
     ):
         super().__init__(
             config,
             storage_name,
-            cadc_client=cadc_client,
-            caom_repo_client=caom_repo_client,
             meta_visitors=meta_visitors,
             observable=observable,
             metadata_reader=metadata_reader,
+            clients=clients,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -430,20 +424,18 @@ class DataVisit(CaomExecute):
         self,
         config,
         storage_name,
-        cadc_client,
-        caom_repo_client,
         data_visitors,
         observable,
         transferrer,
+        clients,
     ):
         super().__init__(
             config,
             storage_name=storage_name,
-            cadc_client=cadc_client,
-            caom_repo_client=caom_repo_client,
             meta_visitors=None,
             observable=observable,
             metadata_reader=None,
+            clients=clients,
         )
         self._data_visitors = data_visitors
         self._log_file_directory = config.log_file_directory
@@ -479,8 +471,7 @@ class DataVisit(CaomExecute):
             'working_directory': self.working_dir,
             'storage_name': self._storage_name,
             'log_file_directory': self._log_file_directory,
-            'cadc_client': self.cadc_client,
-            'caom_repo_client': self.caom_repo_client,
+            'clients': self._clients,
             'stream': self.stream,
             'observable': self.observable,
         }
@@ -504,16 +495,14 @@ class LocalDataVisit(DataVisit):
         self,
         config,
         storage_name,
-        cadc_client,
-        caom_repo_client,
         data_visitors,
         observable,
+        clients,
     ):
         super().__init__(
             config,
             storage_name=storage_name,
-            cadc_client=cadc_client,
-            caom_repo_client=caom_repo_client,
+            clients=clients,
             data_visitors=data_visitors,
             observable=observable,
             transferrer=tc.Transfer(),
@@ -552,8 +541,7 @@ class DataScrape(DataVisit):
         super().__init__(
             config,
             storage_name,
-            cadc_client=None,
-            caom_repo_client=None,
+            clients=None,
             data_visitors=data_visitors,
             observable=observable,
             transferrer=tc.Transfer(),
@@ -583,18 +571,17 @@ class Store(CaomExecute):
         self,
         config,
         storage_name,
-        cadc_client,
         observable,
         transferrer,
+        clients,
     ):
         super().__init__(
             config,
             storage_name,
-            cadc_client=cadc_client,
-            caom_repo_client=None,
             meta_visitors=None,
             observable=observable,
             metadata_reader=None,
+            clients=clients,
         )
         self._transferrer = transferrer
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -637,15 +624,15 @@ class LocalStore(Store):
         self,
         config,
         storage_name,
-        cadc_client,
         observable,
+        clients,
     ):
         super().__init__(
             config,
             storage_name,
-            cadc_client,
             observable,
             transferrer=None,
+            clients=clients,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -678,11 +665,10 @@ class Scrape(CaomExecute):
         super().__init__(
             config,
             storage_name,
-            cadc_client=None,
-            caom_repo_client=None,
             meta_visitors=meta_visitors,
             observable=observable,
             metadata_reader=metadata_reader,
+            clients=None,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -729,8 +715,8 @@ class OrganizeExecutes:
         chooser=None,
         store_transfer=None,
         modify_transfer=None,
-        clients=None,
         metadata_reader=None,
+        clients=None,
     ):
         """
         Why there is support for two transfer instances:
@@ -779,6 +765,7 @@ class OrganizeExecutes:
             clients.metrics = self.observable.metrics
             self._cadc_client = clients.data_client
             self._caom_client = clients.metadata_client
+        self._clients = clients
         self._metadata_reader = metadata_reader
         self._log_h = None
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -1022,8 +1009,8 @@ class OrganizeExecutes:
                         LocalStore(
                             self.config,
                             storage_name,
-                            self._cadc_client,
                             self.observable,
+                            self._clients,
                         )
                     )
                 else:
@@ -1034,9 +1021,9 @@ class OrganizeExecutes:
                         Store(
                             self.config,
                             storage_name,
-                            self._cadc_client,
                             self.observable,
                             self._store_transfer,
+                            self._clients,
                         )
                     )
             elif task_type == mc.TaskType.INGEST:
@@ -1049,11 +1036,10 @@ class OrganizeExecutes:
                         MetaVisitDeleteCreate(
                             self.config,
                             storage_name,
-                            self._cadc_client,
-                            self._caom_client,
                             self._meta_visitors,
                             self.observable,
                             self._metadata_reader,
+                            self._clients,
                         )
                     )
                 else:
@@ -1064,11 +1050,10 @@ class OrganizeExecutes:
                         MetaVisit(
                             self.config,
                             storage_name,
-                            self._cadc_client,
-                            self._caom_client,
                             self._meta_visitors,
                             self.observable,
                             self._metadata_reader,
+                            self._clients,
                         )
                     )
             elif task_type == mc.TaskType.MODIFY:
@@ -1100,10 +1085,9 @@ class OrganizeExecutes:
                                 LocalDataVisit(
                                     self.config,
                                     storage_name,
-                                    self._cadc_client,
-                                    self._caom_client,
                                     self._data_visitors,
                                     self.observable,
+                                    self._clients,
                                 )
                             )
                     else:
@@ -1114,11 +1098,10 @@ class OrganizeExecutes:
                             DataVisit(
                                 self.config,
                                 storage_name,
-                                self._cadc_client,
-                                self._caom_client,
                                 self._data_visitors,
                                 self.observable,
                                 self._modify_transfer,
+                                self._clients,
                             )
                         )
                 else:
@@ -1134,11 +1117,10 @@ class OrganizeExecutes:
                     MetaVisit(
                         self.config,
                         storage_name,
-                        self._cadc_client,
-                        self._caom_client,
                         self._meta_visitors,
                         self.observable,
                         self._metadata_reader,
+                        self._clients,
                     )
                 )
             elif task_type == mc.TaskType.DEFAULT:

@@ -615,8 +615,8 @@ def run_by_todo(
         chooser,
         store_transfer,
         modify_transfer,
-        clients=clients,
         metadata_reader=metadata_reader,
+        clients=clients,
     )
 
     runner = TodoRunner(config, organizer, name_builder, source)
@@ -696,8 +696,8 @@ def run_by_state(
         chooser,
         store_transfer,
         modify_transfer,
-        clients,
         metadata_reader,
+        clients,
     )
 
     runner = StateRunner(
@@ -757,8 +757,8 @@ def run_single(
         chooser,
         store_transfer,
         modify_transfer,
-        clients,
         metadata_reader,
+        clients,
     )
     organizer.complete_record_count = 1
     organizer.choose(storage_name)
