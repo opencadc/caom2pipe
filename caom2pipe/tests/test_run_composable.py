@@ -118,7 +118,6 @@ def test_run_todo_list_dir_data_source(
     ]
     test_config.data_source_extensions = ['.fits']
     test_config.features.supports_latest_client = False
-    test_config.logging_level = 'DEBUG'
     test_chooser = ec.OrganizeChooser()
     test_result = rc.run_by_todo(config=test_config, chooser=test_chooser)
     assert test_result is not None, 'expect a result'
