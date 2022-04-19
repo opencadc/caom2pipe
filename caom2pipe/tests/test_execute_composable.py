@@ -520,15 +520,12 @@ def test_do_one(test_config):
     test_result = test_organizer.do_one(tc.TestStorageName())
     assert test_result is not None
     assert test_result == -1
-    assert test_reader.reset.called, 'reset should be called'
-    assert test_reader.reset.call_count == 1, 'wrong call count first time'
 
     # client
     test_config.features.use_clients = True
     test_result = test_organizer.do_one(tc.TestStorageName())
     assert test_result is not None
     assert test_result == -1
-    assert test_reader.reset.call_count == 2, 'wrong call count second time'
 
 
 def test_storage_name():

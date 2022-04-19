@@ -1146,7 +1146,7 @@ class Fits2caom2Visitor:
     def visit(self):
         self._logger.debug('Begin visit')
         try:
-            for uri, file_info in self._metadata_reader.file_info.items():
+            for uri in self._storage_name.destination_uris:
                 self._logger.debug(f'Build observation for {uri}')
                 headers = self._metadata_reader.headers.get(uri)
                 telescope_data = self._get_mapping(headers)
@@ -1190,6 +1190,7 @@ class Fits2caom2Visitor:
                     product_id=self._storage_name.product_id,
                 )
 
+                file_info = self._metadata_reader.file_info.get(uri)
                 self._observation = telescope_data.update(
                     self._observation,
                     file_info,

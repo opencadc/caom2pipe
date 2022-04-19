@@ -1172,7 +1172,6 @@ class OrganizeExecutes:
             self._logger.debug(traceback.format_exc())
             result = -1
         finally:
-            self._metadata_reader.reset()
             self._clean_up_workspace(storage_name.obs_id)
             self._unset_file_logging()
         return result

@@ -662,9 +662,7 @@ def test_query_tap(caps_mock, base_mock, test_config):
 
 
 def test_visit():
-
     class TestVisitor(mc.PreviewVisitor):
-
         def __init__(self, **kwargs):
             super().__init__(archive='VLASS', **kwargs)
 
