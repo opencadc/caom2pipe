@@ -127,20 +127,25 @@ class MetadataReader:
 
     def set(self, storage_name):
         """Retrieves the Header and FileInfo information to memory."""
+        self._logger.debug(f'Begin set for {storage_name.file_name}')
         self.set_headers(storage_name)
         self.set_file_info(storage_name)
+        self._logger.debug('End set')
 
     def set_file_info(self, storage_name):
         """Retrieves FileInfo information to memory."""
+        self._logger.debug(f'Begin set_file_info for {storage_name.file_name}')
         for index, entry in enumerate(storage_name.destination_uris):
             if entry not in self._file_info.keys():
                 self._logger.debug(f'Retrieve FileInfo for {entry}')
                 self._file_info[entry] = self._retrieve_file_info(
                     storage_name.source_names[index]
                 )
+        self._logger.debug('End set_file_info')
 
     def set_headers(self, storage_name):
         """Retrieves the Header information to memory."""
+        self._logger.debug(f'Begin set_headers for {storage_name.file_name}')
         for index, entry in enumerate(storage_name.destination_uris):
             if entry not in self._headers.keys():
                 if '.fits' in entry:
@@ -150,10 +155,12 @@ class MetadataReader:
                     )
                 else:
                     self._headers[entry] = []
+        self._logger.debug('End set_headers')
 
     def reset(self):
         self._headers = {}
         self._file_info = {}
+        self._logger.debug('End reset')
 
 
 class FileMetadataReader(MetadataReader):
@@ -193,12 +200,14 @@ class StorageClientReader(MetadataReader):
 
     def set_headers(self, storage_name):
         """Retrieves the Header information to memory."""
+        self._logger.debug(f'Begin set_headers for {storage_name.file_name}')
         for entry in storage_name.destination_uris:
             if entry not in self._headers.keys():
                 if '.fits' in entry:
                     self._headers[entry] = self._client.get_head(entry)
                 else:
                     self._headers[entry] = []
+        self._logger.debug('End set_headers')
 
 
 class VaultReader(MetadataReader):

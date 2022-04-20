@@ -259,34 +259,6 @@ def test_define_subject():
         os.getcwd = getcwd_orig
 
 
-@patch('caom2utils.data_util.StorageClientWrapper')
-@patch('caom2pipe.manage_composable.http_get')
-def test_look_pull_and_put(http_mock, mock_client):
-    test_storage_name = 'cadc:GEMINI/TEST.fits'
-    mock_client.info.return_value = FileInfo(
-        id=test_storage_name,
-        size=1234,
-        md5sum='9473fdd0d880a43c21b7778d34872157',
-    )
-    f_name = 'TEST.fits'
-    url = f'https://localhost/{f_name}'
-    test_config = mc.Config()
-    test_config.observe_execution = True
-    mock_client.info.return_value = None
-    test_fqn = os.path.join(tc.TEST_FILES_DIR, f_name)
-    clc.look_pull_and_put(
-        test_storage_name,
-        test_fqn,
-        url,
-        mock_client,
-        'md5:01234',
-    )
-    mock_client.put.assert_called_with(
-        tc.TEST_FILES_DIR, test_storage_name
-    ), 'mock not called'
-    http_mock.assert_called_with(url, test_fqn), 'http mock not called'
-
-
 @patch('caom2repo.core.CAOM2RepoClient')
 def test_repo_create(mock_client):
     test_obs = mc.read_obs_from_file(tc.TEST_OBS_FILE)

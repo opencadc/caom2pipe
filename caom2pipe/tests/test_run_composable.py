@@ -120,12 +120,16 @@ def test_run_todo_list_dir_data_source(
     test_config.features.supports_latest_client = False
     test_config.logging_level = 'DEBUG'
     test_chooser = ec.OrganizeChooser()
-    test_result = rc.run_by_todo(config=test_config, chooser=test_chooser)
+    reader_mock = Mock()
+    test_result = rc.run_by_todo(
+        config=test_config, chooser=test_chooser, metadata_reader=reader_mock
+    )
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert visit_meta_mock.called, 'expect visit call'
     visit_meta_mock.assert_called_with()
     assert write_obs_mock.called, 'expect write call'
+    assert reader_mock.reset.called, 'expect reset call'
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
@@ -334,16 +338,20 @@ def test_run_state(
     test_chooser = ec.OrganizeChooser()
     # use_local_files set so run_by_state chooses QueryTimeBoxDataSourceTS
     test_config.use_local_files = False
+    test_reader = Mock()
     test_result = rc.run_by_state(
         config=test_config,
         chooser=test_chooser,
         bookmark_name=TEST_BOOKMARK,
         end_time=test_end_time,
+        metadata_reader=test_reader,
     )
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert visit_meta_mock.called, 'expect visit meta call'
     visit_meta_mock.assert_called_once_with()
+    assert test_reader.reset.called, 'expect reset call'
+    assert test_reader.reset.call_count == 1, 'wrong call count'
 
     test_state = mc.State(STATE_FILE)
     test_bookmark = test_state.get_bookmark(TEST_BOOKMARK)
@@ -365,10 +373,13 @@ def test_run_state(
         chooser=test_chooser,
         bookmark_name=TEST_BOOKMARK,
         end_time=test_end_time,
+        metadata_reader=test_reader,
     )
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert not visit_meta_mock.called, 'expect no visit_meta call'
+    assert test_reader.reset.called, 'expect reset call'
+    assert test_reader.reset.call_count == 1, 'wrong call count'
 
 
 @patch('caom2pipe.data_source_composable.CadcTapClient')

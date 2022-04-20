@@ -1106,10 +1106,24 @@ class TelescopeMapping:
             bp.set('Artifact.metaProducer', meta_producer)
             bp.set('Chunk.metaProducer', meta_producer)
 
-    def _update_artifact(self, artifact, caom_repo_client=None):
+    def _update_artifact(self, artifact, clients=None):
+        """
+        :param artifact: Artifact instance
+        :param clients: ClientCollection instance
+        :return:
+        """
         return
 
-    def update(self, observation, file_info, caom_repo_client=None):
+    def update(self, observation, file_info, clients=None):
+        """
+        Update the Artifact file-based metadata. Override if it's necessary
+        to carry out more/different updates.
+
+        :param observation: Observation instance
+        :param file_info: FileInfo instance
+        :param clients: ClientCollection instance
+        :return:
+        """
         self._logger.debug(f'Begin update for {observation.observation_id}')
         for plane in observation.planes.values():
             for artifact in plane.artifacts.values():
@@ -1120,7 +1134,7 @@ class TelescopeMapping:
                     )
                     continue
                 update_artifact_meta(artifact, file_info)
-                self._update_artifact(artifact, caom_repo_client)
+                self._update_artifact(artifact, clients)
 
         self._logger.debug('End update')
         return observation
@@ -1136,7 +1150,7 @@ class Fits2caom2Visitor:
         self._observation = observation
         self._storage_name = kwargs.get('storage_name')
         self._metadata_reader = kwargs.get('metadata_reader')
-        self._caom_repo_client = kwargs.get('caom_repo_client')
+        self._clients = kwargs.get('clients')
         self._dump_config = False
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -1163,7 +1177,7 @@ class Fits2caom2Visitor:
     def visit(self):
         self._logger.debug('Begin visit')
         try:
-            for uri, file_info in self._metadata_reader.file_info.items():
+            for uri in self._storage_name.destination_uris:
                 self._logger.debug(f'Build observation for {uri}')
                 headers = self._metadata_reader.headers.get(uri)
                 telescope_data = self._get_mapping(headers)
@@ -1195,10 +1209,11 @@ class Fits2caom2Visitor:
                     product_id=self._storage_name.product_id,
                 )
 
+                file_info = self._metadata_reader.file_info.get(uri)
                 self._observation = telescope_data.update(
                     self._observation,
                     file_info,
-                    self._caom_repo_client,
+                    self._clients,
                 )
         except Caom2Exception as e:
             self._logger.debug(traceback.format_exc())
