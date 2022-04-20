@@ -542,9 +542,7 @@ def test_create_dir():
 
 class TestValidator(mc.Validator):
     def __init__(self, source_name, preview_suffix):
-        super().__init__(
-            source_name, preview_suffix=preview_suffix
-        )
+        super().__init__(source_name, preview_suffix=preview_suffix)
 
     def read_from_source(self):
         return {}
@@ -664,9 +662,7 @@ def test_query_tap(caps_mock, base_mock, test_config):
 
 
 def test_visit():
-
     class TestVisitor(mc.PreviewVisitor):
-
         def __init__(self, **kwargs):
             super().__init__(archive='VLASS', **kwargs)
 

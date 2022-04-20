@@ -80,7 +80,7 @@ from caom2 import CoordFunction1D, DerivedObservation, Provenance
 from caom2 import CoordBounds1D, TypedList, ProductType
 from caom2.diff import get_differences
 from caom2utils import ObsBlueprint, GenericParser, FitsParser
-from caom2utils import update_artifact_meta  # , Caom2Exception
+from caom2utils import update_artifact_meta, Caom2Exception
 
 from caom2pipe import astro_composable as ac
 from caom2pipe import client_composable as clc
@@ -412,9 +412,7 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
     logging.debug(f'End build_temporal_wcs_bounds.')
 
 
-def change_to_composite(
-    observation, algorithm_name='composite'
-):
+def change_to_composite(observation, algorithm_name='composite'):
     """For the case where a SimpleObservation needs to become a
     DerivedObservation."""
     temp = DerivedObservation(
@@ -872,10 +870,9 @@ def _update_plane_provenance(
                 value = header.get(keyword)
                 prov_obs_id, prov_prod_id = repair(value, obs_id)
                 if prov_obs_id is not None and prov_prod_id is not None:
-                    obs_member_uri_str = \
-                        mc.CaomName.make_obs_uri_from_obs_id(
-                            collection, prov_obs_id
-                        )
+                    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(
+                        collection, prov_obs_id
+                    )
                     obs_member_uri = ObservationURI(obs_member_uri_str)
                     plane_uri = PlaneURI.get_plane_uri(
                         obs_member_uri, prov_prod_id
@@ -922,7 +919,9 @@ def update_plane_provenance_from_values(
     :return:
     """
     logging.debug(f'Begin update_plane_provenance_from_values')
-    plane_inputs = TypedSet(PlaneURI,)
+    plane_inputs = TypedSet(
+        PlaneURI,
+    )
     for value in values:
         prov_obs_id, prov_prod_id = repair(value, obs_id)
         if prov_obs_id is not None and prov_prod_id is not None:
@@ -1137,7 +1136,7 @@ class Fits2caom2Visitor:
         self._observation = observation
         self._storage_name = kwargs.get('storage_name')
         self._metadata_reader = kwargs.get('metadata_reader')
-        self._caom_repo_client = kwargs.get('caom_repo_client')
+        self._clients = kwargs.get('clients')
         self._dump_config = False
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -1146,54 +1145,64 @@ class Fits2caom2Visitor:
 
     def visit(self):
         self._logger.debug('Begin visit')
-        for uri, file_info in self._metadata_reader.file_info.items():
-            self._logger.debug(f'Build observation for {uri}')
-            headers = self._metadata_reader.headers.get(uri)
-            telescope_data = self._get_mapping(headers)
-            blueprint = ObsBlueprint(instantiated_class=telescope_data)
-            telescope_data.accumulate_blueprint(blueprint)
+        try:
+            for uri in self._storage_name.destination_uris:
+                self._logger.debug(f'Build observation for {uri}')
+                headers = self._metadata_reader.headers.get(uri)
+                telescope_data = self._get_mapping(headers)
+                blueprint = ObsBlueprint(instantiated_class=telescope_data)
+                telescope_data.accumulate_blueprint(blueprint)
 
-            if headers is None or len(headers) == 0:
-                self._logger.debug(
-                    f'No headers, using a GenericParser for '
-                    f'{self._storage_name.file_uri}'
-                )
-                parser = GenericParser(blueprint, uri)
-            else:
-                self._logger.debug(
-                    f'Using a FitsParser for {self._storage_name.file_uri}'
-                )
-                parser = FitsParser(headers, blueprint, uri)
-
-            if self._dump_config:
-                print(f'Blueprint for {uri}: {blueprint}')
-
-            if self._observation is None:
-                if blueprint._get('DerivedObservation.members') is None:
-                    self._logger.debug('Build a SimpleObservation')
-                    self._observation = SimpleObservation(
-                        collection=self._storage_name.collection,
-                        observation_id=self._storage_name.obs_id,
-                        algorithm=Algorithm('exposure'),
+                if headers is None or len(headers) == 0:
+                    self._logger.debug(
+                        f'No headers, using a GenericParser for '
+                        f'{self._storage_name.file_uri}'
                     )
+                    parser = GenericParser(blueprint, uri)
                 else:
-                    self._logger.debug('Build a DerivedObservation')
-                    self._observation = DerivedObservation(
-                        collection=self._storage_name.collection,
-                        observation_id=self._storage_name.obs_id,
-                        algorithm=Algorithm('composite'),
+                    self._logger.debug(
+                        f'Using a FitsParser for {self._storage_name.file_uri}'
                     )
+                    parser = FitsParser(headers, blueprint, uri)
 
-            parser.augment_observation(
-                observation=self._observation,
-                artifact_uri=uri,
-                product_id=self._storage_name.product_id,
-            )
+                if self._dump_config:
+                    print(f'Blueprint for {uri}: {blueprint}')
 
-            self._observation = telescope_data.update(
-                self._observation,
-                file_info,
-                self._caom_repo_client,
+                if self._observation is None:
+                    if blueprint._get('DerivedObservation.members') is None:
+                        self._logger.debug('Build a SimpleObservation')
+                        self._observation = SimpleObservation(
+                            collection=self._storage_name.collection,
+                            observation_id=self._storage_name.obs_id,
+                            algorithm=Algorithm('exposure'),
+                        )
+                    else:
+                        self._logger.debug('Build a DerivedObservation')
+                        self._observation = DerivedObservation(
+                            collection=self._storage_name.collection,
+                            observation_id=self._storage_name.obs_id,
+                            algorithm=Algorithm('composite'),
+                        )
+
+                parser.augment_observation(
+                    observation=self._observation,
+                    artifact_uri=uri,
+                    product_id=self._storage_name.product_id,
+                )
+
+                file_info = self._metadata_reader.file_info.get(uri)
+                self._observation = telescope_data.update(
+                    self._observation,
+                    file_info,
+                    self._clients.metadata_client,
+                )
+            self._logger.debug(f'End visit')
+        except Caom2Exception as e:
+            self._logger.debug(traceback.format_exc())
+            self._logger.warning(
+                f'CAOM2 record creation failed for {self._storage_name.obs_id}'
+                f':{self._storage_name.file_name} with {e}'
             )
-        self._logger.debug(f'End visit')
+            self._observation = None
+
         return self._observation

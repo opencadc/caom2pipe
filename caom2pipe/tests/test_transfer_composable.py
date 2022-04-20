@@ -204,6 +204,7 @@ def test_vo_fits_cleanup_transfer():
         # success
         def _copy_success(ignore1, ignore2, send_md5=True):
             shutil.copy('/test_files/correct.fits.gz', '/tmp/abc.fits.gz')
+
         mock_client.copy.side_effect = _copy_success
         test_subject.get(test_source, test_destination_fqn)
         assert mock_client.copy.called, 'expect copy to be called'
@@ -215,6 +216,7 @@ def test_vo_fits_cleanup_transfer():
         # failure
         def _copy_failure(ignore1, ignore2, send_md5=True):
             shutil.copy('/test_files/broken.fits', '/tmp/abc.fits')
+
         mock_client.copy.side_effect = _copy_failure
         test_source = 'vos:goliaths/test/abc.fits'
         test_destination_fqn = '/tmp/abc.fits'

@@ -134,26 +134,23 @@ class CaomExecute:
         self,
         config,
         storage_name,
-        cadc_client,
-        caom_repo_client,
         meta_visitors,
         observable,
         metadata_reader,
+        clients,
     ):
         """
         :param config: Configurable parts of execution, as stored in
             manage_composable.Config.
         :param storage_name: An instance of StorageName.
-        :param cadc_client: Instance of CadcDataClient or Client. Used for
-            CADC storage service access.
-        :param caom_repo_client: Instance of CAOM2Repo client. Used for
-            caom2 repository service access.
         :param meta_visitors: List of classes with a
             'visit(observation, **kwargs)' method signature. Requires access
             to metadata only.
         :param observable: things that last longer than a pipeline execution
         :param metadata_reader: instance of MetadataReader, for retrieving
             metadata, for implementations that visit on metadata only.
+        :param clients: instance of ClientCollection, for passing around
+            long-lived https sessions, mostly
         """
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(config.logging_level)
@@ -178,13 +175,16 @@ class CaomExecute:
             self.model_fqn = os.path.join(
                 self.working_dir, storage_name.model_file_name
             )
-        self.cadc_client = cadc_client
-        self.caom_repo_client = caom_repo_client
+        if clients is not None:
+            self.cadc_client = clients.data_client
+            self.caom_repo_client = clients.metadata_client
+        self._clients = clients
         self.stream = None
         if hasattr(config, 'stream'):
             self.stream = (
-                None if config.features.supports_latest_client else
-                config.stream
+                None
+                if config.features.supports_latest_client
+                else config.stream
             )
         self.meta_visitors = meta_visitors
         self.observable = observable
@@ -197,7 +197,8 @@ class CaomExecute:
         # track whether the caom2repo call will be a create or an update
         self._caom2_update_needed = False
         self._decompressor = decompressor_factory(
-            config.collection, self.working_dir, self.log_level_as)
+            config.collection, self.working_dir, self.log_level_as
+        )
 
     def __str__(self):
         return (
@@ -274,8 +275,7 @@ class CaomExecute:
         if self.meta_visitors is not None and len(self.meta_visitors) > 0:
             kwargs = {
                 'working_directory': self.working_dir,
-                'cadc_client': self.cadc_client,
-                'caom_repo_client': self.caom_repo_client,
+                'clients': self._clients,
                 'stream': self.stream,
                 'storage_name': self._storage_name,
                 'metadata_reader': self._metadata_reader,
@@ -321,20 +321,18 @@ class MetaVisitDeleteCreate(CaomExecute):
         self,
         config,
         storage_name,
-        cadc_client,
-        caom_repo_client,
         meta_visitors,
         observable,
         metadata_reader,
+        clients,
     ):
         super().__init__(
             config,
             storage_name,
-            cadc_client,
-            caom_repo_client,
             meta_visitors,
             observable,
             metadata_reader,
+            clients=clients,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -373,20 +371,18 @@ class MetaVisit(CaomExecute):
         self,
         config,
         storage_name,
-        cadc_client,
-        caom_repo_client,
         meta_visitors,
         observable,
         metadata_reader,
+        clients,
     ):
         super().__init__(
             config,
             storage_name,
-            cadc_client=cadc_client,
-            caom_repo_client=caom_repo_client,
             meta_visitors=meta_visitors,
             observable=observable,
             metadata_reader=metadata_reader,
+            clients=clients,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -428,20 +424,18 @@ class DataVisit(CaomExecute):
         self,
         config,
         storage_name,
-        cadc_client,
-        caom_repo_client,
         data_visitors,
         observable,
         transferrer,
+        clients,
     ):
         super().__init__(
             config,
             storage_name=storage_name,
-            cadc_client=cadc_client,
-            caom_repo_client=caom_repo_client,
             meta_visitors=None,
             observable=observable,
             metadata_reader=None,
+            clients=clients,
         )
         self._data_visitors = data_visitors
         self._log_file_directory = config.log_file_directory
@@ -477,8 +471,7 @@ class DataVisit(CaomExecute):
             'working_directory': self.working_dir,
             'storage_name': self._storage_name,
             'log_file_directory': self._log_file_directory,
-            'cadc_client': self.cadc_client,
-            'caom_repo_client': self.caom_repo_client,
+            'clients': self._clients,
             'stream': self.stream,
             'observable': self.observable,
         }
@@ -502,16 +495,14 @@ class LocalDataVisit(DataVisit):
         self,
         config,
         storage_name,
-        cadc_client,
-        caom_repo_client,
         data_visitors,
         observable,
+        clients,
     ):
         super().__init__(
             config,
             storage_name=storage_name,
-            cadc_client=cadc_client,
-            caom_repo_client=caom_repo_client,
+            clients=clients,
             data_visitors=data_visitors,
             observable=observable,
             transferrer=tc.Transfer(),
@@ -550,8 +541,7 @@ class DataScrape(DataVisit):
         super().__init__(
             config,
             storage_name,
-            cadc_client=None,
-            caom_repo_client=None,
+            clients=None,
             data_visitors=data_visitors,
             observable=observable,
             transferrer=tc.Transfer(),
@@ -581,18 +571,17 @@ class Store(CaomExecute):
         self,
         config,
         storage_name,
-        cadc_client,
         observable,
         transferrer,
+        clients,
     ):
         super().__init__(
             config,
             storage_name,
-            cadc_client=cadc_client,
-            caom_repo_client=None,
             meta_visitors=None,
             observable=observable,
             metadata_reader=None,
+            clients=clients,
         )
         self._transferrer = transferrer
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -635,15 +624,15 @@ class LocalStore(Store):
         self,
         config,
         storage_name,
-        cadc_client,
         observable,
+        clients,
     ):
         super().__init__(
             config,
             storage_name,
-            cadc_client,
             observable,
             transferrer=None,
+            clients=clients,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -655,9 +644,7 @@ class LocalStore(Store):
         )
         for index, entry in enumerate(self._storage_name.source_names):
             self.logger.debug(f'store the input file {entry}')
-            self._cadc_put(
-                entry, self._storage_name.destination_uris[index]
-            )
+            self._cadc_put(entry, self._storage_name.destination_uris[index])
 
         self.logger.debug('End execute')
 
@@ -678,11 +665,10 @@ class Scrape(CaomExecute):
         super().__init__(
             config,
             storage_name,
-            cadc_client=None,
-            caom_repo_client=None,
             meta_visitors=meta_visitors,
             observable=observable,
             metadata_reader=metadata_reader,
+            clients=None,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -729,9 +715,8 @@ class OrganizeExecutes:
         chooser=None,
         store_transfer=None,
         modify_transfer=None,
-        cadc_client=None,
-        caom_client=None,
         metadata_reader=None,
+        clients=None,
     ):
         """
         Why there is support for two transfer instances:
@@ -747,9 +732,7 @@ class OrganizeExecutes:
         :param chooser:
         :param store_transfer Transfer implementation for retrieving files
         :param modify_transfer Transfer implementation for retrieving files
-        :param cadc_client CadcDataClient/vos.Client, depending on the
-            Features.supports_latest_client flag value
-        :param caom_client CAOM2RepoClient
+        :param clients ClientCollection instance
         :param metadata_reader client instance for reading headers,
             passed on to to_caom2_client.
         """
@@ -778,10 +761,11 @@ class OrganizeExecutes:
             self._modify_transfer.observable = self.observable
         if store_transfer is not None:
             self._store_transfer.observable = self.observable
-        self._cadc_client = cadc_client
-        if self._cadc_client is not None:
-            self._cadc_client._metrics = self.observable.metrics
-        self._caom_client = caom_client
+        if clients is not None:
+            clients.metrics = self.observable.metrics
+            self._cadc_client = clients.data_client
+            self._caom_client = clients.metadata_client
+        self._clients = clients
         self._metadata_reader = metadata_reader
         self._log_h = None
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -1025,8 +1009,8 @@ class OrganizeExecutes:
                         LocalStore(
                             self.config,
                             storage_name,
-                            self._cadc_client,
                             self.observable,
+                            self._clients,
                         )
                     )
                 else:
@@ -1037,9 +1021,9 @@ class OrganizeExecutes:
                         Store(
                             self.config,
                             storage_name,
-                            self._cadc_client,
                             self.observable,
                             self._store_transfer,
+                            self._clients,
                         )
                     )
             elif task_type == mc.TaskType.INGEST:
@@ -1052,11 +1036,10 @@ class OrganizeExecutes:
                         MetaVisitDeleteCreate(
                             self.config,
                             storage_name,
-                            self._cadc_client,
-                            self._caom_client,
                             self._meta_visitors,
                             self.observable,
                             self._metadata_reader,
+                            self._clients,
                         )
                     )
                 else:
@@ -1067,20 +1050,19 @@ class OrganizeExecutes:
                         MetaVisit(
                             self.config,
                             storage_name,
-                            self._cadc_client,
-                            self._caom_client,
                             self._meta_visitors,
                             self.observable,
                             self._metadata_reader,
+                            self._clients,
                         )
                     )
             elif task_type == mc.TaskType.MODIFY:
                 if storage_name.is_feasible:
                     if self.config.use_local_files:
                         if (
-                                executors is not None
-                                and len(executors) > 0
-                                and isinstance(executors[0], Scrape)
+                            executors is not None
+                            and len(executors) > 0
+                            and isinstance(executors[0], Scrape)
                         ):
                             self._logger.debug(
                                 f'Choosing executor DataScrape for '
@@ -1103,10 +1085,9 @@ class OrganizeExecutes:
                                 LocalDataVisit(
                                     self.config,
                                     storage_name,
-                                    self._cadc_client,
-                                    self._caom_client,
                                     self._data_visitors,
                                     self.observable,
+                                    self._clients,
                                 )
                             )
                     else:
@@ -1117,11 +1098,10 @@ class OrganizeExecutes:
                             DataVisit(
                                 self.config,
                                 storage_name,
-                                self._cadc_client,
-                                self._caom_client,
                                 self._data_visitors,
                                 self.observable,
                                 self._modify_transfer,
+                                self._clients,
                             )
                         )
                 else:
@@ -1137,11 +1117,10 @@ class OrganizeExecutes:
                     MetaVisit(
                         self.config,
                         storage_name,
-                        self._cadc_client,
-                        self._caom_client,
                         self._meta_visitors,
                         self.observable,
                         self._metadata_reader,
+                        self._clients,
                     )
                 )
             elif task_type == mc.TaskType.DEFAULT:
@@ -1193,7 +1172,6 @@ class OrganizeExecutes:
             self._logger.debug(traceback.format_exc())
             result = -1
         finally:
-            self._metadata_reader.reset()
             self._clean_up_workspace(storage_name.obs_id)
             self._unset_file_logging()
         return result
@@ -1238,13 +1216,14 @@ class FitsForCADCDecompressor:
             if fqn.endswith('.gz'):
                 returned_fqn = os.path.join(
                     self._working_directory,
-                    os.path.basename(fqn).replace('.gz', '')
+                    os.path.basename(fqn).replace('.gz', ''),
                 )
                 self._logger.info(
                     f'Decompressing {fqn} with gunzip to {returned_fqn}'
                 )
-                with gzip.open(fqn, 'rb') as f_in, \
-                     open(returned_fqn, 'wb') as f_out:
+                with gzip.open(fqn, 'rb') as f_in, open(
+                    returned_fqn, 'wb'
+                ) as f_out:
                     # use shutil to control memory consumption
                     copyfileobj(f_in, f_out)
             elif fqn.endswith('.bz2'):
@@ -1255,8 +1234,9 @@ class FitsForCADCDecompressor:
                 self._logger.info(
                     f'Decompressing {fqn} with bz2 to {returned_fqn}'
                 )
-                with open(returned_fqn, 'wb') as f_out, \
-                     bz2.BZ2File(fqn, 'rb') as f_in:
+                with open(returned_fqn, 'wb') as f_out, bz2.BZ2File(
+                    fqn, 'rb'
+                ) as f_in:
                     # use shutil to control memory consumption
                     copyfileobj(f_in, f_out)
         self._logger.debug(f'End fix_compression with {returned_fqn}')
@@ -1277,9 +1257,7 @@ class FitsForCADCCompressor(FitsForCADCDecompressor):
             returned_fqn = super().fix_compression(fqn)
             fz_fqn = f'{returned_fqn}.fz'
             if fz_fqn != fqn:
-                compress_cmd = (
-                    f"imcopy {returned_fqn} '{fz_fqn}[compress]'"
-                )
+                compress_cmd = f"imcopy {returned_fqn} '{fz_fqn}[compress]'"
                 self._logger.debug(f'Executing {compress_cmd}')
                 mc.exec_cmd_array(
                     ['/bin/bash', '-c', compress_cmd], self._log_level_as

@@ -13,7 +13,8 @@ def test_config():
     test_config = mc.Config()
     test_config.working_directory = tc.THIS_DIR
     test_config.collection = 'OMM'
-    test_config.netrc_file = os.path.join(tc.TEST_DATA_DIR, 'test_netrc')
+    test_config.proxy_file_name = 'proxy.pem'
+    test_config.proxy_fqn = os.path.join(tc.TEST_DATA_DIR, 'proxy.pem')
     test_config.work_file = 'todo.txt'
     test_config.logging_level = 'INFO'
     test_config.log_file_directory = tc.TEST_DATA_DIR

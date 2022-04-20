@@ -183,9 +183,9 @@ class DecompressionDataSource(DataSource):
         self._compressed.uri = self._compressed.uri.astype(str).replace(
             self._suffix, new_extension
         )
-        return self._compressed[~self._compressed.uri.isin(
-            self._decompressed.uri
-        )]
+        return self._compressed[
+            ~self._compressed.uri.isin(self._decompressed.uri)
+        ]
 
     def _query_by_extension(self, extension):
         # a TAP query to find all the files in SI with a particular extension
@@ -382,20 +382,15 @@ class ListDirTimeBoxDataSource(DataSource):
                     # send the dir_listing value
                     if self.default_filter(entry):
                         entry_stats = entry.stat()
-                        if (
-                            exec_time
-                            >= entry_stats.st_mtime
-                            >= prev_exec_time
-                        ):
-                            self._temp[entry_stats.st_mtime].append(
-                                entry.path
-                            )
+                        if exec_time >= entry_stats.st_mtime >= prev_exec_time:
+                            self._temp[entry_stats.st_mtime].append(entry.path)
 
 
 class LocalFilesDataSource(ListDirTimeBoxDataSource):
     """
     For when use_local_files: True and cleanup_when_storing: True
     """
+
     def __init__(self, config, cadc_client, metadata_reader, recursive=True):
         super().__init__(config)
         self._retry_failures = config.retry_failures
@@ -450,18 +445,10 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         :param current_count: int how many retries have been executed
         """
         self._logger.debug(f'Begin clean_up with {entry}')
-        if (
-            self._cleanup_when_storing
-            and (
-                (not self._retry_failures)
-                or (
-                    self._retry_failures
-                    and current_count >= self._retry_count
-                )
-                or (
-                    self._retry_failures and execution_result == 0
-                )
-            )
+        if self._cleanup_when_storing and (
+            (not self._retry_failures)
+            or (self._retry_failures and current_count >= self._retry_count)
+            or (self._retry_failures and execution_result == 0)
         ):
             if isinstance(entry, str):
                 fqn = entry
@@ -554,11 +541,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     # otherwise the entry.stat() call will sometimes fail.
                     if not entry.name.startswith('.'):
                         entry_stats = entry.stat()
-                        if (
-                                exec_time
-                                >= entry_stats.st_mtime
-                                >= prev_exec_time
-                        ):
+                        if exec_time >= entry_stats.st_mtime >= prev_exec_time:
                             if self.default_filter(entry):
                                 self._temp[entry_stats.st_mtime].append(
                                     entry.path
@@ -600,7 +583,8 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 if (
                     self._metadata_reader.file_info.get(
                         destination_name
-                    ).md5sum == cadc_meta.md5sum
+                    ).md5sum
+                    == cadc_meta.md5sum
                 ):
                     result = False
         else:
@@ -622,9 +606,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     self._find_work(entry.path)
                 else:
                     if self.default_filter(entry):
-                        self._logger.info(
-                            f'Adding {entry.path} to work list.'
-                        )
+                        self._logger.info(f'Adding {entry.path} to work list.')
                         self._work.append(entry.path)
 
     def _move_action(self, fqn, destination):
@@ -645,9 +627,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 shutil.move(fqn, dest_fqn)
             except Exception as e:
                 self._logger.debug(traceback.format_exc())
-                self._logger.error(
-                    f'Failed to move {fqn} to {destination}'
-                )
+                self._logger.error(f'Failed to move {fqn} to {destination}')
                 raise mc.CadcException(e)
 
 
@@ -813,9 +793,7 @@ class VaultDataSource(ListDirTimeBoxDataSource):
         self._logger.debug('Begin get_work.')
         work = deque()
         for source_directory in self._source_directories:
-            self._logger.debug(
-                f'Searching {source_directory} for work to do.'
-            )
+            self._logger.debug(f'Searching {source_directory} for work to do.')
             self._find_work(source_directory, work)
         self._logger.debug('End get_work.')
         return work
@@ -837,13 +815,8 @@ class VaultDataSource(ListDirTimeBoxDataSource):
                     )
             else:
                 if self.default_filter(target_node):
-                    if (
-                            exec_time >= target_node_mtime >=
-                            prev_exec_time
-                    ):
-                        self._temp[target_node_mtime].append(
-                            target_node.uri
-                        )
+                    if exec_time >= target_node_mtime >= prev_exec_time:
+                        self._temp[target_node_mtime].append(target_node.uri)
                         self._logger.info(
                             f'Add {target_node.uri} to work list.'
                         )
@@ -924,9 +897,7 @@ class VaultCleanupDataSource(VaultDataSource):
                 # due to astropy fits verify failure cleanup
                 if vos_meta is not None:
                     # the transfer itself failed, so track as a failure
-                    self._move_action(
-                        fqn, self._cleanup_failure_directory
-                    )
+                    self._move_action(fqn, self._cleanup_failure_directory)
             else:
                 self._move_action(fqn, self._cleanup_success_directory)
             self._logger.debug('End clean_up.')
@@ -1012,9 +983,7 @@ class VaultCleanupDataSource(VaultDataSource):
                 self._vault_client.move(fqn, dest_fqn)
             except Exception as e:
                 self._logger.debug(traceback.format_exc())
-                self._logger.error(
-                    f'Failed to move {fqn} to {destination}'
-                )
+                self._logger.error(f'Failed to move {fqn} to {destination}')
                 raise mc.CadcException(e)
 
 

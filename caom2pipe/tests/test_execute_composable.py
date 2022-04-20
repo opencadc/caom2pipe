@@ -80,6 +80,7 @@ from shutil import copy
 from cadcdata import FileInfo
 from caom2 import SimpleObservation, Algorithm
 
+from caom2pipe.client_composable import ClientCollection
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
 from caom2pipe import reader_composable as rdc
@@ -129,20 +130,24 @@ class LocalTestVisit:
         return observation
 
 
-def test_meta_visit_delete_create_execute(test_config):
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+def test_meta_visit_delete_create_execute(access_mock, test_config):
+    access_mock.return_value = 'https://localhost:2022'
     data_client_mock = Mock()
     data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
     repo_client_mock = Mock()
     repo_client_mock.read.side_effect = _read_obs2
+    clients = ClientCollection(test_config)
+    clients._data_client = data_client_mock
+    clients._metadata_client = repo_client_mock
     test_observer = Mock()
     test_executor = ec.MetaVisitDeleteCreate(
         test_config,
         tc.TestStorageName(),
-        data_client_mock,
-        repo_client_mock,
         [],
         observable=test_observer,
         metadata_reader=Mock(autospec=True),
+        clients=clients,
     )
     try:
         if not os.path.exists(test_executor.working_dir):
@@ -155,22 +160,26 @@ def test_meta_visit_delete_create_execute(test_config):
         _clean_up_dir(test_executor.working_dir)
 
 
-def test_client_visit(test_config):
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+def test_client_visit(access_mock, test_config):
+    access_mock.return_value = 'https://localhost:2022'
     data_client_mock = Mock()
     repo_client_mock = Mock()
     metadata_reader_mock = Mock()
     test_observer = Mock()
+    clients = ClientCollection(test_config)
+    clients._data_client = data_client_mock
+    clients._metadata_client = repo_client_mock
 
     with patch('caom2pipe.manage_composable.write_obs_to_file') as write_mock:
         mc.StorageName.collection = 'TEST'
         test_executor = ec.MetaVisit(
             test_config,
             tc.TestStorageName(),
-            data_client_mock,
-            repo_client_mock,
             meta_visitors=None,
             observable=test_observer,
             metadata_reader=metadata_reader_mock,
+            clients=clients,
         )
 
         test_executor.execute(None)
@@ -182,13 +191,13 @@ def test_client_visit(test_config):
         assert write_mock.called, 'write mock not called'
 
 
-def test_data_execute(test_config):
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+def test_data_execute(access_mock, test_config):
+    access_mock.return_value = 'https://localhost:2022'
     mc.StorageName.collection = 'TEST'
     test_obs_id = 'test_obs_id'
     test_dir = os.path.join(tc.THIS_DIR, test_obs_id)
-    test_fits_fqn = os.path.join(
-        test_dir, tc.TestStorageName().file_name
-    )
+    test_fits_fqn = os.path.join(test_dir, tc.TestStorageName().file_name)
     try:
         if not os.path.exists(test_dir):
             os.mkdir(test_dir, mode=0o755)
@@ -198,6 +207,9 @@ def test_data_execute(test_config):
         test_data_visitors = [TestVisit]
         repo_client_mock = Mock()
         data_client_mock = Mock()
+        clients = ClientCollection(test_config)
+        clients._data_client = data_client_mock
+        clients._metadata_client = repo_client_mock
         test_observer = Mock()
         test_transferrer = transfer_composable.VoTransfer()
         test_transferrer.cadc_client = data_client_mock
@@ -209,11 +221,10 @@ def test_data_execute(test_config):
         test_executor = ec.DataVisit(
             test_config,
             tc.TestStorageName(),
-            data_client_mock,
-            repo_client_mock,
             test_data_visitors,
             test_observer,
             test_transferrer,
+            clients,
         )
         test_executor.execute(None)
 
@@ -225,7 +236,9 @@ def test_data_execute(test_config):
         _clean_up_dir(test_dir)
 
 
-def test_data_execute_v(test_config):
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+def test_data_execute_v(access_mock, test_config):
+    access_mock.return_value = 'https://localhost:2022'
     mc.StorageName.collection = 'TEST'
     test_config.features.supports_latest_client = True
     test_obs_id = 'test_obs_id'
@@ -239,6 +252,9 @@ def test_data_execute_v(test_config):
         repo_client_mock = Mock(autospec=True)
         cadc_client_mock = Mock(autospec=True)
         cadc_client_mock.copy.side_effect = tc.mock_copy_md5
+        clients = ClientCollection(test_config)
+        clients._data_client = cadc_client_mock
+        clients._metadata_client = repo_client_mock
         test_observer = Mock(autospec=True)
         test_transferrer = transfer_composable.VoTransfer()
         test_transferrer.cadc_client = cadc_client_mock
@@ -253,11 +269,10 @@ def test_data_execute_v(test_config):
         test_executor = ec.DataVisit(
             test_config,
             test_sn,
-            cadc_client_mock,
-            repo_client_mock,
             test_data_visitors,
             test_observer,
             test_transferrer,
+            clients,
         )
         test_executor.execute(None)
 
@@ -275,7 +290,9 @@ def test_data_execute_v(test_config):
         _clean_up_dir(test_dir)
 
 
-def test_data_local_execute(test_config):
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+def test_data_local_execute(access_mock, test_config):
+    access_mock.return_value = 'https://localhost:2022'
     # ensure the model uses the log directory for writing the model file
     mc.StorageName.collection = 'TEST'
     test_config.log_to_file = True
@@ -286,6 +303,9 @@ def test_data_local_execute(test_config):
     data_client_mock = Mock()
     repo_client_mock = Mock()
     repo_client_mock.read.return_value = _read_obs(None)
+    clients = ClientCollection(test_config)
+    clients._data_client = data_client_mock
+    clients._metadata_client = repo_client_mock
     test_observer = Mock()
 
     test_model_fqn = os.path.join(tc.TEST_DATA_DIR, 'test_obs_id.xml')
@@ -299,10 +319,9 @@ def test_data_local_execute(test_config):
         tc.TestStorageName(
             source_names=[f'{tc.TEST_DATA_DIR}/test_file.fits.gz'],
         ),
-        data_client_mock,
-        repo_client_mock,
         test_data_visitors,
         observable=test_observer,
+        clients=clients,
     )
     test_executor.execute(None)
 
@@ -316,13 +335,17 @@ def test_data_local_execute(test_config):
     assert os.path.exists(test_model_fqn), 'observation not written to disk'
 
 
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
-def test_data_store(fix_mock, test_config):
+def test_data_store(fix_mock, access_mock, test_config):
+    access_mock.return_value = 'https://localhost:2022'
     test_dir = f'{tc.TEST_DATA_DIR}/test_obs_id'
     if os.path.exists(test_dir):
         os.rmdir(test_dir)
 
     data_client_mock = Mock()
+    clients = ClientCollection(test_config)
+    clients._data_client = data_client_mock
     test_observer = Mock()
     # stat mock is for CadcDataClient
     stat_orig = os.stat
@@ -340,9 +363,9 @@ def test_data_store(fix_mock, test_config):
             tc.TestStorageName(
                 source_names=[f'{tc.TEST_DATA_DIR}/test_file.fits.gz'],
             ),
-            data_client_mock,
             observable=test_observer,
             transferrer=transfer_composable.Transfer(),
+            clients=clients,
         )
         test_executor.execute(None)
 
@@ -411,8 +434,6 @@ def test_organize_executes_chooser(test_config):
     log_file_directory = os.path.join(tc.THIS_DIR, 'logs')
     test_config.log_file_directory = log_file_directory
     test_config.features.supports_composite = True
-    caom_client = Mock(autospec=True)
-    caom_client.read.side_effect = _read_obs2
 
     test_config.task_types = [mc.TaskType.INGEST]
     test_chooser = tc.TestChooser()
@@ -421,8 +442,7 @@ def test_organize_executes_chooser(test_config):
         [],
         [],
         test_chooser,
-        cadc_client=Mock(autospec=True, return_value=None),
-        caom_client=caom_client,
+        clients=Mock(autospec=True, return_value=None),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -441,8 +461,7 @@ def test_organize_executes_chooser(test_config):
         [],
         [],
         test_chooser,
-        cadc_client=Mock(autospec=True, return_value=None),
-        caom_client=caom_client,
+        clients=Mock(autospec=True, return_value=None),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -454,16 +473,14 @@ def test_organize_executes_chooser(test_config):
 def test_organize_executes_client_existing(test_config):
     test_obs_id = tc.TestStorageName()
     test_config.features.use_clients = True
-    repo_client_mock = Mock(autospec=True)
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.use_local_files = False
     test_oe = ec.OrganizeExecutes(
         test_config,
         [],
         [],
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
         metadata_reader=Mock(autospec=True),
+        clients=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
@@ -476,21 +493,21 @@ def test_organize_executes_client_visit(test_config):
     test_config.features.use_clients = True
     test_config.task_types = [mc.TaskType.VISIT]
     test_config.use_local_files = False
-    repo_client_mock = Mock(autospec=True)
-    repo_client_mock.read.side_effect = _read_obs2
+    clients_mock = Mock(autospec=True)
     test_oe = ec.OrganizeExecutes(
         test_config,
         [],
         [],
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
         metadata_reader=Mock(autospec=True),
+        clients=clients_mock,
     )
     executors = test_oe.choose(test_obs_id)
     assert executors is not None
     assert len(executors) == 1
     assert isinstance(executors[0], ec.MetaVisit)
-    assert not repo_client_mock.read.called, 'mock should not be called?'
+    assert (
+        not clients_mock.return_value.metadata_client.read.called
+    ), 'mock should not be called?'
 
 
 def test_do_one(test_config):
@@ -503,15 +520,12 @@ def test_do_one(test_config):
     test_result = test_organizer.do_one(tc.TestStorageName())
     assert test_result is not None
     assert test_result == -1
-    assert test_reader.reset.called, 'reset should be called'
-    assert test_reader.reset.call_count == 1, 'wrong call count first time'
 
     # client
     test_config.features.use_clients = True
     test_result = test_organizer.do_one(tc.TestStorageName())
     assert test_result is not None
     assert test_result == -1
-    assert test_reader.reset.call_count == 2, 'wrong call count second time'
 
 
 def test_storage_name():
@@ -596,17 +610,13 @@ def test_organize_executes_client_do_one(test_config):
     test_config.features.use_clients = True
     retry_file_name = 'retries.txt'
     test_config.retry_file_name = retry_file_name
-    repo_client_mock = Mock(autospec=True)
-    repo_client_mock.read.return_value = None
-
     test_config.task_types = [mc.TaskType.SCRAPE]
     test_oe = ec.OrganizeExecutes(
         test_config,
         [],
         [],
         chooser=None,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -624,8 +634,7 @@ def test_organize_executes_client_do_one(test_config):
         [],
         [],
         chooser=None,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -642,8 +651,7 @@ def test_organize_executes_client_do_one(test_config):
         [],
         [],
         chooser=None,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -659,8 +667,7 @@ def test_organize_executes_client_do_one(test_config):
         [],
         [],
         chooser=None,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -676,8 +683,7 @@ def test_organize_executes_client_do_one(test_config):
         [],
         [],
         chooser=None,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -694,8 +700,7 @@ def test_organize_executes_client_do_one(test_config):
         [],
         [],
         chooser=test_chooser,
-        cadc_client=Mock(autospec=True),
-        caom_client=repo_client_mock,
+        clients=Mock(autospec=True),
         metadata_reader=Mock(autospec=True),
     )
     executors = test_oe.choose(test_obs_id)
@@ -704,12 +709,17 @@ def test_organize_executes_client_do_one(test_config):
     assert isinstance(executors[0], ec.MetaVisitDeleteCreate)
 
 
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2utils.data_util.StorageClientWrapper')
-def test_data_visit(client_mock, test_config):
+def test_data_visit(client_mock, access_mock, test_config):
+    access_mock.return_value = 'https://localhost:2022'
     test_config.features.supports_latest_client = False
     client_mock.get.side_effect = Mock(autospec=True)
     test_repo_client = Mock(autospec=True)
     test_repo_client.read.side_effect = tc.mock_read
+    clients = ClientCollection(test_config)
+    clients._data_client = client_mock
+    clients._metadata_client = test_repo_client
     dv_mock = Mock(autospec=True)
     dv_mock.visit.return_value = SimpleObservation(
         collection='test_collection',
@@ -732,11 +742,10 @@ def test_data_visit(client_mock, test_config):
     test_subject = ec.DataVisit(
         test_config,
         test_sn,
-        client_mock,
-        test_repo_client,
         test_data_visitors,
         test_observable,
         test_transferrer,
+        clients,
     )
     try:
         if not os.path.exists(test_subject.working_dir):
@@ -763,8 +772,10 @@ def test_data_visit(client_mock, test_config):
         _clean_up_dir(test_subject.working_dir)
 
 
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
-def test_store(compressor_mock, test_config):
+def test_store(compressor_mock, access_mock, test_config):
+    access_mock.return_value = 'https://localhost:2022'
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.features.supports_latest_client = False
     test_sn = tc.TestStorageName(
@@ -772,6 +783,8 @@ def test_store(compressor_mock, test_config):
         source_names=['vos:goliaths/nonexistent.fits.gz'],
     )
     test_data_client = Mock(autospec=True)
+    clients = ClientCollection(test_config)
+    clients._data_client = test_data_client
     test_observable = Mock(autospec=True)
     test_transferrer = Mock(autospec=True)
     test_transferrer.get.side_effect = _transfer_get_mock
@@ -781,9 +794,9 @@ def test_store(compressor_mock, test_config):
     test_subject = ec.Store(
         test_config,
         test_sn,
-        test_data_client,
         test_observable,
         test_transferrer,
+        clients,
     )
     assert test_subject is not None, 'expect construction'
     assert test_subject.working_dir == os.path.join(
@@ -810,8 +823,10 @@ def test_store(compressor_mock, test_config):
         _clean_up_dir(test_subject.working_dir)
 
 
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
-def test_local_store(compressor_mock, test_config):
+def test_local_store(compressor_mock, access_mock, test_config):
+    access_mock.return_value = 'https://localhost:2022'
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.data_source = ['/test_files/caom2pipe']
     test_config.use_local_files = True
@@ -827,9 +842,11 @@ def test_local_store(compressor_mock, test_config):
             f.write('test content')
 
     test_data_client = Mock(autospec=True)
+    clients = ClientCollection(test_config)
+    clients._data_client = test_data_client
     test_observable = Mock(autospec=True)
     test_subject = ec.LocalStore(
-        test_config, test_sn, test_data_client, test_observable
+        test_config, test_sn, test_observable, clients
     )
     assert test_subject is not None, 'expect construction'
     test_subject.execute(None)
@@ -868,8 +885,10 @@ class FlagStorageName(mc.StorageName):
         return self._file_name
 
 
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2utils.data_util.StorageClientWrapper')
-def test_store_newer_files_only_flag(client_mock, test_config):
+def test_store_newer_files_only_flag(client_mock, access_mock, test_config):
+    access_mock.return_value = 'https://localhost:2022'
     # first test case
     # flag set to True, file is older at CADC, supports_latest_client = False
     test_config.working_directory = tc.TEST_DATA_DIR
@@ -883,21 +902,25 @@ def test_store_newer_files_only_flag(client_mock, test_config):
     client_mock.info.return_value = FileInfo(
         id=du[0], lastmod='Mon, 4 Mar 2019 19:05:41 GMT'
     )
+    clients = ClientCollection(test_config)
+    clients._data_client = client_mock
 
     test_subject = ec.LocalStore(
         test_config,
         test_sn,
-        client_mock,
         observable_mock,
+        clients,
     )
     test_subject.execute(None)
     assert client_mock.put.called, 'expect put call'
 
 
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2utils.data_util.StorageClientWrapper')
 def test_store_newer_files_only_flag_client(
-    client_mock, test_config
+    client_mock, access_mock, test_config
 ):
+    access_mock.return_value = 'https://localhost:2022'
     # just like the previous test, except supports_latest_client = True
     # first test case
     # flag set to True, file is older at CADC, supports_latest_client = False
@@ -912,18 +935,22 @@ def test_store_newer_files_only_flag_client(
     client_mock.cadcinfo.return_value = FileInfo(
         id=du[0], md5sum='d41d8cd98f00b204e9800998ecf8427e'
     )
+    clients = ClientCollection(test_config)
+    clients._data_client = client_mock
 
     test_subject = ec.LocalStore(
         test_config,
         test_sn,
-        client_mock,
         observable_mock,
+        clients,
     )
     test_subject.execute(None)
     assert client_mock.put.called, 'expect copy call'
 
 
-def test_data_visit_params():
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+def test_data_visit_params(access_mock):
+    access_mock.return_value = 'https://localhost:2022'
     test_wd = '/tmp/abc'
     if os.path.exists(test_wd):
         if os.path.isdir(test_wd):
@@ -940,10 +967,16 @@ def test_data_visit_params():
     test_config.task_types = [mc.TaskType.MODIFY]
     test_config.working_directory = '/tmp'
     test_config.logging_level = 'DEBUG'
+    test_config.proxy_file_name = 'proxy.pem'
+    test_config.proxy_fqn = f'{tc.TEST_DATA_DIR}/proxy.pem'
+    test_config.resource_id = 'ivo:cadc.nrc.ca/test'
 
     test_cadc_client = Mock(autospec=True)
     test_caom_client = Mock(autospec=True)
     test_caom_client.read.side_effect = _read_obs2
+    clients = ClientCollection(test_config)
+    clients._data_client = test_cadc_client
+    clients._metadata_client = test_caom_client
     data_visitor = Mock(autospec=True)
     data_visitor.visit.return_value = SimpleObservation(
         collection='test_collection',
@@ -959,11 +992,10 @@ def test_data_visit_params():
         test_subject = ec.DataVisit(
             test_config,
             storage_name,
-            test_cadc_client,
-            test_caom_client,
             test_data_visitors,
             test_observable,
             test_transferrer,
+            clients,
         )
         assert test_subject is not None, 'broken ctor'
         if not os.path.exists(test_subject.working_dir):
@@ -975,10 +1007,9 @@ def test_data_visit_params():
             working_directory='/tmp/abc',
             storage_name=storage_name,
             log_file_directory=None,
-            cadc_client=ANY,
-            caom_repo_client=ANY,
             stream=None,
             observable=ANY,
+            clients=ANY,
         ), f'wrong visit params {storage_name.source_names}'
         data_visitor.visit.reset_mock()
     finally:

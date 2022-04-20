@@ -231,9 +231,7 @@ class Features:
         self._supports_multiple_files = value
 
     def __str__(self):
-        return ' '.join(
-            f'{ii} {getattr(self, ii)}' for ii in vars(self)
-        )
+        return ' '.join(f'{ii} {getattr(self, ii)}' for ii in vars(self))
 
 
 class TaskType(Enum):
@@ -1597,9 +1595,7 @@ class PreviewVisitor:
     def _store_smalls(self):
         if self._cadc_client is not None:
             for uri, entry in self._previews.items():
-                self._cadc_client.put(
-                    self._working_dir, uri, self._stream
-                )
+                self._cadc_client.put(self._working_dir, uri, self._stream)
 
     def _gen_thumbnail(self):
         self._logger.debug(
@@ -1609,6 +1605,7 @@ class PreviewVisitor:
         if os.path.exists(self._preview_fqn):
             # keep import local
             import matplotlib.image as image
+
             thumb = image.thumbnail(
                 self._preview_fqn, self._thumb_fqn, scale=0.25
             )
@@ -1808,9 +1805,9 @@ class StorageName:
 
     def get_file_fqn(self, working_directory):
         if (
-            self._source_names is not None and
-            len(self._source_names) > 0 and
-            os.path.exists(self._source_names[0])
+            self._source_names is not None
+            and len(self._source_names) > 0
+            and os.path.exists(self._source_names[0])
         ):
             fqn = self._source_names[0]
         else:
@@ -1822,9 +1819,10 @@ class StorageName:
             temp = parse.urlparse(entry)
             if '.fits' in entry:
                 self._destination_uris.append(
-                    self._get_uri(os.path.basename(
-                            temp.path
-                        ).replace('.gz', '').replace('.bz2', '')
+                    self._get_uri(
+                        os.path.basename(temp.path)
+                        .replace('.gz', '')
+                        .replace('.bz2', '')
                     )
                 )
             else:

@@ -129,8 +129,8 @@ def test_client_put_failure(mock_metrics):
             f.write('test content')
 
     mock_client = Mock()
-    mock_client.cadcput.side_effect = (
-        exceptions.UnexpectedException('error state')
+    mock_client.cadcput.side_effect = exceptions.UnexpectedException(
+        'error state'
     )
     test_destination = 'cadc:GEMINI/TEST.fits'
     with pytest.raises(mc.CadcException):
@@ -165,7 +165,9 @@ def test_client_get_failure(mock_client):
             test_metrics,
         )
     assert len(test_metrics.failures) == 1, 'wrong failures'
-    assert test_metrics.failures['si']['cadcget']['TEST_get.fits'] == 1, 'count'
+    assert (
+        test_metrics.failures['si']['cadcget']['TEST_get.fits'] == 1
+    ), 'count'
 
 
 @patch('vos.vos.Client')
@@ -255,34 +257,6 @@ def test_define_subject():
             clc.define_subject(test_config)
     finally:
         os.getcwd = getcwd_orig
-
-
-@patch('caom2utils.data_util.StorageClientWrapper')
-@patch('caom2pipe.manage_composable.http_get')
-def test_look_pull_and_put(http_mock, mock_client):
-    test_storage_name = 'cadc:GEMINI/TEST.fits'
-    mock_client.info.return_value = FileInfo(
-        id=test_storage_name,
-        size=1234,
-        md5sum='9473fdd0d880a43c21b7778d34872157',
-    )
-    f_name = 'TEST.fits'
-    url = f'https://localhost/{f_name}'
-    test_config = mc.Config()
-    test_config.observe_execution = True
-    mock_client.info.return_value = None
-    test_fqn = os.path.join(tc.TEST_FILES_DIR, f_name)
-    clc.look_pull_and_put(
-        test_storage_name,
-        test_fqn,
-        url,
-        mock_client,
-        'md5:01234',
-    )
-    mock_client.put.assert_called_with(
-        tc.TEST_FILES_DIR, test_storage_name
-    ), 'mock not called'
-    http_mock.assert_called_with(url, test_fqn), 'http mock not called'
 
 
 @patch('caom2repo.core.CAOM2RepoClient')

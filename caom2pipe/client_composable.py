@@ -107,7 +107,6 @@ __all__ = [
     'get_cadc_headers_client',
     'get_cadc_meta_client',
     'get_cadc_meta_client_v',
-    'look_pull_and_put',
     'query_tap_client',
     'repo_create',
     'repo_delete',
@@ -158,7 +157,8 @@ class ClientCollection:
 
     @metrics.setter
     def metrics(self, value):
-        self._data_client._metrics = value
+        if self._data_client is not None:
+            self._data_client._metrics = value
         self._metrics = value
 
     @property
@@ -179,13 +179,11 @@ class ClientCollection:
                 f'SCRAPE\'ing data - no clients will be initialized.'
             )
         else:
-            if self._metrics is None:
-                self._metrics = mc.Metrics(config)
             subject = define_subject(config)
             self._metadata_client = CAOM2RepoClient(
                 subject, config.logging_level, config.resource_id
             )
-            self._data_client = declare_client(config, self._metrics)
+            self._data_client = declare_client(config)
             if config.tap_id is not None:
                 self._query_client = CadcTapClient(
                     subject=subject, resource_id=config.tap_id
@@ -416,42 +414,6 @@ def get_cadc_meta_client_v(storage_name, cadc_client):
     return FileMeta(f_size, f_md5sum)
 
 
-def look_pull_and_put(
-    storage_name, fqn, url, cadc_client, checksum
-):
-    """Checks to see if a file exists at CADC. If yes, stop. If no,
-    pull via https to local storage, then put to CADC storage.
-
-    :param storage_name Artifact URI as the file will appear at CADC
-    :param fqn name on disk for caching between the
-        pull and the put
-    :param url for retrieving the file externally, if it does not exist
-    :param cadc_client access to the storage service
-    :param checksum what the CAOM observation says the checksum should be -
-        just the checksum part of ChecksumURI please, or the comparison will
-        always fail.
-    """
-    cadc_meta = cadc_client.info(storage_name)
-    if (
-        (
-            checksum is not None and
-            cadc_meta is not None and
-            cadc_meta.md5sum.replace('md5:', '') != checksum
-        ) or cadc_meta is None
-    ):
-        logging.debug(
-            f'Different checksums: Source {checksum}, CADC {cadc_meta}'
-        )
-        mc.http_get(url, fqn)
-        cadc_client.put(os.path.dirname(fqn), storage_name)
-        logging.info(
-            f'Retrieved {os.path.basename(fqn)} for storage as '
-            f'{storage_name}'
-        )
-    else:
-        logging.info(f'{os.path.basename(fqn)} already exists at CADC.')
-
-
 def query_tap_client(query_string, tap_client):
     """
     :param query_string ADQL
@@ -637,8 +599,9 @@ def si_client_get_headers(client, storage_name):
         return ac.make_headers_from_string(fits_header)
     except Exception as e:
         logging.debug(traceback.format_exc())
-        raise mc.CadcException(f'Did not retrieve {storage_name} header '
-                               f'because {e}')
+        raise mc.CadcException(
+            f'Did not retrieve {storage_name} header ' f'because {e}'
+        )
 
 
 def si_client_put(client, fqn, storage_name, metrics):

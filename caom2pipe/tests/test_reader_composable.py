@@ -96,7 +96,7 @@ def test_file_reader(test_config):
     assert test_file_info.file_type == 'application/fits', 'wrong type'
     assert test_file_info.size == 197442, 'wrong size'
     assert (
-            test_file_info.md5sum == '053b0780633ebab084b19050c0a58620'
+        test_file_info.md5sum == '053b0780633ebab084b19050c0a58620'
     ), 'wrong md5sum'
     test_subject.reset()
     assert len(test_subject.headers) == 0, 'should be no headers'

@@ -173,9 +173,12 @@ class TodoRunner:
     (StorageNameBuilder extensions).
     """
 
-    def __init__(self, config, organizer, builder, data_source):
+    def __init__(
+        self, config, organizer, builder, data_source, metadata_reader
+    ):
         self._builder = builder
         self._data_source = data_source
+        self._metadata_reader = metadata_reader
         self._config = config
         self._organizer = organizer
         # the list of work to be done, containing whatever is returned from
@@ -264,6 +267,7 @@ class TodoRunner:
         while len(self._todo_list) > 0:
             entry = self._todo_list.popleft()
             result |= self._process_entry(entry, current_count)
+            self._metadata_reader.reset()
         self._finish_run()
         self._logger.debug('End _run_todo_list.')
         return result
@@ -331,8 +335,6 @@ class TodoRunner:
 class StateRunner(TodoRunner):
     """This is StateRunner with all times as timestamps (i.e. float),
     somewhat enforced by the use of the StateRunnerMeta class.
-
-    Eventually deprecate StateRunner in favour of this class.
     """
 
     def __init__(
@@ -341,11 +343,12 @@ class StateRunner(TodoRunner):
         organizer,
         builder,
         data_source,
+        metadata_reader,
         bookmark_name,
         max_ts=None,
     ):
         super().__init__(
-            config, organizer, builder, data_source
+            config, organizer, builder, data_source, metadata_reader
         )
         self._bookmark_name = bookmark_name
         max_ts_in_s = None
@@ -439,6 +442,7 @@ class StateRunner(TodoRunner):
                         save_time = min(
                             mc.convert_to_ts(entry.entry_ts), exec_time
                         )
+                    self._metadata_reader.reset()
                     self._finish_run()
 
                 cumulative += num_entries
@@ -601,15 +605,15 @@ def run_by_todo(
         metadata_reader,
         store_transfer,
     ) = _common_init(
-            config,
-            clients,
-            name_builder,
-            source,
-            modify_transfer,
-            metadata_reader,
-            False,
-            store_transfer,
-        )
+        config,
+        clients,
+        name_builder,
+        source,
+        modify_transfer,
+        metadata_reader,
+        False,
+        store_transfer,
+    )
     organizer = ec.OrganizeExecutes(
         config,
         meta_visitors,
@@ -617,12 +621,13 @@ def run_by_todo(
         chooser,
         store_transfer,
         modify_transfer,
-        cadc_client=clients.data_client,
-        caom_client=clients.metadata_client,
         metadata_reader=metadata_reader,
+        clients=clients,
     )
 
-    runner = TodoRunner(config, organizer, name_builder, source)
+    runner = TodoRunner(
+        config, organizer, name_builder, source, metadata_reader
+    )
     result = runner.run()
     result |= runner.run_retry()
     runner.report()
@@ -699,13 +704,18 @@ def run_by_state(
         chooser,
         store_transfer,
         modify_transfer,
-        clients.data_client,
-        clients.metadata_client,
         metadata_reader,
+        clients,
     )
 
     runner = StateRunner(
-        config, organizer, name_builder, source, bookmark_name, end_time
+        config,
+        organizer,
+        name_builder,
+        source,
+        metadata_reader,
+        bookmark_name,
+        end_time,
     )
     result = runner.run()
     result |= runner.run_retry()
@@ -761,9 +771,8 @@ def run_single(
         chooser,
         store_transfer,
         modify_transfer,
-        clients.data_client,
-        clients.metadata_client,
         metadata_reader,
+        clients,
     )
     organizer.complete_record_count = 1
     organizer.choose(storage_name)
