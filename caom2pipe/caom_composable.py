@@ -1106,10 +1106,24 @@ class TelescopeMapping:
             bp.set('Artifact.metaProducer', meta_producer)
             bp.set('Chunk.metaProducer', meta_producer)
 
-    def _update_artifact(self, artifact, caom_repo_client=None):
+    def _update_artifact(self, artifact, clients=None):
+        """
+        :param artifact: Artifact instance
+        :param clients: ClientCollection instance
+        :return:
+        """
         return
 
-    def update(self, observation, file_info, caom_repo_client=None):
+    def update(self, observation, file_info, clients=None):
+        """
+        Update the Artifact file-based metadata. Override if it's necessary
+        to carry out more/different updates.
+
+        :param observation: Observation instance
+        :param file_info: FileInfo instance
+        :param clients: ClientCollection instance
+        :return:
+        """
         self._logger.debug(f'Begin update for {observation.observation_id}')
         for plane in observation.planes.values():
             for artifact in plane.artifacts.values():
@@ -1120,7 +1134,7 @@ class TelescopeMapping:
                     )
                     continue
                 update_artifact_meta(artifact, file_info)
-                self._update_artifact(artifact, caom_repo_client)
+                self._update_artifact(artifact, clients)
 
         self._logger.debug('End update')
         return observation
@@ -1194,7 +1208,7 @@ class Fits2caom2Visitor:
                 self._observation = telescope_data.update(
                     self._observation,
                     file_info,
-                    self._clients.metadata_client,
+                    self._clients,
                 )
             self._logger.debug(f'End visit')
         except Caom2Exception as e:
