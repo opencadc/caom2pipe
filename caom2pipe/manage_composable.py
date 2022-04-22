@@ -179,6 +179,7 @@ class Features:
         self._supports_catalog = True
         self._supports_latest_client = False
         self._supports_multiple_files = True
+        self._supports_decompression = False
 
     @property
     def run_in_airflow(self):
@@ -209,6 +210,15 @@ class Features:
     @supports_catalog.setter
     def supports_catalog(self, value):
         self._supports_catalog = value
+
+    @property
+    def supports_decompression(self):
+        """If true, will execute decompression code for .gz and .bz2 files."""
+        return self._supports_decompression
+
+    @supports_decompression.setter
+    def supports_decompression(self, value):
+        self._supports_decompression = value
 
     @property
     def supports_latest_client(self):
@@ -1826,7 +1836,9 @@ class StorageName:
                     )
                 )
             else:
-                self._destination_uris.append(entry)
+                self._destination_uris.append(
+                    self._get_uri(os.path.basename(temp.path)),
+                )
 
     def set_file_id(self):
         if self._file_id is None:
