@@ -197,7 +197,7 @@ class CaomExecute:
         # track whether the caom2repo call will be a create or an update
         self._caom2_update_needed = False
         self._decompressor = decompressor_factory(
-            config.collection, self.working_dir, self.log_level_as
+            config, self.working_dir, self.log_level_as
         )
 
     def __str__(self):
@@ -1177,14 +1177,26 @@ class OrganizeExecutes:
         return result
 
 
-def decompressor_factory(collection, working_directory, log_level_as):
-    if collection == 'CFHT':
-        return FitsForCADCCompressor(working_directory, log_level_as)
+def decompressor_factory(config, working_directory, log_level_as):
+    if config.features.supports_decompression:
+        if config.collection == 'CFHT':
+            return FitsForCADCCompressor(working_directory, log_level_as)
+        else:
+            return FitsForCADCDecompressor(working_directory, log_level_as)
     else:
-        return FitsForCADCDecompressor(working_directory, log_level_as)
+        return DecompressorNoop()
 
 
-class FitsForCADCDecompressor:
+class DecompressorNoop:
+
+    def __init__(self):
+        pass
+
+    def fix_compression(self, fqn):
+        return fqn
+
+
+class FitsForCADCDecompressor(DecompressorNoop):
     """
     This class ensures that files stored at CADC are uncompressed if arriving
     with .gz or .bz2 compression.
