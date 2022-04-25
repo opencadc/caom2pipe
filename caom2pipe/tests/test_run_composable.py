@@ -1074,6 +1074,7 @@ def test_vo_with_cleanup(
         test_config.proxy_file_name = 'cadcproxy.pem'
         test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
         test_config.features.supports_latest_client = True
+        test_config.features.supports_decompression = True
         test_config.data_sources = ['vos:goliaths/DAOTest']
         test_config.data_source_extensions = ['.fits.gz']
         test_config.cleanup_files_when_storing = True
