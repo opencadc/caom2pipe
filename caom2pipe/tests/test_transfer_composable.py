@@ -121,7 +121,7 @@ def test_vo_fits_transfer():
     test_config = mc.Config()
     test_config.working_directory = test_conf.TEST_DATA_DIR
     test_config.proxy_file_name = 'proxy.pem'
-    test_subject = tc.VoFitsTransfer(cadc_client_mock)
+    test_subject = tc.VoScienceTransfer(cadc_client_mock)
     assert test_subject is not None, 'expect a result'
     test_subject.observable = Mock()
     test_source = 'vos:goliaths/test_file.fits'
@@ -195,7 +195,7 @@ def test_vo_fits_cleanup_transfer():
         test_config.cleanup_files_when_storing = True
         test_config.cleanup_failure_destination = 'vos:goliaths/failure'
         test_config.cleanup_success_destination = 'vos:goliaths/success'
-        test_subject = tc.VoFitsCleanupTransfer(mock_client, test_config)
+        test_subject = tc.VoScienceCleanupTransfer(mock_client, test_config)
         assert test_subject is not None, 'ctor failure'
 
         test_source = 'vos:goliaths/test/abc.fits.gz'

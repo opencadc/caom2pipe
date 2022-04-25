@@ -68,7 +68,7 @@
 
 import math
 
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 import test_conf as tc
 
 from astropy.io import fits
@@ -224,3 +224,21 @@ def test_filter_md_cache(query_mock):
         ac.FilterMetadataCache.get_central_wavelength(test_result) == -2
     ), 'wrong cw'
     assert ac.FilterMetadataCache.get_fwhm(test_result) == -2, 'wrong fwhm'
+
+
+def test_check_h5():
+    test_fqn_success = '/test_files/2384125z.hdf5'
+    test_result = ac.check_h5(test_fqn_success)
+    assert test_result, 'expect success'
+
+    test_fqn_empty = '/test_files/empty.h5'
+    test_result = ac.check_h5(test_fqn_empty)
+    assert not test_result, 'empty failure'
+
+    test_fqn_broken = '/test_files/broken.h5'
+    test_result = ac.check_h5(test_fqn_broken)
+    assert not test_result, 'broken failure'
+
+    test_fqn_missing = '/test_files/not_there.h5'
+    test_result = ac.check_h5(test_fqn_missing)
+    assert not test_result, 'missing failure'

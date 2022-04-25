@@ -136,9 +136,9 @@ def check_fits(fqn):
     """
     try:
         hdulist = fits.open(fqn, memmap=True, lazy_load_hdus=False)
-        hdulist.verify('warn')
+        hdulist.verify('exception')
         for h in hdulist:
-            h.verify('warn')
+            h.verify('exception')
         hdulist.close()
         logging.debug(f'hdulist verify succeeded for {fqn}')
     except (fits.VerifyError, OSError) as e1:
@@ -160,6 +160,23 @@ def check_fits(fqn):
         logging.error(f'astropy getdata error {e3} when reading {fqn}')
         return False
 
+    return True
+
+
+def check_h5(fqn):
+    """
+    Use h5check to identify non-compliance errors. Currently checking against
+    1.8.
+
+    :param fqn: str fully-qualified file name on local storage
+    :return: bool True if compliant, False otherwise
+    """
+    cmd = f'h5check {fqn}'
+    try:
+        mc.exec_cmd(cmd)
+    except mc.CadcException as e:
+        logging.error(f'h5check failed with {e} when reading {fqn}')
+        return False
     return True
 
 

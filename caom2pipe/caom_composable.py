@@ -79,7 +79,7 @@ from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
 from caom2 import CoordFunction1D, DerivedObservation, Provenance
 from caom2 import CoordBounds1D, TypedList, ProductType
 from caom2.diff import get_differences
-from caom2utils import ObsBlueprint, GenericParser, FitsParser
+from caom2utils import ObsBlueprint, BlueprintParser, FitsParser
 from caom2utils import update_artifact_meta, Caom2Exception
 
 from caom2pipe import astro_composable as ac
@@ -1154,6 +1154,23 @@ class Fits2caom2Visitor:
         self._dump_config = False
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    def _get_blueprint(self, instantiated_class):
+        return ObsBlueprint(instantiated_class=instantiated_class)
+
+    def _get_parser(self, headers, blueprint, uri):
+        if headers is None or len(headers) == 0:
+            self._logger.debug(
+                f'No headers, using a GenericParser for '
+                f'{self._storage_name.file_uri}'
+            )
+            parser = BlueprintParser(blueprint, uri)
+        else:
+            self._logger.debug(
+                f'Using a FitsParser for {self._storage_name.file_uri}'
+            )
+            parser = FitsParser(headers, blueprint, uri)
+        return parser
+
     def _get_mapping(self, headers):
         return TelescopeMapping(self._storage_name, headers)
 
@@ -1164,23 +1181,11 @@ class Fits2caom2Visitor:
                 self._logger.debug(f'Build observation for {uri}')
                 headers = self._metadata_reader.headers.get(uri)
                 telescope_data = self._get_mapping(headers)
-                blueprint = ObsBlueprint(instantiated_class=telescope_data)
+                blueprint = self._get_blueprint(telescope_data)
                 telescope_data.accumulate_blueprint(blueprint)
-
-                if headers is None or len(headers) == 0:
-                    self._logger.debug(
-                        f'No headers, using a GenericParser for '
-                        f'{self._storage_name.file_uri}'
-                    )
-                    parser = GenericParser(blueprint, uri)
-                else:
-                    self._logger.debug(
-                        f'Using a FitsParser for {self._storage_name.file_uri}'
-                    )
-                    parser = FitsParser(headers, blueprint, uri)
-
                 if self._dump_config:
                     print(f'Blueprint for {uri}: {blueprint}')
+                parser = self._get_parser(headers, blueprint, uri)
 
                 if self._observation is None:
                     if blueprint._get('DerivedObservation.members') is None:
@@ -1210,7 +1215,6 @@ class Fits2caom2Visitor:
                     file_info,
                     self._clients,
                 )
-            self._logger.debug(f'End visit')
         except Caom2Exception as e:
             self._logger.debug(traceback.format_exc())
             self._logger.warning(
@@ -1219,4 +1223,5 @@ class Fits2caom2Visitor:
             )
             self._observation = None
 
+        self._logger.debug(f'End visit')
         return self._observation

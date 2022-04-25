@@ -75,7 +75,7 @@ from caom2pipe import translate_composable as tc
 import test_conf
 
 
-@patch('caom2utils.fits2caom2.FitsParser.augment_observation')
+@patch('caom2utils.caom2blueprint.FitsParser.augment_observation')
 def test_add_headers_to_obs_by_blueprint(parser_mock):
     test_blueprint = ObsBlueprint()
     test_fqn = f'{test_conf.TEST_DATA_DIR}/translate_test/after_aug.xml'
