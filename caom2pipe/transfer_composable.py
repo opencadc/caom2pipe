@@ -70,6 +70,7 @@ import logging
 import os
 import traceback
 
+from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 
 
@@ -80,8 +81,8 @@ __all__ = [
     'modify_transfer_factory',
     'store_transfer_factory',
     'Transfer',
-    'VoFitsCleanupTransfer',
-    'VoFitsTransfer',
+    'VoScienceCleanupTransfer',
+    'VoScienceTransfer',
     'VoTransfer',
 ]
 
@@ -189,9 +190,9 @@ class VoTransfer(Transfer):
         self._cadc_client.copy(source, dest_fqn, send_md5=True)
 
 
-class FitsTransfer(Transfer):
+class ScienceTransfer(Transfer):
     """
-    Abstract class to provide FITS transfer checking.
+    Abstract class to provide FITS and HDF5 transfer checking.
     """
 
     def __init__(self):
@@ -207,33 +208,16 @@ class FitsTransfer(Transfer):
         self._observable = value
 
     def check(self, dest_fqn, original_fqn):
-        from astropy.io import fits
+        result = True
+        msg = ''
+        if '.fits' in dest_fqn:
+            result = ac.check_fits(dest_fqn)
+            msg = f'astropy error when reading {dest_fqn}'
+        elif dest_fqn.endswith('.h5') or dest_fqn.endswith('.hdf5'):
+            result = ac.check_h5(dest_fqn)
+            msg = f'h5check error when reading {dest_fqn}'
 
-        try:
-            hdulist = fits.open(dest_fqn, memmap=True, lazy_load_hdus=False)
-            hdulist.verify('warn')
-            for h in hdulist:
-                h.verify('warn')
-            hdulist.close()
-        except (fits.VerifyError, OSError) as e1:
-            if self._observable is not None:
-                self._observable.rejected.record(
-                    mc.Rejected.BAD_DATA, os.path.basename(dest_fqn)
-                )
-            msg = f'astropy verify error {dest_fqn} when reading {e1}'
-            self.failure_action(original_fqn, dest_fqn, msg)
-        # a second check that fails for some NEOSSat cases - if this works,
-        # the file might have been correctly retrieved
-        try:
-            # ignore the return value - if the file is corrupted, the getdata
-            # fails, which is the only interesting behaviour here
-            fits.getdata(dest_fqn)
-        except (TypeError, OSError) as e2:
-            if self._observable is not None:
-                self._observable.rejected.record(
-                    mc.Rejected.BAD_DATA, os.path.basename(dest_fqn)
-                )
-            msg = f'astropy getdata error {dest_fqn} when reading {e2}'
+        if not result:
             self.failure_action(original_fqn, dest_fqn, msg)
 
     def get(self, source, dest_fqn):
@@ -254,7 +238,7 @@ class FitsTransfer(Transfer):
         raise mc.CadcException(msg)
 
 
-class HttpTransfer(FitsTransfer):
+class HttpTransfer(ScienceTransfer):
     """
     Uses HTTP to manage transfers from external sites to local disk.
     """
@@ -271,12 +255,11 @@ class HttpTransfer(FitsTransfer):
         """
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         mc.http_get(source, dest_fqn)
-        if '.fits' in dest_fqn:
-            self.check(dest_fqn, source)
+        self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')
 
 
-class FtpTransfer(FitsTransfer):
+class FtpTransfer(ScienceTransfer):
     """
     Uses FTP to manage transfers from external sites to local disk.
     """
@@ -294,15 +277,14 @@ class FtpTransfer(FitsTransfer):
         """
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         mc.ftp_get_timeout(self._ftp_host, source, dest_fqn)
-        if '.fits' in dest_fqn:
-            self.check(dest_fqn, source)
+        self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')
 
 
-class VoFitsTransfer(FitsTransfer):
+class VoScienceTransfer(ScienceTransfer):
     """
     Uses the vos Client to manage transfers from CADC to local disk. Have
-    FITS integrity-checking.
+    FITS or H5 integrity-checking.
     """
 
     def __init__(self, vo_client):
@@ -313,12 +295,11 @@ class VoFitsTransfer(FitsTransfer):
     def get(self, source, dest_fqn):
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         self._vo_client.copy(source, dest_fqn, send_md5=True)
-        if '.fits' in dest_fqn:
-            self.check(dest_fqn, source)
+        self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')
 
 
-class VoFitsCleanupTransfer(VoFitsTransfer):
+class VoScienceCleanupTransfer(VoScienceTransfer):
     """
     Implements the case where clean up needs to occur.
     """
@@ -333,8 +314,7 @@ class VoFitsCleanupTransfer(VoFitsTransfer):
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
         try:
             self._vo_client.copy(source, dest_fqn, send_md5=True)
-            if '.fits' in dest_fqn:
-                self.check(dest_fqn, source)
+            self.check(dest_fqn, source)
             self._logger.debug(f'Successfully retrieved {source}')
         except Exception as e:
             self._logger.debug(traceback.format_exc())
