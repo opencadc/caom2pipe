@@ -692,7 +692,8 @@ def test_visit():
     test_config = mc.Config()
     test_observable = mc.Observable(test_rejected, mc.Metrics(test_config))
     cadc_client_mock = Mock()
-
+    clients_mock = Mock()
+    clients_mock.data_client = cadc_client_mock
     test_product_id = 'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
     test_file_name = (
         'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
@@ -702,7 +703,7 @@ def test_visit():
     storage_name = VisitStorageName()
     kwargs = {
         'working_directory': tc.TEST_FILES_DIR,
-        'cadc_client': cadc_client_mock,
+        'clients': clients_mock,
         'stream': 'stream',
         'observable': test_observable,
         'storage_name': storage_name,
