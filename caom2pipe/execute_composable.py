@@ -287,6 +287,16 @@ class CaomExecute:
                     self._observation = visitor.visit(
                         self._observation, **kwargs
                     )
+                    if self._observation is None:
+                        msg = (
+                            f'Observation construction failed for '
+                            f'{self._storage_name.file_uri}'
+                        )
+                        self.logger.error(
+                            f'Stopping _visit_meta in {visitor.__name__} '
+                            f'with {msg}'
+                        )
+                        raise mc.CadcException(msg)
                 except Exception as e:
                     raise mc.CadcException(e)
 
