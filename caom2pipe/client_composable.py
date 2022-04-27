@@ -91,6 +91,7 @@ from cadctap import CadcTapClient
 from cadcutils import net, exceptions
 from cadcdata import FileInfo
 from caom2utils.data_util import StorageClientWrapper
+from caom2utils.data_util import get_file_encoding, get_file_type
 from caom2pipe import astro_composable as ac
 from caom2pipe import manage_composable as mc
 from caom2repo import CAOM2RepoClient
@@ -632,7 +633,7 @@ def si_client_put(client, fqn, storage_name, metrics):
             src=fqn,
             replace=replace,
             file_type=local_meta.get('type'),
-            file_encoding='',
+            file_encoding=get_file_encoding(storage_name),
             md5_checksum=local_meta.get('md5sum'),
         )
     except Exception as e:
@@ -661,12 +662,16 @@ def vault_info(client, uri):
     :return: an instance of FileInfo
     """
     try:
+        file_type = get_file_type(uri)
+        encoding = get_file_encoding(uri)
         node = client.get_node(uri, limit=None, force=False)
         return FileInfo(
             id=uri,
             size=mc.to_int(node.props.get('length')),
             md5sum=node.props.get('MD5').replace('md5:', ''),
             lastmod=node.props.get('lastmod'),
+            file_type=file_type,
+            encoding=encoding,
         )
     except exceptions.NotFoundException as e:
         return None
