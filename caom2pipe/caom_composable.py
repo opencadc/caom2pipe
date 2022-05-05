@@ -1067,7 +1067,7 @@ def undo_astropy_cdfix_call(chunk, time_delta):
     omitted.
     See:
     https://docs.astropy.org/en/stable/api/astropy.
-    wc.Wcsprm.html#astropy.wcs.Wcsprm.cdfix
+    wcs.Wcsprm.html#astropy.wcs.Wcsprm.cdfix
     """
     if (
         time_delta == 0.0

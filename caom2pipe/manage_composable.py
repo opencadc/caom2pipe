@@ -1487,10 +1487,10 @@ class PreviewVisitor:
         self._mime_type = mime_type
         self._logger = logging.getLogger(self.__class__.__name__)
         self._working_dir = kwargs.get('working_directory', './')
-        self._cadc_client = kwargs.get('cadc_client')
-        if self._cadc_client is None:
+        self._clients = kwargs.get('clients')
+        if self._clients is None or self._clients.data_client is None:
             self._logger.warning(
-                'Visitor needs a cadc_client parameter to store previews.'
+                'Visitor needs a data_client parameter to store previews.'
             )
         self._stream = kwargs.get('stream')
         if self._stream is None:
@@ -1584,7 +1584,7 @@ class PreviewVisitor:
         """Clean up files on disk after."""
         # cadc_client will be None if executing a ScrapeModify task, so
         # leave the files behind so the user can see them on disk.
-        if self._cadc_client is not None:
+        if self._clients is not None and self._clients.data_client is not None:
             for entry in self._delete_list:
                 if os.path.exists(entry):
                     self._logger.warning(f'Deleting {entry}')
@@ -1603,9 +1603,11 @@ class PreviewVisitor:
         return self._storage_name
 
     def _store_smalls(self):
-        if self._cadc_client is not None:
+        if self._clients is not None and self._clients.data_client is not None:
             for uri, entry in self._previews.items():
-                self._cadc_client.put(self._working_dir, uri, self._stream)
+                self._clients.data_client.put(
+                    self._working_dir, uri, self._stream
+                )
 
     def _gen_thumbnail(self):
         self._logger.debug(
