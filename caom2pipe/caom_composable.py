@@ -1160,7 +1160,7 @@ class Fits2caom2Visitor:
     def _get_parser(self, headers, blueprint, uri):
         if headers is None or len(headers) == 0:
             self._logger.debug(
-                f'No headers, using a GenericParser for '
+                f'No headers, using a BlueprintParser for '
                 f'{self._storage_name.file_uri}'
             )
             parser = BlueprintParser(blueprint, uri)
