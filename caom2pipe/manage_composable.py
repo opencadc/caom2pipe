@@ -334,7 +334,7 @@ class Rejected:
         INVALID_FORMAT: 'Invalid observation ID',
         MISSING: 'Could not find JSON record for',
         NO_INSTRUMENT: 'Unknown value for instrument',
-        NO_PREVIEW: 'Internal Server Error for url: '
+        NO_PREVIEW: 'Not Found for url: '
         'https://archive.gemini.edu/preview',
     }
 
