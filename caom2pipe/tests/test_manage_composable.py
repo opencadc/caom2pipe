@@ -747,6 +747,59 @@ def test_visit():
 
 
 def test_config_write():
+    config_content = """archive: NEOSS
+cache_file_name: cache.yml
+cache_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/cache.yml
+cleanup_files_when_storing: False
+collection: NEOSSAT
+data_source_extensions: ['.fits']
+data_sources: []
+failure_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/failure_log.txt
+failure_log_file_name: failure_log.txt
+features:
+  expects_retry: True
+  run_in_airflow: True
+  supports_catalog: True
+  supports_composite: False
+  supports_latest_client: False
+  supports_multiple_files: True
+interval: 10
+is_connected: True
+log_file_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data
+log_to_file: False
+logging_level: DEBUG
+observe_execution: False
+progress_file_name: progress.txt
+progress_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/progress.txt
+proxy_file_name: test_proxy.pem
+proxy_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_proxy.pem
+recurse_data_sources: False
+rejected_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_config_dir
+rejected_file_name: rejected.yml
+rejected_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_config_dir/rejected.yml
+report_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/data_report.txt
+resource_id: ivo://cadc.nrc.ca/sc2repo
+retry_count: 1
+retry_failures: False
+retry_file_name: retries.txt
+retry_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/retries.txt
+state_file_name: state.yml
+state_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/state.yml
+storage_inventory_resource_id: raven
+store_modified_files_only: False
+stream: raw
+success_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/success_log.txt
+success_log_file_name: success_log.txt
+tap_id: ivo://cadc.nrc.ca/sc2tap
+task_types:
+  - visit
+  - modify
+use_local_files: False
+work_file: todo.txt
+work_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/todo.txt
+working_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data
+"""
+
     get_cwd_orig = os.getcwd
     test_dir = f'{tc.TEST_DATA_DIR}/test_config_dir'
     os.getcwd = Mock(return_value=test_dir)
@@ -769,6 +822,9 @@ def test_config_write():
             assert mc.TaskType.SCRAPE in test_config.task_types, 'scrape end'
     finally:
         os.getcwd = get_cwd_orig
+        fqn = f'{test_dir}/config.yml'
+        with open(fqn, 'w') as f:
+            f.write(config_content)
 
 
 def test_reverse_lookup():
