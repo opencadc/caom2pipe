@@ -382,8 +382,14 @@ class ListDirTimeBoxDataSource(DataSource):
                     # send the dir_listing value
                     if self.default_filter(entry):
                         entry_stats = entry.stat()
-                        if exec_time >= entry_stats.st_mtime >= prev_exec_time:
-                            self._temp[entry_stats.st_mtime].append(entry.path)
+                        if (
+                            exec_time
+                            >= entry_stats.st_mtime
+                            >= prev_exec_time
+                        ):
+                            self._temp[entry_stats.st_mtime].append(
+                                entry.path
+                            )
 
 
 class LocalFilesDataSource(ListDirTimeBoxDataSource):
@@ -541,7 +547,11 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     # otherwise the entry.stat() call will sometimes fail.
                     if not entry.name.startswith('.'):
                         entry_stats = entry.stat()
-                        if exec_time >= entry_stats.st_mtime >= prev_exec_time:
+                        if (
+                            exec_time
+                            >= entry_stats.st_mtime
+                            >= prev_exec_time
+                        ):
                             if self.default_filter(entry):
                                 self._temp[entry_stats.st_mtime].append(
                                     entry.path
@@ -606,7 +616,9 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     self._find_work(entry.path)
                 else:
                     if self.default_filter(entry):
-                        self._logger.info(f'Adding {entry.path} to work list.')
+                        self._logger.info(
+                            f'Adding {entry.path} to work list.'
+                        )
                         self._work.append(entry.path)
 
     def _move_action(self, fqn, destination):
@@ -793,7 +805,9 @@ class VaultDataSource(ListDirTimeBoxDataSource):
         self._logger.debug('Begin get_work.')
         work = deque()
         for source_directory in self._source_directories:
-            self._logger.debug(f'Searching {source_directory} for work to do.')
+            self._logger.debug(
+                f'Searching {source_directory} for work to do.'
+            )
             self._find_work(source_directory, work)
         self._logger.debug('End get_work.')
         return work

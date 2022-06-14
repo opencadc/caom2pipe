@@ -197,7 +197,7 @@ class CaomExecute:
         # track whether the caom2repo call will be a create or an update
         self._caom2_update_needed = False
         self._decompressor = decompressor_factory(
-            config, self.working_dir, self.log_level_as
+            config, self.working_dir, self.log_level_as, storage_name
         )
 
     def __str__(self):
@@ -457,7 +457,9 @@ class DataVisit(CaomExecute):
 
         self.logger.debug('get the input files')
         for entry in self._storage_name.destination_uris:
-            local_fqn = os.path.join(self.working_dir, os.path.basename(entry))
+            local_fqn = os.path.join(
+                self.working_dir, os.path.basename(entry)
+            )
             self._transferrer.get(entry, local_fqn)
 
         self.logger.debug('get the observation for the existing model')
@@ -893,13 +895,17 @@ class OrganizeExecutes:
             )
         finally:
             success.close()
-        logging.debug('******************************************************')
+        logging.debug(
+            '******************************************************'
+        )
         logging.info(
             f'Progress - record {self.success_count} of '
             f'{self.complete_record_count} records processed in '
             f'{execution_s:.2f} s.'
         )
-        logging.debug('******************************************************')
+        logging.debug(
+            '******************************************************'
+        )
 
     def set_log_location(self):
         self.set_log_files(self.config)
@@ -1187,10 +1193,14 @@ class OrganizeExecutes:
         return result
 
 
-def decompressor_factory(config, working_directory, log_level_as):
+def decompressor_factory(
+    config, working_directory, log_level_as, storage_name
+):
     if config.features.supports_decompression:
         if config.collection == 'CFHT':
-            return FitsForCADCCompressor(working_directory, log_level_as)
+            return FitsForCADCCompressor(
+                working_directory, log_level_as, storage_name
+            )
         else:
             return FitsForCADCDecompressor(working_directory, log_level_as)
     else:
@@ -1198,7 +1208,6 @@ def decompressor_factory(config, working_directory, log_level_as):
 
 
 class DecompressorNoop:
-
     def __init__(self):
         pass
 
@@ -1267,19 +1276,28 @@ class FitsForCADCDecompressor(DecompressorNoop):
 
 class FitsForCADCCompressor(FitsForCADCDecompressor):
     """
-    The class the implements the recompression.
+    This class implements conditional recompression.
+
+    SF - 20-05-22
+    it looks like compression will be:
+    if bitpix==(-32|-64):
+         gunzip file.fits.gz
+    else:
+         imcopy file.fits.gz file.fits.fz[compress]
     """
 
-    def __init__(self, working_directory, log_level_as):
+    def __init__(self, working_directory, log_level_as, storage_name):
         super().__init__(working_directory, log_level_as)
+        self._storage_name = storage_name
 
     def fix_compression(self, fqn):
+        self._logger.debug(f'Begin fix_compression with {fqn}')
         returned_fqn = fqn
-        if '.fits' in fqn:
-            returned_fqn = super().fix_compression(fqn)
-            fz_fqn = f'{returned_fqn}.fz'
-            if fz_fqn != fqn:
-                compress_cmd = f"imcopy {returned_fqn} '{fz_fqn}[compress]'"
+        if '.fits' in fqn and fqn.endswith('.gz'):
+            logging.error(self._storage_name)
+            if self._storage_name.file_uri.endswith('.fz'):
+                fz_fqn = fqn.replace('.gz', '.fz')
+                compress_cmd = f"imcopy {fqn} '{fz_fqn}[compress]'"
                 self._logger.debug(f'Executing {compress_cmd}')
                 mc.exec_cmd_array(
                     ['/bin/bash', '-c', compress_cmd], self._log_level_as
@@ -1287,5 +1305,8 @@ class FitsForCADCCompressor(FitsForCADCDecompressor):
                 self._logger.info(
                     f'Changed compressed file from {fqn} to {fz_fqn}'
                 )
-        self._logger.debug(f'End fix_compression with {returned_fqn}')
+                returned_fqn = fz_fqn
+            else:
+                returned_fqn = super().fix_compression(fqn)
+            self._logger.debug(f'End fix_compression with {returned_fqn}')
         return returned_fqn

@@ -111,7 +111,7 @@ def test_client_put(mock_metrics, mock_client):
         src='/test_files/TEST.fits',
         replace=True,
         file_type='application/fits',
-        file_encoding='',
+        file_encoding=None,
         md5_checksum='9473fdd0d880a43c21b7778d34872157',
     ), 'mock not called'
     assert mock_metrics.observe.called, 'mock not called'
@@ -146,7 +146,7 @@ def test_client_put_failure(mock_metrics):
         src='/test_files/TEST.fits',
         replace=True,
         file_type='application/fits',
-        file_encoding='',
+        file_encoding=None,
         md5_checksum='9473fdd0d880a43c21b7778d34872157',
     ), 'mock not called'
     assert mock_metrics.observe_failure.called, 'mock not called'
@@ -345,7 +345,9 @@ def test_repo_delete(mock_client):
 
     clc.repo_delete(mock_client, 'coll', 'test_id', test_metrics)
 
-    mock_client.delete.assert_called_with('coll', 'test_id'), 'mock not called'
+    mock_client.delete.assert_called_with(
+        'coll', 'test_id'
+    ), 'mock not called'
     assert len(test_metrics.history) == 1, 'history conditions'
     assert len(test_metrics.failures) == 0, 'failure conditions'
     assert 'caom2' in test_metrics.history, 'history'

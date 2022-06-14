@@ -83,7 +83,7 @@ from caom2 import SimpleObservation, Algorithm
 from caom2pipe.client_composable import ClientCollection
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
-from caom2pipe import reader_composable as rdc
+from caom2pipe.reader_composable import FileMetadataReader, MetadataReader
 from caom2pipe import transfer_composable
 import test_conf as tc
 
@@ -387,7 +387,7 @@ def test_scrape(test_config):
     # assert os.path.exists(netrc)
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.logging_level = 'INFO'
-    test_reader = rdc.FileMetadataReader()
+    test_reader = FileMetadataReader()
     test_executor = ec.Scrape(
         test_config,
         tc.TestStorageName(
@@ -1017,33 +1017,42 @@ def test_data_visit_params(access_mock):
         _clean_up_dir(test_wd)
 
 
-def test_decompresss():
+def test_decompress():
     if os.path.exists('/tmp/abc.fits.fz'):
         os.unlink('/tmp/abc.fits.fz')
 
-    for test_subject in [
-        ec.FitsForCADCDecompressor('/tmp', logging.DEBUG),
-        ec.FitsForCADCCompressor('/tmp', logging.DEBUG),
-    ]:
-        assert test_subject is not None, 'ctor failure'
-        test_files = [
-            '/tmp/abc.tar.gz',
-            '/tmp/def.csv',
-            '/test_files/compression/abc.fits.gz',
-            # '/test_files/compression/ghi.fits.bz2',
-        ]
+    class RecompressStorageName(mc.StorageName):
 
-        for fqn in test_files:
+        def __init__(self, file_name):
+            super().__init__(file_name=file_name, source_names=[file_name])
+
+        @property
+        def file_uri(self):
+            # beause this is the condition which causes recompression
+            return f'{super().file_uri}.fz'
+
+    test_files = [
+        '/tmp/abc.tar.gz',
+        '/tmp/def.csv',
+        '/test_files/compression/abc.fits.gz',
+        # '/test_files/compression/ghi.fits.bz2',
+    ]
+
+    for fqn in test_files:
+        test_sn = RecompressStorageName(file_name=fqn)
+        for test_subject in [
+            ec.FitsForCADCDecompressor('/tmp', logging.DEBUG),
+            ec.FitsForCADCCompressor('/tmp', logging.DEBUG, test_sn),
+        ]:
+            assert test_subject is not None, 'ctor failure'
             test_result = test_subject.fix_compression(fqn)
 
             if '.fits' in fqn:
                 assert os.path.exists(test_result), f'expect {test_result}'
-                os.unlink(test_result)
-
                 if isinstance(test_subject, ec.FitsForCADCCompressor):
-                    fz_fqn = '/tmp/abc.fits.fz'
+                    fz_fqn = fqn.replace('.gz', '.fz')
                     assert os.path.exists(fz_fqn), f'expect {fz_fqn}'
-                    os.unlink(fz_fqn)
+                os.unlink(test_result)
 
 
 def _transfer_get_mock(entry, fqn):
@@ -1068,7 +1077,7 @@ def _communicate():
 
 def _get_headers(uri):
     x = """SIMPLE  =                    T / Written by IDL:  Fri Oct  6 01:48:35 2017
-BITPIX  =                  -32 / Bits per pixel
+BITPIX  =                   32 / Bits per pixel
 NAXIS   =                    2 / Number of dimensions
 NAXIS1  =                 2048 /
 NAXIS2  =                 2048 /

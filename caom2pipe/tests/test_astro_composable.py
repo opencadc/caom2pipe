@@ -211,7 +211,8 @@ def test_filter_md_cache(query_mock):
     test_result = test_subject.get_svo_filter('collection', 'collection')
     assert test_result is not None, 'expect a result'
     assert (
-        ac.FilterMetadataCache.get_central_wavelength(test_result) == 4444.2043
+        ac.FilterMetadataCache.get_central_wavelength(test_result)
+        == 4444.2043
     ), 'wrong cw'
     assert (
         ac.FilterMetadataCache.get_fwhm(test_result) == 333.9806

@@ -99,7 +99,12 @@ def test_list_dir_data_source(test_config):
         stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
     )
 
-    for entry in ['TEST.fits.gz', 'TEST1.fits', 'TEST2.fits.fz', 'TEST3.hdf5']:
+    for entry in [
+        'TEST.fits.gz',
+        'TEST1.fits',
+        'TEST2.fits.fz',
+        'TEST3.hdf5',
+    ]:
         if not os.path.exists(f'{test_config.working_directory}/{entry}'):
             with open(f'{test_config.working_directory}/{entry}', 'w') as f:
                 f.write('test content')
@@ -294,7 +299,9 @@ def test_list_dir_time_box_data_source(test_config):
             test_prev_exec_time, test_exec_time
         )
         assert test_result is not None, 'expect a non-recursive result'
-        assert len(test_result) == 1, 'expect contents in non-recursive result'
+        assert (
+            len(test_result) == 1
+        ), 'expect contents in non-recursive result'
         x = [ii.entry_name for ii in test_result]
         assert test_file_2 not in x, 'recursive result should not be present'
     finally:
@@ -326,7 +333,7 @@ def test_list_dir_separate_data_source(test_config):
     test_subject = dsc.ListDirSeparateDataSource(test_config)
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a non-recursive result'
-    assert len(test_result) == 91, 'expect contents in non-recursive result'
+    assert len(test_result) == 92, 'expect contents in non-recursive result'
     assert (
         '/test_files/sub_directory/abc.fits' not in test_result
     ), 'recursive result should not be present'
@@ -493,7 +500,8 @@ def test_transfer_check_fits_verify(test_config):
             test_result[1].entry_name == '/cfht_source/same_file.fits'
         ), 'wrong result'
         assert (
-            test_result[2].entry_name == '/cfht_source/already_successful.fits'
+            test_result[2].entry_name
+            == '/cfht_source/already_successful.fits'
         ), 'wrong result'
         for f in [
             test_empty_file,
@@ -611,8 +619,12 @@ def test_transfer_fails(check_fits_mock, test_config):
     test_config.task_types = [mc.TaskType.STORE]
     test_config.data_source_extensions = ['.fits.gz']
     test_config.cleanup_files_when_storing = True
-    test_config.cleanup_failure_destination = test_failure_directory.as_posix()
-    test_config.cleanup_success_destination = test_success_directory.as_posix()
+    test_config.cleanup_failure_destination = (
+        test_failure_directory.as_posix()
+    )
+    test_config.cleanup_success_destination = (
+        test_success_directory.as_posix()
+    )
 
     cadc_client_mock = Mock(autospec=True)
     test_subject = dsc.LocalFilesDataSource(

@@ -362,7 +362,9 @@ class StateRunner(TodoRunner):
         )
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def _record_progress(self, count, cumulative_count, start_time, save_time):
+    def _record_progress(
+        self, count, cumulative_count, start_time, save_time
+    ):
         start_time_dt = datetime.utcfromtimestamp(start_time)
         save_time_dt = datetime.utcfromtimestamp(save_time)
         with open(self._config.progress_fqn, 'a') as progress:
@@ -475,7 +477,9 @@ class StateRunner(TodoRunner):
         state.save_state(
             self._bookmark_name, datetime.utcfromtimestamp(exec_time)
         )
-        self._logger.info('==================================================')
+        self._logger.info(
+            '=================================================='
+        )
         self._logger.info(
             f'Done for {self._bookmark_name}, saved state is '
             f'{datetime.utcfromtimestamp(exec_time)}'
@@ -484,7 +488,9 @@ class StateRunner(TodoRunner):
             f'{cumulative_correct} of {cumulative} records processed '
             f'correctly.'
         )
-        self._logger.info('==================================================')
+        self._logger.info(
+            '=================================================='
+        )
         return result
 
 
@@ -526,7 +532,9 @@ def _common_init(
         config.get_executors()
 
     _set_logging(config)
-    logging.debug(f'Setting collection to {config.collection} in StorageName.')
+    logging.debug(
+        f'Setting collection to {config.collection} in StorageName.'
+    )
     mc.StorageName.collection = config.collection
 
     if clients is None:
