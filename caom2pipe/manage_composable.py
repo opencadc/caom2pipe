@@ -1847,6 +1847,7 @@ class StorageName:
                         os.path.basename(temp.path)
                         .replace('.gz', '')
                         .replace('.bz2', '')
+                        .replace('.header', '')
                     )
                 )
             else:
