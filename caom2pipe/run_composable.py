@@ -203,12 +203,13 @@ class TodoRunner:
         mc.create_dir(self._config.log_file_directory)
         self._organizer.observable.rejected.persist_state()
         self._organizer.observable.metrics.capture()
-        self._logger.info('----------------------------------------')
-        self._logger.info(
+        msg = (
             f'Done, processed {self._organizer.success_count} of '
             f'{self._organizer.complete_record_count} correctly.'
         )
-        self._logger.info('----------------------------------------')
+        self._logger.info('-' * len(msg))
+        self._logger.info(msg)
+        self._logger.info('-' * len(msg))
 
     def _process_entry(self, entry, current_count):
         self._logger.debug(f'Begin _process_entry for {entry}.')
@@ -444,6 +445,11 @@ class StateRunner(TodoRunner):
                         save_time = min(
                             mc.convert_to_ts(entry.entry_ts), exec_time
                         )
+                    # this reset call is outside the while process_entry loop
+                    # for GEMINI which gets all the metadata for an interval in
+                    # a single call, and it wouldn't be polite to throw away
+                    # all the metadata that will be just need to be retrieved
+                    # again for each record
                     self._metadata_reader.reset()
                     self._finish_run()
 
@@ -477,20 +483,17 @@ class StateRunner(TodoRunner):
         state.save_state(
             self._bookmark_name, datetime.utcfromtimestamp(exec_time)
         )
-        self._logger.info(
-            '=================================================='
-        )
-        self._logger.info(
+        msg = (
             f'Done for {self._bookmark_name}, saved state is '
             f'{datetime.utcfromtimestamp(exec_time)}'
         )
+        self._logger.info('=' * len(msg))
+        self._logger.info(msg)
         self._logger.info(
             f'{cumulative_correct} of {cumulative} records processed '
             f'correctly.'
         )
-        self._logger.info(
-            '=================================================='
-        )
+        self._logger.info('=' * len(msg))
         return result
 
 

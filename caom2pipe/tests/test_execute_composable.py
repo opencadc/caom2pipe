@@ -366,6 +366,7 @@ def test_data_store(fix_mock, access_mock, test_config):
             observable=test_observer,
             transferrer=transfer_composable.Transfer(),
             clients=clients,
+            metadata_reader=Mock(),
         )
         test_executor.execute(None)
 
@@ -797,6 +798,7 @@ def test_store(compressor_mock, access_mock, test_config):
         test_observable,
         test_transferrer,
         clients,
+        metadata_reader=Mock(),
     )
     assert test_subject is not None, 'expect construction'
     assert test_subject.working_dir == os.path.join(
@@ -846,7 +848,11 @@ def test_local_store(compressor_mock, access_mock, test_config):
     clients._data_client = test_data_client
     test_observable = Mock(autospec=True)
     test_subject = ec.LocalStore(
-        test_config, test_sn, test_observable, clients
+        test_config,
+        test_sn,
+        test_observable,
+        clients,
+        metadata_reader=Mock(),
     )
     assert test_subject is not None, 'expect construction'
     test_subject.execute(None)
@@ -910,6 +916,7 @@ def test_store_newer_files_only_flag(client_mock, access_mock, test_config):
         test_sn,
         observable_mock,
         clients,
+        metadata_reader=Mock(),
     )
     test_subject.execute(None)
     assert client_mock.put.called, 'expect put call'
@@ -943,6 +950,7 @@ def test_store_newer_files_only_flag_client(
         test_sn,
         observable_mock,
         clients,
+        metadata_reader=Mock(),
     )
     test_subject.execute(None)
     assert client_mock.put.called, 'expect copy call'
@@ -1022,13 +1030,12 @@ def test_decompress():
         os.unlink('/tmp/abc.fits.fz')
 
     class RecompressStorageName(mc.StorageName):
-
         def __init__(self, file_name):
             super().__init__(file_name=file_name, source_names=[file_name])
 
         @property
         def file_uri(self):
-            # beause this is the condition which causes recompression
+            # because this is the condition which causes recompression
             return f'{super().file_uri}.fz'
 
     test_files = [
@@ -1050,7 +1057,8 @@ def test_decompress():
             if '.fits' in fqn:
                 assert os.path.exists(test_result), f'expect {test_result}'
                 if isinstance(test_subject, ec.FitsForCADCCompressor):
-                    fz_fqn = fqn.replace('.gz', '.fz')
+                    temp = os.path.basename(fqn).replace('.gz', '.fz')
+                    fz_fqn = os.path.join('/tmp', temp)
                     assert os.path.exists(fz_fqn), f'expect {fz_fqn}'
                 os.unlink(test_result)
 
