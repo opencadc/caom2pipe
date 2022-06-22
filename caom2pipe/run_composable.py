@@ -107,7 +107,12 @@ class RunnerReport:
     This class contains metrics for reporting on pipeline runs.
     """
 
-    def __init__(self, location):
+    def __init__(self, location, application):
+        self._version = (
+            '0.0.0' if application == 'DEFAULT' else mc.get_version(
+                application
+            )
+        )
         self._location = os.path.basename(location)
         self._start_time = get_utc_now_tz().timestamp()
         self._entries_sum = 0
@@ -140,12 +145,13 @@ class RunnerReport:
         msg2 = f'Date: {datetime.isoformat(datetime.utcnow())}'
         execution_time = get_utc_now_tz().timestamp() - self._start_time
         msg3 = f'Execution Time: {execution_time:.2f} s'
-        msg4 = f'    Number of Inputs: {self._entries_sum}'
-        msg5 = f' Number of Successes: {self._success_sum}'
-        msg6 = f'  Number of Timeouts: {self._timeouts_sum}'
-        msg7 = f'   Number of Retries: {self._retry_sum}'
-        msg8 = f'    Number of Errors: {self._errors_sum}'
-        msg9 = f'Number of Rejections: {self._rejection_sum}'
+        msg4 = f'Version: {self._version}'
+        msg5 = f'    Number of Inputs: {self._entries_sum}'
+        msg6 = f' Number of Successes: {self._success_sum}'
+        msg7 = f'  Number of Timeouts: {self._timeouts_sum}'
+        msg8 = f'   Number of Retries: {self._retry_sum}'
+        msg9 = f'    Number of Errors: {self._errors_sum}'
+        msg10 = f'Number of Rejections: {self._rejection_sum}'
         max_length = max(
             len(msg1),
             len(msg2),
@@ -156,11 +162,12 @@ class RunnerReport:
             len(msg7),
             len(msg8),
             len(msg9),
+            len(msg10),
         )
         msg_highlight = '*' * max_length
         msg = (
             f'\n\n{msg_highlight}\n{msg1}\n{msg2}\n{msg3}\n{msg4}\n{msg5}\n'
-            f'{msg6}\n{msg7}\n{msg8}\n{msg9}\n{msg_highlight}\n\n'
+            f'{msg6}\n{msg7}\n{msg8}\n{msg9}\n{msg10}\n{msg_highlight}\n\n'
         )
         return msg
 
@@ -174,7 +181,13 @@ class TodoRunner:
     """
 
     def __init__(
-        self, config, organizer, builder, data_source, metadata_reader
+        self,
+        config,
+        organizer,
+        builder,
+        data_source,
+        metadata_reader,
+        application,
     ):
         self._builder = builder
         self._data_source = data_source
@@ -184,7 +197,9 @@ class TodoRunner:
         # the list of work to be done, containing whatever is returned from
         # the DataSource instance
         self._todo_list = []
-        self._reporter = RunnerReport(self._config.working_directory)
+        self._reporter = RunnerReport(
+            self._config.working_directory, application
+        )
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _build_todo_list(self):
@@ -346,10 +361,16 @@ class StateRunner(TodoRunner):
         data_source,
         metadata_reader,
         bookmark_name,
+        application,
         max_ts=None,
     ):
         super().__init__(
-            config, organizer, builder, data_source, metadata_reader
+            config,
+            organizer,
+            builder,
+            data_source,
+            metadata_reader,
+            application,
         )
         self._bookmark_name = bookmark_name
         max_ts_in_s = None
@@ -582,6 +603,7 @@ def run_by_todo(
     store_transfer=None,
     clients=None,
     metadata_reader=None,
+    application='DEFAULT',
 ):
     """A default implementation for using the TodoRunner.
 
@@ -606,6 +628,7 @@ def run_by_todo(
         Don't try to guess what this one is.
     :param clients: ClientCollection instance
     :param metadata_reader: MetadataReader instance
+    :param application str Name for finding the version
     """
     (
         config,
@@ -637,7 +660,7 @@ def run_by_todo(
     )
 
     runner = TodoRunner(
-        config, organizer, name_builder, source, metadata_reader
+        config, organizer, name_builder, source, metadata_reader, application
     )
     result = runner.run()
     result |= runner.run_retry()
@@ -658,6 +681,7 @@ def run_by_state(
     store_transfer=None,
     clients=None,
     metadata_reader=None,
+    application='DEFAULT',
 ):
     """A default implementation for using the StateRunner.
 
@@ -685,6 +709,7 @@ def run_by_state(
         Don't try to guess what this one is.
     :param clients instance of ClientsCollection, if one was required
     :param metadata_reader instance of MetadataReader
+    :param application str Name for finding the version
     """
     (
         config,
@@ -726,6 +751,7 @@ def run_by_state(
         source,
         metadata_reader,
         bookmark_name,
+        application,
         end_time,
     )
     result = runner.run()
