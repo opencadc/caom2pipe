@@ -1828,14 +1828,18 @@ class StorageName:
         return pattern.match(self._file_name)
 
     def get_file_fqn(self, working_directory):
+        # the file name without the compression extension
+        temp = os.path.basename(self.file_uri)
         if (
             self._source_names is not None
             and len(self._source_names) > 0
             and os.path.exists(self._source_names[0])
+            # is there an interim, uncompressed file name?
+            and self._source_names[0].endswith(temp)
         ):
             fqn = self._source_names[0]
         else:
-            fqn = os.path.join(working_directory, self._file_name)
+            fqn = os.path.join(working_directory, temp)
         return fqn
 
     def set_destination_uris(self):
