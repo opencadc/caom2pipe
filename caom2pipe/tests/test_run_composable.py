@@ -439,7 +439,9 @@ def test_run_state_log_to_file_true(
         )
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
-        assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+        assert os.path.exists(
+            test_config.progress_fqn
+        ), 'expect progress file'
         file_count = glob.glob(pattern)
         assert len(file_count) == 2, 'wrong number of success files'
     finally:

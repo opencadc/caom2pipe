@@ -198,7 +198,9 @@ def test_config_class():
         assert (
             test_config.features.supports_catalog is False
         ), 'modified supports catalog'
-        assert test_config.data_source_extensions == ['.fits.gz'], 'extensions'
+        assert test_config.data_source_extensions == [
+            '.fits.gz'
+        ], 'extensions'
     finally:
         os.getcwd = getcwd_orig
 
@@ -581,7 +583,9 @@ def test_validator(caps_mock, ad_mock, tap_mock):
 
     try:
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
-        test_destination_meta = test_subject._read_list_from_destination_meta()
+        test_destination_meta = (
+            test_subject._read_list_from_destination_meta()
+        )
         assert test_destination_meta is not None, 'expected result'
         assert len(test_destination_meta) == 3, 'wrong number of results'
         assert (
@@ -626,7 +630,9 @@ def test_validator2(caps_mock, ad_mock):
     os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
     try:
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
-        test_destination_data = test_subject._read_list_from_destination_data()
+        test_destination_data = (
+            test_subject._read_list_from_destination_data()
+        )
         assert test_destination_data is not None, 'expected data result'
         assert len(test_destination_data) == 5, 'wrong number of data results'
         test_result = test_destination_data[1]
@@ -710,7 +716,9 @@ def test_visit():
     }
 
     obs = mc.read_obs_from_file(f'{tc.TEST_DATA_DIR}/fpf_start_obs.xml')
-    assert len(obs.planes[test_product_id].artifacts) == 2, 'initial condition'
+    assert (
+        len(obs.planes[test_product_id].artifacts) == 2
+    ), 'initial condition'
 
     try:
         test_subject = TestVisitor(**kwargs)
@@ -849,7 +857,9 @@ def test_make_time():
         test_result = mc.make_time(key)
         assert test_result is not None, 'expect a result'
         assert isinstance(test_result, datetime), 'wrong result type'
-        assert test_result == value, f'wrong result {test_result} want {value}'
+        assert (
+            test_result == value
+        ), f'wrong result {test_result} want {value}'
 
 
 def test_cache():
@@ -928,7 +938,9 @@ def test_value_repair_cache():
     assert (
         test_observation.environment.seeing is None
     ), 'None remains None because the original is a specific value'
-    assert test_chunk.position.axis.axis1.ctype == 'RA---TAN', 'unchanged post'
+    assert (
+        test_chunk.position.axis.axis1.ctype == 'RA---TAN'
+    ), 'unchanged post'
 
     with pytest.raises(mc.CadcException):
         # pre-condition of 'Unexpected repair key' error

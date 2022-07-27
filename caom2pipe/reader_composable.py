@@ -134,7 +134,9 @@ class MetadataReader:
 
     def set_file_info(self, storage_name):
         """Retrieves FileInfo information to memory."""
-        self._logger.debug(f'Begin set_file_info for {storage_name.file_name}')
+        self._logger.debug(
+            f'Begin set_file_info for {storage_name.file_name}'
+        )
         for index, entry in enumerate(storage_name.destination_uris):
             if entry not in self._file_info.keys():
                 self._logger.debug(f'Retrieve FileInfo for {entry}')
