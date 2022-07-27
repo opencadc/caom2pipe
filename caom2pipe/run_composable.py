@@ -341,7 +341,7 @@ class TodoRunner:
                 self._reporter.add_successes(self._organizer.success_count)
                 if not self._config.need_to_retry():
                     break
-            self._logger.warning('Done retry attempts.')
+            self._logger.warning(f'Done retry attempts with result {result}.')
         else:
             self._logger.info('No failures to be retried.')
         self._logger.debug('End retry run.')
