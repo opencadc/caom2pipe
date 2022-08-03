@@ -1041,12 +1041,18 @@ def test_run_ingest(
             os.chdir(cwd)
 
 
+@patch('caom2pipe.execute_composable.get_local_file_info')
 @patch('caom2pipe.client_composable.vault_info')
 @patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('vos.vos.Client')
 def test_vo_with_cleanup(
-    vo_client_mock, access_mock, fix_mock, vault_info_mock, test_config
+    vo_client_mock,
+    access_mock,
+    fix_mock,
+    vault_info_mock,
+    local_file_info_mock,
+    test_config,
 ):
     access_mock.return_value = 'https://localhost'
     test_obs_id = 'sky_cam_image'
@@ -1061,6 +1067,7 @@ def test_vo_with_cleanup(
         md5sum='abcdef',
     )
     vault_info_mock.return_value = test_file_info
+    local_file_info_mock.return_value = test_file_info
     clients_mock = Mock()
     clients_mock.vo_client = vo_client_mock
     clients_mock.data_client.info.side_effect = [None, test_file_info]
