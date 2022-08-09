@@ -3077,11 +3077,12 @@ def _get_file_info(storage_name, cadc_client):
     return FileMeta(f_size, f_md5sum)
 
 
-def query_tap(query_string, proxy_fqn, resource_id):
+def query_tap(query_string, proxy_fqn, resource_id, timeout=10):
     """
     :param query_string ADQL
     :param proxy_fqn proxy file location, credentials for the query
     :param resource_id which tap service to query
+    :param timeout time in minutes, tap_client gives up after that
     :returns an astropy votable instance."""
 
     logging.debug(
@@ -3090,12 +3091,7 @@ def query_tap(query_string, proxy_fqn, resource_id):
     subject = net.Subject(certificate=proxy_fqn)
     tap_client = CadcTapClient(subject, resource_id=resource_id)
     buffer = io.StringIO()
-    tap_client.query(
-        query_string,
-        output_file=buffer,
-        data_only=True,
-        response_format='csv',
-    )
+    tap_client.query(query_string, output_file=buffer, data_only=True, response_format='csv', timeout=timeout)
     return Table.read(buffer.getvalue().split('\n'), format='csv')
 
 
