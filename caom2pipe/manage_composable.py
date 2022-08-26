@@ -1496,7 +1496,7 @@ class PreviewVisitor:
         self._clients = kwargs.get('clients')
         if self._clients is None or self._clients.data_client is None:
             self._logger.warning(
-                'Visitor needs a data_client parameter to store previews.'
+                'Visitor needs a clients.data_client parameter to store previews.'
             )
         self._stream = kwargs.get('stream')
         if self._stream is None:
