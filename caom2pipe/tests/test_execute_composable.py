@@ -225,6 +225,7 @@ def test_data_execute(access_mock, test_config):
             test_observer,
             test_transferrer,
             clients,
+            metadata_reader=None,
         )
         test_executor.execute(None)
 
@@ -273,6 +274,7 @@ def test_data_execute_v(access_mock, test_config):
             test_observer,
             test_transferrer,
             clients,
+            metadata_reader=None,
         )
         test_executor.execute(None)
 
@@ -322,6 +324,7 @@ def test_data_local_execute(access_mock, test_config):
         test_data_visitors,
         observable=test_observer,
         clients=clients,
+        metadata_reader=None,
     )
     test_executor.execute(None)
 
@@ -415,6 +418,7 @@ def test_data_scrape_execute(test_config):
         tc.TestStorageName(),
         test_data_visitors,
         observable=None,
+        metadata_reader=None,
     )
     try:
         if not os.path.exists(test_executor.working_dir):
@@ -747,6 +751,7 @@ def test_data_visit(client_mock, access_mock, test_config):
         test_observable,
         test_transferrer,
         clients,
+        metadata_reader=None,
     )
     try:
         if not os.path.exists(test_subject.working_dir):
@@ -1004,6 +1009,7 @@ def test_data_visit_params(access_mock):
             test_observable,
             test_transferrer,
             clients,
+            metadata_reader=None,
         )
         assert test_subject is not None, 'broken ctor'
         if not os.path.exists(test_subject.working_dir):
@@ -1018,6 +1024,7 @@ def test_data_visit_params(access_mock):
             stream=None,
             observable=ANY,
             clients=ANY,
+            metadata_reader=ANY,
         ), f'wrong visit params {storage_name.source_names}'
         data_visitor.visit.reset_mock()
     finally:

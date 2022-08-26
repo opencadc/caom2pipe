@@ -250,4 +250,5 @@ def reader_factory(config, clients):
             metadata_reader = VaultReader(clients.vo_client)
     if metadata_reader is None:
         metadata_reader = StorageClientReader(clients.data_client)
+    logging.debug(f'Returning {metadata_reader.__class__.__name__} metadata_reader.')
     return metadata_reader

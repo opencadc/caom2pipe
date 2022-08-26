@@ -445,13 +445,14 @@ class DataVisit(CaomExecute):
         observable,
         transferrer,
         clients,
+        metadata_reader,
     ):
         super().__init__(
             config,
             storage_name=storage_name,
             meta_visitors=None,
             observable=observable,
-            metadata_reader=None,
+            metadata_reader=metadata_reader,
             clients=clients,
         )
         self._data_visitors = data_visitors
@@ -493,10 +494,11 @@ class DataVisit(CaomExecute):
             'clients': self._clients,
             'stream': self.stream,
             'observable': self.observable,
+            'metadata_reader': self._metadata_reader,
         }
         for visitor in self._data_visitors:
             try:
-                self.logger.debug(f'Visit for {visitor}')
+                self.logger.debug(f'Visit for {visitor.__class__.__name__}')
                 self._observation = visitor.visit(self._observation, **kwargs)
             except Exception as e:
                 raise mc.CadcException(e)
@@ -517,6 +519,7 @@ class LocalDataVisit(DataVisit):
         data_visitors,
         observable,
         clients,
+        metadata_reader,
     ):
         super().__init__(
             config,
@@ -525,6 +528,7 @@ class LocalDataVisit(DataVisit):
             data_visitors=data_visitors,
             observable=observable,
             transferrer=tc.Transfer(),
+            metadata_reader=metadata_reader,
         )
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -556,7 +560,7 @@ class DataScrape(DataVisit):
     This executor requires manage_composable.Config.log_to_file to be True.
     """
 
-    def __init__(self, config, storage_name, data_visitors, observable):
+    def __init__(self, config, storage_name, data_visitors, observable, metadata_reader):
         super().__init__(
             config,
             storage_name,
@@ -564,6 +568,7 @@ class DataScrape(DataVisit):
             data_visitors=data_visitors,
             observable=observable,
             transferrer=tc.Transfer(),
+            metadata_reader=metadata_reader,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -1106,6 +1111,7 @@ class OrganizeExecutes:
                                     storage_name,
                                     self._data_visitors,
                                     self.observable,
+                                    self._metadata_reader,
                                 )
                             )
                         else:
@@ -1120,6 +1126,7 @@ class OrganizeExecutes:
                                     self._data_visitors,
                                     self.observable,
                                     self._clients,
+                                    self._metadata_reader,
                                 )
                             )
                     else:
@@ -1134,6 +1141,7 @@ class OrganizeExecutes:
                                 self.observable,
                                 self._modify_transfer,
                                 self._clients,
+                                self._metadata_reader,
                             )
                         )
                 else:
