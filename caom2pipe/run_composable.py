@@ -107,7 +107,12 @@ class RunnerReport:
     This class contains metrics for reporting on pipeline runs.
     """
 
-    def __init__(self, location):
+    def __init__(self, location, application):
+        self._version = (
+            '0.0.0' if application == 'DEFAULT' else mc.get_version(
+                application
+            )
+        )
         self._location = os.path.basename(location)
         self._start_time = get_utc_now_tz().timestamp()
         self._entries_sum = 0
@@ -140,12 +145,13 @@ class RunnerReport:
         msg2 = f'Date: {datetime.isoformat(datetime.utcnow())}'
         execution_time = get_utc_now_tz().timestamp() - self._start_time
         msg3 = f'Execution Time: {execution_time:.2f} s'
-        msg4 = f'    Number of Inputs: {self._entries_sum}'
-        msg5 = f' Number of Successes: {self._success_sum}'
-        msg6 = f'  Number of Timeouts: {self._timeouts_sum}'
-        msg7 = f'   Number of Retries: {self._retry_sum}'
-        msg8 = f'    Number of Errors: {self._errors_sum}'
-        msg9 = f'Number of Rejections: {self._rejection_sum}'
+        msg4 = f'Version: {self._version}'
+        msg5 = f'    Number of Inputs: {self._entries_sum}'
+        msg6 = f' Number of Successes: {self._success_sum}'
+        msg7 = f'  Number of Timeouts: {self._timeouts_sum}'
+        msg8 = f'   Number of Retries: {self._retry_sum}'
+        msg9 = f'    Number of Errors: {self._errors_sum}'
+        msg10 = f'Number of Rejections: {self._rejection_sum}'
         max_length = max(
             len(msg1),
             len(msg2),
@@ -156,11 +162,12 @@ class RunnerReport:
             len(msg7),
             len(msg8),
             len(msg9),
+            len(msg10),
         )
         msg_highlight = '*' * max_length
         msg = (
             f'\n\n{msg_highlight}\n{msg1}\n{msg2}\n{msg3}\n{msg4}\n{msg5}\n'
-            f'{msg6}\n{msg7}\n{msg8}\n{msg9}\n{msg_highlight}\n\n'
+            f'{msg6}\n{msg7}\n{msg8}\n{msg9}\n{msg10}\n{msg_highlight}\n\n'
         )
         return msg
 
@@ -174,7 +181,13 @@ class TodoRunner:
     """
 
     def __init__(
-        self, config, organizer, builder, data_source, metadata_reader
+        self,
+        config,
+        organizer,
+        builder,
+        data_source,
+        metadata_reader,
+        application,
     ):
         self._builder = builder
         self._data_source = data_source
@@ -184,7 +197,9 @@ class TodoRunner:
         # the list of work to be done, containing whatever is returned from
         # the DataSource instance
         self._todo_list = []
-        self._reporter = RunnerReport(self._config.working_directory)
+        self._reporter = RunnerReport(
+            self._config.working_directory, application
+        )
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _build_todo_list(self):
@@ -203,12 +218,13 @@ class TodoRunner:
         mc.create_dir(self._config.log_file_directory)
         self._organizer.observable.rejected.persist_state()
         self._organizer.observable.metrics.capture()
-        self._logger.info('----------------------------------------')
-        self._logger.info(
+        msg = (
             f'Done, processed {self._organizer.success_count} of '
             f'{self._organizer.complete_record_count} correctly.'
         )
-        self._logger.info('----------------------------------------')
+        self._logger.info('-' * len(msg))
+        self._logger.info(msg)
+        self._logger.info('-' * len(msg))
 
     def _process_entry(self, entry, current_count):
         self._logger.debug(f'Begin _process_entry for {entry}.')
@@ -325,7 +341,7 @@ class TodoRunner:
                 self._reporter.add_successes(self._organizer.success_count)
                 if not self._config.need_to_retry():
                     break
-            self._logger.warning('Done retry attempts.')
+            self._logger.warning(f'Done retry attempts with result {result}.')
         else:
             self._logger.info('No failures to be retried.')
         self._logger.debug('End retry run.')
@@ -345,10 +361,16 @@ class StateRunner(TodoRunner):
         data_source,
         metadata_reader,
         bookmark_name,
+        application,
         max_ts=None,
     ):
         super().__init__(
-            config, organizer, builder, data_source, metadata_reader
+            config,
+            organizer,
+            builder,
+            data_source,
+            metadata_reader,
+            application,
         )
         self._bookmark_name = bookmark_name
         max_ts_in_s = None
@@ -362,7 +384,9 @@ class StateRunner(TodoRunner):
         )
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def _record_progress(self, count, cumulative_count, start_time, save_time):
+    def _record_progress(
+        self, count, cumulative_count, start_time, save_time
+    ):
         start_time_dt = datetime.utcfromtimestamp(start_time)
         save_time_dt = datetime.utcfromtimestamp(save_time)
         with open(self._config.progress_fqn, 'a') as progress:
@@ -442,6 +466,11 @@ class StateRunner(TodoRunner):
                         save_time = min(
                             mc.convert_to_ts(entry.entry_ts), exec_time
                         )
+                    # this reset call is outside the while process_entry loop
+                    # for GEMINI which gets all the metadata for an interval in
+                    # a single call, and it wouldn't be polite to throw away
+                    # all the metadata that will be just need to be retrieved
+                    # again for each record
                     self._metadata_reader.reset()
                     self._finish_run()
 
@@ -475,16 +504,17 @@ class StateRunner(TodoRunner):
         state.save_state(
             self._bookmark_name, datetime.utcfromtimestamp(exec_time)
         )
-        self._logger.info('==================================================')
-        self._logger.info(
+        msg = (
             f'Done for {self._bookmark_name}, saved state is '
             f'{datetime.utcfromtimestamp(exec_time)}'
         )
+        self._logger.info('=' * len(msg))
+        self._logger.info(msg)
         self._logger.info(
             f'{cumulative_correct} of {cumulative} records processed '
             f'correctly.'
         )
-        self._logger.info('==================================================')
+        self._logger.info('=' * len(msg))
         return result
 
 
@@ -526,7 +556,9 @@ def _common_init(
         config.get_executors()
 
     _set_logging(config)
-    logging.debug(f'Setting collection to {config.collection} in StorageName.')
+    logging.debug(
+        f'Setting collection to {config.collection} in StorageName.'
+    )
     mc.StorageName.collection = config.collection
 
     if clients is None:
@@ -571,6 +603,7 @@ def run_by_todo(
     store_transfer=None,
     clients=None,
     metadata_reader=None,
+    application='DEFAULT',
 ):
     """A default implementation for using the TodoRunner.
 
@@ -595,6 +628,7 @@ def run_by_todo(
         Don't try to guess what this one is.
     :param clients: ClientCollection instance
     :param metadata_reader: MetadataReader instance
+    :param application str Name for finding the version
     """
     (
         config,
@@ -626,7 +660,7 @@ def run_by_todo(
     )
 
     runner = TodoRunner(
-        config, organizer, name_builder, source, metadata_reader
+        config, organizer, name_builder, source, metadata_reader, application
     )
     result = runner.run()
     result |= runner.run_retry()
@@ -647,6 +681,7 @@ def run_by_state(
     store_transfer=None,
     clients=None,
     metadata_reader=None,
+    application='DEFAULT',
 ):
     """A default implementation for using the StateRunner.
 
@@ -674,6 +709,7 @@ def run_by_state(
         Don't try to guess what this one is.
     :param clients instance of ClientsCollection, if one was required
     :param metadata_reader instance of MetadataReader
+    :param application str Name for finding the version
     """
     (
         config,
@@ -715,6 +751,7 @@ def run_by_state(
         source,
         metadata_reader,
         bookmark_name,
+        application,
         end_time,
     )
     result = runner.run()

@@ -119,6 +119,7 @@ from datetime import datetime
 from shutil import copyfileobj, move
 from urllib.parse import urlparse
 
+from caom2utils.data_util import get_local_file_info
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
@@ -197,7 +198,7 @@ class CaomExecute:
         # track whether the caom2repo call will be a create or an update
         self._caom2_update_needed = False
         self._decompressor = decompressor_factory(
-            config, self.working_dir, self.log_level_as
+            config, self.working_dir, self.log_level_as, storage_name
         )
 
     def __str__(self):
@@ -259,6 +260,12 @@ class CaomExecute:
     def _cadc_put(self, source_fqn, uri):
         interim_fqn = self._decompressor.fix_compression(source_fqn)
         self.cadc_client.put(os.path.dirname(interim_fqn), uri, self.stream)
+        # fix FileInfo that becomes out-dated by decompression during a STORE
+        # task, in this common location, affecting all collections
+        if source_fqn != interim_fqn:
+            self.logger.debug(f'Recalculate FileInfo for {interim_fqn}')
+            interim_file_info = get_local_file_info(interim_fqn)
+            self._metadata_reader.file_info[uri] = interim_file_info
 
     def _read_model(self):
         """Read an observation into memory from an XML file on disk."""
@@ -457,7 +464,9 @@ class DataVisit(CaomExecute):
 
         self.logger.debug('get the input files')
         for entry in self._storage_name.destination_uris:
-            local_fqn = os.path.join(self.working_dir, os.path.basename(entry))
+            local_fqn = os.path.join(
+                self.working_dir, os.path.basename(entry)
+            )
             self._transferrer.get(entry, local_fqn)
 
         self.logger.debug('get the observation for the existing model')
@@ -575,7 +584,11 @@ class DataScrape(DataVisit):
 
 class Store(CaomExecute):
     """Defines the pipeline step for Collection storage of a file. This
-    requires access to the file on disk."""
+    requires access to the file on disk.
+
+    Need the metadata_reader instance in case decompression occurs, resulting
+    in a change to the FileInfo.
+    """
 
     def __init__(
         self,
@@ -584,13 +597,14 @@ class Store(CaomExecute):
         observable,
         transferrer,
         clients,
+        metadata_reader,
     ):
         super().__init__(
             config,
             storage_name,
             meta_visitors=None,
             observable=observable,
-            metadata_reader=None,
+            metadata_reader=metadata_reader,
             clients=clients,
         )
         self._transferrer = transferrer
@@ -628,6 +642,9 @@ class LocalStore(Store):
     """Defines the pipeline step for Collection storage of a file. This
     requires access to the file on disk. The file originates from local
     disk.
+
+    Need the metadata_reader instance in case decompression occurs, resulting
+    in a change to the FileInfo.
     """
 
     def __init__(
@@ -636,6 +653,7 @@ class LocalStore(Store):
         storage_name,
         observable,
         clients,
+        metadata_reader,
     ):
         super().__init__(
             config,
@@ -643,6 +661,7 @@ class LocalStore(Store):
             observable,
             transferrer=None,
             clients=clients,
+            metadata_reader=metadata_reader,
         )
         self.logger = logging.getLogger(self.__class__.__name__)
 
@@ -893,13 +912,14 @@ class OrganizeExecutes:
             )
         finally:
             success.close()
-        logging.debug('******************************************************')
-        logging.info(
+        msg = (
             f'Progress - record {self.success_count} of '
             f'{self.complete_record_count} records processed in '
             f'{execution_s:.2f} s.'
         )
-        logging.debug('******************************************************')
+        self._logger.debug('*' * len(msg))
+        self._logger.info(msg)
+        self._logger.debug('*' * len(msg))
 
     def set_log_location(self):
         self.set_log_files(self.config)
@@ -916,7 +936,7 @@ class OrganizeExecutes:
             storage_name.file_name,
         )
         if result:
-            logging.info(
+            self._logger.info(
                 f'Rejected observation {storage_name.file_name} because of '
                 f'bad metadata'
             )
@@ -1021,6 +1041,7 @@ class OrganizeExecutes:
                             storage_name,
                             self.observable,
                             self._clients,
+                            self._metadata_reader,
                         )
                     )
                 else:
@@ -1034,6 +1055,7 @@ class OrganizeExecutes:
                             self.observable,
                             self._store_transfer,
                             self._clients,
+                            self._metadata_reader,
                         )
                     )
             elif task_type == mc.TaskType.INGEST:
@@ -1187,10 +1209,14 @@ class OrganizeExecutes:
         return result
 
 
-def decompressor_factory(config, working_directory, log_level_as):
+def decompressor_factory(
+    config, working_directory, log_level_as, storage_name
+):
     if config.features.supports_decompression:
         if config.collection == 'CFHT':
-            return FitsForCADCCompressor(working_directory, log_level_as)
+            return FitsForCADCCompressor(
+                working_directory, log_level_as, storage_name
+            )
         else:
             return FitsForCADCDecompressor(working_directory, log_level_as)
     else:
@@ -1198,7 +1224,6 @@ def decompressor_factory(config, working_directory, log_level_as):
 
 
 class DecompressorNoop:
-
     def __init__(self):
         pass
 
@@ -1267,19 +1292,30 @@ class FitsForCADCDecompressor(DecompressorNoop):
 
 class FitsForCADCCompressor(FitsForCADCDecompressor):
     """
-    The class the implements the recompression.
+    This class implements conditional recompression.
+
+    SF - 20-05-22
+    it looks like compression will be:
+    if bitpix==(-32|-64):
+         gunzip file.fits.gz
+    else:
+         imcopy file.fits.gz file.fits.fz[compress]
     """
 
-    def __init__(self, working_directory, log_level_as):
+    def __init__(self, working_directory, log_level_as, storage_name):
         super().__init__(working_directory, log_level_as)
+        self._storage_name = storage_name
 
     def fix_compression(self, fqn):
+        self._logger.debug(f'Begin fix_compression with {fqn}')
         returned_fqn = fqn
-        if '.fits' in fqn:
-            returned_fqn = super().fix_compression(fqn)
-            fz_fqn = f'{returned_fqn}.fz'
-            if fz_fqn != fqn:
-                compress_cmd = f"imcopy {returned_fqn} '{fz_fqn}[compress]'"
+        if '.fits' in fqn and fqn.endswith('.gz'):
+            if self._storage_name.file_uri.endswith('.fz'):
+                fz_fqn = os.path.join(
+                    self._working_directory,
+                    os.path.basename(fqn).replace('.gz', '.fz'),
+                )
+                compress_cmd = f"imcopy {fqn} '{fz_fqn}[compress]'"
                 self._logger.debug(f'Executing {compress_cmd}')
                 mc.exec_cmd_array(
                     ['/bin/bash', '-c', compress_cmd], self._log_level_as
@@ -1287,5 +1323,9 @@ class FitsForCADCCompressor(FitsForCADCDecompressor):
                 self._logger.info(
                     f'Changed compressed file from {fqn} to {fz_fqn}'
                 )
-        self._logger.debug(f'End fix_compression with {returned_fqn}')
+                returned_fqn = fz_fqn
+                self._logger.debug(f'End fix_compression with {returned_fqn}')
+            else:
+                returned_fqn = super().fix_compression(fqn)
+                # log message in the super
         return returned_fqn

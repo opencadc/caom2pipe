@@ -237,7 +237,9 @@ def build_chunk_energy_range(chunk, filter_name, filter_md):
     cw = ac.FilterMetadataCache.get_central_wavelength(filter_md)
     fwhm = ac.FilterMetadataCache.get_fwhm(filter_md)
     if cw is not None and fwhm is not None:
-        resolving_power = ac.FilterMetadataCache.get_resolving_power(filter_md)
+        resolving_power = ac.FilterMetadataCache.get_resolving_power(
+            filter_md
+        )
         axis = CoordAxis1D(axis=Axis(ctype='WAVE', cunit='Angstrom'))
         ref_coord1 = RefCoord(0.5, cw - fwhm / 2.0)
         ref_coord2 = RefCoord(1.5, cw + fwhm / 2.0)

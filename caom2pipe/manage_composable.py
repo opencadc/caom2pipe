@@ -452,7 +452,9 @@ class Metrics:
             create_dir(self.observable_dir)
             now = datetime.utcnow().timestamp()
             for service in self.history.keys():
-                fqn = os.path.join(self.observable_dir, f'{now}.{service}.yml')
+                fqn = os.path.join(
+                    self.observable_dir, f'{now}.{service}.yml'
+                )
                 write_as_yaml(self.history[service], fqn)
 
             fqn = os.path.join(self.observable_dir, f'{now}.fail.yml')
@@ -1251,7 +1253,9 @@ class Config:
             )
             self.work_file = config.get('todo_file_name', 'todo.txt')
             self.netrc_file = config.get('netrc_filename', None)
-            self.data_sources = Config._obtain_list('data_sources', config, [])
+            self.data_sources = Config._obtain_list(
+                'data_sources', config, []
+            )
             self.data_source_extensions = Config._obtain_list(
                 'data_source_extensions', config, ['.fits']
             )
@@ -1284,7 +1288,9 @@ class Config:
             self.failure_log_file_name = config.get(
                 'failure_log_file_name', 'failure_log.txt'
             )
-            self.retry_file_name = config.get('retry_file_name', 'retries.txt')
+            self.retry_file_name = config.get(
+                'retry_file_name', 'retries.txt'
+            )
             self.retry_failures = config.get('retry_failures', False)
             self.retry_count = config.get('retry_count', 1)
             self.retry_decay = config.get('retry_decay', 1)
@@ -1584,7 +1590,10 @@ class PreviewVisitor:
         """Clean up files on disk after."""
         # cadc_client will be None if executing a ScrapeModify task, so
         # leave the files behind so the user can see them on disk.
-        if self._clients is not None and self._clients.data_client is not None:
+        if (
+            self._clients is not None
+            and self._clients.data_client is not None
+        ):
             for entry in self._delete_list:
                 if os.path.exists(entry):
                     self._logger.warning(f'Deleting {entry}')
@@ -1603,7 +1612,10 @@ class PreviewVisitor:
         return self._storage_name
 
     def _store_smalls(self):
-        if self._clients is not None and self._clients.data_client is not None:
+        if (
+            self._clients is not None
+            and self._clients.data_client is not None
+        ):
             for uri, entry in self._previews.items():
                 self._clients.data_client.put(
                     self._working_dir, uri, self._stream
@@ -1816,14 +1828,18 @@ class StorageName:
         return pattern.match(self._file_name)
 
     def get_file_fqn(self, working_directory):
+        # the file name without the compression extension
+        temp = os.path.basename(self.file_uri)
         if (
             self._source_names is not None
             and len(self._source_names) > 0
             and os.path.exists(self._source_names[0])
+            # is there an interim, uncompressed file name?
+            and self._source_names[0].endswith(temp)
         ):
             fqn = self._source_names[0]
         else:
-            fqn = os.path.join(working_directory, self._file_name)
+            fqn = os.path.join(working_directory, temp)
         return fqn
 
     def set_destination_uris(self):
@@ -1835,6 +1851,7 @@ class StorageName:
                         os.path.basename(temp.path)
                         .replace('.gz', '')
                         .replace('.bz2', '')
+                        .replace('.header', '')
                     )
                 )
             else:
@@ -1861,7 +1878,9 @@ class StorageName:
     def remove_extensions(name):
         """How to get the file_id from a file_name."""
         return (
-            name.replace('.fits', '').replace('.gz', '').replace('.header', '')
+            name.replace('.fits', '')
+            .replace('.gz', '')
+            .replace('.header', '')
         )
 
     @staticmethod
@@ -2145,7 +2164,9 @@ def exec_cmd_array(cmd_array, log_level_as=logging.debug, timeout=None):
             raise e
         logging.warning(f'Error with command {cmd_text}:: {e}')
         logging.debug(traceback.format_exc())
-        raise CadcException(f'Could not execute cmd {cmd_text}. Exception {e}')
+        raise CadcException(
+            f'Could not execute cmd {cmd_text}. Exception {e}'
+        )
 
 
 def exec_cmd_info(cmd):
@@ -2370,7 +2391,11 @@ def get_file_meta(fqn):
         'size': get_file_size(fqn),
         'md5sum': md5(open(fqn, 'rb').read()).hexdigest(),
     }
-    if fqn.endswith('.header') or fqn.endswith('.txt') or fqn.endswith('.cat'):
+    if (
+        fqn.endswith('.header')
+        or fqn.endswith('.txt')
+        or fqn.endswith('.cat')
+    ):
         meta['type'] = 'text/plain'
     elif fqn.endswith('.csv'):
         meta['type'] = 'text/csv'
@@ -2442,7 +2467,9 @@ def check_param(param, param_type):
     expected type.
     """
     if param is None or not isinstance(param, param_type):
-        raise CadcException(f'Parameter {param} failed check for {param_type}')
+        raise CadcException(
+            f'Parameter {param} failed check for {param_type}'
+        )
 
 
 def read_csv_file(fqn):
@@ -3064,7 +3091,10 @@ def query_tap(query_string, proxy_fqn, resource_id):
     tap_client = CadcTapClient(subject, resource_id=resource_id)
     buffer = io.StringIO()
     tap_client.query(
-        query_string, output_file=buffer, data_only=True, response_format='csv'
+        query_string,
+        output_file=buffer,
+        data_only=True,
+        response_format='csv',
     )
     return Table.read(buffer.getvalue().split('\n'), format='csv')
 
