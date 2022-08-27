@@ -281,6 +281,7 @@ class TodoRunner:
         """
         self._logger.debug('Begin _run_todo_list.')
         result = 0
+        self._organizer.choose()
         while len(self._todo_list) > 0:
             entry = self._todo_list.popleft()
             result |= self._process_entry(entry, current_count)
