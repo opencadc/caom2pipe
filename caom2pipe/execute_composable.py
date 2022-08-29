@@ -1150,7 +1150,6 @@ class OrganizeExecutes:
                 # successful rejection of the execution case
                 result = 0
             else:
-                # executors = self.choose()
                 self._metadata_reader.set(storage_name)
                 self._create_workspace(storage_name.obs_id)
                 context = {'storage_name': storage_name}

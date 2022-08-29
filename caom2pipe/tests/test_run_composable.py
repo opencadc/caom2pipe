@@ -320,66 +320,63 @@ def test_run_state(
 
     test_end_time = datetime.fromtimestamp(1579740838, tz=timezone.utc)
     start_time = test_end_time - timedelta(seconds=900)
-    _write_state(start_time)
 
     test_config.task_types = [mc.TaskType.INGEST]
-    test_config.state_fqn = STATE_FILE
     test_config.interval = 10
     individual_log_file = (
         f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
     )
-    if os.path.exists(test_config.progress_fqn):
-        os.unlink(test_config.progress_fqn)
-    if os.path.exists(test_config.success_fqn):
-        os.unlink(test_config.success_fqn)
-    if os.path.exists(individual_log_file):
-        os.unlink(individual_log_file)
 
-    test_chooser = ec.OrganizeChooser()
-    # use_local_files set so run_by_state chooses QueryTimeBoxDataSourceTS
-    test_config.use_local_files = False
-    test_reader = Mock()
-    test_result = rc.run_by_state(
-        config=test_config,
-        chooser=test_chooser,
-        bookmark_name=TEST_BOOKMARK,
-        end_time=test_end_time,
-        metadata_reader=test_reader,
-    )
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert visit_meta_mock.called, 'expect visit meta call'
-    visit_meta_mock.assert_called_once_with()
-    assert test_reader.reset.called, 'expect reset call'
-    assert test_reader.reset.call_count == 1, 'wrong call count'
+    with TemporaryDirectory() as tmp_dir_name:
+        test_config.working_directory = tmp_dir_name
+        test_config.state_fqn = os.path.join(tmp_dir_name, 'state.yml')
+        _write_state(start_time, test_config.state_fqn)
 
-    test_state = mc.State(STATE_FILE)
-    test_bookmark = test_state.get_bookmark(TEST_BOOKMARK)
-    assert test_bookmark == test_end_time, 'wrong time'
-    assert os.path.exists(test_config.progress_fqn), 'expect progress file'
-    assert os.path.exists(
-        test_config.success_fqn
-    ), 'log_to_file set to false, no success file'
-    assert not os.path.exists(
-        individual_log_file
-    ), f'log_to_file is False, no entry log'
+        test_chooser = ec.OrganizeChooser()
+        # use_local_files set so run_by_state chooses QueryTimeBoxDataSourceTS
+        test_config.use_local_files = False
+        test_reader = Mock()
+        test_result = rc.run_by_state(
+            config=test_config,
+            chooser=test_chooser,
+            bookmark_name=TEST_BOOKMARK,
+            end_time=test_end_time,
+            metadata_reader=test_reader,
+        )
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+        assert visit_meta_mock.called, 'expect visit meta call'
+        visit_meta_mock.assert_called_once_with()
+        assert test_reader.reset.called, 'expect reset call'
+        assert test_reader.reset.call_count == 1, 'wrong call count'
 
-    # test that runner does nothing when times haven't changed
-    start_time = test_end_time
-    _write_state(start_time)
-    visit_meta_mock.reset_mock()
-    test_result = rc.run_by_state(
-        config=test_config,
-        chooser=test_chooser,
-        bookmark_name=TEST_BOOKMARK,
-        end_time=test_end_time,
-        metadata_reader=test_reader,
-    )
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert not visit_meta_mock.called, 'expect no visit_meta call'
-    assert test_reader.reset.called, 'expect reset call'
-    assert test_reader.reset.call_count == 1, 'wrong call count'
+        test_state = mc.State(test_config.state_fqn)
+        test_bookmark = test_state.get_bookmark(TEST_BOOKMARK)
+        assert test_bookmark == test_end_time, 'wrong time'
+        assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+        assert os.path.exists(
+            test_config.success_fqn
+        ), 'log_to_file set to false, no success file'
+        assert not os.path.exists(
+            individual_log_file
+        ), f'log_to_file is False, no entry log'
+
+        # test that runner does nothing when times haven't changed
+        start_time = test_end_time
+        _write_state(start_time)
+        visit_meta_mock.reset_mock()
+        test_result = rc.run_by_state(
+            config=test_config,
+            chooser=test_chooser,
+            bookmark_name=TEST_BOOKMARK,
+            end_time=test_end_time,
+            metadata_reader=test_reader,
+        )
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+        assert not visit_meta_mock.called, 'expect no visit_meta call'
+        assert test_reader.reset.called, 'expect reset call'
+        assert test_reader.reset.call_count == 1, 'wrong call count'
 
 
 @patch('caom2pipe.data_source_composable.CadcTapClient')
@@ -898,7 +895,7 @@ def test_run_store_ingest_failure(
     data_client_mock.return_value.put.side_effect = (
         exceptions.UnexpectedException
     )
-    # mock a series of failures with the CADC service
+    # mock a series of failures with the CADC storage service
     data_client_mock.return_value.info.side_effect = (
         exceptions.UnexpectedException
     )
@@ -956,8 +953,10 @@ def test_run_store_ingest_failure(
             cleanup_mock.assert_has_calls(cleanup_calls), 'wrong cleanup args'
             assert not visit_meta_mock.called, 'no _visit_meta call'
             assert not caom2_store_mock.called, 'no _caom2_store call'
-            assert not reader_file_info_mock.called, 'info'
-            assert not reader_headers_mock.called, 'get_head should be called'
+            assert reader_file_info_mock.called, 'info'
+            reader_file_info_mock.assert_called_with('/data/dao_c122_2021_005157.fits'), 'info args'
+            assert reader_headers_mock.called, 'get_head should be called'
+            reader_headers_mock.assert_called_with('/data/dao_c122_2021_005157.fits'), 'headers mock call'
         finally:
             os.getcwd = getcwd_orig
             os.chdir(cwd)
@@ -1194,9 +1193,9 @@ def _check_log_files(
     assert os.path.exists(retry_retry_fqn), 'expect retry file'
 
 
-def _write_state(start_time):
-    if os.path.exists(STATE_FILE):
-        os.unlink(STATE_FILE)
+def _write_state(start_time, fqn=STATE_FILE):
+    if os.path.exists(fqn):
+        os.unlink(fqn)
     test_bookmark = {
         'bookmarks': {
             TEST_BOOKMARK: {
@@ -1204,7 +1203,7 @@ def _write_state(start_time):
             },
         },
     }
-    mc.write_as_yaml(test_bookmark, STATE_FILE)
+    mc.write_as_yaml(test_bookmark, fqn)
 
 
 def _write_todo(test_config):

@@ -196,6 +196,7 @@ def test_data_execute(access_mock, test_config):
     test_obs_id = 'test_obs_id'
     with TemporaryDirectory() as tmp_dir_name:
         test_dir = os.path.join(tmp_dir_name, test_obs_id)
+        test_config.working_directory = tmp_dir_name
         os.mkdir(test_dir, mode=0o755)
         test_fits_fqn = os.path.join(test_dir, tc.TestStorageName().file_name)
         precondition = open(test_fits_fqn, 'w')

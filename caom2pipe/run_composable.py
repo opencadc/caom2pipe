@@ -445,6 +445,7 @@ class StateRunner(TodoRunner):
         else:
             cumulative = 0
             result = 0
+            self._organizer.choose()
             while exec_time <= self._end_time:
                 self._logger.info(
                     f'Processing from '
@@ -817,7 +818,7 @@ def run_single(
         clients,
     )
     organizer.complete_record_count = 1
-    organizer.choose(storage_name)
+    organizer.choose()
     result = organizer.do_one(storage_name)
     logging.debug(f'run_single result is {result}')
     return result
