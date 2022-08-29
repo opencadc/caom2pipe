@@ -82,6 +82,7 @@ import traceback
 
 from collections import deque
 from datetime import datetime, timezone
+from shutil import move
 from time import sleep
 
 from caom2pipe import client_composable as cc
@@ -280,6 +281,7 @@ class TodoRunner:
         """
         self._logger.debug('Begin _run_todo_list.')
         result = 0
+        self._organizer.choose()
         while len(self._todo_list) > 0:
             entry = self._todo_list.popleft()
             result |= self._process_entry(entry, current_count)
@@ -306,6 +308,9 @@ class TodoRunner:
         self._reporter.add_rejections(self._organizer.rejected_count)
         msg = self._reporter.report()
         self._logger.info(msg)
+        if os.path.exists(self._config.report_fqn) and os.path.getsize(self._config.report_fqn) != 0:
+            back_fqn = self._config.report_fqn.replace('.txt', f'.{get_utc_now_tz().timestamp()}.txt')
+            move(self._config.report_fqn, back_fqn)
         mc.write_to_file(self._config.report_fqn, msg)
 
     def run(self):
@@ -440,6 +445,7 @@ class StateRunner(TodoRunner):
         else:
             cumulative = 0
             result = 0
+            self._organizer.choose()
             while exec_time <= self._end_time:
                 self._logger.info(
                     f'Processing from '
@@ -812,7 +818,7 @@ def run_single(
         clients,
     )
     organizer.complete_record_count = 1
-    organizer.choose(storage_name)
+    organizer.choose()
     result = organizer.do_one(storage_name)
     logging.debug(f'run_single result is {result}')
     return result
