@@ -708,42 +708,33 @@ class QueryTimeBoxDataSource(DataSource):
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         """
-        Get a set of file names from an archive. Limit the entries by
-        time-boxing on ingestDate, and don't include previews.
+        Get a set of file names from a collection. Limit the entries by
+        time-boxing on contentLastModified, and don't include previews.
 
         :param prev_exec_time timestamp start of the time-boxed chunk
         :param exec_time timestamp end of the time-boxed chunk
-        :return: a list of StateRunnerMeta instances in the CADC storage
-            system
+        :return: a list of StateRunnerMeta instances in the CADC storage system
         """
-        # container timezone is UTC, ad timezone is Pacific
-        db_fmt = '%Y-%m-%d %H:%M:%S.%f'
-        prev_exec_time_pz = datetime.strftime(
-            datetime.utcfromtimestamp(prev_exec_time).astimezone(
-                tz.gettz('US/Pacific')
-            ),
-            db_fmt,
-        )
-        exec_time_pz = datetime.strftime(
-            datetime.utcfromtimestamp(exec_time).astimezone(
-                tz.gettz('US/Pacific')
-            ),
-            db_fmt,
-        )
+        # SG 8-09-22
+        # All timestamps in the SI databases are in UT
+        #
+        # SGo - the Docker images all run at UTC, so just use the timestamps as retrieved/stored in state.yml file.
         self._logger.debug(f'Begin get_work.')
-        query = (
-            f"SELECT fileName, ingestDate FROM archive_files WHERE "
-            f"archiveName = '{self._config.archive}' "
-            f"AND fileName NOT LIKE '%{self._preview_suffix}' "
-            f"AND ingestDate > '{prev_exec_time_pz}' "
-            f"AND ingestDate <= '{exec_time_pz}' "
-            "ORDER BY ingestDate ASC "
-        )
+        query = f"""
+            SELECT A.uri, A.contentLastModified 
+            FROM inventory.Artifact AS A 
+            WHERE A.uri NOT LIKE '%{self._preview_suffix}'
+            AND A.contentLastModified > '{prev_exec_time}'
+            AND A.contentLastModified <= '{exec_time}'
+            AND split_part( split_part( A.uri, '/', 1 ), ':', 2 ) = '{self._config.collection}'
+            ORDER BY A.contentLastModified ASC
+        """
         self._logger.debug(query)
         rows = clc.query_tap_client(query, self._client)
         result = deque()
         for row in rows:
-            result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
+            ignore_scheme, ignore_path, f_name = mc.decompose_uri(row['uri'])
+            result.append(StateRunnerMeta(f_name, row['contentLastModified']))
         return result
 
 
