@@ -709,7 +709,7 @@ class QueryTimeBoxDataSource(DataSource):
     def get_time_box_work(self, prev_exec_time, exec_time):
         """
         Get a set of file names from a collection. Limit the entries by
-        time-boxing on contentLastModified, and don't include previews.
+        time-boxing on lastModified, and don't include previews.
 
         :param prev_exec_time timestamp start of the time-boxed chunk
         :param exec_time timestamp end of the time-boxed chunk
@@ -719,9 +719,10 @@ class QueryTimeBoxDataSource(DataSource):
         # All timestamps in the SI databases are in UT
         #
         # SGo - the Docker images all run at UTC, so just use the timestamps as retrieved/stored in state.yml file.
+        # Use 'lastModified', because that should be the later timestamp (avoid eventual consistency lags).
         self._logger.debug(f'Begin get_work.')
         query = f"""
-            SELECT A.uri, A.contentLastModified 
+            SELECT A.uri, A.lastModified 
             FROM inventory.Artifact AS A 
             WHERE A.uri NOT LIKE '%{self._preview_suffix}'
             AND A.contentLastModified > '{prev_exec_time}'

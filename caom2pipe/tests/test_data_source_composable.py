@@ -159,7 +159,7 @@ def test_todo_file(test_config):
 def test_storage_time_box_query(query_mock, test_config):
     def _mock_query(arg1, arg2):
         return Table.read(
-            'uri,contentLastModified\n'
+            'uri,lastModified\n'
             'cadc:NEOSSAT/NEOS_SCI_2015347000000_clean.fits,2019-10-23T16:27:19.000\n'
             'cadc:NEOSSAT/NEOS_SCI_2015347000000.fits,2019-10-23T16:27:27.000\n'
             'cadc:NEOSSAT/NEOS_SCI_2015347002200_clean.fits,2019-10-23T16:27:33.000\n'.split(
