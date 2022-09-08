@@ -725,17 +725,17 @@ class QueryTimeBoxDataSource(DataSource):
             SELECT A.uri, A.lastModified 
             FROM inventory.Artifact AS A 
             WHERE A.uri NOT LIKE '%{self._preview_suffix}'
-            AND A.contentLastModified > '{prev_exec_time}'
-            AND A.contentLastModified <= '{exec_time}'
+            AND A.lastModified > '{prev_exec_time}'
+            AND A.lastModified <= '{exec_time}'
             AND split_part( split_part( A.uri, '/', 1 ), ':', 2 ) = '{self._config.collection}'
-            ORDER BY A.contentLastModified ASC
+            ORDER BY A.lastModified ASC
         """
         self._logger.debug(query)
         rows = clc.query_tap_client(query, self._client)
         result = deque()
         for row in rows:
             ignore_scheme, ignore_path, f_name = mc.decompose_uri(row['uri'])
-            result.append(StateRunnerMeta(f_name, row['contentLastModified']))
+            result.append(StateRunnerMeta(f_name, row['lastModified']))
         return result
 
 
