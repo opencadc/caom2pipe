@@ -159,10 +159,10 @@ def test_todo_file(test_config):
 def test_storage_time_box_query(query_mock, test_config):
     def _mock_query(arg1, arg2):
         return Table.read(
-            'fileName,ingestDate\n'
-            'NEOS_SCI_2015347000000_clean.fits,2019-10-23T16:27:19.000\n'
-            'NEOS_SCI_2015347000000.fits,2019-10-23T16:27:27.000\n'
-            'NEOS_SCI_2015347002200_clean.fits,2019-10-23T16:27:33.000\n'.split(
+            'uri,lastModified\n'
+            'cadc:NEOSSAT/NEOS_SCI_2015347000000_clean.fits,2019-10-23T16:27:19.000\n'
+            'cadc:NEOSSAT/NEOS_SCI_2015347000000.fits,2019-10-23T16:27:27.000\n'
+            'cadc:NEOSSAT/NEOS_SCI_2015347002200_clean.fits,2019-10-23T16:27:33.000\n'.split(
                 '\n'
             ),
             format='csv',
@@ -326,14 +326,14 @@ def test_list_dir_separate_data_source(test_config):
     assert test_subject is not None, 'ctor is broken'
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a result'
-    assert len(test_result) == 101, 'expect contents in the result'
+    assert len(test_result) == 100, 'expect contents in the result'
     assert '/test_files/sub_directory/abc.fits' in test_result, 'wrong entry'
 
     test_config.recurse_data_sources = False
     test_subject = dsc.ListDirSeparateDataSource(test_config)
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a non-recursive result'
-    assert len(test_result) == 97, 'expect contents in non-recursive result'
+    assert len(test_result) == 96, 'expect contents in non-recursive result'
     assert (
         '/test_files/sub_directory/abc.fits' not in test_result
     ), 'recursive result should not be present'

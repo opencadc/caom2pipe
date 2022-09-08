@@ -1234,11 +1234,10 @@ def _mock_get_work2(arg1, **kwargs):
 def _mock_query(arg1, arg2, arg3):
     global call_count
     if call_count == 0:
-        logging.error('returning results')
         call_count = 1
         return Table.read(
-            'fileName,ingestDate\n'
-            'NEOS_SCI_2015347000000_clean.fits,'
+            'uri,lastModified\n'
+            'cadc:NEOSSAT/NEOS_SCI_2015347000000_clean.fits,'
             '2019-10-23T16:27:19.000\n'.split('\n'),
             format='csv',
         )
