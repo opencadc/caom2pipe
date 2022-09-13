@@ -281,13 +281,13 @@ class VaultReader(MetadataReader):
 
 
 def reader_factory(config, clients):
-    metadata_reader = None
     if config.use_local_files or mc.TaskType.SCRAPE in config.task_types:
         metadata_reader = FileMetadataReader()
+    elif config.use_vos and clients.vo_client is not None:
+        metadata_reader = VaultReader(clients.vo_client)
+    elif mc.TaskType.STORE in config.task_types and not config.use_local_files:
+        metadata_reader = DelayedClientReader(clients.data_client)
     else:
-        if config.use_vos and clients.vo_client is not None:
-            metadata_reader = VaultReader(clients.vo_client)
-    if metadata_reader is None:
         metadata_reader = StorageClientReader(clients.data_client)
     logging.debug(f'Returning {metadata_reader.__class__.__name__} metadata_reader.')
     return metadata_reader
