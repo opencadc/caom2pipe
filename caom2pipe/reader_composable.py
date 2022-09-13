@@ -228,7 +228,9 @@ class DelayedClientReader(StorageClientReader):
         for entry in storage_name.destination_uris:
             if entry not in self._file_info:
                 temp = self._client.info(entry)
-                if temp is not None:
+                if temp is None:
+                    self._logger.debug(f'Ignore failure to find FileInfo for {entry}')
+                else:
                     self._file_info[entry] = temp
 
     def set_headers(self, storage_name):
@@ -242,6 +244,7 @@ class DelayedClientReader(StorageClientReader):
                         self._headers[entry] = self._client.get_head(entry)
                     except exceptions.UnexpectedException as e:
                         # the record was not found, this is expected, keep going
+                        self._logger.debug(f'Ignore UnexpectedException for {entry}')
                         pass
                 else:
                     self._headers[entry] = []
