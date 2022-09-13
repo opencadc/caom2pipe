@@ -71,12 +71,14 @@ import logging
 import tempfile
 import traceback
 
+from cadcutils import exceptions
 from caom2utils import data_util
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 
 
 __all__ = [
+    'DelayedClientReader',
     'FileMetadataReader',
     'MetadataReader',
     'reader_factory',
@@ -207,6 +209,40 @@ class StorageClientReader(MetadataReader):
             if entry not in self._headers.keys():
                 if '.fits' in entry:
                     self._headers[entry] = self._client.get_head(entry)
+                else:
+                    self._headers[entry] = []
+        self._logger.debug('End set_headers')
+
+
+class DelayedClientReader(StorageClientReader):
+    """Use case: TaskType.STORE, with use_local_files set to False.
+
+    The object is to be able to delay the retrieval of the FileInfo and header information until the file is retrieved
+    from the data provider, and stored at CADC. If the files are retrieved from a remote location, for example by http
+    or ftp, the STORE task needs to be executable without the MetadataReader causing an execution failure.
+    """
+
+    def set_file_info(self, storage_name):
+        """Retrieves FileInfo information to memory. Ignore retrieval failures, as the file may not yet be at CADC.
+        """
+        for entry in storage_name.destination_uris:
+            if entry not in self._file_info:
+                temp = self._client.info(entry)
+                if temp is not None:
+                    self._file_info[entry] = temp
+
+    def set_headers(self, storage_name):
+        """Retrieves the Header information to memory. Ignore retrieval failures, as the file may not yet be at CADC.
+        """
+        self._logger.debug(f'Begin set_headers for {storage_name.file_name}')
+        for entry in storage_name.destination_uris:
+            if entry not in self._headers:
+                if '.fits' in entry:
+                    try:
+                        self._headers[entry] = self._client.get_head(entry)
+                    except exceptions.UnexpectedException as e:
+                        # the record was not found, this is expected, keep going
+                        pass
                 else:
                     self._headers[entry] = []
         self._logger.debug('End set_headers')
