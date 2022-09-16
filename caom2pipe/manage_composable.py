@@ -3091,8 +3091,23 @@ def query_tap(query_string, proxy_fqn, resource_id, timeout=10):
     subject = net.Subject(certificate=proxy_fqn)
     tap_client = CadcTapClient(subject, resource_id=resource_id)
     buffer = io.StringIO()
-    tap_client.query(query_string, output_file=buffer, data_only=True, response_format='csv', timeout=timeout)
-    return Table.read(buffer.getvalue().split('\n'), format='csv')
+    tap_client.query(query_string, output_file=buffer, data_only=True, response_format='tsv', timeout=timeout)
+    return Table.read(buffer.getvalue().split('\n'), format='ascii.tab')
+
+
+def query_tap_pandas(query_string, client, timeout=10):
+    """
+    Return TAP query results as a Pandas Dataframe.
+
+    :param query_string: query to execute
+    :param client: CadcTapClient instance, pointed to a service that understands the query
+    :param timeout: in minutes
+
+    :return: Dataframe with query results
+    """
+    buffer = io.StringIO()
+    client.query(query_string, output_file=buffer, data_only=True, response_format='tsv', timeout=timeout)
+    return Table.read(buffer.getvalue().split('\n'), format='ascii.tab').to_pandas()
 
 
 def reverse_lookup(value_to_find, in_dict):
