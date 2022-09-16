@@ -618,12 +618,12 @@ def test_validator2(caps_mock, ad_mock):
     response = Mock()
     response.status_code = 200
     response.iter_content.return_value = [
-        b'ingestDate,fileName\n'
-        b'2019-10-23T16:27:19.000,NEOS_SCI_2015347000000_clean.fits\n'
-        b'2019-10-23T16:27:27.000,NEOS_SCI_2015347000000.fits\n'
-        b'2019-10-23T16:27:33.000,NEOS_SCI_2015347002200_clean.fits\n'
-        b'2019-10-23T16:27:40.000,NEOS_SCI_2015347002200.fits\n'
-        b'2019-10-23T16:27:47.000,NEOS_SCI_2015347002500_clean.fits\n'
+        b'ingestDate\tfileName\n'
+        b'2019-10-23T16:27:19.000\tNEOS_SCI_2015347000000_clean.fits\n'
+        b'2019-10-23T16:27:27.000\tNEOS_SCI_2015347000000.fits\n'
+        b'2019-10-23T16:27:33.000\tNEOS_SCI_2015347002200_clean.fits\n'
+        b'2019-10-23T16:27:40.000\tNEOS_SCI_2015347002200.fits\n'
+        b'2019-10-23T16:27:47.000\tNEOS_SCI_2015347002500_clean.fits\n'
     ]
     ad_mock.return_value.__enter__.return_value = response
     getcwd_orig = os.getcwd
