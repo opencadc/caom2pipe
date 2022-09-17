@@ -480,7 +480,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             elif '.hdf5' in entry.name:
                 # no hdf5 validation
                 pass
-            elif ac.check_fits(entry.path):
+            elif ac.check_fitsverify(entry.path):
                 # only work with files that pass the FITS verification
                 if self._cleanup_when_storing:
                     if self._store_modified_files_only:

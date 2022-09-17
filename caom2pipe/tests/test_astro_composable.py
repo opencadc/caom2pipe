@@ -243,3 +243,31 @@ def test_check_h5():
     test_fqn_missing = '/test_files/not_there.h5'
     test_result = ac.check_h5(test_fqn_missing)
     assert not test_result, 'missing failure'
+
+
+def test_check_fits_verify():
+    files = {
+        '/test_files/a2020_06_17_07_00_01.fits': True,
+        '/test_files/a2022_07_26_05_50_01.fits': False,
+        '/test_files/2377897o.fits.fz': True,
+        '/test_files/scatsmth.flat.V.00.01.fits.gz': False,
+        '/test_files/NEOS_SCI_2022223000524.fits': True,
+        '/test_files/broken.fits': False,
+    }
+
+    for fqn, expected_result in files.items():
+        test_result = ac.check_fitsverify(fqn)
+        assert test_result == expected_result, f'wrong fitsverify result {fqn}'
+
+    files = {
+        '/test_files/a2020_06_17_07_00_01.fits': True,
+        '/test_files/a2022_07_26_05_50_01.fits': True,
+        '/test_files/2377897o.fits.fz': True,
+        '/test_files/scatsmth.flat.V.00.01.fits.gz': True,
+        '/test_files/NEOS_SCI_2022223000524.fits': True,
+        '/test_files/broken.fits': False,
+    }
+
+    for fqn, expected_result in files.items():
+        test_result = ac.check_fits(fqn)
+        assert test_result == expected_result, f'wrong astropy verify result {fqn}'
