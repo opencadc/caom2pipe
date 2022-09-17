@@ -95,8 +95,5 @@ setup(name=PACKAGENAME,
         'Programming Language :: Python',
         'Programming Language :: Python :: 3.6'
       ],
-      cmdclass = {
-          'coverage': PyTest,
-          'inttest': IntTestCommand
-      }
+      cmdclass = {'coverage': PyTest}
 )
