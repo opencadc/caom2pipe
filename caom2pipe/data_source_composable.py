@@ -121,6 +121,8 @@ class DataSource:
         self._extensions = None
         if config is not None:
             self._extensions = config.data_source_extensions
+        self._capture_failure = None
+        self._capture_success = None
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def clean_up(self, entry, execution_result, current_count):
@@ -131,6 +133,22 @@ class DataSource:
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         return deque()
+
+    @property
+    def capture_failure(self):
+        return self._capture_failure
+
+    @capture_failure.setter
+    def capture_failure(self, value):
+        self._capture_failure = value
+
+    @property
+    def capture_success(self):
+        return self._capture_success
+
+    @capture_success.setter
+    def capture_success(self, value):
+        self._capture_success = value
 
     @property
     def start_time_ts(self):
@@ -498,6 +516,8 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                             self._move_action(
                                 entry.path, self._cleanup_success_directory
                             )
+                            if self._capture_success is not None:
+                                self._capture_success(entry.name, entry.name, datetime.utcnow().timestamp())
                 else:
                     work_with_file = True
             else:
@@ -509,6 +529,9 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     self._move_action(
                         entry.path, self._cleanup_failure_directory
                     )
+                if self._capture_failure is not None:
+                    temp_storage_name = mc.StorageName(file_name=entry.name)
+                    self._capture_failure(temp_storage_name, BaseException('fitsverify errors'), 'fitsverify errors')
                 work_with_file = False
         else:
             work_with_file = False
@@ -591,10 +614,8 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 self._metadata_reader.set_file_info(temp_storage_name)
 
                 if (
-                    self._metadata_reader.file_info.get(
-                        destination_name
-                    ).md5sum
-                    == cadc_meta.md5sum
+                    self._metadata_reader.file_info.get(destination_name).md5sum.replace('md5:', '')
+                    == cadc_meta.md5sum.replace('md5:', '')
                 ):
                     result = False
         else:
@@ -720,7 +741,7 @@ class QueryTimeBoxDataSource(DataSource):
         #
         # SGo - the Docker images all run at UTC, so just use the timestamps as retrieved/stored in state.yml file.
         # Use 'lastModified', because that should be the later timestamp (avoid eventual consistency lags).
-        self._logger.debug(f'Begin get_work.')
+        self._logger.debug(f'Begin get_time_box_work.')
         query = f"""
             SELECT A.uri, A.lastModified 
             FROM inventory.Artifact AS A 
@@ -736,6 +757,7 @@ class QueryTimeBoxDataSource(DataSource):
         for row in rows:
             ignore_scheme, ignore_path, f_name = mc.decompose_uri(row['uri'])
             result.append(StateRunnerMeta(f_name, row['lastModified']))
+        self._logger.debug(f'End get_time_box_work.')
         return result
 
 
@@ -922,6 +944,8 @@ class VaultCleanupDataSource(VaultDataSource):
                         self._move_action(
                             entry_fqn, self._cleanup_success_directory
                         )
+                        if self._capture_success is not None:
+                            self._capture_success(entry.name, entry.name, datetime.utcnow().timestamp())
                 else:
                     copy_file = True
                 break
