@@ -224,7 +224,7 @@ class StorageClientReader(MetadataReader):
 class DelayedClientReader(StorageClientReader):
     """Use case: TaskType.STORE, with use_local_files set to False.
 
-    The object is to be able to delay the retrieval of the FileInfo and header information until the file is retrieved
+    The objective is to be able to delay the retrieval of the FileInfo and header information until the file is retrieved
     from the data provider, and stored at CADC. If the files are retrieved from a remote location, for example by http
     or ftp, the STORE task needs to be executable without the MetadataReader causing an execution failure.
     """
