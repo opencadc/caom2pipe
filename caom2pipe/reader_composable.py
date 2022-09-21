@@ -71,12 +71,14 @@ import logging
 import tempfile
 import traceback
 
+from cadcutils import exceptions
 from caom2utils import data_util
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 
 
 __all__ = [
+    'DelayedClientReader',
     'FileMetadataReader',
     'MetadataReader',
     'reader_factory',
@@ -119,11 +121,19 @@ class MetadataReader:
     def headers(self):
         return self._headers
 
-    def _retrieve_file_info(self, source_name):
-        return None
+    def _retrieve_file_info(self, key, source_name):
+        """
+        :param key: Artifact URI
+        :param source_name: fully-qualified name at the data source
+        """
+        raise NotImplementedError
 
-    def _retrieve_headers(self, source_name):
-        return None
+    def _retrieve_headers(self, key, source_name):
+        """
+        :param key: Artifact URI
+        :param source_name: fully-qualified name at the data source
+        """
+        raise NotImplementedError
 
     def set(self, storage_name):
         """Retrieves the Header and FileInfo information to memory."""
@@ -134,29 +144,20 @@ class MetadataReader:
 
     def set_file_info(self, storage_name):
         """Retrieves FileInfo information to memory."""
-        self._logger.debug(
-            f'Begin set_file_info for {storage_name.file_name}'
-        )
+        self._logger.debug(f'Begin set_file_info for {storage_name.file_name}')
         for index, entry in enumerate(storage_name.destination_uris):
-            if entry not in self._file_info.keys():
+            if entry not in self._file_info:
                 self._logger.debug(f'Retrieve FileInfo for {entry}')
-                self._file_info[entry] = self._retrieve_file_info(
-                    storage_name.source_names[index]
-                )
+                self._retrieve_file_info(entry, storage_name.source_names[index])
         self._logger.debug('End set_file_info')
 
     def set_headers(self, storage_name):
         """Retrieves the Header information to memory."""
         self._logger.debug(f'Begin set_headers for {storage_name.file_name}')
         for index, entry in enumerate(storage_name.destination_uris):
-            if entry not in self._headers.keys():
-                if '.fits' in entry:
-                    self._logger.debug(f'Retrieve headers for {entry}')
-                    self._headers[entry] = self._retrieve_headers(
-                        storage_name.source_names[index]
-                    )
-                else:
-                    self._headers[entry] = []
+            if entry not in self._headers:
+                self._logger.debug(f'Retrieve headers for {entry}')
+                self._retrieve_headers(entry, storage_name.source_names[index])
         self._logger.debug('End set_headers')
 
     def reset(self):
@@ -171,11 +172,13 @@ class FileMetadataReader(MetadataReader):
     def __init__(self):
         super().__init__()
 
-    def _retrieve_file_info(self, source_name):
-        return data_util.get_local_file_info(source_name)
+    def _retrieve_file_info(self, key, source_name):
+        self._file_info[key] = data_util.get_local_file_info(source_name)
 
-    def _retrieve_headers(self, source_name):
-        return data_util.get_local_headers_from_fits(source_name)
+    def _retrieve_headers(self, key, source_name):
+        self._headers[key] = []
+        if '.fits' in source_name:
+            self._headers[key] = data_util.get_local_headers_from_fits(source_name)
 
 
 class StorageClientReader(MetadataReader):
@@ -188,28 +191,64 @@ class StorageClientReader(MetadataReader):
 
     def __init__(self, client):
         """
-
         :param client: StorageClientWrapper instance
         """
         super().__init__()
         self._client = client
 
+    def _retrieve_file_info(self, key, source_name):
+        self._file_info[key] = self._client.info(source_name)
+
+    def _retrieve_headers(self, key, source_name):
+        self._headers[key] = []
+        if '.fits' in source_name:
+            self._headers[key] = self._client.get_head(source_name)
+
     def set_file_info(self, storage_name):
-        """Retrieves FileInfo information to memory."""
+        """Retrieves FileInfo information from CADC storage to memory."""
+        self._logger.debug(f'Begin set_file_info for {storage_name.file_name}')
         for entry in storage_name.destination_uris:
-            if entry not in self._file_info.keys():
-                self._file_info[entry] = self._client.info(entry)
+            if entry not in self._file_info:
+                self._retrieve_file_info(entry, entry)
+        self._logger.debug('End set_file_info')
 
     def set_headers(self, storage_name):
-        """Retrieves the Header information to memory."""
+        """Retrieves the Header information from CADC storage to memory."""
         self._logger.debug(f'Begin set_headers for {storage_name.file_name}')
         for entry in storage_name.destination_uris:
-            if entry not in self._headers.keys():
-                if '.fits' in entry:
-                    self._headers[entry] = self._client.get_head(entry)
-                else:
-                    self._headers[entry] = []
+            if entry not in self._headers:
+                self._retrieve_headers(entry, entry)
         self._logger.debug('End set_headers')
+
+
+class DelayedClientReader(StorageClientReader):
+    """Use case: TaskType.STORE, with use_local_files set to False.
+
+    The objective is to be able to delay the retrieval of the FileInfo and header information until the file is retrieved
+    from the data provider, and stored at CADC. If the files are retrieved from a remote location, for example by http
+    or ftp, the STORE task needs to be executable without the MetadataReader causing an execution failure.
+    """
+    def _retrieve_file_info(self, key, source_name):
+        """Retrieves FileInfo information to memory. Ignore retrieval failures, as the file may not yet be at CADC.
+        """
+        temp = self._client.info(source_name)
+        if temp is None:
+            self._logger.debug(f'Ignore failure to find FileInfo for {source_name}')
+        else:
+            self._file_info[key] = temp
+
+    def _retrieve_headers(self, key, source_name):
+        """Retrieves the Header information to memory. Ignore retrieval failures, as the file may not yet be at CADC.
+        """
+        if '.fits' in source_name:
+            try:
+                self._headers[key] = self._client.get_head(source_name)
+            except exceptions.UnexpectedException as e:
+                # the record was not found, this is expected, keep going
+                self._logger.debug(f'Ignore UnexpectedException for {source_name}')
+                pass
+        else:
+            self._headers[key] = []
 
 
 class VaultReader(MetadataReader):
@@ -217,38 +256,35 @@ class VaultReader(MetadataReader):
 
     def __init__(self, client):
         """
-
         :param client: vos.Client instance
         """
         super().__init__()
         self._client = client
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def _retrieve_file_info(self, source_name):
-        return clc.vault_info(self._client, source_name)
+    def _retrieve_file_info(self, key, source_name):
+        self._file_info[key] = clc.vault_info(self._client, source_name)
 
-    def _retrieve_headers(self, source_name):
+    def _retrieve_headers(self, key, source_name):
         try:
             tmp_file = tempfile.NamedTemporaryFile()
             self._client.copy(source_name, tmp_file.name, head=True)
             temp_header = data_util.get_local_file_headers(tmp_file.name)
             tmp_file.close()
-            return temp_header
+            self._headers[key] = temp_header
         except Exception as e:
             self._logger.debug(traceback.format_exc())
-            raise mc.CadcException(
-                f'Did not retrieve {source_name} header because {e}'
-            )
+            raise mc.CadcException(f'Did not retrieve {source_name} header because {e}')
 
 
 def reader_factory(config, clients):
-    metadata_reader = None
     if config.use_local_files or mc.TaskType.SCRAPE in config.task_types:
         metadata_reader = FileMetadataReader()
+    elif config.use_vos and clients.vo_client is not None:
+        metadata_reader = VaultReader(clients.vo_client)
+    elif mc.TaskType.STORE in config.task_types and not config.use_local_files:
+        metadata_reader = DelayedClientReader(clients.data_client)
     else:
-        if config.use_vos and clients.vo_client is not None:
-            metadata_reader = VaultReader(clients.vo_client)
-    if metadata_reader is None:
         metadata_reader = StorageClientReader(clients.data_client)
     logging.debug(f'Returning {metadata_reader.__class__.__name__} metadata_reader.')
     return metadata_reader

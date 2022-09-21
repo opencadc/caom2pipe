@@ -881,9 +881,9 @@ def test_run_store_ingest_failure(
     repo_client_mock.return_value.read.return_value = None
     reader_headers_mock.return_value = [{'OBSMODE': 'abc'}]
 
-    def _file_info_mock(uri):
+    def _file_info_mock(key, ignore):
         return FileInfo(
-            id=uri,
+            id=key,
             file_type='application/fits',
             md5sum='md5:def',
         )
@@ -952,9 +952,9 @@ def test_run_store_ingest_failure(
             assert not visit_meta_mock.called, 'no _visit_meta call'
             assert not caom2_store_mock.called, 'no _caom2_store call'
             assert reader_file_info_mock.called, 'info'
-            reader_file_info_mock.assert_called_with('/data/dao_c122_2021_005157.fits'), 'info args'
+            reader_file_info_mock.assert_called_with('cadc:OMM/dao_c122_2021_005157.fits', '/data/dao_c122_2021_005157.fits'), 'info args'
             assert reader_headers_mock.called, 'get_head should be called'
-            reader_headers_mock.assert_called_with('/data/dao_c122_2021_005157.fits'), 'headers mock call'
+            reader_headers_mock.assert_called_with('cadc:OMM/dao_c122_2021_005157.fits', '/data/dao_c122_2021_005157.fits'), 'headers mock call'
         finally:
             os.getcwd = getcwd_orig
             os.chdir(cwd)
@@ -1128,7 +1128,7 @@ def test_run_ingest(
         test_config.collection = 'CFHT'
         test_config.proxy_file_name = 'cadcproxy.pem'
         test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
-        test_config.features.supports_latest_client = False
+        test_config.features.supports_latest_client = True
         test_config.use_local_files = False
         mc.Config.write_to_file(test_config)
         with open(test_config.proxy_fqn, 'w') as f:
@@ -1145,18 +1145,14 @@ def test_run_ingest(
             assert (
                 data_client_mock.return_value.info.call_count == 1
             ), 'wrong number of info calls'
-            data_client_mock.return_value.info.assert_called_with(
-                f'ad:CFHT/{test_f_name}',
-            )
+            data_client_mock.return_value.info.assert_called_with(f'cadc:CFHT/{test_f_name}')
             assert (
                 data_client_mock.return_value.get_head.called
             ), 'get_head should be called'
             assert (
                 data_client_mock.return_value.get_head.call_count == 1
             ), 'wrong number of get_heads'
-            data_client_mock.return_value.get_head.assert_called_with(
-                f'ad:CFHT/{test_f_name}',
-            )
+            data_client_mock.return_value.get_head.assert_called_with(f'cadc:CFHT/{test_f_name}')
             assert meta_visit_mock.called, '_visit_meta call'
             assert meta_visit_mock.call_count == 1, '_visit_meta call count'
             assert caom2_store_mock.called, '_caom2_store call'
