@@ -899,7 +899,7 @@ class VaultCleanupDataSource(VaultDataSource):
                 fqn = entry
             else:
                 fqn = entry.entry_name
-            self._logger.debug(f'Clean up f{fqn}')
+            self._logger.debug(f'Clean up {fqn}')
             check_result, vos_meta = self._check_md5sum(fqn)
             if check_result:
                 # if vos_meta is None, it's already been cleaned up,
