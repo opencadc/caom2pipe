@@ -1150,10 +1150,10 @@ class OrganizeExecutes:
                 # successful rejection of the execution case
                 result = 0
             else:
-                self._metadata_reader.set(storage_name)
                 self._create_workspace(storage_name.obs_id)
                 context = {'storage_name': storage_name}
                 for executor in self._executors:
+                    self._metadata_reader.set(storage_name)
                     self._logger.info(
                         f'Task with {executor.__class__.__name__} for '
                         f'{storage_name.obs_id}'
