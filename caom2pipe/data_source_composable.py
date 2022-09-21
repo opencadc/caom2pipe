@@ -721,12 +721,15 @@ class QueryTimeBoxDataSource(DataSource):
         # SGo - the Docker images all run at UTC, so just use the timestamps as retrieved/stored in state.yml file.
         # Use 'lastModified', because that should be the later timestamp (avoid eventual consistency lags).
         self._logger.debug(f'Begin get_work.')
+        db_fmt = '%Y-%m-%d %H:%M:%S.%f'
+        prev_exec_time_utc = datetime.strftime(datetime.utcfromtimestamp(prev_exec_time), db_fmt)
+        exec_time_utc = datetime.strftime(datetime.utcfromtimestamp(exec_time), db_fmt)
         query = f"""
-            SELECT A.uri, A.lastModified 
-            FROM inventory.Artifact AS A 
+            SELECT A.uri, A.lastModified
+            FROM inventory.Artifact AS A
             WHERE A.uri NOT LIKE '%{self._preview_suffix}'
-            AND A.lastModified > '{prev_exec_time}'
-            AND A.lastModified <= '{exec_time}'
+            AND A.lastModified > '{prev_exec_time_utc}'
+            AND A.lastModified <= '{exec_time_utc}'
             AND split_part( split_part( A.uri, '/', 1 ), ':', 2 ) = '{self._config.collection}'
             ORDER BY A.lastModified ASC
         """
