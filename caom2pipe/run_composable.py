@@ -665,6 +665,9 @@ def run_by_todo(
         clients=clients,
     )
 
+    source.capture_failure = organizer.capture_failure
+    source.capture_success = organizer.capture_success
+
     runner = TodoRunner(
         config, organizer, name_builder, source, metadata_reader, application
     )
@@ -749,6 +752,9 @@ def run_by_state(
         metadata_reader,
         clients,
     )
+
+    source.capture_failure = organizer.capture_failure
+    source.capture_success = organizer.capture_success
 
     runner = StateRunner(
         config,

@@ -10,8 +10,6 @@ from setuptools import find_packages
 
 from setuptools import setup
 
-import distutils.cmd
-import distutils.log
 import subprocess
 
 # read the README.md file and return as string.
@@ -73,25 +71,6 @@ class PyTest(TestCommand):
         err_no = pytest.main(self.pytest_args)
         sys.exit(err_no)
         
-class IntTestCommand(distutils.cmd.Command):
-  """A custom command to run integration tests."""
-
-  description = 'Integration tests'
-  user_options = []
-  
-  def initialize_options(self):
-    """Set default values for options."""
-    # Each user option must be listed here with their default value.
-
-  def finalize_options(self):
-    """Post-process options."""
-
-  def run(self):
-    """Run command."""
-    import pytest
-    testfile = os.getcwd() + '/tests/test_integration.py'
-    pytest.main(['-s', '--capture=no','-x', testfile])
-
 install_requires=metadata.get('install_requires', '').strip().split()
 
 setup(name=PACKAGENAME,
@@ -116,8 +95,5 @@ setup(name=PACKAGENAME,
         'Programming Language :: Python',
         'Programming Language :: Python :: 3.6'
       ],
-      cmdclass = {
-          'coverage': PyTest,
-          'inttest': IntTestCommand
-      }
+      cmdclass = {'coverage': PyTest}
 )

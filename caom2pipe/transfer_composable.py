@@ -211,8 +211,8 @@ class ScienceTransfer(Transfer):
         result = True
         msg = ''
         if '.fits' in dest_fqn:
-            result = ac.check_fits(dest_fqn)
-            msg = f'astropy error when reading {dest_fqn}'
+            result = ac.check_fitsverify(dest_fqn)
+            msg = f'fitsverify error when reading {dest_fqn}'
         elif dest_fqn.endswith('.h5') or dest_fqn.endswith('.hdf5'):
             result = ac.check_h5(dest_fqn)
             msg = f'h5check error when reading {dest_fqn}'
