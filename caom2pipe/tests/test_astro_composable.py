@@ -245,7 +245,7 @@ def test_check_h5():
     assert not test_result, 'missing failure'
 
 
-def test_check_fits_verify():
+def test_check_fitsverify():
     files = {
         '/test_files/a2020_06_17_07_00_01.fits': True,
         '/test_files/a2022_07_26_05_50_01.fits': False,
@@ -253,6 +253,7 @@ def test_check_fits_verify():
         '/test_files/scatsmth.flat.V.00.01.fits.gz': False,
         '/test_files/NEOS_SCI_2022223000524.fits': True,
         '/test_files/broken.fits': False,
+        '/test_files/dao_c122_2007_000882_v_1024.png': False,
     }
 
     for fqn, expected_result in files.items():
@@ -266,6 +267,7 @@ def test_check_fits_verify():
         '/test_files/scatsmth.flat.V.00.01.fits.gz': True,
         '/test_files/NEOS_SCI_2022223000524.fits': True,
         '/test_files/broken.fits': False,
+        '/test_files/dao_c122_2007_000882_v_1024.png': False,
     }
 
     for fqn, expected_result in files.items():
