@@ -170,9 +170,8 @@ def check_fitsverify(fqn):
     Execute fitsverify on fqn
     :return: bool True if compliant, False if Error count > 0
     """
-    result = True
+    result = False
     if '.fits' in fqn:
-        result = False
         cmd = f'fitsverify -q {fqn}'
         logging.debug(cmd)
         cmd_array = cmd.split()
