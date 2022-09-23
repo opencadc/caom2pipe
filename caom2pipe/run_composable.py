@@ -281,7 +281,6 @@ class TodoRunner:
         """
         self._logger.debug('Begin _run_todo_list.')
         result = 0
-        self._organizer.choose()
         while len(self._todo_list) > 0:
             entry = self._todo_list.popleft()
             result |= self._process_entry(entry, current_count)
@@ -317,6 +316,8 @@ class TodoRunner:
         self._logger.debug('Begin run.')
         self._build_todo_list()
         self._reporter.add_entries(self._organizer.complete_record_count)
+        # have the choose call here, so that retries don't change the set of tasks to be executed
+        self._organizer.choose()
         result = self._run_todo_list(current_count=0)
         self._reporter.add_successes(self._organizer.success_count)
         self._logger.debug('End run.')
