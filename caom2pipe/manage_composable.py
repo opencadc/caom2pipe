@@ -1760,6 +1760,10 @@ class StorageName:
         return self._destination_uris
 
     @property
+    def hdf5(self):
+        return StorageName.is_hdf5(self._file_name)
+
+    @property
     def model_file_name(self):
         """The file name used on local disk that holds the CAOM2 Observation
         XML."""
