@@ -96,13 +96,10 @@ class TestTransfer(transfer_composable.Transfer):
         test_source_uri = 'cadc:TEST/test_file.fits'
         if source_fqn not in [test_source_fqn, test_source_uri]:
             assert False, f'wrong source directory {source_fqn}'
-        assert (
-            dest_fqn
-            in [
-                '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits',
-                '/usr/src/app/caom2pipe/int_test/test_obs_id/1000003f.fits.fz',
-            ]
-        ), 'wrong destination directory'
+        assert dest_fqn in [
+            '/usr/src/app/caom2pipe/int_test/test_obs_id/test_file.fits',
+            '/usr/src/app/caom2pipe/int_test/test_obs_id/1000003f.fits.fz',
+        ], 'wrong destination directory'
         with open(dest_fqn, 'w') as f:
             f.write('test content')
 
@@ -117,9 +114,7 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
         for entry in file_list:
             stats = os.stat(entry)
             if prev_exec_time <= stats.st_mtime <= exec_time:
-                result.append(
-                    dsc.StateRunnerMeta(entry, stats.st_mtime)
-                )
+                result.append(dsc.StateRunnerMeta(entry, stats.st_mtime))
         return result
 
 
@@ -404,11 +399,12 @@ def _get_times(test_config, caom2pipe_bookmark):
     if not os.path.exists('/caom2pipe_test'):
         os.mkdir('/caom2pipe_test')
         from pathlib import Path
+
         Path('/caom2pipe_test/1000003f.fits.fz').touch()
 
     test_start_time = datetime.fromtimestamp(
         os.stat('/caom2pipe_test/1000003f.fits.fz').st_mtime,
-        tz=dateutil.tz.UTC
+        tz=dateutil.tz.UTC,
     ) - timedelta(minutes=5)
 
     with open(test_config.state_fqn, 'w') as f:

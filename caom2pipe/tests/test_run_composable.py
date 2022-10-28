@@ -66,7 +66,6 @@
 # ***********************************************************************
 #
 
-import distutils
 import logging
 import pytest
 import glob
@@ -83,10 +82,12 @@ import test_conf as tc
 from cadcdata import FileInfo
 from cadcutils import exceptions
 from caom2 import SimpleObservation, Algorithm
+from caom2pipe.client_composable import ClientCollection
 from caom2pipe import data_source_composable as dsc
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
 from caom2pipe import name_builder_composable as nbc
+from caom2pipe.reader_composable import FileMetadataReader
 from caom2pipe import run_composable as rc
 from caom2pipe import name_builder_composable as b
 
@@ -95,9 +96,6 @@ STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')
 TEST_BOOKMARK = 'test_bookmark'
 TEST_COMMAND = 'test_command'
 TEST_DIR = f'{tc.TEST_DATA_DIR}/run_composable'
-TEST_SOURCE = (
-    f'{distutils.sysconfig.get_python_lib()}/test_command/' f'test_command.py'
-)
 
 
 @patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
@@ -118,15 +116,18 @@ def test_run_todo_list_dir_data_source(
     ]
     test_config.data_source_extensions = ['.fits']
     test_config.features.supports_latest_client = False
+    test_config.logging_level = 'DEBUG'
     test_chooser = ec.OrganizeChooser()
+    reader_mock = Mock()
     test_result = rc.run_by_todo(
-        config=test_config, chooser=test_chooser
+        config=test_config, chooser=test_chooser, metadata_reader=reader_mock
     )
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert visit_meta_mock.called, 'expect visit call'
     visit_meta_mock.assert_called_with()
     assert write_obs_mock.called, 'expect write call'
+    assert reader_mock.reset.called, 'expect reset call'
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
@@ -250,9 +251,7 @@ def test_run_todo_file_data_source(clients_mock, test_config):
     test_config.log_to_file = True
 
     test_chooser = ec.OrganizeChooser()
-    test_result = rc.run_by_todo(
-        config=test_config, chooser=test_chooser
-    )
+    test_result = rc.run_by_todo(config=test_config, chooser=test_chooser)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert os.path.exists(test_config.success_fqn), 'expect success file'
@@ -284,9 +283,7 @@ def test_run_todo_file_data_source_v(clients_mock, test_config):
     test_config.log_to_file = True
 
     test_chooser = ec.OrganizeChooser()
-    test_result = rc.run_by_todo(
-        config=test_config, chooser=test_chooser
-    )
+    test_result = rc.run_by_todo(config=test_config, chooser=test_chooser)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert os.path.exists(test_config.success_fqn), 'expect success file'
@@ -306,9 +303,7 @@ def test_run_todo_file_data_source_v(clients_mock, test_config):
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.data_source_composable.CadcTapClient')
 @patch('caom2pipe.client_composable.query_tap_client')
-@patch(
-    'caom2pipe.execute_composable.MetaVisit._visit_meta'
-)
+@patch('caom2pipe.execute_composable.MetaVisit._visit_meta')
 def test_run_state(
     visit_meta_mock,
     tap_query_mock,
@@ -323,59 +318,63 @@ def test_run_state(
 
     test_end_time = datetime.fromtimestamp(1579740838, tz=timezone.utc)
     start_time = test_end_time - timedelta(seconds=900)
-    _write_state(start_time)
 
     test_config.task_types = [mc.TaskType.INGEST]
-    test_config.state_fqn = STATE_FILE
     test_config.interval = 10
     individual_log_file = (
         f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
     )
-    if os.path.exists(test_config.progress_fqn):
-        os.unlink(test_config.progress_fqn)
-    if os.path.exists(test_config.success_fqn):
-        os.unlink(test_config.success_fqn)
-    if os.path.exists(individual_log_file):
-        os.unlink(individual_log_file)
 
-    test_chooser = ec.OrganizeChooser()
-    # use_local_files set so run_by_state chooses QueryTimeBoxDataSourceTS
-    test_config.use_local_files = False
-    test_result = rc.run_by_state(
-        config=test_config,
-        chooser=test_chooser,
-        bookmark_name=TEST_BOOKMARK,
-        end_time=test_end_time,
-    )
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert visit_meta_mock.called, 'expect visit meta call'
-    visit_meta_mock.assert_called_once_with()
+    with TemporaryDirectory() as tmp_dir_name:
+        test_config.working_directory = tmp_dir_name
+        test_config.state_fqn = os.path.join(tmp_dir_name, 'state.yml')
+        _write_state(start_time, test_config.state_fqn)
 
-    test_state = mc.State(STATE_FILE)
-    test_bookmark = test_state.get_bookmark(TEST_BOOKMARK)
-    assert test_bookmark == test_end_time, 'wrong time'
-    assert os.path.exists(test_config.progress_fqn), 'expect progress file'
-    assert os.path.exists(
-        test_config.success_fqn
-    ), 'log_to_file set to false, no success file'
-    assert not os.path.exists(
-        individual_log_file
-    ), f'log_to_file is False, no entry log'
+        test_chooser = ec.OrganizeChooser()
+        # use_local_files set so run_by_state chooses QueryTimeBoxDataSourceTS
+        test_config.use_local_files = False
+        test_reader = Mock()
+        test_result = rc.run_by_state(
+            config=test_config,
+            chooser=test_chooser,
+            bookmark_name=TEST_BOOKMARK,
+            end_time=test_end_time,
+            metadata_reader=test_reader,
+        )
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+        assert visit_meta_mock.called, 'expect visit meta call'
+        visit_meta_mock.assert_called_once_with()
+        assert test_reader.reset.called, 'expect reset call'
+        assert test_reader.reset.call_count == 1, 'wrong call count'
 
-    # test that runner does nothing when times haven't changed
-    start_time = test_end_time
-    _write_state(start_time)
-    visit_meta_mock.reset_mock()
-    test_result = rc.run_by_state(
-        config=test_config,
-        chooser=test_chooser,
-        bookmark_name=TEST_BOOKMARK,
-        end_time=test_end_time,
-    )
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert not visit_meta_mock.called, 'expect no visit_meta call'
+        test_state = mc.State(test_config.state_fqn)
+        test_bookmark = test_state.get_bookmark(TEST_BOOKMARK)
+        assert test_bookmark == test_end_time, 'wrong time'
+        assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+        assert os.path.exists(
+            test_config.success_fqn
+        ), 'log_to_file set to false, no success file'
+        assert not os.path.exists(
+            individual_log_file
+        ), f'log_to_file is False, no entry log'
+
+        # test that runner does nothing when times haven't changed
+        start_time = test_end_time
+        _write_state(start_time)
+        visit_meta_mock.reset_mock()
+        test_result = rc.run_by_state(
+            config=test_config,
+            chooser=test_chooser,
+            bookmark_name=TEST_BOOKMARK,
+            end_time=test_end_time,
+            metadata_reader=test_reader,
+        )
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+        assert not visit_meta_mock.called, 'expect no visit_meta call'
+        assert test_reader.reset.called, 'expect reset call'
+        assert test_reader.reset.call_count == 1, 'wrong call count'
 
 
 @patch('caom2pipe.data_source_composable.CadcTapClient')
@@ -435,7 +434,9 @@ def test_run_state_log_to_file_true(
         )
         assert test_result is not None, 'expect a result'
         assert test_result == 0, 'expect success'
-        assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+        assert os.path.exists(
+            test_config.progress_fqn
+        ), 'expect progress file'
         file_count = glob.glob(pattern)
         assert len(file_count) == 2, 'wrong number of success files'
     finally:
@@ -533,7 +534,10 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config):
     ), 'do_one is mocked, should be no data client call'
     assert source_mock.called, 'clean_up should be called'
     assert source_mock.call_count == 2, 'clean_up should be called two times'
-    calls = [call('test_obs_id.fits.gz', -1, 0), call('test_obs_id.fits.gz', -1, 1)]
+    calls = [
+        call('test_obs_id.fits.gz', -1, 0),
+        call('test_obs_id.fits.gz', -1, 1),
+    ]
     source_mock.assert_has_calls(calls)
 
     # what should happen when successful execution occurs
@@ -876,9 +880,10 @@ def test_run_store_ingest_failure(
     get_work_mock.return_value = temp_deque
     repo_client_mock.return_value.read.return_value = None
     reader_headers_mock.return_value = [{'OBSMODE': 'abc'}]
-    def _file_info_mock(uri):
+
+    def _file_info_mock(key, ignore):
         return FileInfo(
-            id=uri,
+            id=key,
             file_type='application/fits',
             md5sum='md5:def',
         )
@@ -888,7 +893,7 @@ def test_run_store_ingest_failure(
     data_client_mock.return_value.put.side_effect = (
         exceptions.UnexpectedException
     )
-    # mock a series of failures with the CADC service
+    # mock a series of failures with the CADC storage service
     data_client_mock.return_value.info.side_effect = (
         exceptions.UnexpectedException
     )
@@ -915,7 +920,9 @@ def test_run_store_ingest_failure(
         os.getcwd = Mock(return_value=tmp_dir_name)
         try:
             data_source = dsc.LocalFilesDataSource(
-                test_config, data_client_mock, Mock(),
+                test_config,
+                data_client_mock,
+                Mock(),
             )
             test_result = rc.run_by_todo(source=data_source)
             assert test_result is not None, 'expect result'
@@ -944,11 +951,141 @@ def test_run_store_ingest_failure(
             cleanup_mock.assert_has_calls(cleanup_calls), 'wrong cleanup args'
             assert not visit_meta_mock.called, 'no _visit_meta call'
             assert not caom2_store_mock.called, 'no _caom2_store call'
-            assert not reader_file_info_mock.called, 'info'
-            assert not reader_headers_mock.called, 'get_head should be called'
+            assert reader_file_info_mock.called, 'info'
+            reader_file_info_mock.assert_called_with('cadc:OMM/dao_c122_2021_005157.fits', '/data/dao_c122_2021_005157.fits'), 'info args'
+            assert reader_headers_mock.called, 'get_head should be called'
+            reader_headers_mock.assert_called_with('cadc:OMM/dao_c122_2021_005157.fits', '/data/dao_c122_2021_005157.fits'), 'headers mock call'
         finally:
             os.getcwd = getcwd_orig
             os.chdir(cwd)
+
+
+@patch('caom2pipe.execute_composable.CaomExecute._caom2_store')
+@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+@patch('caom2pipe.data_source_composable.LocalFilesDataSource._move_action')
+@patch('caom2pipe.client_composable.CAOM2RepoClient')
+@patch('caom2pipe.client_composable.StorageClientWrapper')
+def test_run_store_get_work_failures(
+    data_client_mock,
+    repo_client_mock,
+    cleanup_mock,
+    access_mock,
+    visit_meta_mock,
+    caom2_store_mock,
+    test_config,
+):
+    # this is a test that a fitsverify failure will be logged in the failure log,
+    # and an md5sum that is the same on disk as at CADC will be logged in the success log
+
+    access_mock.return_value = 'https://localhost'
+    repo_client_mock.return_value.read.return_value = None
+
+    def _file_info_mock(uri):
+        logging.error('entering _file_info_mock')
+        return FileInfo(
+            id=uri,
+            file_type='application/fits',
+            md5sum='md5:d937df477fe2511995fa39a027e8ce2f',
+        )
+
+    data_client_mock.info.side_effect = _file_info_mock
+    cwd = os.getcwd()
+    with TemporaryDirectory() as tmp_dir_name:
+        os.chdir(tmp_dir_name)
+        test_config.working_directory = tmp_dir_name
+        test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
+        test_config.use_local_files = True
+        test_config.cleanup_files_when_storing = True
+        test_config.cleanup_failure_destination = '/data/failure'
+        test_config.cleanup_success_destination = '/data/success'
+        test_config.store_modified_files_only = True
+        test_config.data_sources = ['/data']
+        test_config.data_source_extensions = ['.fits']
+        test_config.logging_level = 'INFO'
+        test_config.proxy_file_name = 'cadcproxy.pem'
+        test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
+        test_config.features.supports_latest_client = True
+        test_config.features.supports_decompression = True
+        test_config.state_file_name = 'state.yml'
+        test_config.state_fqn = f'{tmp_dir_name}/{test_config.state_file_name}'
+        test_config.recurse_data_sources = False
+        mc.Config.write_to_file(test_config)
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
+
+        test_end_time = datetime.fromtimestamp(1579740838, tz=timezone.utc)
+        start_time = test_end_time - timedelta(seconds=900)
+        _write_state(start_time, test_config.state_fqn)
+
+        getcwd_orig = os.getcwd
+        os.getcwd = Mock(return_value=tmp_dir_name)
+
+        stat_return_value = type('', (), {})
+        stat_return_value.st_mtime = 1579740835.7357888
+        dir_entry_1 = type('', (), {})
+        dir_entry_1.name = 'a2020_06_17_07_00_01.fits'
+        dir_entry_1.path = '/test_files/a2020_06_17_07_00_01.fits'
+        dir_entry_1.stat = Mock(return_value=stat_return_value)
+        dir_entry_1.is_dir = Mock(return_value=False)
+        dir_entry_2 = type('', (), {})
+        dir_entry_2.name = 'a2022_07_26_05_50_01.fits'
+        dir_entry_2.path = '/test_files/a2022_07_26_05_50_01.fits'
+        dir_entry_2.stat = Mock(return_value=stat_return_value)
+        dir_entry_2.is_dir = Mock(return_value=False)
+
+        file_metadata_reader = FileMetadataReader()
+
+        with patch('os.scandir') as scandir_mock:
+            scandir_mock.return_value.__enter__.return_value = [dir_entry_1, dir_entry_2]
+            try:
+                data_source = dsc.LocalFilesDataSource(
+                    test_config,
+                    data_client_mock,
+                    file_metadata_reader,
+                )
+                clients_mock = ClientCollection(test_config)
+                clients_mock._data_client = data_client_mock
+                clients_mock._metadata_client = repo_client_mock
+                test_result = rc.run_by_state(
+                    source=data_source,
+                    bookmark_name=TEST_BOOKMARK,
+                    end_time=test_end_time,
+                    clients=clients_mock,
+                    metadata_reader=file_metadata_reader,
+                )
+
+                assert test_result is not None, 'expect result'
+                assert test_result == 0, 'expect successful execution'
+                # execution stops before this call should be made
+                assert not repo_client_mock.return_value.read.called, 'no read'
+                # make sure data is not really being written to CADC storage :)
+                assert not data_client_mock.put.called, 'put should not be called'
+                assert cleanup_mock.called, 'cleanup'
+                cleanup_calls = [
+                    call('/test_files/a2020_06_17_07_00_01.fits', '/data/success'),
+                    call('/test_files/a2022_07_26_05_50_01.fits', '/data/failure'),
+                ]
+                cleanup_mock.assert_has_calls(cleanup_calls), 'wrong cleanup args'
+                assert not visit_meta_mock.called, 'no _visit_meta call'
+                assert not caom2_store_mock.called, 'no _caom2_store call'
+                assert os.path.exists(test_config.failure_fqn), f'failure log {test_config.failure_fqn} should exist'
+                with open(test_config.failure_fqn, 'r') as f:
+                    content = f.readlines()
+                    assert len(content) == 1, 'expect 1 failure'
+                    assert 'a2022_07_26_05_50_01' in content[0], 'expect verify in failure log'
+                    assert 'a2020_06_17_07_00_01' not in content[0], 'expect md5sum in success log'
+
+                assert os.path.exists(test_config.success_fqn), f'failure log {test_config.success_fqn} should exist'
+                with open(test_config.success_fqn, 'r') as f:
+                    content = f.readlines()
+                    assert len(content) == 1, 'expect 1 success'
+                    assert 'a2020_06_17_07_00_01' in content[0], 'expect md5sum in success log'
+                    assert 'a2022_07_26_05_50_01' not in content[0], 'expect verify in failure log'
+
+            finally:
+                os.getcwd = getcwd_orig
+                os.chdir(cwd)
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
@@ -991,7 +1128,7 @@ def test_run_ingest(
         test_config.collection = 'CFHT'
         test_config.proxy_file_name = 'cadcproxy.pem'
         test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
-        test_config.features.supports_latest_client = False
+        test_config.features.supports_latest_client = True
         test_config.use_local_files = False
         mc.Config.write_to_file(test_config)
         with open(test_config.proxy_fqn, 'w') as f:
@@ -1008,18 +1145,14 @@ def test_run_ingest(
             assert (
                 data_client_mock.return_value.info.call_count == 1
             ), 'wrong number of info calls'
-            data_client_mock.return_value.info.assert_called_with(
-                f'ad:CFHT/{test_f_name}',
-            )
+            data_client_mock.return_value.info.assert_called_with(f'cadc:CFHT/{test_f_name}')
             assert (
                 data_client_mock.return_value.get_head.called
             ), 'get_head should be called'
             assert (
                 data_client_mock.return_value.get_head.call_count == 1
             ), 'wrong number of get_heads'
-            data_client_mock.return_value.get_head.assert_called_with(
-                f'ad:CFHT/{test_f_name}',
-            )
+            data_client_mock.return_value.get_head.assert_called_with(f'cadc:CFHT/{test_f_name}')
             assert meta_visit_mock.called, '_visit_meta call'
             assert meta_visit_mock.call_count == 1, '_visit_meta call count'
             assert caom2_store_mock.called, '_caom2_store call'
@@ -1029,12 +1162,18 @@ def test_run_ingest(
             os.chdir(cwd)
 
 
+@patch('caom2pipe.execute_composable.get_local_file_info')
 @patch('caom2pipe.client_composable.vault_info')
 @patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('vos.vos.Client')
 def test_vo_with_cleanup(
-    vo_client_mock, access_mock, fix_mock, vault_info_mock, test_config
+    vo_client_mock,
+    access_mock,
+    fix_mock,
+    vault_info_mock,
+    local_file_info_mock,
+    test_config,
 ):
     access_mock.return_value = 'https://localhost'
     test_obs_id = 'sky_cam_image'
@@ -1049,6 +1188,7 @@ def test_vo_with_cleanup(
         md5sum='abcdef',
     )
     vault_info_mock.return_value = test_file_info
+    local_file_info_mock.return_value = test_file_info
     clients_mock = Mock()
     clients_mock.vo_client = vo_client_mock
     clients_mock.data_client.info.side_effect = [None, test_file_info]
@@ -1064,6 +1204,7 @@ def test_vo_with_cleanup(
         test_config.proxy_file_name = 'cadcproxy.pem'
         test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
         test_config.features.supports_latest_client = True
+        test_config.features.supports_decompression = True
         test_config.data_sources = ['vos:goliaths/DAOTest']
         test_config.data_source_extensions = ['.fits.gz']
         test_config.cleanup_files_when_storing = True
@@ -1091,7 +1232,7 @@ def test_vo_with_cleanup(
             assert vo_client_mock.move.called, 'vo mock call'
             vo_client_mock.move.assert_called_with(
                 'vos:goliaths/DAOTest/sky_cam_image.fits.gz',
-                'vos:goliaths/DAOTest/pass/sky_cam_image.fits.gz'
+                'vos:goliaths/DAOTest/pass/sky_cam_image.fits.gz',
             ), 'move args'
             assert clients_mock.data_client.put.called, 'put call'
             clients_mock.data_client.put.assert_called_with(
@@ -1100,6 +1241,42 @@ def test_vo_with_cleanup(
         finally:
             os.getcwd = getcwd_orig
             os.chdir(cwd)
+
+
+@patch('caom2pipe.data_source_composable.TodoFileDataSource.get_work')
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+def test_store_from_to_cadc(clients_mock, get_work_mock, test_config):
+    # mimic a decompression event
+    test_f_name = 'abc.fits'
+    test_config.task_types = [mc.TaskType.STORE]
+    test_config.features.supports_latest_client = True
+    test_config.logging_level = 'DEBUG'
+    test_return_value = deque()
+    test_return_value.append(
+        f'cadc:{test_config.collection}/{test_f_name}.gz',
+    )
+    get_work_mock.return_value = test_return_value
+    clients_mock.return_value.data_client.get.side_effect = (
+        _mock_get_compressed_file
+    )
+    test_builder = nbc.GuessingBuilder(mc.StorageName)
+    test_result = rc.run_by_todo(
+        test_config,
+        test_builder,
+    )
+
+    assert test_result == 0, 'expect success'
+    assert clients_mock.return_value.data_client.get.called, 'get call'
+    assert clients_mock.return_value.data_client.put.called, 'put call'
+    clients_mock.return_value.data_client.get.assert_called_with(
+        '/usr/src/app/caom2pipe/caom2pipe/tests/abc',
+        f'cadc:{test_config.collection}/{test_f_name}.gz',
+    ), 'wrong get params'
+    clients_mock.return_value.data_client.put.assert_called_with(
+        '/usr/src/app/caom2pipe/caom2pipe/tests/abc',
+        f'cadc:{test_config.collection}/{test_f_name}',
+        None,  # stream
+    ), 'wrong put params'
 
 
 def _clean_up_log_files(test_config):
@@ -1138,9 +1315,9 @@ def _check_log_files(
     assert os.path.exists(retry_retry_fqn), 'expect retry file'
 
 
-def _write_state(start_time):
-    if os.path.exists(STATE_FILE):
-        os.unlink(STATE_FILE)
+def _write_state(start_time, fqn=STATE_FILE):
+    if os.path.exists(fqn):
+        os.unlink(fqn)
     test_bookmark = {
         'bookmarks': {
             TEST_BOOKMARK: {
@@ -1148,7 +1325,7 @@ def _write_state(start_time):
             },
         },
     }
-    mc.write_as_yaml(test_bookmark, STATE_FILE)
+    mc.write_as_yaml(test_bookmark, fqn)
 
 
 def _write_todo(test_config):
@@ -1157,6 +1334,15 @@ def _write_todo(test_config):
 
 
 call_count = 0
+
+
+def _mock_get_compressed_file(working_dir, uri):
+    fqn = f'{working_dir}/{os.path.basename(uri)}'
+    with open(fqn, 'wb') as f:
+        f.write(
+            b"\x1f\x8b\x08\x08\xd0{Lb\x02\xff.abc.fits\x00+I-.QH\xce"
+            b"\xcf+I\xcd+\xe1\x02\x00\xbd\xdfZ'\r\x00\x00\x00"
+        )
 
 
 def _mock_get_work(arg1, arg2):
@@ -1170,11 +1356,10 @@ def _mock_get_work2(arg1, **kwargs):
 def _mock_query(arg1, arg2, arg3):
     global call_count
     if call_count == 0:
-        logging.error('returning results')
         call_count = 1
         return Table.read(
-            'fileName,ingestDate\n'
-            'NEOS_SCI_2015347000000_clean.fits,'
+            'uri,lastModified\n'
+            'cadc:NEOSSAT/NEOS_SCI_2015347000000_clean.fits,'
             '2019-10-23T16:27:19.000\n'.split('\n'),
             format='csv',
         )

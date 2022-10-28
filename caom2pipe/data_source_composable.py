@@ -85,11 +85,13 @@ from caom2pipe import manage_composable as mc
 __all__ = [
     'DataSource',
     'data_source_factory',
+    'DecompressionDataSource',
     'ListDirDataSource',
     'ListDirSeparateDataSource',
     'ListDirTimeBoxDataSource',
     'LocalFilesDataSource',
     'QueryTimeBoxDataSource',
+    'RenameURIDataSource',
     'StateRunnerMeta',
     'TodoFileDataSource',
     'VaultDataSource',
@@ -119,6 +121,8 @@ class DataSource:
         self._extensions = None
         if config is not None:
             self._extensions = config.data_source_extensions
+        self._capture_failure = None
+        self._capture_success = None
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def clean_up(self, entry, execution_result, current_count):
@@ -129,6 +133,22 @@ class DataSource:
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         return deque()
+
+    @property
+    def capture_failure(self):
+        return self._capture_failure
+
+    @capture_failure.setter
+    def capture_failure(self, value):
+        self._capture_failure = value
+
+    @property
+    def capture_success(self):
+        return self._capture_success
+
+    @capture_success.setter
+    def capture_success(self, value):
+        self._capture_success = value
 
     @property
     def start_time_ts(self):
@@ -146,6 +166,73 @@ class DataSource:
             if entry.name.endswith(extension):
                 return True
         return False
+
+
+class DecompressionDataSource(DataSource):
+    """
+    Implement a Data Source that queries for files in Storage Inventory
+    that are compressed, where there does not exist a corresponding
+    decompressed copy of the file.
+
+    For CFHT, the condition is where there does not exist a corresponding
+    .fz compressed copy of the file.
+    """
+
+    def __init__(self, config, collection, scheme, suffix='.gz'):
+        super().__init__(config)
+        self._suffix = suffix
+        subject = clc.define_subject(config)
+        # the resource_id values are hard-coded - if the referenced instances
+        # of the services aren't available, the query answers are just
+        # considered not available.
+        self._luskan_client = CadcTapClient(
+            subject, resource_id='ivo://cadc.nrc.ca/global/luskan'
+        )
+        self._compressed = None
+        self._decompressed = None
+        self._collection = collection
+        self._scheme = scheme
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def _match_work(self):
+        new_extension = ''
+        if self._collection == 'CFHT':
+            new_extension = '.fz'
+        self._compressed.uri = self._compressed.uri.astype(str).replace(
+            self._suffix, new_extension
+        )
+        return self._compressed[
+            ~self._compressed.uri.isin(self._decompressed.uri)
+        ]
+
+    def _query_by_extension(self, extension):
+        # a TAP query to find all the files in SI with a particular extension
+        qs = f"""
+        SELECT A.uri
+        FROM inventory.Artifact AS A
+        WHERE A.uri like '{self._scheme}:{self._collection}/%{extension}'
+        """
+        return clc.query_tap_client(qs, self._luskan_client).to_pandas()
+
+    def get_cleanup_work(self):
+        return self._query_by_extension(
+            f'.fits{self._suffix}'
+        ).uri.values.tolist()[1:]
+
+    def get_work(self):
+        self._compressed = self._query_by_extension(f'.fits{self._suffix}')
+        self._logger.info(
+            f'Found {self._compressed.shape[0]} SI records with '
+            f'extension .fits{self._suffix}.'
+        )
+        self._decompressed = self._query_by_extension('.fits')
+        self._logger.info(
+            f'Found {self._decompressed.shape[0]} SI records with '
+            f'extension .fits.'
+        )
+        # make a list for ray, skip the first entry, which is the text header
+        # string 'uri'
+        return self._match_work().uri.values.tolist()[1:]
 
 
 class ListDirDataSource(DataSource):
@@ -327,6 +414,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
     """
     For when use_local_files: True and cleanup_when_storing: True
     """
+
     def __init__(self, config, cadc_client, metadata_reader, recursive=True):
         super().__init__(config)
         self._retry_failures = config.retry_failures
@@ -381,18 +469,10 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         :param current_count: int how many retries have been executed
         """
         self._logger.debug(f'Begin clean_up with {entry}')
-        if (
-            self._cleanup_when_storing
-            and (
-                (not self._retry_failures)
-                or (
-                    self._retry_failures
-                    and current_count >= self._retry_count
-                )
-                or (
-                    self._retry_failures and execution_result == 0
-                )
-            )
+        if self._cleanup_when_storing and (
+            (not self._retry_failures)
+            or (self._retry_failures and current_count >= self._retry_count)
+            or (self._retry_failures and execution_result == 0)
         ):
             if isinstance(entry, str):
                 fqn = entry
@@ -418,7 +498,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             elif '.hdf5' in entry.name:
                 # no hdf5 validation
                 pass
-            elif ac.check_fits(entry.path):
+            elif ac.check_fitsverify(entry.path):
                 # only work with files that pass the FITS verification
                 if self._cleanup_when_storing:
                     if self._store_modified_files_only:
@@ -436,6 +516,8 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                             self._move_action(
                                 entry.path, self._cleanup_success_directory
                             )
+                            if self._capture_success is not None:
+                                self._capture_success(entry.name, entry.name, datetime.utcnow().timestamp())
                 else:
                     work_with_file = True
             else:
@@ -447,6 +529,9 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     self._move_action(
                         entry.path, self._cleanup_failure_directory
                     )
+                if self._capture_failure is not None:
+                    temp_storage_name = mc.StorageName(file_name=entry.name)
+                    self._capture_failure(temp_storage_name, BaseException('fitsverify errors'), 'fitsverify errors')
                 work_with_file = False
         else:
             work_with_file = False
@@ -486,9 +571,9 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     if not entry.name.startswith('.'):
                         entry_stats = entry.stat()
                         if (
-                                exec_time
-                                >= entry_stats.st_mtime
-                                >= prev_exec_time
+                            exec_time
+                            >= entry_stats.st_mtime
+                            >= prev_exec_time
                         ):
                             if self.default_filter(entry):
                                 self._temp[entry_stats.st_mtime].append(
@@ -529,9 +614,8 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 self._metadata_reader.set_file_info(temp_storage_name)
 
                 if (
-                    self._metadata_reader.file_info.get(
-                        destination_name
-                    ).md5sum == cadc_meta.md5sum
+                    self._metadata_reader.file_info.get(destination_name).md5sum.replace('md5:', '')
+                    == cadc_meta.md5sum.replace('md5:', '')
                 ):
                     result = False
         else:
@@ -576,9 +660,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 shutil.move(fqn, dest_fqn)
             except Exception as e:
                 self._logger.debug(traceback.format_exc())
-                self._logger.error(
-                    f'Failed to move {fqn} to {destination}'
-                )
+                self._logger.error(f'Failed to move {fqn} to {destination}')
                 raise mc.CadcException(e)
 
 
@@ -647,43 +729,78 @@ class QueryTimeBoxDataSource(DataSource):
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         """
-        Get a set of file names from an archive. Limit the entries by
-        time-boxing on ingestDate, and don't include previews.
+        Get a set of file names from a collection. Limit the entries by
+        time-boxing on lastModified, and don't include previews.
 
         :param prev_exec_time timestamp start of the time-boxed chunk
         :param exec_time timestamp end of the time-boxed chunk
-        :return: a list of StateRunnerMeta instances in the CADC storage
-            system
+        :return: a list of StateRunnerMeta instances in the CADC storage system
         """
-        # container timezone is UTC, ad timezone is Pacific
+        # SG 8-09-22
+        # All timestamps in the SI databases are in UT
+        #
+        # SGo - the Docker images all run at UTC, so just use the timestamps as retrieved/stored in state.yml file.
+        # Use 'lastModified', because that should be the later timestamp (avoid eventual consistency lags).
+        self._logger.debug(f'Begin get_time_box_work.')
         db_fmt = '%Y-%m-%d %H:%M:%S.%f'
-        prev_exec_time_pz = datetime.strftime(
-            datetime.utcfromtimestamp(prev_exec_time).astimezone(
-                tz.gettz('US/Pacific')
-            ),
-            db_fmt,
-        )
-        exec_time_pz = datetime.strftime(
-            datetime.utcfromtimestamp(exec_time).astimezone(
-                tz.gettz('US/Pacific')
-            ),
-            db_fmt,
-        )
-        self._logger.debug(f'Begin get_work.')
-        query = (
-            f"SELECT fileName, ingestDate FROM archive_files WHERE "
-            f"archiveName = '{self._config.archive}' "
-            f"AND fileName NOT LIKE '%{self._preview_suffix}' "
-            f"AND ingestDate > '{prev_exec_time_pz}' "
-            f"AND ingestDate <= '{exec_time_pz}' "
-            "ORDER BY ingestDate ASC "
-        )
+        prev_exec_time_utc = datetime.strftime(datetime.utcfromtimestamp(prev_exec_time), db_fmt)
+        exec_time_utc = datetime.strftime(datetime.utcfromtimestamp(exec_time), db_fmt)
+        query = f"""
+            SELECT A.uri, A.lastModified
+            FROM inventory.Artifact AS A
+            WHERE A.uri NOT LIKE '%{self._preview_suffix}'
+            AND A.lastModified > '{prev_exec_time_utc}'
+            AND A.lastModified <= '{exec_time_utc}'
+            AND split_part( split_part( A.uri, '/', 1 ), ':', 2 ) = '{self._config.collection}'
+            ORDER BY A.lastModified ASC
+        """
         self._logger.debug(query)
         rows = clc.query_tap_client(query, self._client)
         result = deque()
         for row in rows:
-            result.append(StateRunnerMeta(row['fileName'], row['ingestDate']))
+            ignore_scheme, ignore_path, f_name = mc.decompose_uri(row['uri'])
+            result.append(StateRunnerMeta(f_name, row['lastModified']))
+        self._logger.debug(f'End get_time_box_work.')
         return result
+
+
+class RenameURIDataSource(DataSource):
+    """
+    Implement a Data Source that queries for CAOM2 records that have a
+    URI that references a compressed file.
+    """
+
+    def __init__(self, config, collection, scheme, suffix='.gz'):
+        super().__init__(config)
+        self._suffix = suffix
+        subject = clc.define_subject(config)
+        # the resource_id values are hard-coded - if the referenced instances
+        # of the services aren't available, the query answers are just
+        # considered not available.
+        self._argus_client = CadcTapClient(
+            subject, resource_id='ivo://cadc.nrc.ca/argus'
+        )
+        self._collection = collection
+        self._scheme = scheme
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    def _query(self):
+        # a TAP query to find all the observationID values in CAOM2 with a
+        # particular extension
+        qs = f"""
+        SELECT O.observationID
+        FROM caom2.Observation AS O
+        JOIN caom2.Plane AS P ON O.obsID = P.obsID
+        JOIN caom2.Artifact AS A ON A.planeID = P.planeID
+        WHERE O.collection = '{self._collection}'
+        AND A.uri LIKE f'{self._scheme}:{self._collection}/%.fits{self._suffix}
+        """
+        return clc.query_tap_client(qs, self._argus_client).to_pandas()
+
+    def get_work(self):
+        # make a list for ray, skip the first entry, which is the text header
+        # string 'observationID'
+        return self._query().observationID.values.tolist()[1:]
 
 
 class VaultDataSource(ListDirTimeBoxDataSource):
@@ -729,13 +846,8 @@ class VaultDataSource(ListDirTimeBoxDataSource):
                     )
             else:
                 if self.default_filter(target_node):
-                    if (
-                            exec_time >= target_node_mtime >=
-                            prev_exec_time
-                    ):
-                        self._temp[target_node_mtime].append(
-                            target_node.uri
-                        )
+                    if exec_time >= target_node_mtime >= prev_exec_time:
+                        self._temp[target_node_mtime].append(target_node.uri)
                         self._logger.info(
                             f'Add {target_node.uri} to work list.'
                         )
@@ -809,16 +921,14 @@ class VaultCleanupDataSource(VaultDataSource):
                 fqn = entry
             else:
                 fqn = entry.entry_name
-            self._logger.debug(f'Clean up f{fqn}')
+            self._logger.debug(f'Clean up {fqn}')
             check_result, vos_meta = self._check_md5sum(fqn)
             if check_result:
                 # if vos_meta is None, it's already been cleaned up,
                 # due to astropy fits verify failure cleanup
                 if vos_meta is not None:
                     # the transfer itself failed, so track as a failure
-                    self._move_action(
-                        fqn, self._cleanup_failure_directory
-                    )
+                    self._move_action(fqn, self._cleanup_failure_directory)
             else:
                 self._move_action(fqn, self._cleanup_success_directory)
             self._logger.debug('End clean_up.')
@@ -837,6 +947,8 @@ class VaultCleanupDataSource(VaultDataSource):
                         self._move_action(
                             entry_fqn, self._cleanup_success_directory
                         )
+                        if self._capture_success is not None:
+                            self._capture_success(entry.name, entry.name, datetime.utcnow().timestamp())
                 else:
                     copy_file = True
                 break
@@ -860,7 +972,6 @@ class VaultCleanupDataSource(VaultDataSource):
         collection = self.get_collection(f_name)
         cadc_name = mc.build_uri(collection, f_name, scheme)
         cadc_meta = self._cadc_client.info(cadc_name)
-        logging.error(cadc_meta)
         if cadc_meta is not None and vos_meta.md5sum == cadc_meta.md5sum:
             self._logger.warning(
                 f'{entry_fqn} has the same md5sum at CADC. Not transferring.'
@@ -904,9 +1015,7 @@ class VaultCleanupDataSource(VaultDataSource):
                 self._vault_client.move(fqn, dest_fqn)
             except Exception as e:
                 self._logger.debug(traceback.format_exc())
-                self._logger.error(
-                    f'Failed to move {fqn} to {destination}'
-                )
+                self._logger.error(f'Failed to move {fqn} to {destination}')
                 raise mc.CadcException(e)
 
 

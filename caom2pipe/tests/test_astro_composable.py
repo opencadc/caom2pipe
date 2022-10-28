@@ -68,7 +68,7 @@
 
 import math
 
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 import test_conf as tc
 
 from astropy.io import fits
@@ -211,7 +211,8 @@ def test_filter_md_cache(query_mock):
     test_result = test_subject.get_svo_filter('collection', 'collection')
     assert test_result is not None, 'expect a result'
     assert (
-        ac.FilterMetadataCache.get_central_wavelength(test_result) == 4444.2043
+        ac.FilterMetadataCache.get_central_wavelength(test_result)
+        == 4444.2043
     ), 'wrong cw'
     assert (
         ac.FilterMetadataCache.get_fwhm(test_result) == 333.9806
@@ -224,3 +225,51 @@ def test_filter_md_cache(query_mock):
         ac.FilterMetadataCache.get_central_wavelength(test_result) == -2
     ), 'wrong cw'
     assert ac.FilterMetadataCache.get_fwhm(test_result) == -2, 'wrong fwhm'
+
+
+def test_check_h5():
+    test_fqn_success = '/test_files/2384125z.hdf5'
+    test_result = ac.check_h5(test_fqn_success)
+    assert test_result, 'expect success'
+
+    test_fqn_empty = '/test_files/empty.h5'
+    test_result = ac.check_h5(test_fqn_empty)
+    assert not test_result, 'empty failure'
+
+    test_fqn_broken = '/test_files/broken.h5'
+    test_result = ac.check_h5(test_fqn_broken)
+    assert not test_result, 'broken failure'
+
+    test_fqn_missing = '/test_files/not_there.h5'
+    test_result = ac.check_h5(test_fqn_missing)
+    assert not test_result, 'missing failure'
+
+
+def test_check_fitsverify():
+    files = {
+        '/test_files/a2020_06_17_07_00_01.fits': True,
+        '/test_files/a2022_07_26_05_50_01.fits': False,
+        '/test_files/2377897o.fits.fz': True,
+        '/test_files/scatsmth.flat.V.00.01.fits.gz': False,
+        '/test_files/NEOS_SCI_2022223000524.fits': True,
+        '/test_files/broken.fits': False,
+        '/test_files/dao_c122_2007_000882_v_1024.png': False,
+    }
+
+    for fqn, expected_result in files.items():
+        test_result = ac.check_fitsverify(fqn)
+        assert test_result == expected_result, f'wrong fitsverify result {fqn}'
+
+    files = {
+        '/test_files/a2020_06_17_07_00_01.fits': True,
+        '/test_files/a2022_07_26_05_50_01.fits': True,
+        '/test_files/2377897o.fits.fz': True,
+        '/test_files/scatsmth.flat.V.00.01.fits.gz': True,
+        '/test_files/NEOS_SCI_2022223000524.fits': True,
+        '/test_files/broken.fits': False,
+        '/test_files/dao_c122_2007_000882_v_1024.png': False,
+    }
+
+    for fqn, expected_result in files.items():
+        test_result = ac.check_fits(fqn)
+        assert test_result == expected_result, f'wrong astropy verify result {fqn}'

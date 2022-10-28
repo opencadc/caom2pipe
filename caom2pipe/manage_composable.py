@@ -179,6 +179,7 @@ class Features:
         self._supports_catalog = True
         self._supports_latest_client = False
         self._supports_multiple_files = True
+        self._supports_decompression = False
 
     @property
     def run_in_airflow(self):
@@ -211,6 +212,15 @@ class Features:
         self._supports_catalog = value
 
     @property
+    def supports_decompression(self):
+        """If true, will execute decompression code for .gz and .bz2 files."""
+        return self._supports_decompression
+
+    @supports_decompression.setter
+    def supports_decompression(self, value):
+        self._supports_decompression = value
+
+    @property
     def supports_latest_client(self):
         """If true, will execute any latest-version-specific code when creating
         a CAOM instance."""
@@ -231,9 +241,7 @@ class Features:
         self._supports_multiple_files = value
 
     def __str__(self):
-        return ' '.join(
-            f'{ii} {getattr(self, ii)}' for ii in vars(self)
-        )
+        return ' '.join(f'{ii} {getattr(self, ii)}' for ii in vars(self))
 
 
 class TaskType(Enum):
@@ -326,7 +334,7 @@ class Rejected:
         INVALID_FORMAT: 'Invalid observation ID',
         MISSING: 'Could not find JSON record for',
         NO_INSTRUMENT: 'Unknown value for instrument',
-        NO_PREVIEW: 'Internal Server Error for url: '
+        NO_PREVIEW: 'Not Found for url: '
         'https://archive.gemini.edu/preview',
     }
 
@@ -444,7 +452,9 @@ class Metrics:
             create_dir(self.observable_dir)
             now = datetime.utcnow().timestamp()
             for service in self.history.keys():
-                fqn = os.path.join(self.observable_dir, f'{now}.{service}.yml')
+                fqn = os.path.join(
+                    self.observable_dir, f'{now}.{service}.yml'
+                )
                 write_as_yaml(self.history[service], fqn)
 
             fqn = os.path.join(self.observable_dir, f'{now}.fail.yml')
@@ -1243,7 +1253,9 @@ class Config:
             )
             self.work_file = config.get('todo_file_name', 'todo.txt')
             self.netrc_file = config.get('netrc_filename', None)
-            self.data_sources = Config._obtain_list('data_sources', config, [])
+            self.data_sources = Config._obtain_list(
+                'data_sources', config, []
+            )
             self.data_source_extensions = Config._obtain_list(
                 'data_source_extensions', config, ['.fits']
             )
@@ -1276,7 +1288,9 @@ class Config:
             self.failure_log_file_name = config.get(
                 'failure_log_file_name', 'failure_log.txt'
             )
-            self.retry_file_name = config.get('retry_file_name', 'retries.txt')
+            self.retry_file_name = config.get(
+                'retry_file_name', 'retries.txt'
+            )
             self.retry_failures = config.get('retry_failures', False)
             self.retry_count = config.get('retry_count', 1)
             self.retry_decay = config.get('retry_decay', 1)
@@ -1479,10 +1493,10 @@ class PreviewVisitor:
         self._mime_type = mime_type
         self._logger = logging.getLogger(self.__class__.__name__)
         self._working_dir = kwargs.get('working_directory', './')
-        self._cadc_client = kwargs.get('cadc_client')
-        if self._cadc_client is None:
+        self._clients = kwargs.get('clients')
+        if self._clients is None or self._clients.data_client is None:
             self._logger.warning(
-                'Visitor needs a cadc_client parameter to store previews.'
+                'Visitor needs a clients.data_client parameter to store previews.'
             )
         self._stream = kwargs.get('stream')
         if self._stream is None:
@@ -1576,7 +1590,10 @@ class PreviewVisitor:
         """Clean up files on disk after."""
         # cadc_client will be None if executing a ScrapeModify task, so
         # leave the files behind so the user can see them on disk.
-        if self._cadc_client is not None:
+        if (
+            self._clients is not None
+            and self._clients.data_client is not None
+        ):
             for entry in self._delete_list:
                 if os.path.exists(entry):
                     self._logger.warning(f'Deleting {entry}')
@@ -1595,9 +1612,12 @@ class PreviewVisitor:
         return self._storage_name
 
     def _store_smalls(self):
-        if self._cadc_client is not None:
+        if (
+            self._clients is not None
+            and self._clients.data_client is not None
+        ):
             for uri, entry in self._previews.items():
-                self._cadc_client.put(
+                self._clients.data_client.put(
                     self._working_dir, uri, self._stream
                 )
 
@@ -1609,6 +1629,7 @@ class PreviewVisitor:
         if os.path.exists(self._preview_fqn):
             # keep import local
             import matplotlib.image as image
+
             thumb = image.thumbnail(
                 self._preview_fqn, self._thumb_fqn, scale=0.25
             )
@@ -1739,6 +1760,10 @@ class StorageName:
         return self._destination_uris
 
     @property
+    def hdf5(self):
+        return StorageName.is_hdf5(self._file_name)
+
+    @property
     def model_file_name(self):
         """The file name used on local disk that holds the CAOM2 Observation
         XML."""
@@ -1807,14 +1832,18 @@ class StorageName:
         return pattern.match(self._file_name)
 
     def get_file_fqn(self, working_directory):
+        # the file name without the compression extension
+        temp = os.path.basename(self.file_uri)
         if (
-            self._source_names is not None and
-            len(self._source_names) > 0 and
-            os.path.exists(self._source_names[0])
+            self._source_names is not None
+            and len(self._source_names) > 0
+            and os.path.exists(self._source_names[0])
+            # is there an interim, uncompressed file name?
+            and self._source_names[0].endswith(temp)
         ):
             fqn = self._source_names[0]
         else:
-            fqn = os.path.join(working_directory, self._file_name)
+            fqn = os.path.join(working_directory, temp)
         return fqn
 
     def set_destination_uris(self):
@@ -1822,14 +1851,16 @@ class StorageName:
             temp = parse.urlparse(entry)
             if '.fits' in entry:
                 self._destination_uris.append(
-                    self._get_uri(os.path.basename(
-                            temp.path
-                        ).replace('.gz', '').replace('.bz2', '')
+                    self._get_uri(
+                        os.path.basename(temp.path)
+                        .replace('.gz', '')
+                        .replace('.bz2', '')
+                        .replace('.header', '')
                     )
                 )
             else:
                 self._destination_uris.append(
-                    self._get_uri(os.path.basename(temp.path))
+                    self._get_uri(os.path.basename(temp.path)),
                 )
 
     def set_file_id(self):
@@ -1851,7 +1882,9 @@ class StorageName:
     def remove_extensions(name):
         """How to get the file_id from a file_name."""
         return (
-            name.replace('.fits', '').replace('.gz', '').replace('.header', '')
+            name.replace('.fits', '')
+            .replace('.gz', '')
+            .replace('.header', '')
         )
 
     @staticmethod
@@ -2135,7 +2168,9 @@ def exec_cmd_array(cmd_array, log_level_as=logging.debug, timeout=None):
             raise e
         logging.warning(f'Error with command {cmd_text}:: {e}')
         logging.debug(traceback.format_exc())
-        raise CadcException(f'Could not execute cmd {cmd_text}. Exception {e}')
+        raise CadcException(
+            f'Could not execute cmd {cmd_text}. Exception {e}'
+        )
 
 
 def exec_cmd_info(cmd):
@@ -2360,7 +2395,11 @@ def get_file_meta(fqn):
         'size': get_file_size(fqn),
         'md5sum': md5(open(fqn, 'rb').read()).hexdigest(),
     }
-    if fqn.endswith('.header') or fqn.endswith('.txt') or fqn.endswith('.cat'):
+    if (
+        fqn.endswith('.header')
+        or fqn.endswith('.txt')
+        or fqn.endswith('.cat')
+    ):
         meta['type'] = 'text/plain'
     elif fqn.endswith('.csv'):
         meta['type'] = 'text/csv'
@@ -2432,7 +2471,9 @@ def check_param(param, param_type):
     expected type.
     """
     if param is None or not isinstance(param, param_type):
-        raise CadcException(f'Parameter {param} failed check for {param_type}')
+        raise CadcException(
+            f'Parameter {param} failed check for {param_type}'
+        )
 
 
 def read_csv_file(fqn):
@@ -3040,11 +3081,12 @@ def _get_file_info(storage_name, cadc_client):
     return FileMeta(f_size, f_md5sum)
 
 
-def query_tap(query_string, proxy_fqn, resource_id):
+def query_tap(query_string, proxy_fqn, resource_id, timeout=10):
     """
     :param query_string ADQL
     :param proxy_fqn proxy file location, credentials for the query
     :param resource_id which tap service to query
+    :param timeout time in minutes, tap_client gives up after that
     :returns an astropy votable instance."""
 
     logging.debug(
@@ -3053,10 +3095,23 @@ def query_tap(query_string, proxy_fqn, resource_id):
     subject = net.Subject(certificate=proxy_fqn)
     tap_client = CadcTapClient(subject, resource_id=resource_id)
     buffer = io.StringIO()
-    tap_client.query(
-        query_string, output_file=buffer, data_only=True, response_format='csv'
-    )
-    return Table.read(buffer.getvalue().split('\n'), format='csv')
+    tap_client.query(query_string, output_file=buffer, data_only=True, response_format='tsv', timeout=timeout)
+    return Table.read(buffer.getvalue().split('\n'), format='ascii.tab')
+
+
+def query_tap_pandas(query_string, client, timeout=10):
+    """
+    Return TAP query results as a Pandas Dataframe.
+
+    :param query_string: query to execute
+    :param client: CadcTapClient instance, pointed to a service that understands the query
+    :param timeout: in minutes
+
+    :return: Dataframe with query results
+    """
+    buffer = io.StringIO()
+    client.query(query_string, output_file=buffer, data_only=True, response_format='tsv', timeout=timeout)
+    return Table.read(buffer.getvalue().split('\n'), format='ascii.tab').to_pandas()
 
 
 def reverse_lookup(value_to_find, in_dict):

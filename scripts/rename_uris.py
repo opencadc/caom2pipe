@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2020.                            (c) 2020.
+#  (c) 2021.                            (c) 2021.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -66,92 +67,44 @@
 # ***********************************************************************
 #
 
-from unittest.mock import patch
+from threading import get_native_id
 
-from caom2utils import ObsBlueprint
-from caom2pipe import manage_composable as mc
-from caom2pipe import translate_composable as tc
-
-import test_conf
+from cadcutils.net import Subject
+from caom2utils.data_util import StorageClientWrapper
+from caom2utils.fits2caom2 import update_artifact_meta
 
 
-@patch('caom2utils.caom2blueprint.FitsParser.augment_observation')
-def test_add_headers_to_obs_by_blueprint(parser_mock):
-    test_blueprint = ObsBlueprint()
-    test_fqn = f'{test_conf.TEST_DATA_DIR}/translate_test/after_aug.xml'
-    test_obs = mc.read_obs_from_file(test_fqn)
-    test_product_id = '2515996g'
-    test_uri = 'ad:CFHT/2515996g.fits'
-    assert len(test_obs.planes) == 1, 'wrong number of planes'
-    assert (
-        len(test_obs.planes[test_product_id].artifacts) == 1
-    ), 'wrong number of artifacts'
-    assert (
-        len(test_obs.planes[test_product_id].artifacts[test_uri].parts) == 5
-    ), 'wrong number of parts'
-    assert (
-        len(
-            test_obs.planes[test_product_id]
-            .artifacts[test_uri]
-            .parts['0']
-            .chunks
+thread_clients = {}
+
+
+def visit(self, observation, **kwargs):
+    artifact_count = 0
+    thread_id = get_native_id()
+    data_client = thread_clients.get(thread_id)
+    if data_client is None and thread_id is not None:
+        subject = Subject(certificate='/usr/src/app/cadcproxy.pem')
+        data_client = StorageClientWrapper(
+            subject, resource_id='ivo://cadc.nrc.ca/global/minoc'
         )
-        == 1
-    ), 'wrong number of chunks'
-    assert (
-        test_obs.planes[test_product_id]
-        .artifacts[test_uri]
-        .parts['0']
-        .chunks[0]
-        .naxis
-        == 3
-    ), 'track initial value'
-    assert (
-        test_obs.planes[test_product_id]
-        .artifacts[test_uri]
-        .parts['IMAGE DATA']
-        .chunks[0]
-        .naxis
-        is None
-    ), 'track initial value'
-    tc.add_headers_to_obs_by_blueprint(
-        test_obs, [], test_blueprint, test_uri, test_product_id
+        thread_clients[thread_id] = data_client
+
+    for plane in observation.planes.values():
+        for artifact in plane.artifacts.values():
+            if artifact.uri.endswith(self._suffix):
+                new_artifact_uri = artifact.uri.replace(self._suffix, '')
+                file_info = data_client.info(new_artifact_uri)
+                if file_info is not None:
+                    old_artifact_uri = artifact.uri
+                    artifact.uri = new_artifact_uri
+                    update_artifact_meta(artifact, file_info)
+                    self._logger.info(
+                        f'Renamed URI from {old_artifact_uri} to '
+                        f'{artifact.uri}, updated contentChecksum, '
+                        f'contentLength.'
+                    )
+                    artifact_count += 1
+
+    self._logger.info(
+        f'Updated URIs and content for {artifact_count} artifacts.'
     )
-    assert (
-        len(test_obs.planes[test_product_id].artifacts[test_uri].parts) == 5
-    ), 'wrong number of parts'
-    assert (
-        len(
-            test_obs.planes[test_product_id]
-            .artifacts[test_uri]
-            .parts['0']
-            .chunks
-        )
-        == 0
-    ), 'wrong number of chunks'
-    assert (
-        len(
-            test_obs.planes[test_product_id]
-            .artifacts[test_uri]
-            .parts['1']
-            .chunks
-        )
-        == 1
-    ), 'wrong number of chunks'
-    assert (
-        len(
-            test_obs.planes[test_product_id]
-            .artifacts[test_uri]
-            .parts['IMAGE DATA']
-            .chunks
-        )
-        == 1
-    ), 'wrong number of chunks'
-    assert (
-        test_obs.planes[test_product_id]
-        .artifacts[test_uri]
-        .parts['IMAGE DATA']
-        .chunks[0]
-        .naxis
-        == 3
-    ), 'track initial value'
+    return observation

@@ -1,8 +1,9 @@
+# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2020.                            (c) 2020.
+#  (c) 2021.                            (c) 2021.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -66,92 +67,91 @@
 # ***********************************************************************
 #
 
-from unittest.mock import patch
+import logging
+import ray
+import time
 
-from caom2utils import ObsBlueprint
-from caom2pipe import manage_composable as mc
-from caom2pipe import translate_composable as tc
+from ray.util import ActorPool
 
-import test_conf
+from caom2pipe.client_composable import ClientCollection
+from caom2pipe.data_source_composable import DecompressionDataSource
+from caom2pipe.execute_composable import OrganizeExecutes
+from caom2pipe.manage_composable import Config, StorageName
+from caom2pipe.name_builder_composable import GuessingBuilder
+from caom2pipe.reader_composable import StorageClientReader
+from caom2pipe.transfer_composable import CadcTransfer
 
 
-@patch('caom2utils.caom2blueprint.FitsParser.augment_observation')
-def test_add_headers_to_obs_by_blueprint(parser_mock):
-    test_blueprint = ObsBlueprint()
-    test_fqn = f'{test_conf.TEST_DATA_DIR}/translate_test/after_aug.xml'
-    test_obs = mc.read_obs_from_file(test_fqn)
-    test_product_id = '2515996g'
-    test_uri = 'ad:CFHT/2515996g.fits'
-    assert len(test_obs.planes) == 1, 'wrong number of planes'
-    assert (
-        len(test_obs.planes[test_product_id].artifacts) == 1
-    ), 'wrong number of artifacts'
-    assert (
-        len(test_obs.planes[test_product_id].artifacts[test_uri].parts) == 5
-    ), 'wrong number of parts'
-    assert (
-        len(
-            test_obs.planes[test_product_id]
-            .artifacts[test_uri]
-            .parts['0']
-            .chunks
-        )
-        == 1
-    ), 'wrong number of chunks'
-    assert (
-        test_obs.planes[test_product_id]
-        .artifacts[test_uri]
-        .parts['0']
-        .chunks[0]
-        .naxis
-        == 3
-    ), 'track initial value'
-    assert (
-        test_obs.planes[test_product_id]
-        .artifacts[test_uri]
-        .parts['IMAGE DATA']
-        .chunks[0]
-        .naxis
-        is None
-    ), 'track initial value'
-    tc.add_headers_to_obs_by_blueprint(
-        test_obs, [], test_blueprint, test_uri, test_product_id
+def _set_logging(config):
+    formatter = logging.Formatter(
+        '%(asctime)s:%(levelname)-8s:%(name)-12s:%(lineno)-4d:%(message)s'
     )
-    assert (
-        len(test_obs.planes[test_product_id].artifacts[test_uri].parts) == 5
-    ), 'wrong number of parts'
-    assert (
-        len(
-            test_obs.planes[test_product_id]
-            .artifacts[test_uri]
-            .parts['0']
-            .chunks
+    logging.error(logging.getLogger().handlers)
+    for handler in logging.getLogger().handlers:
+        handler.setLevel(config.logging_level)
+        handler.setFormatter(formatter)
+
+
+@ray.remote
+class SessionActor:
+    def __init__(self):
+        StorageName.scheme = scheme
+        StorageName.collection = config.collection
+        self._client = ClientCollection(config)
+        self._builder = GuessingBuilder(StorageName)
+        self._store_transfer = CadcTransfer()
+        self._metadata_reader = StorageClientReader(self._client)
+        self._organizer = OrganizeExecutes(
+            config,
+            [],
+            [],
+            store_transfer=self._store_transfer,
+            clients=self._client,
+            metadata_reader=self._metadata_reader,
         )
-        == 0
-    ), 'wrong number of chunks'
-    assert (
-        len(
-            test_obs.planes[test_product_id]
-            .artifacts[test_uri]
-            .parts['1']
-            .chunks
-        )
-        == 1
-    ), 'wrong number of chunks'
-    assert (
-        len(
-            test_obs.planes[test_product_id]
-            .artifacts[test_uri]
-            .parts['IMAGE DATA']
-            .chunks
-        )
-        == 1
-    ), 'wrong number of chunks'
-    assert (
-        test_obs.planes[test_product_id]
-        .artifacts[test_uri]
-        .parts['IMAGE DATA']
-        .chunks[0]
-        .naxis
-        == 3
-    ), 'track initial value'
+
+    def do_one(self, entry):
+        # _set_logging(config)
+        storage_name = self._builder.build(entry)
+        self._organizer.choose(storage_name)
+        return self._organizer.do_one(storage_name)
+
+
+start = time.time()
+# uncomment the following to get a glimpse at what ray is doing
+# environ['RAY_LOG_TO_STDERR'] = '1'
+ray.init()
+config = Config()
+config.get_executors()
+# work_to_do = TodoFileDataSource(config).get_work()
+scheme = 'gemini' if config.collection == 'GEMINI' else 'cadc'
+work_to_do = DecompressionDataSource(
+    config, config.collection, scheme
+).get_work()
+print(f'{len(work_to_do)} records to process')
+
+MAX_ACTORS = 2
+x = list()
+for ii in range(MAX_ACTORS):
+    y = SessionActor.remote()
+    x.append(y)
+actor_pool = ActorPool(x)
+
+gen = actor_pool.map_unordered(
+    lambda a, v: a.do_one.remote(v), work_to_do
+)
+
+success = 0
+failure = 0
+for gg in gen:
+    if gg == 0:
+        success += 1
+    else:
+        failure += 1
+end = time.time()
+print(f'per task overhead (ms) ={(end - start)*1000/len(work_to_do)}')
+print(f'duration is {end-start}')
+print(f'{success} successes')
+print(f'{failure} failures')
+print(f'{len(work_to_do)} total')
+

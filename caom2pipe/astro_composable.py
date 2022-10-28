@@ -69,6 +69,7 @@
 import io
 import logging
 import requests
+import subprocess
 import traceback
 
 from astropy import units
@@ -101,6 +102,7 @@ __all__ = [
     'build_plane_time_sample',
     'build_ra_dec_as_deg',
     'check_fits',
+    'check_fitsverify',
     'convert_time',
     'FilterMetadataCache',
     'get_datetime',
@@ -160,6 +162,53 @@ def check_fits(fqn):
         logging.error(f'astropy getdata error {e3} when reading {fqn}')
         return False
 
+    return True
+
+
+def check_fitsverify(fqn):
+    """
+    Execute fitsverify on fqn
+    :return: bool True if compliant, False if Error count > 0
+    """
+    result = False
+    if '.fits' in fqn:
+        cmd = f'fitsverify -q {fqn}'
+        logging.debug(cmd)
+        cmd_array = cmd.split()
+        try:
+            output, outerr = subprocess.Popen(
+                cmd_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            ).communicate()
+            if (
+                output is not None
+                and len(output) > 0
+                and output[0] is not None
+                and ( 'and 0 errors' in output.decode('utf-8') or 'verification OK:' in output.decode('utf-8') )
+            ):
+                result = True
+            if not result:
+                logging.error(f'fitsverify failed with:\n{output.decode("utf-8")}{outerr.decode("utf-8")}')
+        except Exception as e:
+            logging.debug(f'Error with command {cmd}:: {e}')
+            logging.debug(traceback.format_exc())
+            raise mc.CadcException(f'Could not execute cmd {cmd}. Exception {e}')
+    return result
+
+
+def check_h5(fqn):
+    """
+    Use h5check to identify non-compliance errors. Currently checking against
+    1.8.
+
+    :param fqn: str fully-qualified file name on local storage
+    :return: bool True if compliant, False otherwise
+    """
+    cmd = f'h5check {fqn}'
+    try:
+        mc.exec_cmd(cmd)
+    except mc.CadcException as e:
+        logging.error(f'h5check failed with {e} when reading {fqn}')
+        return False
     return True
 
 

@@ -67,6 +67,7 @@
 # ***********************************************************************
 #
 
+from mock import Mock
 from os.path import basename
 from caom2pipe import manage_composable as mc
 from caom2pipe import reader_composable
@@ -96,8 +97,36 @@ def test_file_reader(test_config):
     assert test_file_info.file_type == 'application/fits', 'wrong type'
     assert test_file_info.size == 197442, 'wrong size'
     assert (
-            test_file_info.md5sum == '053b0780633ebab084b19050c0a58620'
+        test_file_info.md5sum == '053b0780633ebab084b19050c0a58620'
     ), 'wrong md5sum'
     test_subject.reset()
     assert len(test_subject.headers) == 0, 'should be no headers'
     assert len(test_subject.file_info) == 0, 'should be no file_info'
+
+
+def test_factory(test_config):
+    cfht_config = mc.Config()
+    cfht_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
+    cfht_config.use_local_files = True
+
+    dao_config = mc.Config()
+    dao_config.use_local_files = False
+    dao_config.data_sources = ['vos:goliaths/dao']
+
+    vlass_config = mc.Config()
+    vlass_config.use_local_files = False
+    vlass_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY]
+    vlass_config.data_sources = ['https://localhost:8080']
+
+    fix_config = mc.Config()
+    fix_config.use_local_files = False
+    fix_config.task_types = [mc.TaskType.INGEST, mc.TaskType.MODIFY]
+
+    for test_cfg, expected_type in {
+        cfht_config: reader_composable.FileMetadataReader,
+        dao_config: reader_composable.VaultReader,
+        vlass_config: reader_composable.DelayedClientReader,
+        fix_config: reader_composable.StorageClientReader,
+    }.items():
+        result = reader_composable.reader_factory(test_cfg, Mock())
+        assert isinstance(result, expected_type), f'got {result} type instead'

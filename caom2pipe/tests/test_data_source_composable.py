@@ -86,10 +86,9 @@ from caom2pipe import reader_composable as rdc
 import test_conf as tc
 
 
-def test_list_dir_data_source():
+def test_list_dir_data_source(test_config):
     get_cwd_orig = os.getcwd
     os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
-    test_config = mc.Config()
     test_config.get_executors()
     test_config.working_directory = '/test_files/1'
 
@@ -100,7 +99,12 @@ def test_list_dir_data_source():
         stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
     )
 
-    for entry in ['TEST.fits.gz', 'TEST1.fits', 'TEST2.fits.fz', 'TEST3.hdf5']:
+    for entry in [
+        'TEST.fits.gz',
+        'TEST1.fits',
+        'TEST2.fits.fz',
+        'TEST3.hdf5',
+    ]:
         if not os.path.exists(f'{test_config.working_directory}/{entry}'):
             with open(f'{test_config.working_directory}/{entry}', 'w') as f:
                 f.write('test content')
@@ -134,14 +138,13 @@ def test_list_dir_data_source():
             os.rmdir(test_config.working_directory)
 
 
-def test_todo_file():
+def test_todo_file(test_config):
     todo_fqn = os.path.join(tc.TEST_DATA_DIR, 'todo.txt')
     with open(todo_fqn, 'w') as f:
         f.write('file1\n')
         f.write('file2\n')
         f.write('\n')
     try:
-        test_config = mc.Config()
         test_config.work_fqn = todo_fqn
         test_subject = dsc.TodoFileDataSource(test_config)
         test_result = test_subject.get_work()
@@ -153,13 +156,13 @@ def test_todo_file():
 
 
 @patch('caom2pipe.client_composable.query_tap_client')
-def test_storage_time_box_query(query_mock):
+def test_storage_time_box_query(query_mock, test_config):
     def _mock_query(arg1, arg2):
         return Table.read(
-            'fileName,ingestDate\n'
-            'NEOS_SCI_2015347000000_clean.fits,2019-10-23T16:27:19.000\n'
-            'NEOS_SCI_2015347000000.fits,2019-10-23T16:27:27.000\n'
-            'NEOS_SCI_2015347002200_clean.fits,2019-10-23T16:27:33.000\n'.split(
+            'uri,lastModified\n'
+            'cadc:NEOSSAT/NEOS_SCI_2015347000000_clean.fits,2019-10-23T16:27:19.000\n'
+            'cadc:NEOSSAT/NEOS_SCI_2015347000000.fits,2019-10-23T16:27:27.000\n'
+            'cadc:NEOSSAT/NEOS_SCI_2015347002200_clean.fits,2019-10-23T16:27:33.000\n'.split(
                 '\n'
             ),
             format='csv',
@@ -170,7 +173,6 @@ def test_storage_time_box_query(query_mock):
     os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
     tap_client_ctor_orig = CadcTapClient.__init__
     CadcTapClient.__init__ = Mock(return_value=None)
-    test_config = mc.Config()
     test_config.get_executors()
     utc_now = datetime.utcnow()
     prev_exec_date = utc_now - timedelta(seconds=3600)
@@ -190,7 +192,7 @@ def test_storage_time_box_query(query_mock):
         CadcTapClient.__init__ = tap_client_ctor_orig
 
 
-def test_vault_list_dir_data_source():
+def test_vault_list_dir_data_source(test_config):
     def _query_mock(ignore_source_directory):
         return ['abc.txt', 'abc.fits', 'def.fits', '900898p_moc.fits']
 
@@ -226,7 +228,6 @@ def test_vault_list_dir_data_source():
     test_vos_client = Mock()
     test_vos_client.listdir.side_effect = _query_mock
     test_vos_client.get_node.side_effect = [node4, node1, node2, node3, node5]
-    test_config = mc.Config()
     test_config.get_executors()
     test_config.data_sources = ['vos:goliaths/wrong']
     test_config.data_source_extensions = ['.fits']
@@ -245,7 +246,7 @@ def test_vault_list_dir_data_source():
     ), 'wrong result'
 
 
-def test_list_dir_time_box_data_source():
+def test_list_dir_time_box_data_source(test_config):
     test_prev_exec_time_dt = datetime.utcnow()
 
     test_dir = '/test_files/1'
@@ -272,7 +273,6 @@ def test_list_dir_time_box_data_source():
         with open(entry, 'w') as f:
             f.write('test content')
 
-    test_config = mc.Config()
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.data_sources = [test_dir]
     test_config.data_source_extensions = ['.fits']
@@ -299,7 +299,9 @@ def test_list_dir_time_box_data_source():
             test_prev_exec_time, test_exec_time
         )
         assert test_result is not None, 'expect a non-recursive result'
-        assert len(test_result) == 1, 'expect contents in non-recursive result'
+        assert (
+            len(test_result) == 1
+        ), 'expect contents in non-recursive result'
         x = [ii.entry_name for ii in test_result]
         assert test_file_2 not in x, 'recursive result should not be present'
     finally:
@@ -311,8 +313,8 @@ def test_list_dir_time_box_data_source():
             os.rmdir(test_dir)
 
 
-def test_list_dir_separate_data_source():
-    test_config = mc.Config()
+def test_list_dir_separate_data_source(test_config):
+    # test_config = mc.Config()
     test_config.data_sources = ['/test_files']
     test_config.data_source_extensions = [
         '.fits',
@@ -324,20 +326,20 @@ def test_list_dir_separate_data_source():
     assert test_subject is not None, 'ctor is broken'
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a result'
-    assert len(test_result) == 96, 'expect contents in the result'
+    assert len(test_result) == 67, 'expect contents in the result'
     assert '/test_files/sub_directory/abc.fits' in test_result, 'wrong entry'
 
     test_config.recurse_data_sources = False
     test_subject = dsc.ListDirSeparateDataSource(test_config)
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a non-recursive result'
-    assert len(test_result) == 91, 'expect contents in non-recursive result'
+    assert len(test_result) == 63, 'expect contents in non-recursive result'
     assert (
         '/test_files/sub_directory/abc.fits' not in test_result
     ), 'recursive result should not be present'
 
 
-def test_vault_list_dir_time_box_data_source():
+def test_vault_list_dir_time_box_data_source(test_config):
     node1 = type('', (), {})()
     node1.props = {
         'date': '2020-09-15 19:55:03.067000+00:00',
@@ -360,7 +362,6 @@ def test_vault_list_dir_time_box_data_source():
 
     test_vos_client = Mock()
     test_vos_client.get_node.side_effect = [node3, node1, node2]
-    test_config = mc.Config()
     test_config.get_executors()
     test_config.data_sources = ['vos:goliaths/wrong']
     test_subject = dsc.VaultDataSource(test_vos_client, test_config)
@@ -389,16 +390,16 @@ def test_vault_list_dir_time_box_data_source():
     assert test_result is not None, 'expect a test result'
     assert len(test_result) == 1, 'wrong number of results'
     assert (
-            'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits' ==
-            test_result[0].entry_name
+        'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
+        == test_result[0].entry_name
     ), 'wrong name result'
     assert (
-            datetime(2020, 9, 15, 19, 55, 3, 67000, tzinfo=timezone.utc) ==
-            test_result[0].entry_ts
+        datetime(2020, 9, 15, 19, 55, 3, 67000, tzinfo=timezone.utc)
+        == test_result[0].entry_ts
     ), 'wrong ts result'
 
 
-def test_transfer_check_fits_verify():
+def test_transfer_check_fits_verify(test_config):
     # how things should probably work at CFHT
     delta = timedelta(minutes=30)
     # half an hour ago
@@ -440,10 +441,12 @@ def test_transfer_check_fits_verify():
         )
 
         assert test_subject is not None, 'expect construction to work'
-        test_result = test_subject.get_time_box_work(test_start_ts, test_end_ts)
+        test_result = test_subject.get_time_box_work(
+            test_start_ts, test_end_ts
+        )
         assert len(test_result) == 1, 'wrong number of results returned'
         assert (
-                test_result[0].entry_name == '/cfht_source/correct.fits.gz'
+            test_result[0].entry_name == '/cfht_source/correct.fits.gz'
         ), 'wrong result'
 
         for entry in [test_empty_file, test_broken_file]:
@@ -491,14 +494,14 @@ def test_transfer_check_fits_verify():
         )
         assert len(test_result) == 3, 'wrong number of results returned'
         assert (
-                test_result[0].entry_name == '/cfht_source/correct.fits.gz'
+            test_result[0].entry_name == '/cfht_source/correct.fits.gz'
         ), 'wrong result'
         assert (
             test_result[1].entry_name == '/cfht_source/same_file.fits'
         ), 'wrong result'
         assert (
-            test_result[2].entry_name ==
-            '/cfht_source/already_successful.fits'
+            test_result[2].entry_name
+            == '/cfht_source/already_successful.fits'
         ), 'wrong result'
         for f in [
             test_empty_file,
@@ -550,7 +553,7 @@ def test_transfer_check_fits_verify():
         for entry in [
             test_failure_directory,
             test_success_directory,
-            test_source_directory
+            test_source_directory,
         ]:
             if not entry.exists():
                 entry.mkdir()
@@ -570,14 +573,15 @@ def test_transfer_check_fits_verify():
         # of replacing a file already in the destination directory
         shutil.copy(test_already_successful_source, test_success_directory)
 
-        test_config = mc.Config()
         test_config.use_local_files = True
         test_config.data_sources = [test_source_directory.as_posix()]
         test_config.data_source_extensions = ['.fits', '.fits.gz', '.fits.fz']
-        test_config.cleanup_success_destination = \
+        test_config.cleanup_success_destination = (
             test_success_directory.as_posix()
-        test_config.cleanup_failure_destination = \
+        )
+        test_config.cleanup_failure_destination = (
             test_failure_directory.as_posix()
+        )
         test_config.store_modified_files_only = True
 
         test(
@@ -587,7 +591,7 @@ def test_transfer_check_fits_verify():
 
 
 @patch('caom2pipe.astro_composable.check_fits')
-def test_transfer_fails(check_fits_mock):
+def test_transfer_fails(check_fits_mock, test_config):
     check_fits_mock.return_value = True
 
     # set up a correct transfer
@@ -602,7 +606,7 @@ def test_transfer_fails(check_fits_mock):
     for entry in [
         test_failure_directory,
         test_success_directory,
-        test_source_directory
+        test_source_directory,
     ]:
         if not entry.exists():
             entry.mkdir()
@@ -611,13 +615,16 @@ def test_transfer_fails(check_fits_mock):
     shutil.copy(test_correct_source, test_correct_file_1)
     shutil.copy(test_correct_source, test_correct_file_2)
 
-    test_config = mc.Config()
     test_config.data_sources = [test_source_directory.as_posix()]
     test_config.task_types = [mc.TaskType.STORE]
     test_config.data_source_extensions = ['.fits.gz']
     test_config.cleanup_files_when_storing = True
-    test_config.cleanup_failure_destination = test_failure_directory.as_posix()
-    test_config.cleanup_success_destination = test_success_directory.as_posix()
+    test_config.cleanup_failure_destination = (
+        test_failure_directory.as_posix()
+    )
+    test_config.cleanup_success_destination = (
+        test_success_directory.as_posix()
+    )
 
     cadc_client_mock = Mock(autospec=True)
     test_subject = dsc.LocalFilesDataSource(

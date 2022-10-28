@@ -198,7 +198,9 @@ def test_config_class():
         assert (
             test_config.features.supports_catalog is False
         ), 'modified supports catalog'
-        assert test_config.data_source_extensions == ['.fits.gz'], 'extensions'
+        assert test_config.data_source_extensions == [
+            '.fits.gz'
+        ], 'extensions'
     finally:
         os.getcwd = getcwd_orig
 
@@ -542,9 +544,7 @@ def test_create_dir():
 
 class TestValidator(mc.Validator):
     def __init__(self, source_name, preview_suffix):
-        super().__init__(
-            source_name, preview_suffix=preview_suffix
-        )
+        super().__init__(source_name, preview_suffix=preview_suffix)
 
     def read_from_source(self):
         return {}
@@ -583,7 +583,9 @@ def test_validator(caps_mock, ad_mock, tap_mock):
 
     try:
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
-        test_destination_meta = test_subject._read_list_from_destination_meta()
+        test_destination_meta = (
+            test_subject._read_list_from_destination_meta()
+        )
         assert test_destination_meta is not None, 'expected result'
         assert len(test_destination_meta) == 3, 'wrong number of results'
         assert (
@@ -616,19 +618,21 @@ def test_validator2(caps_mock, ad_mock):
     response = Mock()
     response.status_code = 200
     response.iter_content.return_value = [
-        b'ingestDate,fileName\n'
-        b'2019-10-23T16:27:19.000,NEOS_SCI_2015347000000_clean.fits\n'
-        b'2019-10-23T16:27:27.000,NEOS_SCI_2015347000000.fits\n'
-        b'2019-10-23T16:27:33.000,NEOS_SCI_2015347002200_clean.fits\n'
-        b'2019-10-23T16:27:40.000,NEOS_SCI_2015347002200.fits\n'
-        b'2019-10-23T16:27:47.000,NEOS_SCI_2015347002500_clean.fits\n'
+        b'ingestDate\tfileName\n'
+        b'2019-10-23T16:27:19.000\tNEOS_SCI_2015347000000_clean.fits\n'
+        b'2019-10-23T16:27:27.000\tNEOS_SCI_2015347000000.fits\n'
+        b'2019-10-23T16:27:33.000\tNEOS_SCI_2015347002200_clean.fits\n'
+        b'2019-10-23T16:27:40.000\tNEOS_SCI_2015347002200.fits\n'
+        b'2019-10-23T16:27:47.000\tNEOS_SCI_2015347002500_clean.fits\n'
     ]
     ad_mock.return_value.__enter__.return_value = response
     getcwd_orig = os.getcwd
     os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
     try:
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
-        test_destination_data = test_subject._read_list_from_destination_data()
+        test_destination_data = (
+            test_subject._read_list_from_destination_data()
+        )
         assert test_destination_data is not None, 'expected data result'
         assert len(test_destination_data) == 5, 'wrong number of data results'
         test_result = test_destination_data[1]
@@ -696,7 +700,8 @@ def test_visit():
     test_config = mc.Config()
     test_observable = mc.Observable(test_rejected, mc.Metrics(test_config))
     cadc_client_mock = Mock()
-
+    clients_mock = Mock()
+    clients_mock.data_client = cadc_client_mock
     test_product_id = 'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
     test_file_name = (
         'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
@@ -706,14 +711,16 @@ def test_visit():
     storage_name = VisitStorageName()
     kwargs = {
         'working_directory': tc.TEST_FILES_DIR,
-        'cadc_client': cadc_client_mock,
+        'clients': clients_mock,
         'stream': 'stream',
         'observable': test_observable,
         'storage_name': storage_name,
     }
 
     obs = mc.read_obs_from_file(f'{tc.TEST_DATA_DIR}/fpf_start_obs.xml')
-    assert len(obs.planes[test_product_id].artifacts) == 2, 'initial condition'
+    assert (
+        len(obs.planes[test_product_id].artifacts) == 2
+    ), 'initial condition'
 
     try:
         test_subject = TestVisitor(**kwargs)
@@ -750,6 +757,59 @@ def test_visit():
 
 
 def test_config_write():
+    config_content = """archive: NEOSS
+cache_file_name: cache.yml
+cache_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/cache.yml
+cleanup_files_when_storing: False
+collection: NEOSSAT
+data_source_extensions: ['.fits']
+data_sources: []
+failure_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/failure_log.txt
+failure_log_file_name: failure_log.txt
+features:
+  expects_retry: True
+  run_in_airflow: True
+  supports_catalog: True
+  supports_composite: False
+  supports_latest_client: False
+  supports_multiple_files: True
+interval: 10
+is_connected: True
+log_file_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data
+log_to_file: False
+logging_level: DEBUG
+observe_execution: False
+progress_file_name: progress.txt
+progress_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/progress.txt
+proxy_file_name: test_proxy.pem
+proxy_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_proxy.pem
+recurse_data_sources: False
+rejected_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_config_dir
+rejected_file_name: rejected.yml
+rejected_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_config_dir/rejected.yml
+report_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/data_report.txt
+resource_id: ivo://cadc.nrc.ca/sc2repo
+retry_count: 1
+retry_failures: False
+retry_file_name: retries.txt
+retry_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/retries.txt
+state_file_name: state.yml
+state_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/state.yml
+storage_inventory_resource_id: raven
+store_modified_files_only: False
+stream: raw
+success_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/success_log.txt
+success_log_file_name: success_log.txt
+tap_id: ivo://cadc.nrc.ca/sc2tap
+task_types:
+  - visit
+  - modify
+use_local_files: False
+work_file: todo.txt
+work_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/todo.txt
+working_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data
+"""
+
     get_cwd_orig = os.getcwd
     test_dir = f'{tc.TEST_DATA_DIR}/test_config_dir'
     os.getcwd = Mock(return_value=test_dir)
@@ -772,6 +832,9 @@ def test_config_write():
             assert mc.TaskType.SCRAPE in test_config.task_types, 'scrape end'
     finally:
         os.getcwd = get_cwd_orig
+        fqn = f'{test_dir}/config.yml'
+        with open(fqn, 'w') as f:
+            f.write(config_content)
 
 
 def test_reverse_lookup():
@@ -796,7 +859,9 @@ def test_make_time():
         test_result = mc.make_time(key)
         assert test_result is not None, 'expect a result'
         assert isinstance(test_result, datetime), 'wrong result type'
-        assert test_result == value, f'wrong result {test_result} want {value}'
+        assert (
+            test_result == value
+        ), f'wrong result {test_result} want {value}'
 
 
 def test_cache():
@@ -875,7 +940,9 @@ def test_value_repair_cache():
     assert (
         test_observation.environment.seeing is None
     ), 'None remains None because the original is a specific value'
-    assert test_chunk.position.axis.axis1.ctype == 'RA---TAN', 'unchanged post'
+    assert (
+        test_chunk.position.axis.axis1.ctype == 'RA---TAN'
+    ), 'unchanged post'
 
     with pytest.raises(mc.CadcException):
         # pre-condition of 'Unexpected repair key' error

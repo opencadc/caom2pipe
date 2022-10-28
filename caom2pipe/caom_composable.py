@@ -237,7 +237,9 @@ def build_chunk_energy_range(chunk, filter_name, filter_md):
     cw = ac.FilterMetadataCache.get_central_wavelength(filter_md)
     fwhm = ac.FilterMetadataCache.get_fwhm(filter_md)
     if cw is not None and fwhm is not None:
-        resolving_power = ac.FilterMetadataCache.get_resolving_power(filter_md)
+        resolving_power = ac.FilterMetadataCache.get_resolving_power(
+            filter_md
+        )
         axis = CoordAxis1D(axis=Axis(ctype='WAVE', cunit='Angstrom'))
         ref_coord1 = RefCoord(0.5, cw - fwhm / 2.0)
         ref_coord2 = RefCoord(1.5, cw + fwhm / 2.0)
@@ -412,9 +414,7 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
     logging.debug(f'End build_temporal_wcs_bounds.')
 
 
-def change_to_composite(
-    observation, algorithm_name='composite'
-):
+def change_to_composite(observation, algorithm_name='composite'):
     """For the case where a SimpleObservation needs to become a
     DerivedObservation."""
     temp = DerivedObservation(
@@ -872,10 +872,9 @@ def _update_plane_provenance(
                 value = header.get(keyword)
                 prov_obs_id, prov_prod_id = repair(value, obs_id)
                 if prov_obs_id is not None and prov_prod_id is not None:
-                    obs_member_uri_str = \
-                        mc.CaomName.make_obs_uri_from_obs_id(
-                            collection, prov_obs_id
-                        )
+                    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(
+                        collection, prov_obs_id
+                    )
                     obs_member_uri = ObservationURI(obs_member_uri_str)
                     plane_uri = PlaneURI.get_plane_uri(
                         obs_member_uri, prov_prod_id
@@ -922,7 +921,9 @@ def update_plane_provenance_from_values(
     :return:
     """
     logging.debug(f'Begin update_plane_provenance_from_values')
-    plane_inputs = TypedSet(PlaneURI,)
+    plane_inputs = TypedSet(
+        PlaneURI,
+    )
     for value in values:
         prov_obs_id, prov_prod_id = repair(value, obs_id)
         if prov_obs_id is not None and prov_prod_id is not None:
@@ -1068,7 +1069,7 @@ def undo_astropy_cdfix_call(chunk, time_delta):
     omitted.
     See:
     https://docs.astropy.org/en/stable/api/astropy.
-    wc.Wcsprm.html#astropy.wcs.Wcsprm.cdfix
+    wcs.Wcsprm.html#astropy.wcs.Wcsprm.cdfix
     """
     if (
         time_delta == 0.0
@@ -1107,10 +1108,24 @@ class TelescopeMapping:
             bp.set('Artifact.metaProducer', meta_producer)
             bp.set('Chunk.metaProducer', meta_producer)
 
-    def _update_artifact(self, artifact, caom_repo_client=None):
+    def _update_artifact(self, artifact, clients=None):
+        """
+        :param artifact: Artifact instance
+        :param clients: ClientCollection instance
+        :return:
+        """
         return
 
-    def update(self, observation, file_info, caom_repo_client=None):
+    def update(self, observation, file_info, clients=None):
+        """
+        Update the Artifact file-based metadata. Override if it's necessary
+        to carry out more/different updates.
+
+        :param observation: Observation instance
+        :param file_info: FileInfo instance
+        :param clients: ClientCollection instance
+        :return:
+        """
         self._logger.debug(f'Begin update for {observation.observation_id}')
         for plane in observation.planes.values():
             for artifact in plane.artifacts.values():
@@ -1121,7 +1136,7 @@ class TelescopeMapping:
                     )
                     continue
                 update_artifact_meta(artifact, file_info)
-                self._update_artifact(artifact, caom_repo_client)
+                self._update_artifact(artifact, clients)
 
         self._logger.debug('End update')
         return observation
@@ -1137,7 +1152,7 @@ class Fits2caom2Visitor:
         self._observation = observation
         self._storage_name = kwargs.get('storage_name')
         self._metadata_reader = kwargs.get('metadata_reader')
-        self._caom_repo_client = kwargs.get('caom_repo_client')
+        self._clients = kwargs.get('clients')
         self._dump_config = False
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -1147,7 +1162,7 @@ class Fits2caom2Visitor:
     def _get_parser(self, headers, blueprint, uri):
         if headers is None or len(headers) == 0:
             self._logger.debug(
-                f'No headers, using a GenericParser for '
+                f'No headers, using a BlueprintParser for '
                 f'{self._storage_name.file_uri}'
             )
             parser = BlueprintParser(blueprint, uri)
@@ -1164,7 +1179,7 @@ class Fits2caom2Visitor:
     def visit(self):
         self._logger.debug('Begin visit')
         try:
-            for uri, file_info in self._metadata_reader.file_info.items():
+            for uri in self._storage_name.destination_uris:
                 self._logger.debug(f'Build observation for {uri}')
                 headers = self._metadata_reader.headers.get(uri)
                 telescope_data = self._get_mapping(headers)
@@ -1196,12 +1211,12 @@ class Fits2caom2Visitor:
                     product_id=self._storage_name.product_id,
                 )
 
+                file_info = self._metadata_reader.file_info.get(uri)
                 self._observation = telescope_data.update(
                     self._observation,
                     file_info,
-                    self._caom_repo_client,
+                    self._clients,
                 )
-            self._logger.debug(f'End visit')
         except Caom2Exception as e:
             self._logger.debug(traceback.format_exc())
             self._logger.warning(
@@ -1210,4 +1225,5 @@ class Fits2caom2Visitor:
             )
             self._observation = None
 
+        self._logger.debug(f'End visit')
         return self._observation

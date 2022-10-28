@@ -106,12 +106,12 @@ def test_guessing_builder_dir(test_config):
 
     assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
     assert test_result.file_name == 'test_storage_name.fits.gz', 'wrong fname'
-    assert (
-        test_result.source_names == ['/data/test_storage_name.fits.gz']
-    ), 'wrong source names'
-    assert (
-        test_result.destination_uris == ['cadc:TEST/test_storage_name.fits']
-    ), ' wrong destination uris'
+    assert test_result.source_names == [
+        '/data/test_storage_name.fits.gz'
+    ], 'wrong source names'
+    assert test_result.destination_uris == [
+        'cadc:TEST/test_storage_name.fits'
+    ], ' wrong destination uris'
 
 
 def test_obs_id_builder(test_config):
@@ -132,10 +132,9 @@ def test_guessing_builder_uri(test_config):
     )
     # note TestStorageName has its own hard-coded values
     assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
-    assert (
-            test_result.source_names ==
-            ['https://localhost/data/test_storage_name.fits']
-    ), 'wrong source names'
-    assert (
-            test_result.destination_uris == ['cadc:TEST/test_storage_name.fits']
-    ), ' wrong destination uris'
+    assert test_result.source_names == [
+        'https://localhost/data/test_storage_name.fits'
+    ], 'wrong source names'
+    assert test_result.destination_uris == [
+        'cadc:TEST/test_storage_name.fits'
+    ], ' wrong destination uris'

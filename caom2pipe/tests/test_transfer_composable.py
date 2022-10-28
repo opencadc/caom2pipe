@@ -121,7 +121,7 @@ def test_vo_fits_transfer():
     test_config = mc.Config()
     test_config.working_directory = test_conf.TEST_DATA_DIR
     test_config.proxy_file_name = 'proxy.pem'
-    test_subject = tc.VoFitsTransfer(cadc_client_mock)
+    test_subject = tc.VoScienceTransfer(cadc_client_mock)
     assert test_subject is not None, 'expect a result'
     test_subject.observable = Mock()
     test_source = 'vos:goliaths/test_file.fits'
@@ -195,7 +195,7 @@ def test_vo_fits_cleanup_transfer():
         test_config.cleanup_files_when_storing = True
         test_config.cleanup_failure_destination = 'vos:goliaths/failure'
         test_config.cleanup_success_destination = 'vos:goliaths/success'
-        test_subject = tc.VoFitsCleanupTransfer(mock_client, test_config)
+        test_subject = tc.VoScienceCleanupTransfer(mock_client, test_config)
         assert test_subject is not None, 'ctor failure'
 
         test_source = 'vos:goliaths/test/abc.fits.gz'
@@ -204,6 +204,7 @@ def test_vo_fits_cleanup_transfer():
         # success
         def _copy_success(ignore1, ignore2, send_md5=True):
             shutil.copy('/test_files/correct.fits.gz', '/tmp/abc.fits.gz')
+
         mock_client.copy.side_effect = _copy_success
         test_subject.get(test_source, test_destination_fqn)
         assert mock_client.copy.called, 'expect copy to be called'
@@ -215,6 +216,7 @@ def test_vo_fits_cleanup_transfer():
         # failure
         def _copy_failure(ignore1, ignore2, send_md5=True):
             shutil.copy('/test_files/broken.fits', '/tmp/abc.fits')
+
         mock_client.copy.side_effect = _copy_failure
         test_source = 'vos:goliaths/test/abc.fits'
         test_destination_fqn = '/tmp/abc.fits'

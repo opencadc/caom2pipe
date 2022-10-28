@@ -79,15 +79,13 @@ TEST_OBS_FILE = os.path.join(TEST_DATA_DIR, 'test_obs_id.fits.xml')
 
 
 class TestStorageName(mc.StorageName):
-
-    def __init__(
-        self, obs_id=None, file_name=None, source_names=[]
-    ):
+    def __init__(self, obs_id=None, file_name=None, source_names=[]):
         obs_id = 'test_obs_id' if obs_id is None else obs_id
         file_name = 'test_file.fits.gz' if file_name is None else file_name
         source_names = (
             ['/tmp/test_file.fits.gz']
-            if len(source_names) == 0 else source_names
+            if len(source_names) == 0
+            else source_names
         )
         super().__init__(
             obs_id=obs_id,
