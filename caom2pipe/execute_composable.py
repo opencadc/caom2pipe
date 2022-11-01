@@ -189,8 +189,6 @@ class CaomExecute:
         self._observation = None
         # track whether the caom2repo call will be a create or an update
         self._caom2_update_needed = False
-        self._decompressor = decompressor_factory(
-            config.collection, self.working_dir, self.log_level_as)
 
     def __str__(self):
         return (
