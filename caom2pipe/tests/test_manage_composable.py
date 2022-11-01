@@ -748,9 +748,7 @@ def test_visit():
             cadc_client_mock.put.call_count == expected_call_count
         ), 'put called wrong number of times'
         # it's an ad call, so there's a stream parameter
-        cadc_client_mock.put.assert_called_with(
-            '/test_files', 'cadc:VLASS/test_obs_id_prev.jpg', 'stream'
-        )
+        cadc_client_mock.put.assert_called_with('/test_files', 'cadc:VLASS/test_obs_id_prev.jpg')
     except Exception as e:
         assert False, f'{str(e)}'
     # assert False

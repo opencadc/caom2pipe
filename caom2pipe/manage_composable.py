@@ -617,7 +617,6 @@ class Config:
         self._logging_level = None
         self._log_to_file = False
         self._log_file_directory = None
-        self._stream = None
         self._storage_host = None
         self._task_types = []
         self._success_log_file_name = None
@@ -841,16 +840,6 @@ class Config:
     @recurse_data_sources.setter
     def recurse_data_sources(self, value):
         self._recurse_data_sources = value
-
-    @property
-    def stream(self):
-        """the ad 'stream' that goes with the archive - use when storing
-        files"""
-        return self._stream
-
-    @stream.setter
-    def stream(self, value):
-        self._stream = value
 
     @property
     def storage_host(self):
@@ -1189,7 +1178,6 @@ class Config:
             f'  storage_inventory_resource_id:: '
             f'{self.storage_inventory_resource_id}\n'
             f'  store_modified_files_only:: {self.store_modified_files_only}\n'
-            f'  stream:: {self.stream}\n'
             f'  success_fqn:: {self.success_fqn}\n'
             f'  success_log_file_name:: {self.success_log_file_name}\n'
             f'  tap_id:: {self.tap_id}\n'
@@ -1278,7 +1266,6 @@ class Config:
             self.log_file_directory = config.get(
                 'log_file_directory', self.working_directory
             )
-            self.stream = config.get('stream', 'raw')
             self.task_types = Config._obtain_task_types(config, [])
             self.collection = config.get('collection', 'TEST')
             self.archive = config.get('archive', self.collection)
@@ -1498,9 +1485,6 @@ class PreviewVisitor:
             self._logger.warning(
                 'Visitor needs a clients.data_client parameter to store previews.'
             )
-        self._stream = kwargs.get('stream')
-        if self._stream is None:
-            self._logger.warning('No stream parameter.')
         self._observable = kwargs.get('observable')
         if self._observable is None:
             raise CadcException('Visitor needs a observable parameter.')
@@ -1530,7 +1514,6 @@ class PreviewVisitor:
     def __str__(self):
         return (
             f'working directory: {self._working_dir}\n'
-            f'stream: {self._stream}\n'
             f'science file: {self._storage_name.file_name}\n'
         )
 
@@ -1617,9 +1600,7 @@ class PreviewVisitor:
             and self._clients.data_client is not None
         ):
             for uri, entry in self._previews.items():
-                self._clients.data_client.put(
-                    self._working_dir, uri, self._stream
-                )
+                self._clients.data_client.put(self._working_dir, uri)
 
     def _gen_thumbnail(self):
         self._logger.debug(
