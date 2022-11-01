@@ -102,7 +102,6 @@ __all__ = [
     'ClientCollection',
     'current',
     'data_get',
-    'data_put_fqn',
     'declare_client',
     'define_subject',
     'get_cadc_headers_client',
@@ -268,43 +267,6 @@ def data_get(client, working_directory, file_name, archive, metrics):
     end = current()
     file_size = os.stat(fqn).st_size
     metrics.observe(start, end, file_size, 'get', 'data', file_name)
-
-
-def data_put_fqn(
-    client,
-    source_name,
-    storage_name,
-    stream='raw',
-    metrics=None,
-):
-    """
-    Make a copy of a locally available file by writing it to CADC. Assumes
-    file and directory locations are correct. Requires a checksum comparison
-    by the client.
-
-    :param client: The CadcDataClient for write access to CADC storage.
-    :param source_name: str fully-qualified
-    :param storage_name: StorageName instance
-    :param stream: str A relic of the old CADC storage.
-    :param metrics: Tracking success execution times, and failure counts.
-    """
-    start = current()
-    try:
-        client.put_file(
-            storage_name.archive,
-            source_name,
-            archive_stream=stream,
-            mime_type=storage_name.mime_type,
-            mime_encoding=storage_name.mime_encoding,
-            md5_check=True,
-        )
-        file_size = os.stat(source_name).st_size
-    except Exception as e:
-        metrics.observe_failure('put', 'data', source_name)
-        logging.debug(traceback.format_exc())
-        raise mc.CadcException(f'Failed to store data with {e}')
-    end = current()
-    metrics.observe(start, end, file_size, 'put', 'data', source_name)
 
 
 def declare_client(config, metrics=None):

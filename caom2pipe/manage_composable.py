@@ -2679,55 +2679,6 @@ def sizeof(x):
     return sys.getsizeof(x)
 
 
-def data_put(
-    client,
-    working_directory,
-    file_name,
-    archive,
-    stream='raw',
-    mime_type=None,
-    mime_encoding=None,
-    metrics=None,
-):
-    """
-    Make a copy of a locally available file by writing it to CADC. Assumes
-    file and directory locations are correct. Requires a checksum comparison
-    by the client.
-
-    :param client: The CadcDataClient for write access to CADC storage.
-    :param working_directory: Where 'file_name' exists locally.
-    :param file_name: What to copy to CADC storage.
-    :param archive: Which archive to associate the file with.
-    :param stream: Defaults to raw - use is deprecated, however necessary it
-        may be at the current moment to the 'put_file' call.
-    :param mime_type: Because libmagic can't see inside a zipped fits file.
-    :param mime_encoding: Also because libmagic can't see inside a zipped
-        fits file.
-    :param metrics: Tracking success execution times, and failure counts.
-    """
-    start = datetime.utcnow().timestamp()
-    cwd = os.getcwd()
-    try:
-        os.chdir(working_directory)
-        client.put_file(
-            archive,
-            file_name,
-            archive_stream=stream,
-            mime_type=mime_type,
-            mime_encoding=mime_encoding,
-            md5_check=True,
-        )
-        file_size = os.stat(file_name).st_size
-    except Exception as e:
-        metrics.observe_failure('put', 'data', file_name)
-        logging.debug(traceback.format_exc())
-        raise CadcException(f'Failed to store data with {e}')
-    finally:
-        os.chdir(cwd)
-    end = datetime.utcnow().timestamp()
-    metrics.observe(start, end, file_size, 'put', 'data', file_name)
-
-
 def build_uri(archive, file_name, scheme='ad'):
     """One location to keep the syntax for an Artifact URI."""
     return f'{scheme}:{archive}/{file_name}'

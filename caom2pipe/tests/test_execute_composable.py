@@ -111,9 +111,6 @@ class TestVisit:
 class LocalTestVisit:
     @staticmethod
     def visit(observation, **kwargs):
-        v = kwargs['stream']
-        assert v is not None, 'stream'
-        assert v == 'TEST', 'wrong stream'
         x = kwargs['working_directory']
         assert x is not None, 'working directory'
         assert (
@@ -738,7 +735,6 @@ def test_data_visit(client_mock, access_mock, test_config):
             kwargs.get('storage_name') == test_sn
         ), 'wrong storage name parameter'
         assert kwargs.get('log_file_directory') == tc.TEST_DATA_DIR
-        assert kwargs.get('stream') == 'TEST'
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
@@ -782,7 +778,7 @@ def test_store(compressor_mock, access_mock, test_config):
         ), 'wrong destination'
         assert test_data_client.put.called, 'data put not called'
         test_data_client.put.assert_called_with(
-            f'{tmp_dir_name}/test_obs_id', 'cadc:TEST/test_file.fits', 'TEST'
+            f'{tmp_dir_name}/test_obs_id', 'cadc:TEST/test_file.fits', None
         ), 'wrong put call args'
 
 
@@ -976,7 +972,6 @@ def test_data_visit_params(access_mock):
             working_directory=f'{tmp_dir_name}/abc',
             storage_name=storage_name,
             log_file_directory=None,
-            stream=None,
             observable=ANY,
             clients=ANY,
             metadata_reader=ANY,
