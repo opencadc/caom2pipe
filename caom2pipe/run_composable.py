@@ -94,6 +94,7 @@ from caom2pipe import reader_composable
 from caom2pipe import transfer_composable
 
 __all__ = [
+    'common_runner_init',
     'get_utc_now',
     'get_utc_now_tz',
     'run_by_state',
@@ -548,7 +549,7 @@ def get_utc_now_tz():
     return datetime.now(tz=timezone.utc)
 
 
-def _common_init(
+def common_runner_init(
     config,
     clients,
     name_builder,
@@ -557,6 +558,9 @@ def _common_init(
     metadata_reader,
     state,
     store_transfer,
+    meta_visitors,
+    data_visitors,
+    chooser,
 ):
     if config is None:
         config = mc.Config()
@@ -588,6 +592,20 @@ def _common_init(
             config, clients
         )
 
+    organizer = ec.OrganizeExecutes(
+        config,
+        meta_visitors,
+        data_visitors,
+        chooser,
+        store_transfer,
+        modify_transfer,
+        metadata_reader,
+        clients,
+    )
+
+    source.capture_failure = organizer.capture_failure
+    source.capture_success = organizer.capture_success
+
     return (
         config,
         clients,
@@ -596,6 +614,7 @@ def _common_init(
         modify_transfer,
         metadata_reader,
         store_transfer,
+        organizer,
     )
 
 
@@ -645,7 +664,8 @@ def run_by_todo(
         modify_transfer,
         metadata_reader,
         store_transfer,
-    ) = _common_init(
+        organizer,
+    ) = common_runner_init(
         config,
         clients,
         name_builder,
@@ -654,20 +674,10 @@ def run_by_todo(
         metadata_reader,
         False,
         store_transfer,
-    )
-    organizer = ec.OrganizeExecutes(
-        config,
         meta_visitors,
         data_visitors,
         chooser,
-        store_transfer,
-        modify_transfer,
-        metadata_reader=metadata_reader,
-        clients=clients,
     )
-
-    source.capture_failure = organizer.capture_failure
-    source.capture_success = organizer.capture_success
 
     runner = TodoRunner(
         config, organizer, name_builder, source, metadata_reader, application
@@ -729,7 +739,8 @@ def run_by_state(
         modify_transfer,
         metadata_reader,
         store_transfer,
-    ) = _common_init(
+        organizer,
+    ) = common_runner_init(
         config,
         clients,
         name_builder,
@@ -738,24 +749,13 @@ def run_by_state(
         metadata_reader,
         True,
         store_transfer,
+        meta_visitors,
+        data_visitors,
+        chooser,
     )
 
     if end_time is None:
         end_time = get_utc_now_tz()
-
-    organizer = ec.OrganizeExecutes(
-        config,
-        meta_visitors,
-        data_visitors,
-        chooser,
-        store_transfer,
-        modify_transfer,
-        metadata_reader,
-        clients,
-    )
-
-    source.capture_failure = organizer.capture_failure
-    source.capture_success = organizer.capture_success
 
     runner = StateRunner(
         config,

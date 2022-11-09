@@ -541,7 +541,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     )
                 if self._capture_failure is not None:
                     temp_storage_name = mc.StorageName(file_name=entry.name)
-                    self._capture_failure(temp_storage_name, BaseException('fitsverify errors'), 'fitsverify errors')
+                    self._capture_failure(temp_storage_name, BaseException('_check_file errors'), '_check_file errors')
                 work_with_file = False
         else:
             work_with_file = False

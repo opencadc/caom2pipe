@@ -1531,8 +1531,7 @@ class PreviewVisitor:
             self._augment_artifacts(plane)
             self._delete_list_of_files()
         self._logger.info(
-            f'Completed preview augmentation for {observation.observation_id}.'
-            f'Changed {count} artifacts.'
+            f'Completed preview augmentation for {observation.observation_id}. Changed {count} artifacts.'
         )
         self._report = {'artifacts': count}
         return observation

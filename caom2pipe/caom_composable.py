@@ -532,41 +532,24 @@ def copy_chunk(from_chunk, features=None):
     :param features which version of CAOM to use
     :return a copy of the from_chunk
     """
-    if features is not None and features.supports_latest_caom:
-        copy = Chunk(
-            product_type=from_chunk.product_type,
-            naxis=from_chunk.naxis,
-            position_axis_1=from_chunk.position_axis_1,
-            position_axis_2=from_chunk.position_axis_2,
-            position=from_chunk.position,
-            energy_axis=from_chunk.energy_axis,
-            energy=from_chunk.energy,
-            time_axis=from_chunk.time_axis,
-            time=from_chunk.time,
-            custom_axis=from_chunk.custom_axis,
-            custom=from_chunk.custom,
-            polarization_axis=from_chunk.polarization_axis,
-            polarization=from_chunk.polarization,
-            observable_axis=from_chunk.observable_axis,
-            observable=from_chunk.observable,
-        )
-        copy.meta_producer = from_chunk.meta_producer
-    else:
-        copy = Chunk(
-            product_type=from_chunk.product_type,
-            naxis=from_chunk.naxis,
-            position_axis_1=from_chunk.position_axis_1,
-            position_axis_2=from_chunk.position_axis_2,
-            position=from_chunk.position,
-            energy_axis=from_chunk.energy_axis,
-            energy=from_chunk.energy,
-            time_axis=from_chunk.time_axis,
-            time=from_chunk.time,
-            polarization_axis=from_chunk.polarization_axis,
-            polarization=from_chunk.polarization,
-            observable_axis=from_chunk.observable_axis,
-            observable=from_chunk.observable,
-        )
+    copy = Chunk(
+        product_type=from_chunk.product_type,
+        naxis=from_chunk.naxis,
+        position_axis_1=from_chunk.position_axis_1,
+        position_axis_2=from_chunk.position_axis_2,
+        position=from_chunk.position,
+        energy_axis=from_chunk.energy_axis,
+        energy=from_chunk.energy,
+        time_axis=from_chunk.time_axis,
+        time=from_chunk.time,
+        custom_axis=from_chunk.custom_axis,
+        custom=from_chunk.custom,
+        polarization_axis=from_chunk.polarization_axis,
+        polarization=from_chunk.polarization,
+        observable_axis=from_chunk.observable_axis,
+        observable=from_chunk.observable,
+    )
+    copy.meta_producer = from_chunk.meta_producer
     return copy
 
 
@@ -1088,9 +1071,10 @@ class TelescopeMapping:
     mapping, using the 'update' method.
     """
 
-    def __init__(self, storage_name, headers):
+    def __init__(self, storage_name, headers, clients):
         self._storage_name = storage_name
         self._headers = headers
+        self._clients = clients
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def accumulate_blueprint(self, bp, application=None):
@@ -1108,26 +1092,29 @@ class TelescopeMapping:
             bp.set('Artifact.metaProducer', meta_producer)
             bp.set('Chunk.metaProducer', meta_producer)
 
-    def _update_artifact(self, artifact, clients=None):
+    def _update_artifact(self, artifact):
         """
         :param artifact: Artifact instance
-        :param clients: ClientCollection instance
         :return:
         """
         return
 
-    def update(self, observation, file_info, clients=None):
+    def update(self, observation, file_info):
         """
         Update the Artifact file-based metadata. Override if it's necessary
         to carry out more/different updates.
 
         :param observation: Observation instance
         :param file_info: FileInfo instance
-        :param clients: ClientCollection instance
         :return:
         """
         self._logger.debug(f'Begin update for {observation.observation_id}')
         for plane in observation.planes.values():
+            if plane.product_id != self._storage_name.product_id:
+                self._logger.debug(
+                    f'Product ID is {plane.product_id} but working on {self._storage_name.product_id}. Continuing.'
+                )
+                continue
             for artifact in plane.artifacts.values():
                 if artifact.uri != self._storage_name.file_uri:
                     self._logger.debug(
@@ -1136,7 +1123,7 @@ class TelescopeMapping:
                     )
                     continue
                 update_artifact_meta(artifact, file_info)
-                self._update_artifact(artifact, clients)
+                self._update_artifact(artifact)
 
         self._logger.debug('End update')
         return observation
@@ -1174,7 +1161,7 @@ class Fits2caom2Visitor:
         return parser
 
     def _get_mapping(self, headers):
-        return TelescopeMapping(self._storage_name, headers)
+        return TelescopeMapping(self._storage_name, headers, self._clients)
 
     def visit(self):
         self._logger.debug('Begin visit')
@@ -1183,6 +1170,9 @@ class Fits2caom2Visitor:
                 self._logger.debug(f'Build observation for {uri}')
                 headers = self._metadata_reader.headers.get(uri)
                 telescope_data = self._get_mapping(headers)
+                if telescope_data is None:
+                    self._logger.info(f'Ignoring {uri} because there is no TelescopeMapping.')
+                    continue
                 blueprint = self._get_blueprint(telescope_data)
                 telescope_data.accumulate_blueprint(blueprint)
                 if self._dump_config:
@@ -1212,11 +1202,7 @@ class Fits2caom2Visitor:
                 )
 
                 file_info = self._metadata_reader.file_info.get(uri)
-                self._observation = telescope_data.update(
-                    self._observation,
-                    file_info,
-                    self._clients,
-                )
+                self._observation = telescope_data.update(self._observation, file_info)
         except Caom2Exception as e:
             self._logger.debug(traceback.format_exc())
             self._logger.warning(
