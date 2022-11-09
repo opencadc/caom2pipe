@@ -177,9 +177,7 @@ class Features:
         self._run_in_airflow = True
         self._supports_composite = True
         self._supports_catalog = True
-        self._supports_latest_client = False
         self._supports_multiple_files = True
-        self._supports_decompression = False
 
     @property
     def run_in_airflow(self):
@@ -210,25 +208,6 @@ class Features:
     @supports_catalog.setter
     def supports_catalog(self, value):
         self._supports_catalog = value
-
-    @property
-    def supports_decompression(self):
-        """If true, will execute decompression code for .gz and .bz2 files."""
-        return self._supports_decompression
-
-    @supports_decompression.setter
-    def supports_decompression(self, value):
-        self._supports_decompression = value
-
-    @property
-    def supports_latest_client(self):
-        """If true, will execute any latest-version-specific code when creating
-        a CAOM instance."""
-        return self._supports_latest_client
-
-    @supports_latest_client.setter
-    def supports_latest_client(self, value):
-        self._supports_latest_client = value
 
     @property
     def supports_multiple_files(self):
@@ -1425,17 +1404,20 @@ class Config:
                 if entry.startswith('_') or callable(attribute):
                     continue
                 elif entry == 'features':
-                    f.write('features:\n')
-                    for feature in dir(attribute):
-                        try:
-                            feature_attribute = getattr(attribute, feature)
-                        except TypeError:
-                            pass
-                        if feature.startswith('_') or callable(
-                            feature_attribute
-                        ):
-                            continue
-                        f.write(f'  {feature}: {feature_attribute}\n')
+                    if len(dir(attribute)) == 0:
+                        f.write('features: []\n')
+                    else:
+                        f.write('features:\n')
+                        for feature in dir(attribute):
+                            try:
+                                feature_attribute = getattr(attribute, feature)
+                            except TypeError:
+                                pass
+                            if feature.startswith('_') or callable(
+                                feature_attribute
+                            ):
+                                continue
+                            f.write(f'  {feature}: {feature_attribute}\n')
                 elif entry == 'task_types':
                     if len(attribute) > 0:
                         f.write('task_types:\n')

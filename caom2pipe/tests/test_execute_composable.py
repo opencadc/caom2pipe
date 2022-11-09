@@ -233,7 +233,6 @@ def test_data_execute(access_mock, test_config):
 def test_data_execute_v(access_mock, test_config):
     access_mock.return_value = 'https://localhost:2022'
     mc.StorageName.collection = 'TEST'
-    test_config.features.supports_latest_client = True
     test_obs_id = 'test_obs_id'
     with TemporaryDirectory() as tmp_dir_name:
         test_config.working_directory = tmp_dir_name
@@ -289,7 +288,6 @@ def test_data_local_execute(access_mock, test_config):
     mc.StorageName.collection = 'TEST'
     test_config.log_to_file = True
     test_config.working_directory = tc.TEST_DATA_DIR
-    test_config.features.supports_latest_client = False
     test_data_visitors = [LocalTestVisit]
 
     data_client_mock = Mock()
@@ -348,6 +346,8 @@ def test_data_store(fix_mock, access_mock, test_config):
     path_orig = os.path.exists
     os.path.exists = Mock(return_value=False)
     test_config.features.supports_multiple_files = False
+    mock_metadata_reader = Mock()
+    mock_metadata_reader.file_info = {}
     try:
         test_config.working_directory = tc.TEST_DATA_DIR
         test_executor = ec.Store(
@@ -355,7 +355,7 @@ def test_data_store(fix_mock, access_mock, test_config):
             observable=test_observer,
             transferrer=transfer_composable.Transfer(),
             clients=clients,
-            metadata_reader=Mock(),
+            metadata_reader=mock_metadata_reader,
         )
         test_executor.execute({'storage_name': tc.TestStorageName(
             source_names=[f'{tc.TEST_DATA_DIR}/test_file.fits.gz'],
@@ -413,7 +413,6 @@ def test_data_scrape_execute(test_config):
 
 def test_organize_executes_chooser(test_config):
     test_config.use_local_files = True
-    test_config.features.supports_latest_client = False
     log_file_directory = os.path.join(tc.THIS_DIR, 'logs')
     test_config.log_file_directory = log_file_directory
     test_config.features.supports_composite = True
@@ -681,7 +680,6 @@ def test_organize_executes_client_do_one(test_config):
 @patch('caom2utils.data_util.StorageClientWrapper')
 def test_data_visit(client_mock, access_mock, test_config):
     access_mock.return_value = 'https://localhost:2022'
-    test_config.features.supports_latest_client = False
     client_mock.get.side_effect = Mock(autospec=True)
     test_repo_client = Mock(autospec=True)
     test_repo_client.read.side_effect = tc.mock_read
@@ -737,12 +735,13 @@ def test_data_visit(client_mock, access_mock, test_config):
         assert kwargs.get('log_file_directory') == tc.TEST_DATA_DIR
 
 
+@patch('caom2pipe.execute_composable.get_local_file_info')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
-def test_store(compressor_mock, access_mock, test_config):
+def test_store(compressor_mock, access_mock, file_info_mock, test_config):
     access_mock.return_value = 'https://localhost:2022'
-    test_config.working_directory = tc.TEST_DATA_DIR
-    test_config.features.supports_latest_client = False
+    file_info_mock.return_value = FileInfo(id='nonexistent.fits')
+    # test_config.working_directory = tc.TEST_DATA_DIR
     test_sn = tc.TestStorageName(
         obs_id='test_obs_id',
         source_names=['vos:goliaths/nonexistent.fits.gz'],
@@ -753,20 +752,24 @@ def test_store(compressor_mock, access_mock, test_config):
     test_observable = Mock(autospec=True)
     test_transferrer = Mock(autospec=True)
     test_transferrer.get.side_effect = _transfer_get_mock
-    compressor_mock.return_value = (
-        f'{test_config.working_directory}/test_obs_id/test_file.fits'
-    )
+    test_metadata_reader = Mock()
+    test_metadata_reader.file_info = {}
     with TemporaryDirectory() as tmp_dir_name:
         test_config.working_directory = tmp_dir_name
+        compressor_mock.return_value = (
+            f'{test_config.working_directory}/test_obs_id/nonexistent.fits'
+        )
         test_subject = ec.Store(
             test_config,
             test_observable,
             test_transferrer,
             clients,
-            metadata_reader=Mock(),
+            metadata_reader=test_metadata_reader,
         )
         assert test_subject is not None, 'expect construction'
         os.mkdir(os.path.join(tmp_dir_name, test_sn.obs_id))
+        import logging
+        logging.getLogger('root').setLevel(logging.DEBUG)
         test_subject.execute({'storage_name': test_sn})
         assert test_subject.working_dir == os.path.join(tmp_dir_name, 'test_obs_id'), 'wrong working directory'
         assert (
@@ -782,15 +785,16 @@ def test_store(compressor_mock, access_mock, test_config):
         ), 'wrong put call args'
 
 
+@patch('caom2pipe.execute_composable.get_local_file_info')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
-def test_local_store(compressor_mock, access_mock, test_config):
+def test_local_store(compressor_mock, access_mock, file_info_mock, test_config):
     access_mock.return_value = 'https://localhost:2022'
+    file_info_mock.return_value = FileInfo(id='test_file.fits')
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.data_source = ['/test_files/caom2pipe']
     test_config.use_local_files = True
     test_config.store_newer_files_only = False
-    test_config.features.supports_latest_client = False
     test_sn = tc.TestStorageName(
         source_names=[f'{tc.TEST_DATA_DIR}/test_file.fits.gz'],
     )
@@ -804,12 +808,14 @@ def test_local_store(compressor_mock, access_mock, test_config):
     clients = ClientCollection(test_config)
     clients._data_client = test_data_client
     test_observable = Mock(autospec=True)
+    test_metadata_reader = Mock()
+    test_metadata_reader.file_info = {}
     test_subject = ec.LocalStore(
         test_config,
         # test_sn,
         test_observable,
         clients,
-        metadata_reader=Mock(),
+        metadata_reader=test_metadata_reader,
     )
     assert test_subject is not None, 'expect construction'
     test_subject.execute({'storage_name': test_sn})
@@ -850,47 +856,14 @@ class FlagStorageName(mc.StorageName):
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2utils.data_util.StorageClientWrapper')
-def test_store_newer_files_only_flag(client_mock, access_mock, test_config):
-    access_mock.return_value = 'https://localhost:2022'
-    # first test case
-    # flag set to True, file is older at CADC, supports_latest_client = False
-    test_config.working_directory = tc.TEST_DATA_DIR
-    test_config.use_local_files = True
-    test_config.features.supports_latest_client = False
-    test_f_name = '1000003f.fits.fz'
-    sn = [os.path.join('/caom2pipe_test', test_f_name)]
-    du = [f'cadc:TEST/{test_f_name}']
-    test_sn = FlagStorageName(test_f_name, sn)
-    observable_mock = Mock(autospec=True)
-    client_mock.info.return_value = FileInfo(
-        id=du[0], lastmod='Mon, 4 Mar 2019 19:05:41 GMT'
-    )
-    clients = ClientCollection(test_config)
-    clients._data_client = client_mock
-
-    test_subject = ec.LocalStore(
-        test_config,
-        # test_sn,
-        observable_mock,
-        clients,
-        metadata_reader=Mock(),
-    )
-    test_subject.execute({'storage_name': test_sn})
-    assert client_mock.put.called, 'expect put call'
-
-
-@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-@patch('caom2utils.data_util.StorageClientWrapper')
 def test_store_newer_files_only_flag_client(
     client_mock, access_mock, test_config
 ):
     access_mock.return_value = 'https://localhost:2022'
-    # just like the previous test, except supports_latest_client = True
     # first test case
-    # flag set to True, file is older at CADC, supports_latest_client = False
+    # flag set to True, file is older at CADC
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.use_local_files = True
-    test_config.features.supports_latest_client = True
     test_f_name = '1000003f.fits.fz'
     sn = [os.path.join('/caom2pipe_test', test_f_name)]
     du = [f'cadc:TEST/{test_f_name}']
@@ -913,8 +886,9 @@ def test_store_newer_files_only_flag_client(
     assert client_mock.put.called, 'expect copy call'
 
 
+@patch('caom2utils.data_util.StorageInventoryClient')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_data_visit_params(access_mock):
+def test_data_visit_params(access_mock, client_mock):
     access_mock.return_value = 'https://localhost:2022'
     test_wd = '/tmp/abc'
     if os.path.exists(test_wd):

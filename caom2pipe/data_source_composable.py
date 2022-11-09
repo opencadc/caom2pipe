@@ -415,7 +415,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
     For when use_local_files: True and cleanup_when_storing: True
     """
 
-    def __init__(self, config, cadc_client, metadata_reader, recursive=True):
+    def __init__(self, config, cadc_client, metadata_reader, recursive=True, scheme='cadc'):
         super().__init__(config)
         self._retry_failures = config.retry_failures
         self._retry_count = config.retry_count
@@ -424,7 +424,6 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         self._cleanup_failure_directory = config.cleanup_failure_destination
         self._cleanup_success_directory = config.cleanup_success_destination
         self._store_modified_files_only = config.store_modified_files_only
-        self._supports_latest_client = config.features.supports_latest_client
         self._source_directories = config.data_sources
         self._archive = config.archive
         self._collection = config.collection
@@ -432,6 +431,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         self._metadata_reader = metadata_reader
         self._logger = logging.getLogger(self.__class__.__name__)
         self._is_connected = config.is_connected
+        self._scheme = scheme
         if not self._is_connected:
             # assume iterative testing is the objective for SCRAPE'ing,
             # and over-ride the configuration that will undermine that
@@ -600,10 +600,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         if self._is_connected:
             # get the CADC FileInfo
             f_name = os.path.basename(entry_path)
-            scheme = 'cadc' if self._supports_latest_client else 'ad'
-            destination_name = mc.build_uri(
-                self.get_collection(f_name), f_name, scheme
-            )
+            destination_name = mc.build_uri(self.get_collection(f_name), f_name, self._scheme)
             try:
                 cadc_meta = self._cadc_client.info(destination_name)
             except Exception as e:
@@ -904,16 +901,16 @@ class VaultCleanupDataSource(VaultDataSource):
     the FileInfo.
     """
 
-    def __init__(self, config, vault_client, cadc_client):
+    def __init__(self, config, vault_client, cadc_client, scheme='cadc'):
         super().__init__(vault_client, config)
         self._cleanup_when_storing = config.cleanup_files_when_storing
         self._cleanup_failure_directory = config.cleanup_failure_destination
         self._cleanup_success_directory = config.cleanup_success_destination
         self._store_modified_files_only = config.store_modified_files_only
-        self._supports_latest_client = config.features.supports_latest_client
         self._archive = config.archive
         self._recursive = config.recurse_data_sources
         self._cadc_client = cadc_client
+        self._scheme = scheme
         self._work = deque()
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -978,9 +975,8 @@ class VaultCleanupDataSource(VaultDataSource):
         vos_meta = clc.vault_info(self._vault_client, entry_fqn)
         # get the metadata at CADC
         f_name = os.path.basename(entry_fqn)
-        scheme = 'cadc' if self._supports_latest_client else 'ad'
         collection = self.get_collection(f_name)
-        cadc_name = mc.build_uri(collection, f_name, scheme)
+        cadc_name = mc.build_uri(collection, f_name, self._scheme)
         cadc_meta = self._cadc_client.info(cadc_name)
         if cadc_meta is not None and vos_meta.md5sum == cadc_meta.md5sum:
             self._logger.warning(

@@ -177,7 +177,6 @@ class CaomExecute:
         self.observable = observable
         self.log_file_directory = None
         self.data_visitors = []
-        self.supports_latest_client = config.features.supports_latest_client
         self._metadata_reader = metadata_reader
         self._observation = None
         # track whether the caom2repo call will be a create or an update
@@ -260,6 +259,7 @@ class CaomExecute:
 
     def _cadc_put(self, source_fqn, uri):
         interim_fqn = self._decompressor.fix_compression(source_fqn)
+        logging.error(f'interim_rqn = {interim_fqn}')
         self.cadc_client.put(os.path.dirname(interim_fqn), uri, None)
         # fix FileInfo that becomes out-dated by decompression during a STORE
         # task, in this common location, affecting all collections
@@ -1171,18 +1171,11 @@ class OrganizeExecutes:
         return result
 
 
-def decompressor_factory(
-    config, working_directory, log_level_as, storage_name
-):
-    if config.features.supports_decompression:
-        if config.collection == 'CFHT':
-            return FitsForCADCCompressor(
-                working_directory, log_level_as, storage_name
-            )
-        else:
-            return FitsForCADCDecompressor(working_directory, log_level_as)
+def decompressor_factory(config, working_directory, log_level_as, storage_name):
+    if config.collection == 'CFHT':
+        return FitsForCADCCompressor(working_directory, log_level_as, storage_name)
     else:
-        return DecompressorNoop()
+        return FitsForCADCDecompressor(working_directory, log_level_as)
 
 
 class DecompressorNoop:

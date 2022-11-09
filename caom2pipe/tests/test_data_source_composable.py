@@ -482,7 +482,6 @@ def test_transfer_check_fits_verify(test_config):
 
     def _at_cadc(test_start_ts, test_end_ts):
         test_config.cleanup_files_when_storing = False
-        test_config.features.supports_latest_client = True
         cadc_client_mock = Mock(autospec=True)
         cadc_client_mock.info.side_effect = mock_info
         test_subject = dsc.LocalFilesDataSource(

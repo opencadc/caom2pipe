@@ -215,7 +215,7 @@ def test_config_class_feature_true():
         test_config.get_executors()
         assert test_config is not None
         assert test_config.features is not None
-        assert test_config.features.supports_latest_client is True
+        assert test_config.features.supports_catalog is True
     finally:
         os.getcwd = getcwd_orig
 
@@ -734,11 +734,9 @@ data_sources: []
 failure_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/failure_log.txt
 failure_log_file_name: failure_log.txt
 features:
-  expects_retry: True
   run_in_airflow: True
   supports_catalog: True
   supports_composite: False
-  supports_latest_client: False
   supports_multiple_files: True
 interval: 10
 is_connected: True

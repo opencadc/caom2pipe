@@ -98,43 +98,11 @@ TEST_COMMAND = 'test_command'
 TEST_DIR = f'{tc.TEST_DATA_DIR}/run_composable'
 
 
-@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
-@patch('caom2pipe.manage_composable.read_obs_from_file')
-@patch('caom2pipe.manage_composable.write_obs_to_file')
-def test_run_todo_list_dir_data_source(
-    write_obs_mock,
-    read_obs_mock,
-    visit_meta_mock,
-    test_config,
-):
-    read_obs_mock.side_effect = _mock_read
-    test_config.working_directory = tc.TEST_DATA_DIR
-    test_config.use_local_files = True
-    test_config.task_types = [mc.TaskType.SCRAPE]
-    test_config.data_sources = [
-        os.path.join(tc.TEST_FILES_DIR, 'sub_directory')
-    ]
-    test_config.data_source_extensions = ['.fits']
-    test_config.features.supports_latest_client = False
-    test_config.logging_level = 'DEBUG'
-    test_chooser = ec.OrganizeChooser()
-    reader_mock = Mock()
-    test_result = rc.run_by_todo(
-        config=test_config, chooser=test_chooser, metadata_reader=reader_mock
-    )
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert visit_meta_mock.called, 'expect visit call'
-    visit_meta_mock.assert_called_with()
-    assert write_obs_mock.called, 'expect write call'
-    assert reader_mock.reset.called, 'expect reset call'
-
-
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
 @patch('caom2pipe.manage_composable.read_obs_from_file')
 @patch('caom2pipe.manage_composable.write_obs_to_file')
-def test_run_todo_list_dir_data_source_v(
+def test_run_todo_list_dir_data_source(
     write_obs_mock,
     read_obs_mock,
     visit_meta_mock,
@@ -149,7 +117,6 @@ def test_run_todo_list_dir_data_source_v(
     ]
     test_config.data_source_extensions = ['.fits']
     test_config.task_types = [mc.TaskType.SCRAPE]
-    test_config.features.supports_latest_client = True
     test_result = rc.run_by_todo(config=test_config)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
@@ -166,9 +133,7 @@ def test_run_todo_list_dir_data_source_v(
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_run_todo_list_dir_data_source_invalid_fname_v(
-    clients_mock, test_config
-):
+def test_run_todo_list_dir_data_source_invalid_fname(clients_mock, test_config):
     test_dir = os.path.join('/test_files', '1')
     test_fqn = os.path.join(test_dir, 'abc.fits.gz')
 
@@ -178,7 +143,6 @@ def test_run_todo_list_dir_data_source_invalid_fname_v(
     test_config.data_source_extensions = ['.fits', '.fits.gz']
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.log_to_file = False
-    test_config.features.supports_latest_client = True
 
     if os.path.exists(test_config.failure_fqn):
         os.unlink(test_config.failure_fqn)
@@ -234,37 +198,6 @@ def test_run_todo_list_dir_data_source_invalid_fname_v(
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 def test_run_todo_file_data_source(clients_mock, test_config):
-    clients_mock.return_value.data_client.get_file_info.return_value = None
-    clients_mock.return_value.metadata_client.read.return_value = (
-        SimpleObservation(
-            collection=test_config.collection,
-            observation_id='def',
-            algorithm=Algorithm('test'),
-        )
-    )
-
-    if os.path.exists(test_config.success_fqn):
-        os.unlink(test_config.success_fqn)
-
-    test_config.work_fqn = f'{TEST_DIR}/todo.txt'
-    test_config.task_types = [mc.TaskType.VISIT]
-    test_config.log_to_file = True
-
-    test_chooser = ec.OrganizeChooser()
-    test_result = rc.run_by_todo(config=test_config, chooser=test_chooser)
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert os.path.exists(test_config.success_fqn), 'expect success file'
-
-    with open(test_config.success_fqn) as f:
-        content = f.read()
-        # the obs id and file name
-        assert 'def def.fits' in content, 'wrong success message'
-
-
-@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_run_todo_file_data_source_v(clients_mock, test_config):
-    test_config.features.supports_latest_client = True
     test_cert_file = os.path.join(TEST_DIR, 'test_proxy.pem')
     test_config.proxy_fqn = test_cert_file
     clients_mock.return_value.metadata_client.read.side_effect = Mock(
@@ -456,51 +389,48 @@ def test_run_todo_list_dir_data_source_exception(
     test_config.task_types = [mc.TaskType.SCRAPE]
     test_config.log_to_file = True
 
-    for entry in [False, True]:
-        test_config.features.supports_latest_client = entry
-        do_one_mock.side_effect = mc.CadcException
+    do_one_mock.side_effect = mc.CadcException
 
-        if os.path.exists(test_config.failure_fqn):
-            os.unlink(test_config.failure_fqn)
-        if os.path.exists(test_config.retry_fqn):
-            os.unlink(test_config.retry_fqn)
+    if os.path.exists(test_config.failure_fqn):
+        os.unlink(test_config.failure_fqn)
+    if os.path.exists(test_config.retry_fqn):
+        os.unlink(test_config.retry_fqn)
 
-        test_chooser = ec.OrganizeChooser()
-        test_data_source = dsc.ListDirDataSource(test_config, test_chooser)
-        test_result = rc.run_by_todo(
-            config=test_config,
-            chooser=test_chooser,
-            source=test_data_source,
-        )
-        assert test_result is not None, 'expect a result'
-        assert test_result == -1, 'expect failure'
-        assert do_one_mock.called, 'expect do_one call'
-        assert os.path.exists(test_config.failure_fqn), 'expect failure file'
-        assert os.path.exists(test_config.retry_fqn), 'expect retry file'
+    test_chooser = ec.OrganizeChooser()
+    test_data_source = dsc.ListDirDataSource(test_config, test_chooser)
+    test_result = rc.run_by_todo(
+        config=test_config,
+        chooser=test_chooser,
+        source=test_data_source,
+    )
+    assert test_result is not None, 'expect a result'
+    assert test_result == -1, 'expect failure'
+    assert do_one_mock.called, 'expect do_one call'
+    assert os.path.exists(test_config.failure_fqn), 'expect failure file'
+    assert os.path.exists(test_config.retry_fqn), 'expect retry file'
 
-        with open(test_config.failure_fqn) as f:
-            content = f.read()
-            # the obs id and file name
-            assert 'abc abc.fits' in content, 'wrong failure message'
+    with open(test_config.failure_fqn) as f:
+        content = f.read()
+        # the obs id and file name
+        assert 'abc abc.fits' in content, 'wrong failure message'
 
-        with open(test_config.retry_fqn) as f:
-            content = f.read()
-            # retry file names
-            assert content == 'abc.fits\n', 'wrong retry content'
+    with open(test_config.retry_fqn) as f:
+        content = f.read()
+        # retry file names
+        assert content == 'abc.fits\n', 'wrong retry content'
 
-        assert not (
-            clients_mock.return_value.metadata_client.read.called
-        ), 'scrape, should be no metadata client call'
-        assert not (
-            clients_mock.return_value.data_client.get_file_info.called
-        ), 'scrape, should be no data client call'
+    assert not (
+        clients_mock.return_value.metadata_client.read.called
+    ), 'scrape, should be no metadata client call'
+    assert not (
+        clients_mock.return_value.data_client.get_file_info.called
+    ), 'scrape, should be no data client call'
 
 
 @patch('caom2pipe.data_source_composable.TodoFileDataSource.clean_up')
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config):
-    test_config.features.supports_latest_client = True
     (
         retry_success_fqn,
         retry_failure_fqn,
@@ -600,48 +530,6 @@ def test_run_state_retry(get_work_mock, tap_mock, do_one_mock, test_config):
     assert do_one_mock.called, 'expect do_one call'
     assert do_one_mock.call_count == 2, 'wrong number of calls'
     assert tap_mock.called, 'init should be called'
-
-
-@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-@patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
-def test_run_single(do_mock, get_access_mock, test_config):
-    get_access_mock.return_value = 'https://localhost'
-    _clean_up_log_files(test_config)
-    progress_file = os.path.join(tc.TEST_DATA_DIR, 'progress.txt')
-
-    test_config.features.expects_retry = False
-    test_config.progress_fqn = progress_file
-
-    test_config.state_fqn = STATE_FILE
-    test_config.interval = 5
-    test_config.features.supports_latest_client = False
-    test_state = mc.State(test_config.state_fqn)
-    test_state.save_state('gemini_timestamp', datetime.utcnow())
-
-    do_mock.return_value = -1
-
-    test_url = 'http://localhost/test_url.fits'
-    mc.StorageName.collection = test_config.collection
-    test_storage_name = mc.StorageName(source_names=[test_url])
-
-    test_result = rc.run_single(
-        test_config,
-        test_storage_name,
-        meta_visitors=None,
-        data_visitors=None,
-    )
-    assert test_result is not None, 'expect a result'
-    assert test_result == -1, 'wrong result'
-
-    assert do_mock.called, 'do mock not called'
-    assert do_mock.call_count == 1, do_mock.call_count
-    args, kwargs = do_mock.call_args
-    test_storage = args[0]
-    assert isinstance(test_storage, mc.StorageName), type(test_storage)
-    assert test_storage.obs_id is None, 'wrong obs id'
-    assert (
-        test_storage.destination_uris[0] == 'cadc:OMM/test_url.fits'
-    ), test_storage
 
 
 # TODO - make this work with TodoRunner AND StateRunner
@@ -912,7 +800,6 @@ def test_run_store_ingest_failure(
         test_config.logging_level = 'INFO'
         test_config.proxy_file_name = 'cadcproxy.pem'
         test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
-        test_config.features.supports_latest_client = True
         mc.Config.write_to_file(test_config)
         with open(test_config.proxy_fqn, 'w') as f:
             f.write('test content')
@@ -1005,8 +892,6 @@ def test_run_store_get_work_failures(
         test_config.logging_level = 'INFO'
         test_config.proxy_file_name = 'cadcproxy.pem'
         test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
-        test_config.features.supports_latest_client = True
-        test_config.features.supports_decompression = True
         test_config.state_file_name = 'state.yml'
         test_config.state_fqn = f'{tmp_dir_name}/{test_config.state_file_name}'
         test_config.recurse_data_sources = False
@@ -1128,7 +1013,6 @@ def test_run_ingest(
         test_config.collection = 'CFHT'
         test_config.proxy_file_name = 'cadcproxy.pem'
         test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
-        test_config.features.supports_latest_client = True
         test_config.use_local_files = False
         mc.Config.write_to_file(test_config)
         with open(test_config.proxy_fqn, 'w') as f:
@@ -1203,8 +1087,6 @@ def test_vo_with_cleanup(
         test_config.collection = 'DAO'
         test_config.proxy_file_name = 'cadcproxy.pem'
         test_config.proxy_fqn = f'{tmp_dir_name}/cadcproxy.pem'
-        test_config.features.supports_latest_client = True
-        test_config.features.supports_decompression = True
         test_config.data_sources = ['vos:goliaths/DAOTest']
         test_config.data_source_extensions = ['.fits.gz']
         test_config.cleanup_files_when_storing = True
@@ -1249,7 +1131,6 @@ def test_store_from_to_cadc(clients_mock, get_work_mock, test_config):
     # mimic a decompression event
     test_f_name = 'abc.fits'
     test_config.task_types = [mc.TaskType.STORE]
-    test_config.features.supports_latest_client = True
     test_config.logging_level = 'DEBUG'
     test_return_value = deque()
     test_return_value.append(
