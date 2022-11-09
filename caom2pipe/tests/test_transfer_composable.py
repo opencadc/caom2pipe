@@ -145,7 +145,6 @@ def test_http_transfer(get_mock):
     get_mock.side_effect = Mock(autospec=True)
     test_config = mc.Config()
     test_config.working_directory = test_conf.TEST_DATA_DIR
-    test_config.netrc_file = 'test_netrc'
     test_config.rejected_fqn = '/tmp/rejected.yml'
     test_observable = mc.Observable(
         mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)
@@ -171,7 +170,6 @@ def test_ftp_transfer(data_get_mock):
     data_get_mock.side_effect = Mock(autospec=True)
     test_config = mc.Config()
     test_config.working_directory = test_conf.TEST_DATA_DIR
-    test_config.netrc_file = 'test_netrc'
     test_config.rejected_fqn = '/tmp/rejected.yml'
     test_observable = mc.Observable(
         mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)

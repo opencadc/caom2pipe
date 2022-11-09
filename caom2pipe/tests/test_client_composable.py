@@ -223,22 +223,6 @@ def test_define_subject():
         test_config = mc.Config()
         test_config.get_executors()
         test_config.proxy_fqn = None
-        test_config.netrc_file = 'test_netrc'
-        test_netrc_fqn = os.path.join(
-            test_config.working_directory, test_config.netrc_file
-        )
-        if not os.path.exists(test_netrc_fqn):
-            with open(test_netrc_fqn, 'w') as f:
-                f.write(
-                    'machine www.example.com login userid password userpass'
-                )
-
-        test_subject = clc.define_subject(test_config)
-        assert test_subject is not None, 'expect a netrc subject'
-        test_config.netrc_file = 'nonexistent'
-        test_subject = clc.define_subject(test_config)
-        assert test_subject is None, 'expect no subject, cannot find content'
-        test_config.netrc_file = None
         # proxy pre-condition
         test_config.proxy_fqn = f'{tc.TEST_DATA_DIR}/proxy.pem'
 

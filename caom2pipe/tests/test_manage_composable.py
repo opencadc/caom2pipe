@@ -147,7 +147,6 @@ def test_config_class():
         assert (
             test_config.work_fqn == f'{tc.TEST_DATA_DIR}/todo.txt'
         ), 'work_fqn'
-        assert test_config.netrc_file == 'test_netrc', 'netrc'
         assert test_config.archive == 'NEOSS', 'archive'
         assert test_config.collection == 'NEOSSAT', 'collection'
         assert (
@@ -337,9 +336,9 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.product_type == ProductType.WEIGHT, 'wrong product type'
-    assert result.content_length == 410, 'wrong length'
+    assert result.content_length == 383, 'wrong length'
     assert (
-        result.content_checksum.uri == 'md5:4252762f594c2a2640ba652ca80d748a'
+        result.content_checksum.uri == 'md5:fa7ce4f21e6c3dda14fbc910a0d280b0'
     ), 'wrong checksum'
 
     # update action
@@ -350,7 +349,7 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert (
-        result.content_checksum.uri == 'md5:4252762f594c2a2640ba652ca80d748a'
+        result.content_checksum.uri == 'md5:fa7ce4f21e6c3dda14fbc910a0d280b0'
     ), 'wrong checksum'
 
 

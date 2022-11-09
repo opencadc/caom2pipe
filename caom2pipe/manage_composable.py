@@ -121,7 +121,6 @@ __all__ = [
     'ftp_get_timeout',
     'get_artifact_metadata',
     'get_cadc_headers',
-    'get_cadc_meta',
     'get_endpoint_session',
     'get_file_meta',
     'get_keyword',
@@ -587,7 +586,6 @@ class Config:
         self._work_file = None
         # the fully qualified name for the work file
         self.work_fqn = None
-        self._netrc_file = None
         self._archive = None
         self._collection = None
         self._use_local_files = False
@@ -686,15 +684,6 @@ class Config:
     @data_source_extensions.setter
     def data_source_extensions(self, value):
         self._data_source_extensions = value
-
-    @property
-    def netrc_file(self):
-        """credentials for any service calls"""
-        return self._netrc_file
-
-    @netrc_file.setter
-    def netrc_file(self, value):
-        self._netrc_file = value
 
     @property
     def collection(self):
@@ -1132,7 +1121,6 @@ class Config:
             f'  log_file_directory:: {self.log_file_directory}\n'
             f'  log_to_file:: {self.log_to_file}\n'
             f'  logging_level:: {self.logging_level}\n'
-            f'  netrc_file:: {self.netrc_file}\n'
             f'  observable_directory:: {self.observable_directory}\n'
             f'  observe_execution:: {self.observe_execution}\n'
             f'  progress_file_name:: {self.progress_file_name}\n'
@@ -1219,7 +1207,6 @@ class Config:
                 'working_directory', os.getcwd()
             )
             self.work_file = config.get('todo_file_name', 'todo.txt')
-            self.netrc_file = config.get('netrc_filename', None)
             self.data_sources = Config._obtain_list(
                 'data_sources', config, []
             )
@@ -2314,19 +2301,6 @@ def get_cadc_headers_client(archive, file_name, client):
     fits_header = b.getvalue().decode('ascii')
     b.close()
     return fits_header
-
-
-def get_cadc_meta(netrc_fqn, archive, fname):
-    """
-    Gets contentType, contentLength and contentChecksum of a CADC artifact
-    :param netrc_fqn: user credentials
-    :param archive: archive file has been stored to
-    :param fname: name of file in the archive
-    :return:
-    """
-    subject = net.Subject(username=None, certificate=None, netrc=netrc_fqn)
-    client = CadcDataClient(subject)
-    return client.get_file_info(archive, fname)
 
 
 def get_cadc_meta_client(client, archive, fname):
