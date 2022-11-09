@@ -147,7 +147,6 @@ def test_config_class():
         assert (
             test_config.work_fqn == f'{tc.TEST_DATA_DIR}/todo.txt'
         ), 'work_fqn'
-        assert test_config.archive == 'NEOSS', 'archive'
         assert test_config.collection == 'NEOSSAT', 'collection'
         assert (
             test_config.log_file_directory == tc.TEST_DATA_DIR
@@ -723,8 +722,7 @@ def test_visit():
 
 
 def test_config_write():
-    config_content = """archive: NEOSS
-cache_file_name: cache.yml
+    config_content = """cache_file_name: cache.yml
 cache_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/cache.yml
 cleanup_files_when_storing: False
 collection: NEOSSAT

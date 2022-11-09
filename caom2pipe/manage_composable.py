@@ -586,7 +586,6 @@ class Config:
         self._work_file = None
         # the fully qualified name for the work file
         self.work_fqn = None
-        self._archive = None
         self._collection = None
         self._use_local_files = False
         self._resource_id = None
@@ -693,15 +692,6 @@ class Config:
     @collection.setter
     def collection(self, value):
         self._collection = value
-
-    @property
-    def archive(self):
-        """which archive is addressed by the pipeline"""
-        return self._archive
-
-    @archive.setter
-    def archive(self, value):
-        self._archive = value
 
     @property
     def use_local_files(self):
@@ -1103,7 +1093,6 @@ class Config:
     def __str__(self):
         return (
             f'\nFrom {os.getcwd()}/config.yml:\n'
-            f'  archive:: {self.archive}\n'
             f'  cache_fqn:: {self.cache_fqn}\n'
             f'  cleanup_failure_destination:: '
             f'{self.cleanup_failure_destination}\n'
@@ -1234,7 +1223,6 @@ class Config:
             )
             self.task_types = Config._obtain_task_types(config, [])
             self.collection = config.get('collection', 'TEST')
-            self.archive = config.get('archive', self.collection)
             self.success_log_file_name = config.get(
                 'success_log_file_name', 'success_log.txt'
             )
@@ -1923,9 +1911,10 @@ class Validator:
         """
         ad_resource_id = 'ivo://cadc.nrc.ca/ad'
         query = (
-            f"SELECT fileName, ingestDate FROM archive_files WHERE "
-            f"archiveName = '{self._config.archive}' "
-            f"AND fileName not like '%{self._preview_suffix}'"
+            f"SELECT A.uri, A.contentLastModified "
+            f"FROM inventory.Artifact AS A "
+            f"WHERE A.uri LIKE '%:{self._config.collection}/%' "
+            f"AND A.uri NOT LIKE '%{self._preview_suffix}'"
         )
         self._logger.debug(f'Query is {query}')
         return query_tap(query, self._config.proxy_fqn, ad_resource_id)
@@ -2498,11 +2487,12 @@ def read_file_list_from_archive(config, app_name, prev_exec_date, exec_date):
     end_time = format_time_for_query(exec_date)
     ad_resource_id = 'ivo://cadc.nrc.ca/ad'
     query = (
-        f"SELECT fileName, min(ingestDate) FROM archive_files WHERE "
-        f"archiveName = '{config.archive}' AND ingestDate > "
-        f"'{start_time}' and "
-        f"ingestDate <= '{end_time}' ORDER BY ingestDate "
-        f"GROUP BY ingestDate"
+        f"SELECT A.uri, min(A.contentLastModified) "
+        f"FROM inventory.Artifact AS A "
+        f"WHERE A.uri LIKE '%:{config.collection}/%' "
+        f"AND A.contentLastModified > '{start_time}' and A.contentLastModified <= '{end_time}' "
+        f"ORDER BY A.contentLastModified "
+        f"GROUP BY A.contentLastModified"
     )
     logging.debug(f'Query is {query}')
     temp = query_tap(query, config.proxy_fqn, config.resource_id)

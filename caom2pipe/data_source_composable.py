@@ -425,7 +425,6 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         self._cleanup_success_directory = config.cleanup_success_destination
         self._store_modified_files_only = config.store_modified_files_only
         self._source_directories = config.data_sources
-        self._archive = config.archive
         self._collection = config.collection
         self._recursive = recursive
         self._metadata_reader = metadata_reader
@@ -907,7 +906,7 @@ class VaultCleanupDataSource(VaultDataSource):
         self._cleanup_failure_directory = config.cleanup_failure_destination
         self._cleanup_success_directory = config.cleanup_success_destination
         self._store_modified_files_only = config.store_modified_files_only
-        self._archive = config.archive
+        self._collection = config.collection
         self._recursive = config.recurse_data_sources
         self._cadc_client = cadc_client
         self._scheme = scheme
@@ -915,7 +914,7 @@ class VaultCleanupDataSource(VaultDataSource):
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_collection(self, f_name):
-        return self._archive
+        return self._collection
 
     def clean_up(self, entry, execution_result, current_count):
         """
