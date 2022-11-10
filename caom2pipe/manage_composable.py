@@ -2763,6 +2763,7 @@ def make_seconds(from_time):
         '%a, %d %b %Y %H:%M:%S GMT',
         '%Y-%m-%dT%H:%M',
         '%a %b %d %Y %H:%M:%S',
+        '%Y%m%d %H:%M',
     ]:
         try:
             seconds_since_epoch = datetime.strptime(
