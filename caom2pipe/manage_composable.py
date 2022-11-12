@@ -88,6 +88,7 @@ from hashlib import md5
 from importlib_metadata import version
 from io import BytesIO
 from requests.adapters import HTTPAdapter
+from shutil import move
 from urllib import parse as parse
 from urllib3 import Retry
 
@@ -114,6 +115,7 @@ __all__ = [
     'exec_cmd',
     'exec_cmd_info',
     'exec_cmd_redirect',
+    'ExecutionReporter',
     'extract_file_name_from_uri',
     'Features',
     'FileMeta',
@@ -390,6 +392,234 @@ class Rejected:
             if text in message:
                 result = reason
         return result
+
+
+class ExecutionReporter:
+    """
+    This class reports on the individual work unit successes, failures, and possible retries for the duration
+    of a pipeline run.
+
+
+    """
+
+    def __init__(self, config, observable, application):
+        """
+        If a retry is configured, logging locations change during a pipeline run, so the file name setting is relegated
+        to externally visible methods.
+        """
+        self._failure_fqn = None
+        self._retry_fqn = None
+        self._success_fqn = None
+        self._report_fqn = config.report_fqn
+        self.set_log_location(config)
+        self._observable = observable
+        self._summary = ExecutionSummary(os.path.basename(config.working_directory), application)
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    @property
+    def all(self):
+        return self._summary.entries
+
+    @property
+    def success(self):
+        return self._summary.success
+
+    def _count_timeouts(self, e):
+        if e is not None and (
+            'Read timed out' in e
+            or 'reset by peer' in e
+            or 'ConnectTimeoutError' in e
+            or 'Broken pipe' in e
+        ):
+            self._summary.add_timeouts(1)
+
+    def _set_log_files(self, config):
+        """Support changing log file locations during a retry."""
+        self._success_fqn = config.success_fqn
+        self._failure_fqn = config.failure_fqn
+        self._retry_fqn = config.retry_fqn
+
+    def set_log_location(self, config):
+        """Support changing log file locations during a retry."""
+        self._set_log_files(config)
+        create_dir(config.log_file_directory)
+        now_s = datetime.utcnow().timestamp()
+        for fqn in [self._success_fqn, self._failure_fqn, self._retry_fqn, self._report_fqn]:
+            ExecutionReporter._init_log_file(fqn, now_s)
+        self._summary.success_count = 0
+
+    @staticmethod
+    def _init_log_file(log_fqn, now_s):
+        """Keep old versions of the progress files."""
+        log_fid = log_fqn.replace('.txt', '')
+        back_fqn = f'{log_fid}.{now_s}.txt'
+        if os.path.exists(log_fqn) and os.path.getsize(log_fqn) != 0:
+            move(log_fqn, back_fqn)
+        f_handle = open(log_fqn, 'w')
+        f_handle.close()
+
+    def capture_failure(self, storage_name, e, stack_trace):
+        """Log an error message to the failure file.
+
+        If the failure is of a known type, also capture it to the rejected
+        list. The rejected list will be saved to disk when the execute method
+        completes.
+
+        :obs_id observation ID being processed
+        :file_name file name being processed
+        :e Exception to log - the entire stack trace, which, if logging
+            level is not set to debug, will be lost for debugging purposes.
+        """
+        self._count_timeouts(stack_trace)
+        with open(self._failure_fqn, 'a') as failure:
+            if e.args is not None and len(e.args) > 1:
+                min_error = e.args[0]
+            else:
+                min_error = str(e)
+            failure.write(f'{datetime.now()} {storage_name.obs_id} {storage_name.file_name} {min_error}\n')
+
+        # only retry entries that are not permanently marked as rejected
+        reason = Rejected.known_failure(stack_trace)
+        if reason == Rejected.NO_REASON:
+            with open(self._retry_fqn, 'a') as retry:
+                for entry in storage_name.source_names:
+                    retry.write(f'{entry}\n')
+        else:
+            self._observable.rejected.record(reason, storage_name.obs_id)
+            self._summary.add_rejections(1)
+
+    def capture_success(self, obs_id, file_name, start_time):
+        """Capture, with a timestamp, the successful observations/file names
+        that have been processed.
+        :obs_id observation ID being processed
+        :file_name file name being processed
+        :start_time seconds since beginning of execution.
+        """
+        self._summary.add_successes(1)
+        execution_s = datetime.utcnow().timestamp() - start_time
+        success = open(self._success_fqn, 'a')
+        try:
+            success.write(f'{datetime.now()} {obs_id} {file_name} {execution_s:.2f}\n')
+        finally:
+            success.close()
+        msg = (
+            f'Progress - record {self._summary.success} of {self._summary.entries} records processed in '
+            f'{execution_s:.2f} s.'
+        )
+        self._logger.debug('*' * len(msg))
+        self._logger.info(msg)
+        self._logger.debug('*' * len(msg))
+
+    def report(self, config):
+        # self._summary.add_timeouts(self._organizer.timeouts)
+        self._summary.add_errors(config.count_retries())
+        # self._summary.add_rejections(self._organizer.rejected_count)
+        msg = self._summary.report()
+        self._logger.info(msg)
+        write_to_file(self._report_fqn, msg)
+
+    def capture_retry(self):
+        # TODO - yucky name, it implies more than is going on here
+        self._summary.add_retries(self._summary.entries)
+
+
+class ExecutionSummary:
+    """
+    This class generates summary reports of the successes and failures that occur during a pipeline run.
+    """
+
+    def __init__(self, location, application):
+        """
+        - Execution time: the time from initiating the pipeline to completion of execution.
+        - Number of inputs: the number of entries originally counted. Depending on the content of config.yml, this
+             value will originate from a work file, or files on disk, or cumulative tracking of entries when working
+             by state.
+        - Number of successes: the number of entries that eventually succeed, including retries.
+        - Number of timeouts: the number of times exceptions that may involve timeouts were generated. Those
+             exceptions include messages like "Read timed out", "reset by peer", "ConnectTimeoutError", and
+             "Broken pipe".
+        - Number of retries: the number of retries executed. Depending on whether and how retry is enabled in
+             config.yml, this value is the cumulative number of entries processed more than once.
+        - Number of errors: the number of failures after the final retry. If this number is zero, a retry fixed the
+             failures, so all entries were eventually ingested.
+        - Number of rejections: the number of entries that are rejected due to well-known processing failures. These
+             rejections include those caused by fitsverify or hd5check failures.
+        - Number of skipped: the number of entries with a checksum that is the same at the data source as it is in
+             CADC storage. If the checksum is the same, the pipeline can make no changes to either the data or metdata,
+             so it doesn't try.
+        """
+        self._version = '0.0.0' if application == 'DEFAULT' else get_version(application)
+        self._location = location
+        self._start_time = datetime.now(tz=timezone.utc).timestamp()
+        self._entries_sum = 0
+        self._errors_sum = 0
+        self._rejection_sum = 0
+        self._retry_sum = 0
+        self._skipped_sum = 0
+        self._success_sum = 0
+        self._timeouts_sum = 0
+
+    def add_entries(self, value):
+        self._entries_sum += value
+
+    def add_errors(self, value):
+        self._errors_sum += value
+
+    def add_rejections(self, value):
+        self._rejection_sum += value
+
+    def add_retries(self, value):
+        self._retry_sum += value
+
+    def add_skipped(self, value):
+        self._skipped_sum += value
+
+    def add_successes(self, value):
+        self._success_sum += value
+
+    def add_timeouts(self, value):
+        self._timeouts_sum += value
+
+    @property
+    def success(self):
+        return self._success_sum
+
+    @property
+    def entries(self):
+        return self._entries_sum
+
+    def report(self):
+        msg1 = f'Location: {self._location}'
+        msg2 = f'Date: {datetime.isoformat(datetime.utcnow())}'
+        execution_time = datetime.now(tz=timezone.utc).timestamp() - self._start_time
+        msg3 = f'Execution Time: {execution_time:.2f} s'
+        msg4 = f'Version: {self._version}'
+        msg5 = f'      Number of Inputs: {self._entries_sum}'
+        msg6 = f'   Number of Successes: {self._success_sum}'
+        msg7 = f'    Number of Timeouts: {self._timeouts_sum}'
+        msg8 = f'     Number of Retries: {self._retry_sum}'
+        msg9 = f'      Number of Errors: {self._errors_sum}'
+        msg10 = f'Number of Rejections: {self._rejection_sum}'
+        msg11 = f'   Number of Skipped: {self._skipped_sum}'
+        max_length = max(
+            len(msg1),
+            len(msg2),
+            len(msg3),
+            len(msg4),
+            len(msg5),
+            len(msg6),
+            len(msg7),
+            len(msg8),
+            len(msg9),
+            len(msg10),
+            len(msg11),
+        )
+        msg_highlight = '*' * max_length
+        msg = (
+            f'\n\n{msg_highlight}\n{msg1}\n{msg2}\n{msg3}\n{msg4}\n{msg5}\n'
+            f'{msg6}\n{msg7}\n{msg8}\n{msg9}\n{msg10}\n{msg11}\n{msg_highlight}\n\n'
+        )
+        return msg
 
 
 class Metrics:
@@ -1130,6 +1360,7 @@ class Config:
             f'  slack_channel:: {self.slack_channel}\n'
             f'  slack_token:: secret\n'
             f'  source_host:: {self.source_host}\n'
+            f'  state_file_name:: {self.state_file_name}\n'
             f'  state_fqn:: {self.state_fqn}\n'
             f'  storage_inventory_resource_id:: '
             f'{self.storage_inventory_resource_id}\n'
