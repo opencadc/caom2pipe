@@ -982,3 +982,24 @@ def test_use_vos():
     assert test_config.use_vos is True, 'mixed data source'
     test_config.data_sources = ['/data/vos/2022', '/data/vos/2021']
     assert test_config.use_vos is False, 'use_local_files data source'
+
+
+def test_log_directory_construction(test_config):
+    orig_dir = os.getcwd()
+    try:
+        with TemporaryDirectory() as tmp_dir_name:
+            test_config.log_to_file = True
+            test_config.log_file_directory = tmp_dir_name
+            # reset the fqn's
+            test_config.success_log_file_name = 'good.txt'
+            test_config.failure_log_file_name = 'bad.txt'
+            test_config.retry_file_name = 'again.txt'
+            assert not os.path.exists(test_config.success_fqn)
+            assert not os.path.exists(test_config.failure_fqn)
+            assert not os.path.exists(test_config.retry_fqn)
+            ignore = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+            assert os.path.exists(test_config.success_fqn)
+            assert os.path.exists(test_config.failure_fqn)
+            assert os.path.exists(test_config.retry_fqn)
+    finally:
+        os.chdir(orig_dir)

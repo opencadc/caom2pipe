@@ -116,7 +116,7 @@ import os
 import traceback
 
 from datetime import datetime
-from shutil import copyfileobj, move
+from shutil import copyfileobj
 from urllib.parse import urlparse
 
 from caom2utils.data_util import get_local_file_info
@@ -135,9 +135,9 @@ class CaomExecute:
         self,
         config,
         meta_visitors,
-        observable,
-        metadata_reader,
-        clients,
+        observable=None,
+        metadata_reader=None,
+        clients=None,
     ):
         """
         :param config: Configurable parts of execution, as stored in
@@ -542,12 +542,12 @@ class DataScrape(DataVisit):
     This executor requires manage_composable.Config.log_to_file to be True.
     """
 
-    def __init__(self, config, data_visitors, observable, metadata_reader):
+    def __init__(self, config, data_visitors, metadata_reader):
         super().__init__(
             config,
             clients=None,
             data_visitors=data_visitors,
-            observable=observable,
+            observable=None,
             transferrer=tc.Transfer(),
             metadata_reader=metadata_reader,
         )
@@ -666,20 +666,8 @@ class Scrape(CaomExecute):
     observation. The file containing the metadata is located on disk.
     No record is written to a web service."""
 
-    def __init__(
-        self,
-        config,
-        observable,
-        meta_visitors,
-        metadata_reader,
-    ):
-        super().__init__(
-            config,
-            meta_visitors=meta_visitors,
-            observable=observable,
-            metadata_reader=metadata_reader,
-            clients=None,
-        )
+    def __init__(self, config, meta_visitors, metadata_reader):
+        super().__init__(config, meta_visitors=meta_visitors, metadata_reader=metadata_reader, clients=None)
 
     def execute(self, context):
         super().execute(context)
@@ -723,6 +711,8 @@ class OrganizeExecutes:
         modify_transfer=None,
         metadata_reader=None,
         clients=None,
+        observable=None,
+        reporter=None,
     ):
         """
         Why there is support for two transfer instances:
@@ -745,32 +735,12 @@ class OrganizeExecutes:
         self.config = config
         self.chooser = chooser
         self.task_types = config.task_types
-        self.todo_fqn = None
-        self.success_fqn = None
-        self.failure_fqn = None
-        self.retry_fqn = None
-        self.rejected_fqn = None
-        self.set_log_location()
-        self._success_count = 0
-        self._rejected_count = 0
-        self._complete_record_count = 0
-        self._timeout = 0
-        self.observable = mc.Observable(
-            mc.Rejected(self.rejected_fqn), mc.Metrics(config)
-        )
+        self._reporter = reporter
+        self._observable = observable
         self._meta_visitors = meta_visitors
         self._data_visitors = data_visitors
         self._modify_transfer = modify_transfer
         self._store_transfer = store_transfer
-        # use the same Observable everywhere
-        if modify_transfer is not None:
-            self._modify_transfer.observable = self.observable
-        if store_transfer is not None:
-            self._store_transfer.observable = self.observable
-        if clients is not None:
-            clients.metrics = self.observable.metrics
-            self._cadc_client = clients.data_client
-            self._caom_client = clients.metadata_client
         self._clients = clients
         self._metadata_reader = metadata_reader
         self._log_h = None
@@ -802,142 +772,16 @@ class OrganizeExecutes:
         self._logger.debug(f'Create working directory {working_dir}')
         mc.create_dir(working_dir)
 
-    def set_log_files(self, config):
-        self.todo_fqn = config.work_fqn
-        self.success_fqn = config.success_fqn
-        self.failure_fqn = config.failure_fqn
-        self.retry_fqn = config.retry_fqn
-        self.rejected_fqn = config.rejected_fqn
-
-    @property
-    def rejected_count(self):
-        """:return integer indicating how many inputs (files or observations,
-        depending on the configuration) have been rejected for well-known
-        reasons."""
-        return self._rejected_count
-
-    @property
-    def success_count(self):
-        """:return integer indicating how many inputs (files or observations,
-        depending on the configuration) have been successfully processed."""
-        return self._success_count
-
-    @success_count.setter
-    def success_count(self, value):
-        self._success_count = value
-
-    @property
-    def complete_record_count(self):
-        """:return integer indicating how many inputs (files or observations,
-        depending on the configuration) have been processed."""
-        return self._complete_record_count
-
-    @complete_record_count.setter
-    def complete_record_count(self, value):
-        self._complete_record_count = value
-
-    @property
-    def timeouts(self):
-        return self._timeout
-
-    def capture_failure(self, storage_name, e, stack_trace):
-        """Log an error message to the failure file.
-
-        If the failure is of a known type, also capture it to the rejected
-        list. The rejected list will be saved to disk when the execute method
-        completes.
-
-        :obs_id observation ID being processed
-        :file_name file name being processed
-        :e Exception to log - the entire stack trace, which, if logging
-            level is not set to debug, will be lost for debugging purposes.
-        """
-        self._count_timeouts(stack_trace)
-        with open(self.failure_fqn, 'a') as failure:
-            if e.args is not None and len(e.args) > 1:
-                min_error = e.args[0]
-            else:
-                min_error = str(e)
-            failure.write(
-                f'{datetime.now()} {storage_name.obs_id} '
-                f'{storage_name.file_name} {min_error}\n'
-            )
-
-        # only retry entries that are not permanently marked as rejected
-        reason = mc.Rejected.known_failure(stack_trace)
-        if reason == mc.Rejected.NO_REASON:
-            with open(self.retry_fqn, 'a') as retry:
-                for entry in storage_name.source_names:
-                    retry.write(f'{entry}\n')
-        else:
-            self.observable.rejected.record(reason, storage_name.obs_id)
-            self._rejected_count += 1
-
-    def capture_success(self, obs_id, file_name, start_time):
-        """Capture, with a timestamp, the successful observations/file names
-        that have been processed.
-        :obs_id observation ID being processed
-        :file_name file name being processed
-        :start_time seconds since beginning of execution.
-        """
-        self.success_count += 1
-        execution_s = datetime.utcnow().timestamp() - start_time
-        success = open(self.success_fqn, 'a')
-        try:
-            success.write(
-                f'{datetime.now()} {obs_id} {file_name} '
-                f'{execution_s:.2f}\n'
-            )
-        finally:
-            success.close()
-        msg = (
-            f'Progress - record {self.success_count} of '
-            f'{self.complete_record_count} records processed in '
-            f'{execution_s:.2f} s.'
-        )
-        self._logger.debug('*' * len(msg))
-        self._logger.info(msg)
-        self._logger.debug('*' * len(msg))
-
-    def set_log_location(self):
-        self.set_log_files(self.config)
-        mc.create_dir(self.config.log_file_directory)
-        now_s = datetime.utcnow().timestamp()
-        for fqn in [self.success_fqn, self.failure_fqn, self.retry_fqn]:
-            OrganizeExecutes.init_log_file(fqn, now_s)
-        self._success_count = 0
-
     def is_rejected(self, storage_name):
         """Common code to use the appropriate identifier when checking for
         rejected entries."""
-        result = self.observable.rejected.is_bad_metadata(
-            storage_name.file_name,
-        )
+        result = self._observable.rejected.is_bad_metadata(storage_name.file_name)
         if result:
             self._logger.info(
                 f'Rejected observation {storage_name.file_name} because of '
                 f'bad metadata'
             )
         return result
-
-    @staticmethod
-    def init_log_file(log_fqn, now_s):
-        """Keep old versions of the progress files."""
-        log_fid = log_fqn.replace('.txt', '')
-        back_fqn = f'{log_fid}.{now_s}.txt'
-        if os.path.exists(log_fqn) and os.path.getsize(log_fqn) != 0:
-            move(log_fqn, back_fqn)
-        f_handle = open(log_fqn, 'w')
-        f_handle.close()
-
-    def _count_timeouts(self, e):
-        if e is not None and (
-            'Read timed out' in e
-            or 'reset by peer' in e
-            or 'ConnectTimeoutError' in e
-            or 'Broken pipe' in e
-        ):
-            self._timeout += 1
 
     def _set_up_file_logging(self, storage_name):
         """Configure logging to a separate file for each entry being
@@ -979,27 +823,13 @@ class OrganizeExecutes:
         :destination_name StorageName extension that handles the naming rules
             for a file.
         """
-        if mc.TaskType.SCRAPE not in self.task_types:
-            for entry in [self._modify_transfer, self._store_transfer]:
-                if entry is not None:
-                    # set only for Transfer specializations that have a
-                    # cadc_client attribute (HttpTransfer, FtpTransfer do not)
-                    if hasattr(entry, '_cadc_client'):
-                        entry.cadc_client = self._cadc_client
         for task_type in self.task_types:
             if task_type == mc.TaskType.SCRAPE:
                 if self.config.use_local_files:
                     self._logger.debug(
                         f'Choosing executor Scrape for {task_type}.'
                     )
-                    self._executors.append(
-                        Scrape(
-                            self.config,
-                            self.observable,
-                            self._meta_visitors,
-                            self._metadata_reader,
-                        )
-                    )
+                    self._executors.append(Scrape(self.config,  self._meta_visitors, self._metadata_reader))
 
                 else:
                     raise mc.CadcException(
@@ -1012,12 +842,7 @@ class OrganizeExecutes:
                         f'Choosing executor LocalStore for {task_type}.'
                     )
                     self._executors.append(
-                        LocalStore(
-                            self.config,
-                            self.observable,
-                            self._clients,
-                            self._metadata_reader,
-                        )
+                        LocalStore(self.config, self._observable, self._clients, self._metadata_reader)
                     )
                 else:
                     self._logger.debug(
@@ -1025,11 +850,7 @@ class OrganizeExecutes:
                     )
                     self._executors.append(
                         Store(
-                            self.config,
-                            self.observable,
-                            self._store_transfer,
-                            self._clients,
-                            self._metadata_reader,
+                            self.config, self._observable, self._store_transfer, self._clients, self._metadata_reader
                         )
                     )
             elif task_type == mc.TaskType.INGEST:
@@ -1040,11 +861,7 @@ class OrganizeExecutes:
                     )
                     self._executors.append(
                         MetaVisitDeleteCreate(
-                            self.config,
-                            self._meta_visitors,
-                            self.observable,
-                            self._metadata_reader,
-                            self._clients,
+                            self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
                         )
                     )
                 else:
@@ -1053,11 +870,7 @@ class OrganizeExecutes:
                     )
                     self._executors.append(
                         MetaVisit(
-                            self.config,
-                            self._meta_visitors,
-                            self.observable,
-                            self._metadata_reader,
-                            self._clients,
+                            self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
                         )
                     )
             elif task_type == mc.TaskType.MODIFY:
@@ -1067,14 +880,7 @@ class OrganizeExecutes:
                             f'Choosing executor DataScrape for '
                             f'{task_type}.'
                         )
-                        self._executors.append(
-                            DataScrape(
-                                self.config,
-                                self._data_visitors,
-                                self.observable,
-                                self._metadata_reader,
-                            )
-                        )
+                        self._executors.append(DataScrape(self.config, self._data_visitors, self._metadata_reader))
                     else:
                         self._logger.debug(
                             f'Choosing executor LocalDataVisit for '
@@ -1084,7 +890,7 @@ class OrganizeExecutes:
                             LocalDataVisit(
                                 self.config,
                                 self._data_visitors,
-                                self.observable,
+                                self._observable,
                                 self._clients,
                                 self._metadata_reader,
                             )
@@ -1097,7 +903,7 @@ class OrganizeExecutes:
                         DataVisit(
                             self.config,
                             self._data_visitors,
-                            self.observable,
+                            self._observable,
                             self._modify_transfer,
                             self._clients,
                             self._metadata_reader,
@@ -1109,11 +915,7 @@ class OrganizeExecutes:
                 )
                 self._executors.append(
                     MetaVisit(
-                        self.config,
-                        self._meta_visitors,
-                        self.observable,
-                        self._metadata_reader,
-                        self._clients,
+                        self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
                     )
                 )
             elif task_type == mc.TaskType.DEFAULT:
@@ -1132,11 +934,7 @@ class OrganizeExecutes:
         start_s = datetime.utcnow().timestamp()
         try:
             if self.is_rejected(storage_name):
-                self.capture_failure(
-                    storage_name,
-                    BaseException('StorageName.is_rejected'),
-                    'Rejected',
-                )
+                self._reporter.capture_failure(storage_name, BaseException('StorageName.is_rejected'), 'Rejected')
                 # successful rejection of the execution case
                 result = 0
             else:
@@ -1150,15 +948,13 @@ class OrganizeExecutes:
                     )
                     executor.execute(context)
                 if len(self._executors) > 0:
-                    self.capture_success(
-                        storage_name.obs_id, storage_name.file_name, start_s
-                    )
+                    self._reporter.capture_success(storage_name.obs_id, storage_name.file_name, start_s)
                     result = 0
                 else:
                     self._logger.info(f'No executors for {storage_name}')
                     result = -1  # cover case where file name validation fails
         except Exception as e:
-            self.capture_failure(storage_name, e, traceback.format_exc())
+            self._reporter.capture_failure(storage_name, e, traceback.format_exc())
             self._logger.warning(
                 f'Execution failed for {storage_name.obs_id} with {e}'
             )
