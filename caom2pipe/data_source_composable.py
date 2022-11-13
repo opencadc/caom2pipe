@@ -74,7 +74,6 @@ import traceback
 from collections import deque, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from dateutil import tz
 
 from cadctap import CadcTapClient
 from cadcutils import exceptions
@@ -85,13 +84,11 @@ from caom2pipe import manage_composable as mc
 __all__ = [
     'DataSource',
     'data_source_factory',
-    'DecompressionDataSource',
     'ListDirDataSource',
     'ListDirSeparateDataSource',
     'ListDirTimeBoxDataSource',
     'LocalFilesDataSource',
     'QueryTimeBoxDataSource',
-    'RenameURIDataSource',
     'StateRunnerMeta',
     'TodoFileDataSource',
     'VaultDataSource',
@@ -114,49 +111,21 @@ class DataSource:
         deque of work todo as a method implementation
     """
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, reporter=None):
         self._config = config
         # if this value is used, it should be a timestamp - i.e. a float
         self._start_time_ts = None
         self._extensions = None
         if config is not None:
             self._extensions = config.data_source_extensions
-        self._capture_failure = None
-        self._capture_success = None
+        self._skipped_files = []
+        self._rejected_files = {}
+        self._reporter = reporter
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def clean_up(self, entry, execution_result, current_count):
+        """Clean up files locally after there has been a storage attempt."""
         pass
-
-    def get_work(self):
-        return deque()
-
-    def get_time_box_work(self, prev_exec_time, exec_time):
-        return deque()
-
-    @property
-    def capture_failure(self):
-        return self._capture_failure
-
-    @capture_failure.setter
-    def capture_failure(self, value):
-        self._capture_failure = value
-
-    @property
-    def capture_success(self):
-        return self._capture_success
-
-    @capture_success.setter
-    def capture_success(self, value):
-        self._capture_success = value
-
-    @property
-    def start_time_ts(self):
-        return self._start_time_ts
-
-    @start_time_ts.setter
-    def start_time_ts(self, value):
-        self._start_time_ts = value
 
     def default_filter(self, entry):
         """
@@ -167,72 +136,19 @@ class DataSource:
                 return True
         return False
 
-
-class DecompressionDataSource(DataSource):
-    """
-    Implement a Data Source that queries for files in Storage Inventory
-    that are compressed, where there does not exist a corresponding
-    decompressed copy of the file.
-
-    For CFHT, the condition is where there does not exist a corresponding
-    .fz compressed copy of the file.
-    """
-
-    def __init__(self, config, collection, scheme, suffix='.gz'):
-        super().__init__(config)
-        self._suffix = suffix
-        subject = clc.define_subject(config)
-        # the resource_id values are hard-coded - if the referenced instances
-        # of the services aren't available, the query answers are just
-        # considered not available.
-        self._luskan_client = CadcTapClient(
-            subject, resource_id='ivo://cadc.nrc.ca/global/luskan'
-        )
-        self._compressed = None
-        self._decompressed = None
-        self._collection = collection
-        self._scheme = scheme
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    def _match_work(self):
-        new_extension = ''
-        if self._collection == 'CFHT':
-            new_extension = '.fz'
-        self._compressed.uri = self._compressed.uri.astype(str).replace(
-            self._suffix, new_extension
-        )
-        return self._compressed[
-            ~self._compressed.uri.isin(self._decompressed.uri)
-        ]
-
-    def _query_by_extension(self, extension):
-        # a TAP query to find all the files in SI with a particular extension
-        qs = f"""
-        SELECT A.uri
-        FROM inventory.Artifact AS A
-        WHERE A.uri like '{self._scheme}:{self._collection}/%{extension}'
-        """
-        return clc.query_tap_client(qs, self._luskan_client).to_pandas()
-
-    def get_cleanup_work(self):
-        return self._query_by_extension(
-            f'.fits{self._suffix}'
-        ).uri.values.tolist()[1:]
-
     def get_work(self):
-        self._compressed = self._query_by_extension(f'.fits{self._suffix}')
-        self._logger.info(
-            f'Found {self._compressed.shape[0]} SI records with '
-            f'extension .fits{self._suffix}.'
-        )
-        self._decompressed = self._query_by_extension('.fits')
-        self._logger.info(
-            f'Found {self._decompressed.shape[0]} SI records with '
-            f'extension .fits.'
-        )
-        # make a list for ray, skip the first entry, which is the text header
-        # string 'uri'
-        return self._match_work().uri.values.tolist()[1:]
+        return deque()
+
+    def get_time_box_work(self, prev_exec_time, exec_time):
+        return deque()
+
+    @property
+    def start_time_ts(self):
+        return self._start_time_ts
+
+    @start_time_ts.setter
+    def start_time_ts(self, value):
+        self._start_time_ts = value
 
 
 class ListDirDataSource(DataSource):
@@ -241,16 +157,12 @@ class ListDirDataSource(DataSource):
     listing. This is the original use_local_files: True behaviour.
     """
 
-    def __init__(self, config, chooser):
-        super().__init__(config)
+    def __init__(self, config, chooser, reporter):
+        super().__init__(config, reporter)
         self._chooser = chooser
-        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_work(self):
-        self._logger.debug(
-            f'Begin get_work from {self._config.working_directory} in '
-            f'{self.__class__.__name__}.'
-        )
+        self._logger.debug(f'Begin get_work from {self._config.working_directory}.')
         file_list = os.listdir(self._config.working_directory)
         work = deque()
         for f in file_list:
@@ -288,7 +200,8 @@ class ListDirDataSource(DataSource):
                 work.append(f_name)
         # ensure unique entries
         temp = deque(set(work))
-        self._logger.debug(f'End get_work in {self.__class__.__name__}.')
+        self._reporter.capture_todo(len(temp))
+        self._logger.debug(f'End get_work.')
         return temp
 
 
@@ -302,13 +215,12 @@ class ListDirSeparateDataSource(DataSource):
     to use as a source of files, and how to identify files of interest.
     """
 
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, config, reporter):
+        super().__init__(config, reporter)
         self._source_directories = config.data_sources
         self._extensions = config.data_source_extensions
         self._recursive = config.recurse_data_sources
         self._work = deque()
-        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_work(self):
         self._logger.debug(f'Begin get_work.')
@@ -316,6 +228,7 @@ class ListDirSeparateDataSource(DataSource):
             self._logger.info(f'Look in {source} for work.')
             self._append_work(source)
         self._logger.debug('End get_work')
+        self._reporter.capture_todo(len(self._work))
         return self._work
 
     def _append_work(self, entry):
@@ -347,18 +260,13 @@ class ListDirTimeBoxDataSource(DataSource):
       very long time, and a lot of memory, in glob/walk
     """
 
-    def __init__(self, config):
-        """
-
-        :param config: manage_composable.Config
-        """
-        super().__init__(config)
+    def __init__(self, config, reporter):
+        super().__init__(config, reporter)
         self._source_directories = config.data_sources
         self._extensions = config.data_source_extensions
         self._recursive = config.recurse_data_sources
         self._work = deque()
         self._temp = defaultdict(list)
-        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         """
@@ -383,6 +291,7 @@ class ListDirTimeBoxDataSource(DataSource):
                 )
         self._logger.debug('End get_time_box_work')
         self._temp = defaultdict(list)
+        self._reporter.capture_todo(len(self._work) + len(self._skipped_files) + len(self._rejected_files))
         return self._work
 
     def _append_work(self, prev_exec_time, exec_time, entry_path):
@@ -415,8 +324,8 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
     For when use_local_files: True and cleanup_when_storing: True
     """
 
-    def __init__(self, config, cadc_client, metadata_reader, recursive=True, scheme='cadc'):
-        super().__init__(config)
+    def __init__(self, config, cadc_client, metadata_reader, recursive=True, scheme='cadc', reporter=None):
+        super().__init__(config, reporter)
         self._retry_failures = config.retry_failures
         self._retry_count = config.retry_count
         self._cadc_client = cadc_client
@@ -428,7 +337,6 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         self._collection = config.collection
         self._recursive = recursive
         self._metadata_reader = metadata_reader
-        self._logger = logging.getLogger(self.__class__.__name__)
         self._is_connected = config.is_connected
         self._scheme = scheme
         if not self._is_connected:
@@ -485,7 +393,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 self._move_action(fqn, self._cleanup_success_directory)
         self._logger.debug('End clean_up.')
 
-    def _check_file(self, fqn):
+    def _verify_file(self, fqn):
         """
         Check file content for correctness, by whatever rules the file needs to conform to. The default
         implementation is for FITS files only.
@@ -507,7 +415,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             elif '.hdf5' in entry.name:
                 # no hdf5 validation
                 pass
-            elif self._check_file(entry.path):
+            elif self._verify_file(entry.path):
                 # only work with files that pass the FITS verification
                 if self._cleanup_when_storing:
                     if self._store_modified_files_only:
@@ -522,32 +430,22 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                             # if the file already exists, with the same
                             # checksum, at CADC, Kanoa says move it to the
                             # 'succeeded' directory.
-                            self._move_action(
-                                entry.path, self._cleanup_success_directory
-                            )
-                            if self._capture_success is not None:
-                                self._capture_success(entry.name, entry.name, datetime.utcnow().timestamp())
+                            self._skipped_files.append(entry.path)
+                            self._reporter.capture_skipped(entry.path)
+                            self._move_action(entry.path, self._cleanup_success_directory)
                 else:
                     work_with_file = True
             else:
+                self._rejected_files[entry.path] = [BaseException('_verify_file errors'), '_verify_file_errors']
                 if self._cleanup_when_storing:
-                    self._logger.warning(
-                        f'Moving {entry.path} to '
-                        f'{self._cleanup_failure_directory}'
-                    )
-                    self._move_action(
-                        entry.path, self._cleanup_failure_directory
-                    )
-                if self._capture_failure is not None:
-                    temp_storage_name = mc.StorageName(file_name=entry.name)
-                    self._capture_failure(temp_storage_name, BaseException('_check_file errors'), '_check_file errors')
+                    self._logger.warning(f'Rejecting {entry.path}. Moving to {self._cleanup_failure_directory}')
+                    self._move_action(entry.path, self._cleanup_failure_directory)
+                temp_storage_name = mc.StorageName(file_name=entry.name)
+                self._reporter.capture_failure(temp_storage_name, BaseException('_verify_file errors'), '_verify_file errors')
                 work_with_file = False
         else:
             work_with_file = False
-        self._logger.debug(
-            f'Done default_filter says work_with_file is '
-            f'{work_with_file} for {entry}'
-        )
+        self._logger.debug(f'Done default_filter says work_with_file is {work_with_file} for {entry}')
         return work_with_file
 
     def get_work(self):
@@ -556,6 +454,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             self._logger.info(f'Look in {source} for work.')
             self._find_work(source)
         self._logger.debug('End get_work')
+        self._reporter.capture_todo(len(self._work) + len(self._skipped_files) + len(self._rejected_files))
         return self._work
 
     def _append_work(self, prev_exec_time, exec_time, entry_path):
@@ -676,15 +575,11 @@ class TodoFileDataSource(DataSource):
     contents of a file.
     """
 
-    def __init__(self, config):
-        super().__init__(config)
-        self._logger = logging.getLogger(self.__class__.__name__)
+    def __init__(self, config, reporter):
+        super().__init__(config, reporter)
 
     def get_work(self):
-        self._logger.debug(
-            f'Begin get_work from {self._config.work_fqn} in '
-            f'{self.__class__.__name__}'
-        )
+        self._logger.debug(f'Begin get_work from {self._config.work_fqn}.')
         work = deque()
         with open(self._config.work_fqn) as f:
             for line in f:
@@ -693,8 +588,10 @@ class TodoFileDataSource(DataSource):
                     # ignore empty lines
                     self._logger.debug(f'Adding entry {temp} to work list.')
                     work.append(temp)
-        self._logger.debug(f'End get_work in {self.__class__.__name__}')
-        return work
+        result = work
+        self._reporter.capture_todo(len(result))
+        self._logger.debug(f'End get_work.')
+        return result
 
 
 def is_offset_aware(dt):
@@ -726,12 +623,11 @@ class QueryTimeBoxDataSource(DataSource):
     implementation.
     """
 
-    def __init__(self, config, preview_suffix='jpg'):
-        super().__init__(config)
+    def __init__(self, config, reporter, preview_suffix='jpg'):
+        super().__init__(config, reporter)
         self._preview_suffix = preview_suffix
         subject = clc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
-        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         """
@@ -766,47 +662,9 @@ class QueryTimeBoxDataSource(DataSource):
         for row in rows:
             ignore_scheme, ignore_path, f_name = mc.decompose_uri(row['uri'])
             result.append(StateRunnerMeta(f_name, row['lastModified']))
+        self._reporter.capture_todo(len(result))
         self._logger.debug(f'End get_time_box_work.')
         return result
-
-
-class RenameURIDataSource(DataSource):
-    """
-    Implement a Data Source that queries for CAOM2 records that have a
-    URI that references a compressed file.
-    """
-
-    def __init__(self, config, collection, scheme, suffix='.gz'):
-        super().__init__(config)
-        self._suffix = suffix
-        subject = clc.define_subject(config)
-        # the resource_id values are hard-coded - if the referenced instances
-        # of the services aren't available, the query answers are just
-        # considered not available.
-        self._argus_client = CadcTapClient(
-            subject, resource_id='ivo://cadc.nrc.ca/argus'
-        )
-        self._collection = collection
-        self._scheme = scheme
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    def _query(self):
-        # a TAP query to find all the observationID values in CAOM2 with a
-        # particular extension
-        qs = f"""
-        SELECT O.observationID
-        FROM caom2.Observation AS O
-        JOIN caom2.Plane AS P ON O.obsID = P.obsID
-        JOIN caom2.Artifact AS A ON A.planeID = P.planeID
-        WHERE O.collection = '{self._collection}'
-        AND A.uri LIKE f'{self._scheme}:{self._collection}/%.fits{self._suffix}
-        """
-        return clc.query_tap_client(qs, self._argus_client).to_pandas()
-
-    def get_work(self):
-        # make a list for ray, skip the first entry, which is the text header
-        # string 'observationID'
-        return self._query().observationID.values.tolist()[1:]
 
 
 class VaultDataSource(ListDirTimeBoxDataSource):
@@ -817,12 +675,11 @@ class VaultDataSource(ListDirTimeBoxDataSource):
     The directory listing may be time-boxed.
     """
 
-    def __init__(self, vault_client, config):
-        super().__init__(config)
+    def __init__(self, vault_client, config, reporter):
+        super().__init__(config, reporter)
         self._vault_client = vault_client
         self._source_directories = config.data_sources
         self._data_source_extensions = config.data_source_extensions
-        self._logger = logging.getLogger(__name__)
 
     def get_work(self):
         self._logger.debug('Begin get_work.')
@@ -832,6 +689,7 @@ class VaultDataSource(ListDirTimeBoxDataSource):
                 f'Searching {source_directory} for work to do.'
             )
             self._find_work(source_directory, work)
+        self._reporter.capture_todo(len(work))
         self._logger.debug('End get_work.')
         return work
 
@@ -900,8 +758,8 @@ class VaultCleanupDataSource(VaultDataSource):
     the FileInfo.
     """
 
-    def __init__(self, config, vault_client, cadc_client, scheme='cadc'):
-        super().__init__(vault_client, config)
+    def __init__(self, config, vault_client, cadc_client, reporter, scheme='cadc'):
+        super().__init__(vault_client, config, reporter)
         self._cleanup_when_storing = config.cleanup_files_when_storing
         self._cleanup_failure_directory = config.cleanup_failure_destination
         self._cleanup_success_directory = config.cleanup_success_destination
@@ -966,6 +824,7 @@ class VaultCleanupDataSource(VaultDataSource):
             self._logger.info(f'Look in {source} for work.')
             self._find_work(source)
         self._logger.debug('End get_work')
+        self._work_todo_count = len(self._work) + len(self._rejected)
         return self._work
 
     def _check_md5sum(self, entry_fqn):
@@ -1024,27 +883,26 @@ class VaultCleanupDataSource(VaultDataSource):
                 raise mc.CadcException(e)
 
 
-def data_source_factory(config, clients, state):
+def data_source_factory(config, clients, state, reporter):
     """
     :param config: manage_composable.Config
     :param clients: client_composable.ClientCollection
     :param state: bool True is the DataSource is time-boxed.
-    :return:
+    :param reporter: ExecutionReporter instance tracks and reports on successes and failures
+    :return: DataSource specialization
     """
     if config.use_local_files:
-        source = ListDirSeparateDataSource(config)
+        source = ListDirSeparateDataSource(config, reporter)
     else:
         if config.use_vos and clients.vo_client is not None:
             if config.cleanup_files_when_storing:
-                source = VaultCleanupDataSource(
-                    config, clients.vo_client, clients.data_client
-                )
+                source = VaultCleanupDataSource(config, clients.vo_client, clients.data_client, reporter)
             else:
-                source = VaultDataSource(clients.vo_client, config)
+                source = VaultDataSource(clients.vo_client, config, reporter)
         else:
             if state:
-                source = QueryTimeBoxDataSource(config)
+                source = QueryTimeBoxDataSource(config, reporter)
             else:
-                source = TodoFileDataSource(config)
+                source = TodoFileDataSource(config, reporter)
     logging.debug(f'Created {type(source)} data_source_composable instance.')
     return source

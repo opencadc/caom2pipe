@@ -411,9 +411,9 @@ class ExecutionReporter:
         self._retry_fqn = None
         self._success_fqn = None
         self._report_fqn = config.report_fqn
-        self.set_log_location(config)
         self._observable = observable
         self._summary = ExecutionSummary(os.path.basename(config.working_directory), application)
+        self.set_log_location(config)
         self._logger = logging.getLogger(self.__class__.__name__)
 
     @property
@@ -446,7 +446,7 @@ class ExecutionReporter:
         now_s = datetime.utcnow().timestamp()
         for fqn in [self._success_fqn, self._failure_fqn, self._retry_fqn, self._report_fqn]:
             ExecutionReporter._init_log_file(fqn, now_s)
-        self._summary.success_count = 0
+        self._summary.reset_for_retry()
 
     @staticmethod
     def _init_log_file(log_fqn, now_s):
@@ -470,6 +470,7 @@ class ExecutionReporter:
         :e Exception to log - the entire stack trace, which, if logging
             level is not set to debug, will be lost for debugging purposes.
         """
+        self._summary.add_rejections(1)
         self._count_timeouts(stack_trace)
         with open(self._failure_fqn, 'a') as failure:
             if e.args is not None and len(e.args) > 1:
@@ -487,6 +488,10 @@ class ExecutionReporter:
         else:
             self._observable.rejected.record(reason, storage_name.obs_id)
             self._summary.add_rejections(1)
+
+    def capture_skipped(self, entry):
+        self._logger.debug(f'Skipping {entry}.')
+        self._summary.add_skipped(1)
 
     def capture_success(self, obs_id, file_name, start_time):
         """Capture, with a timestamp, the successful observations/file names
@@ -510,6 +515,9 @@ class ExecutionReporter:
         self._logger.info(msg)
         self._logger.debug('*' * len(msg))
 
+    def capture_todo(self, value):
+        self._summary.add_entries(value)
+
     def report(self, config):
         # self._summary.add_timeouts(self._organizer.timeouts)
         self._summary.add_errors(config.count_retries())
@@ -519,7 +527,6 @@ class ExecutionReporter:
         write_to_file(self._report_fqn, msg)
 
     def capture_retry(self):
-        # TODO - yucky name, it implies more than is going on here
         self._summary.add_retries(self._summary.entries)
 
 
@@ -553,11 +560,14 @@ class ExecutionSummary:
         self._start_time = datetime.now(tz=timezone.utc).timestamp()
         self._entries_sum = 0
         self._errors_sum = 0
-        self._rejection_sum = 0
+        self._rejected_sum = 0
         self._retry_sum = 0
         self._skipped_sum = 0
         self._success_sum = 0
         self._timeouts_sum = 0
+
+    def __str__(self):
+        return self.report()
 
     def add_entries(self, value):
         self._entries_sum += value
@@ -566,7 +576,7 @@ class ExecutionSummary:
         self._errors_sum += value
 
     def add_rejections(self, value):
-        self._rejection_sum += value
+        self._rejected_sum += value
 
     def add_retries(self, value):
         self._retry_sum += value
@@ -594,12 +604,12 @@ class ExecutionSummary:
         execution_time = datetime.now(tz=timezone.utc).timestamp() - self._start_time
         msg3 = f'Execution Time: {execution_time:.2f} s'
         msg4 = f'Version: {self._version}'
-        msg5 = f'      Number of Inputs: {self._entries_sum}'
-        msg6 = f'   Number of Successes: {self._success_sum}'
-        msg7 = f'    Number of Timeouts: {self._timeouts_sum}'
-        msg8 = f'     Number of Retries: {self._retry_sum}'
-        msg9 = f'      Number of Errors: {self._errors_sum}'
-        msg10 = f'Number of Rejections: {self._rejection_sum}'
+        msg5 = f'    Number of Inputs: {self._entries_sum}'
+        msg6 = f' Number of Successes: {self._success_sum}'
+        msg7 = f'  Number of Timeouts: {self._timeouts_sum}'
+        msg8 = f'   Number of Retries: {self._retry_sum}'
+        msg9 = f'    Number of Errors: {self._errors_sum}'
+        msg10 = f'Number of Rejections: {self._rejected_sum}'
         msg11 = f'   Number of Skipped: {self._skipped_sum}'
         max_length = max(
             len(msg1),
@@ -620,6 +630,9 @@ class ExecutionSummary:
             f'{msg6}\n{msg7}\n{msg8}\n{msg9}\n{msg10}\n{msg11}\n{msg_highlight}\n\n'
         )
         return msg
+
+    def reset_for_retry(self):
+        self._success_sum = 0
 
 
 class Metrics:

@@ -66,17 +66,17 @@
 # ***********************************************************************
 #
 
-import glob
 import os
 import pytest
 import shutil
-import stat
 
 from astropy.table import Table
 from cadctap import CadcTapClient
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import Mock, patch
+from tempfile import TemporaryDirectory
+from time import sleep
+from unittest.mock import Mock, patch, call
 
 from cadcdata import FileInfo
 from caom2pipe import data_source_composable as dsc
@@ -87,72 +87,66 @@ import test_conf as tc
 
 
 def test_list_dir_data_source(test_config):
-    get_cwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
-    test_config.get_executors()
-    test_config.working_directory = '/test_files/1'
-
-    if not os.path.exists(test_config.working_directory):
-        os.mkdir(test_config.working_directory)
-    os.chmod(
-        test_config.working_directory,
-        stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR,
-    )
-
-    for entry in [
-        'TEST.fits.gz',
-        'TEST1.fits',
-        'TEST2.fits.fz',
-        'TEST3.hdf5',
-    ]:
-        if not os.path.exists(f'{test_config.working_directory}/{entry}'):
-            with open(f'{test_config.working_directory}/{entry}', 'w') as f:
-                f.write('test content')
-
-    test_chooser = tc.TestChooser()
+    orig_cwd = os.getcwd()
     try:
-        test_subject = dsc.ListDirDataSource(test_config, test_chooser)
-        test_result = test_subject.get_work()
-        assert test_result is not None, 'expected a result'
-        assert len(test_result) == 4, 'wrong result'
-        assert 'TEST.fits.gz' in test_result, 'wrong gz extensions'
-        assert 'TEST1.fits.gz' in test_result, 'wrong no extension'
-        assert 'TEST2.fits.fz' in test_result, 'wrong fz extensions'
-        assert 'TEST3.hdf5' in test_result, 'wrong hdf5'
+        with TemporaryDirectory() as tmp_dir_name:
+            os.chdir(tmp_dir_name)
+            test_config.working_directory = tmp_dir_name
 
-        test_subject = dsc.ListDirDataSource(test_config, chooser=None)
-        test_result = test_subject.get_work()
-        assert test_result is not None, 'expected a result'
-        assert len(test_result) == 4, 'wrong result'
-        assert 'TEST.fits.gz' in test_result, 'wrong gz extensions'
-        assert 'TEST1.fits' in test_result, 'wrong no extension'
-        assert 'TEST2.fits.fz' in test_result, 'wrong fz extensions'
-        assert 'TEST3.hdf5' in test_result, 'wrong hdf5'
+            for entry in [
+                'TEST.fits.gz',
+                'TEST1.fits',
+                'TEST2.fits.fz',
+                'TEST3.hdf5',
+            ]:
+                with open(f'{test_config.working_directory}/{entry}', 'w') as f:
+                    f.write('test content')
 
+            test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+            test_chooser = tc.TestChooser()
+            test_subject = dsc.ListDirDataSource(test_config, test_chooser, test_reporter)
+            test_result = test_subject.get_work()
+            assert test_result is not None, 'expected a result'
+            assert len(test_result) == 4, 'wrong result'
+            assert 'TEST.fits.gz' in test_result, 'wrong gz extensions'
+            assert 'TEST1.fits.gz' in test_result, 'wrong no extension'
+            assert 'TEST2.fits.fz' in test_result, 'wrong fz extensions'
+            assert 'TEST3.hdf5' in test_result, 'wrong hdf5'
+            assert test_reporter.all == 4, 'wrong report'
+
+            test_subject = dsc.ListDirDataSource(test_config, chooser=None, reporter=test_reporter)
+            test_result = test_subject.get_work()
+            assert test_result is not None, 'expected a result'
+            assert len(test_result) == 4, 'wrong result'
+            assert 'TEST.fits.gz' in test_result, 'wrong gz extensions'
+            assert 'TEST1.fits' in test_result, 'wrong no extension'
+            assert 'TEST2.fits.fz' in test_result, 'wrong fz extensions'
+            assert 'TEST3.hdf5' in test_result, 'wrong hdf5'
+            assert test_reporter.all == 8, 'wrong 2nd report'
     finally:
-        os.getcwd = get_cwd_orig
-
-        if os.path.exists(test_config.working_directory):
-            for entry in glob.glob(f'{test_config.working_directory}/*'):
-                os.unlink(entry)
-            os.rmdir(test_config.working_directory)
+        os.chdir(orig_cwd)
 
 
 def test_todo_file(test_config):
-    todo_fqn = os.path.join(tc.TEST_DATA_DIR, 'todo.txt')
-    with open(todo_fqn, 'w') as f:
-        f.write('file1\n')
-        f.write('file2\n')
-        f.write('\n')
+    orig_cwd = os.getcwd()
     try:
-        test_config.work_fqn = todo_fqn
-        test_subject = dsc.TodoFileDataSource(test_config)
-        test_result = test_subject.get_work()
-        assert test_result is not None, 'expect result'
-        assert len(test_result) == 2, 'wrong number of files'
+        with TemporaryDirectory() as tmp_dir_name:
+            os.chdir(tmp_dir_name)
+            todo_fqn = os.path.join(tmp_dir_name, 'todo.txt')
+            with open(todo_fqn, 'w') as f:
+                f.write('file1\n')
+                f.write('file2\n')
+                f.write('\n')
+
+            test_config.work_fqn = todo_fqn
+            test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+            test_subject = dsc.TodoFileDataSource(test_config, test_reporter)
+            test_result = test_subject.get_work()
+            assert test_result is not None, 'expect result'
+            assert len(test_result) == 2, 'wrong number of files'
+            assert test_reporter.all == 2, 'wrong report'
     finally:
-        if os.path.exists(todo_fqn):
-            os.unlink(todo_fqn)
+        os.chdir(orig_cwd)
 
 
 @patch('caom2pipe.client_composable.query_tap_client')
@@ -169,26 +163,28 @@ def test_storage_time_box_query(query_mock, test_config):
         )
 
     query_mock.side_effect = _mock_query
-    getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
     tap_client_ctor_orig = CadcTapClient.__init__
     CadcTapClient.__init__ = Mock(return_value=None)
-    test_config.get_executors()
+    orig_cwd = os.getcwd()
     utc_now = datetime.utcnow()
     prev_exec_date = utc_now - timedelta(seconds=3600)
     exec_date = utc_now - timedelta(seconds=1800)
     try:
-        test_subject = dsc.QueryTimeBoxDataSource(test_config)
-        test_result = test_subject.get_time_box_work(
-            prev_exec_date.timestamp(), exec_date.timestamp()
-        )
-        assert test_result is not None, 'expect result'
-        assert len(test_result) == 3, 'wrong number of results'
-        assert (
-            test_result[0].entry_name == 'NEOS_SCI_2015347000000_clean.fits'
-        ), 'wrong results'
+        with TemporaryDirectory() as tmp_dir_name:
+            os.chdir(tmp_dir_name)
+            test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+            test_subject = dsc.QueryTimeBoxDataSource(test_config, test_reporter)
+            test_result = test_subject.get_time_box_work(
+                prev_exec_date.timestamp(), exec_date.timestamp()
+            )
+            assert test_result is not None, 'expect result'
+            assert len(test_result) == 3, 'wrong number of results'
+            assert (
+                test_result[0].entry_name == 'NEOS_SCI_2015347000000_clean.fits'
+            ), 'wrong results'
+            assert test_reporter.all == 3, 'wrong report'
     finally:
-        os.getcwd = getcwd_orig
+        os.chdir(orig_cwd)
         CadcTapClient.__init__ = tap_client_ctor_orig
 
 
@@ -231,90 +227,77 @@ def test_vault_list_dir_data_source(test_config):
     test_config.get_executors()
     test_config.data_sources = ['vos:goliaths/wrong']
     test_config.data_source_extensions = ['.fits']
-    test_subject = dsc.VaultDataSource(test_vos_client, test_config)
-    assert test_subject is not None, 'expect a test_subject'
-    test_result = test_subject.get_work()
-    assert test_result is not None, 'expect a test result'
-    assert len(test_result) == 2, 'wrong number of results'
-    test_entry = test_result.popleft()
-    assert (
-        'vos://cadc.nrc.ca!vault/goliaths/moc/abc.fits' == test_entry
-    ), 'wrong result'
-    test_entry = test_result.popleft()
-    assert (
-        'vos://cadc.nrc.ca!vault/goliaths/moc/def.fits' == test_entry
-    ), 'wrong result'
+    orig_cwd = os.getcwd()
+    try:
+        with TemporaryDirectory() as tmp_dir_name:
+            os.chdir(tmp_dir_name)
+            test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+            test_subject = dsc.VaultDataSource(test_vos_client, test_config, test_reporter)
+            assert test_subject is not None, 'expect a test_subject'
+            test_result = test_subject.get_work()
+            assert test_result is not None, 'expect a test result'
+            assert len(test_result) == 2, 'wrong number of results'
+            test_entry = test_result.popleft()
+            assert 'vos://cadc.nrc.ca!vault/goliaths/moc/abc.fits' == test_entry, 'wrong result'
+            test_entry = test_result.popleft()
+            assert 'vos://cadc.nrc.ca!vault/goliaths/moc/def.fits' == test_entry, 'wrong result'
+            assert test_reporter.all == 2, 'wrong report'
+    finally:
+        os.chdir(orig_cwd)
 
 
 def test_list_dir_time_box_data_source(test_config):
     test_prev_exec_time_dt = datetime.utcnow()
 
-    test_dir = '/test_files/1'
-    import time
-
-    time.sleep(1)
-    test_sub_dir = '/test_files/1/sub_directory'
-    test_file_1 = os.path.join(test_dir, 'abc1.fits')
-    test_file_2 = os.path.join(test_sub_dir, 'abc2.fits')
-
-    # so the timestamps are correct, delete then re-create the test
-    # directory structure
-    if os.path.exists(test_file_2):
-        os.unlink(test_file_2)
-        os.rmdir(test_sub_dir)
-    if os.path.exists(test_file_1):
-        os.unlink(test_file_1)
-        os.rmdir(test_dir)
-
-    for entry in [test_dir, test_sub_dir]:
-        os.mkdir(entry)
-
-    for entry in [test_file_1, test_file_2]:
-        with open(entry, 'w') as f:
-            f.write('test content')
-
-    test_config.working_directory = tc.TEST_DATA_DIR
-    test_config.data_sources = [test_dir]
-    test_config.data_source_extensions = ['.fits']
-
+    orig_cwd = os.getcwd()
     try:
-        test_subject = dsc.ListDirTimeBoxDataSource(test_config)
-        assert test_subject is not None, 'ctor is broken'
-        test_prev_exec_time = test_prev_exec_time_dt.timestamp()
-        test_exec_time_dt = datetime.utcnow()
-        test_exec_time = test_exec_time_dt.timestamp() + 3600.0
-        test_result = test_subject.get_time_box_work(
-            test_prev_exec_time, test_exec_time
-        )
-        assert test_result is not None, 'expect a result'
-        assert len(test_result) == 2, 'expect contents in the result'
-        test_entry = test_result.popleft()
-        assert (
-            test_entry.entry_name == test_file_1
-        ), 'wrong expected file, order matters since should be sorted deque'
+        with TemporaryDirectory() as tmp_dir_name:
+            os.chdir(tmp_dir_name)
+            sleep(1)
+            test_sub_dir = f'{tmp_dir_name}/sub_directory'
+            test_file_1 = os.path.join(tmp_dir_name, 'abc1.fits')
+            test_file_2 = os.path.join(test_sub_dir, 'abc2.fits')
 
-        test_config.recurse_data_sources = False
-        test_subject = dsc.ListDirTimeBoxDataSource(test_config)
-        test_result = test_subject.get_time_box_work(
-            test_prev_exec_time, test_exec_time
-        )
-        assert test_result is not None, 'expect a non-recursive result'
-        assert (
-            len(test_result) == 1
-        ), 'expect contents in non-recursive result'
-        x = [ii.entry_name for ii in test_result]
-        assert test_file_2 not in x, 'recursive result should not be present'
+            # so the timestamps are correct, delete then re-create the test directory structure
+            os.mkdir(test_sub_dir)
+
+            for entry in [test_file_1, test_file_2]:
+                sleep(1)
+                with open(entry, 'w') as f:
+                    f.write('test content')
+
+            test_config.working_directory = tc.TEST_DATA_DIR
+            test_config.data_sources = [tmp_dir_name]
+            test_config.data_source_extensions = ['.fits']
+            test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+            test_prev_exec_time = test_prev_exec_time_dt.timestamp()
+            test_exec_time_dt = datetime.utcnow()
+            test_exec_time = test_exec_time_dt.timestamp() + 3600.0
+
+            test_subject = dsc.ListDirTimeBoxDataSource(test_config, test_reporter)
+            assert test_subject is not None, 'ctor is broken'
+            test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
+            assert test_result is not None, 'expect a result'
+            assert len(test_result) == 2, 'expect contents in the result'
+            test_entry = test_result.popleft()
+            assert (
+                test_entry.entry_name == test_file_1
+            ), 'wrong expected file, order matters since should be sorted deque'
+            assert test_reporter.all == 2, 'wrong report'
+
+            test_config.recurse_data_sources = False
+            test_subject = dsc.ListDirTimeBoxDataSource(test_config, test_reporter)
+            test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
+            assert test_result is not None, 'expect a non-recursive result'
+            assert len(test_result) == 1, 'expect contents in non-recursive result'
+            x = [ii.entry_name for ii in test_result]
+            assert test_file_2 not in x, 'recursive result should not be present'
+            assert test_reporter.all == 3, 'wrong 2nd report'
     finally:
-        if os.path.exists(test_file_2):
-            os.unlink(test_file_2)
-            os.rmdir(test_sub_dir)
-        if os.path.exists(test_file_1):
-            os.unlink(test_file_1)
-            os.rmdir(test_dir)
+        os.chdir(orig_cwd)
 
 
 def test_list_dir_separate_data_source(test_config):
-    # test_config = mc.Config()
     test_config.data_sources = ['/test_files']
     test_config.data_source_extensions = [
         '.fits',
@@ -322,21 +305,24 @@ def test_list_dir_separate_data_source(test_config):
         '.fits.fz',
         '.hdf5',
     ]
-    test_subject = dsc.ListDirSeparateDataSource(test_config)
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_subject = dsc.ListDirSeparateDataSource(test_config, test_reporter)
     assert test_subject is not None, 'ctor is broken'
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a result'
-    assert len(test_result) == 67, 'expect contents in the result'
+    assert len(test_result) == 97, 'expect contents in the result'
     assert '/test_files/sub_directory/abc.fits' in test_result, 'wrong entry'
+    assert test_reporter.all == 97, 'wrong report'
 
     test_config.recurse_data_sources = False
-    test_subject = dsc.ListDirSeparateDataSource(test_config)
+    test_subject = dsc.ListDirSeparateDataSource(test_config, test_reporter)
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a non-recursive result'
-    assert len(test_result) == 63, 'expect contents in non-recursive result'
+    assert len(test_result) == 93, 'expect contents in non-recursive result'
     assert (
         '/test_files/sub_directory/abc.fits' not in test_result
     ), 'recursive result should not be present'
+    assert test_reporter.all == 190, 'wrong 2nd report'
 
 
 def test_vault_list_dir_time_box_data_source(test_config):
@@ -364,7 +350,8 @@ def test_vault_list_dir_time_box_data_source(test_config):
     test_vos_client.get_node.side_effect = [node3, node1, node2]
     test_config.get_executors()
     test_config.data_sources = ['vos:goliaths/wrong']
-    test_subject = dsc.VaultDataSource(test_vos_client, test_config)
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_subject = dsc.VaultDataSource(test_vos_client, test_config, test_reporter)
     assert test_subject is not None, 'expect a test_subject'
     test_prev_exec_time = datetime(
         year=2020,
@@ -397,6 +384,7 @@ def test_vault_list_dir_time_box_data_source(test_config):
         datetime(2020, 9, 15, 19, 55, 3, 67000, tzinfo=timezone.utc)
         == test_result[0].entry_ts
     ), 'wrong ts result'
+    assert test_reporter.all == 1, 'wrong report'
 
 
 def test_transfer_check_fits_verify(test_config):
@@ -406,253 +394,277 @@ def test_transfer_check_fits_verify(test_config):
     test_start_time = datetime.now(tz=timezone.utc) - delta
     # half an hour from now
     test_end_time = test_start_time + delta + delta
-    test_source_directory = Path('/cfht_source')
-    test_failure_directory = Path('/cfht_transfer_failure')
-    test_success_directory = Path('/cfht_transfer_success')
-    test_empty_file = Path('/cfht_source/empty_file.fits.fz')
-    test_broken_file = Path('/cfht_source/broken.fits')
-    test_broken_source = Path('/test_files/broken.fits')
-    test_correct_file = Path('/cfht_source/correct.fits.gz')
-    test_correct_source = Path('/test_files/correct.fits.gz')
-    test_dot_file = Path('/cfht_source/.dot_file.fits')
-    test_same_source = Path('/test_files/same_file.fits')
-    test_same_file = Path('/cfht_source/same_file.fits')
-    test_already_successful = Path('/cfht_source/already_successful.fits')
-    test_already_successful_source = Path(
-        '/test_files/already_successful.fits'
-    )
-    test_reader = rdc.FileMetadataReader()
+    orig_cwd = os.getcwd()
+    try:
+        with TemporaryDirectory() as tmp_dir_name:
+            os.chdir(tmp_dir_name)
+            test_source_directory = Path(f'{tmp_dir_name}/cfht_source')
+            test_failure_directory = Path(f'{tmp_dir_name}/cfht_transfer_failure')
+            test_success_directory = Path(f'{tmp_dir_name}/cfht_transfer_success')
+            test_empty_file = Path(f'{tmp_dir_name}/cfht_source/empty_file.fits.fz')
+            test_broken_file = Path(f'{tmp_dir_name}/cfht_source/broken.fits')
+            test_correct_file = Path(f'{tmp_dir_name}/cfht_source/correct.fits.gz')
+            test_dot_file = Path(f'{tmp_dir_name}/cfht_source/.dot_file.fits')
+            test_same_file = Path(f'{tmp_dir_name}/cfht_source/same_file.fits')
+            test_broken_source = Path('/test_files/broken.fits')
+            test_correct_source = Path('/test_files/correct.fits.gz')
+            test_same_source = Path('/test_files/same_file.fits')
+            test_already_successful_source = Path('/test_files/already_successful.fits')
+            test_reader = rdc.FileMetadataReader()
 
-    def mock_info(uri):
-        return FileInfo(
-            id=uri,
-            size=12,
-            md5sum='e4e153121805745792991935e04de322',
-        )
-
-    def _at_cfht(test_start_ts, test_end_ts):
-        test_config.cleanup_files_when_storing = True
-        test_config.task_types = [mc.TaskType.STORE]
-        test_config.retry_failures = False
-        cadc_client_mock = Mock(autospec=True)
-        cadc_client_mock.info.side_effect = mock_info
-        test_subject = dsc.LocalFilesDataSource(
-            test_config, cadc_client_mock, test_reader
-        )
-
-        assert test_subject is not None, 'expect construction to work'
-        test_result = test_subject.get_time_box_work(
-            test_start_ts, test_end_ts
-        )
-        assert len(test_result) == 1, 'wrong number of results returned'
-        assert (
-            test_result[0].entry_name == '/cfht_source/correct.fits.gz'
-        ), 'wrong result'
-
-        for entry in [test_empty_file, test_broken_file]:
-            # both should fail the ac.check_fits call
-            assert not entry.exists(), f'file at source {entry}'
-            moved = Path(test_failure_directory, entry.name)
-            assert moved.exists(), 'file at destination'
-
-        # same file has been moved
-        assert not test_same_file.exists(), 'same file at source'
-        moved = Path(test_success_directory, test_same_file.name)
-        assert moved.exists(), 'same file at destination'
-
-        # correct file - the file stays where it is until it's transferred
-        assert test_correct_file.exists(), 'correct file at source'
-        moved_success = Path(test_success_directory, test_correct_file.name)
-        moved_failure = Path(test_failure_directory, test_correct_file.name)
-        assert not moved_success.exists(), 'correct file at success'
-        assert not moved_failure.exists(), 'correct file at failure'
-
-        # and after the transfer
-        for test_entry in test_result:
-            # execution result == -1, execution failed, so delay clean-up
-            test_subject.clean_up(test_entry, -1, current_count=0)
-        assert not test_correct_file.exists(), 'correct file at source'
-        assert not moved_success.exists(), 'correct file at destination'
-        assert moved_failure.exists(), 'correct file at destination'
-
-        # dot file - which should be ignored
-        assert test_dot_file.exists(), 'correct file at source'
-        moved = Path(test_success_directory, test_dot_file.name)
-        assert not moved.exists(), 'dot file at destination'
-
-    def _at_cadc(test_start_ts, test_end_ts):
-        test_config.cleanup_files_when_storing = False
-        cadc_client_mock = Mock(autospec=True)
-        cadc_client_mock.info.side_effect = mock_info
-        test_subject = dsc.LocalFilesDataSource(
-            test_config, cadc_client_mock, test_reader
-        )
-        assert test_subject is not None, 'expect construction to work'
-        test_result = test_subject.get_time_box_work(
-            test_start_ts, test_end_ts
-        )
-        assert len(test_result) == 3, 'wrong number of results returned'
-        assert (
-            test_result[0].entry_name == '/cfht_source/correct.fits.gz'
-        ), 'wrong result'
-        assert (
-            test_result[1].entry_name == '/cfht_source/same_file.fits'
-        ), 'wrong result'
-        assert (
-            test_result[2].entry_name
-            == '/cfht_source/already_successful.fits'
-        ), 'wrong result'
-        for f in [
-            test_empty_file,
-            test_broken_file,
-            test_correct_file,
-            test_dot_file,
-            test_same_file,
-        ]:
-            assert f.exists(), 'file at source'
-            moved = Path(test_failure_directory, f.name)
-            assert not moved.exists(), 'file at destination'
-        # clean up should do nothing
-        for test_entry in test_result:
-            # execution result == -1, execution failed, so delay clean-up
-            test_subject.clean_up(test_entry, -1, current_count=0)
-        for f in [
-            test_empty_file,
-            test_broken_file,
-            test_correct_file,
-            test_dot_file,
-            test_same_file,
-        ]:
-            assert f.exists(), 'file at source'
-            moved = Path(test_failure_directory, f.name)
-            assert not moved.exists(), 'file at destination'
-
-    def _move_failure(test_start_ts, test_end_ts):
-        def _move_mock():
-            raise mc.CadcException('move mock')
-
-        move_orig = shutil.move
-        shutil.move = Mock(side_effect=_move_mock)
-        try:
-            test_config.cleanup_files_when_storing = True
-            test_config.task_types = [mc.TaskType.STORE]
-            cadc_client_mock = Mock(autospec=True)
-            cadc_client_mock.info.side_effect = mock_info
-            test_subject = dsc.LocalFilesDataSource(
-                test_config, cadc_client_mock, test_reader
-            )
-            with pytest.raises(mc.CadcException):
-                test_result = test_subject.get_time_box_work(
-                    test_start_ts, test_end_ts
+            def mock_info(uri):
+                return FileInfo(
+                    id=uri,
+                    size=12,
+                    md5sum='e4e153121805745792991935e04de322',
                 )
-        finally:
-            shutil.move = move_orig
 
-    for test in [_at_cfht, _at_cadc, _move_failure]:
-        for entry in [
-            test_failure_directory,
-            test_success_directory,
-            test_source_directory,
-        ]:
-            if not entry.exists():
-                entry.mkdir()
-            for child in entry.iterdir():
-                child.unlink()
-        for entry in [test_empty_file, test_dot_file]:
-            entry.touch()
-        for source in [
-            test_broken_source,
-            test_correct_source,
-            test_same_source,
-            test_already_successful_source,
-        ]:
-            shutil.copy(source, test_source_directory)
+            def _at_cfht(test_start_ts, test_end_ts):
+                test_config.cleanup_files_when_storing = True
+                test_config.task_types = [mc.TaskType.STORE]
+                test_config.retry_failures = False
+                cadc_client_mock = Mock(autospec=True)
+                cadc_client_mock.info.side_effect = mock_info
+                test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+                test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader, reporter=test_reporter)
 
-        # CFHT test case - try to move a file that would have the effect
-        # of replacing a file already in the destination directory
-        shutil.copy(test_already_successful_source, test_success_directory)
+                assert test_subject is not None, 'expect construction to work'
+                test_result = test_subject.get_time_box_work(test_start_ts, test_end_ts)
+                assert len(test_result) == 1, 'wrong number of results returned'
+                assert test_result[0].entry_name == f'{tmp_dir_name}/cfht_source/correct.fits.gz', 'wrong result'
 
-        test_config.use_local_files = True
-        test_config.data_sources = [test_source_directory.as_posix()]
-        test_config.data_source_extensions = ['.fits', '.fits.gz', '.fits.fz']
-        test_config.cleanup_success_destination = (
-            test_success_directory.as_posix()
-        )
-        test_config.cleanup_failure_destination = (
-            test_failure_directory.as_posix()
-        )
-        test_config.store_modified_files_only = True
+                for e in [test_empty_file, test_broken_file]:
+                    # both should fail the ac.check_fits call
+                    assert not e.exists(), f'file at source {e}'
+                    moved = Path(test_failure_directory, e.name)
+                    assert moved.exists(), f'file at destination {e}'
 
-        test(
-            test_start_time.timestamp(),
-            test_end_time.timestamp(),
-        )
+                # same file has been moved
+                assert not test_same_file.exists(), 'same file at source'
+                moved = Path(test_success_directory, test_same_file.name)
+                assert moved.exists(), 'same file at destination'
+
+                # correct file - the file stays where it is until it's transferred
+                assert test_correct_file.exists(), 'correct file at source'
+                moved_success = Path(test_success_directory, test_correct_file.name)
+                moved_failure = Path(test_failure_directory, test_correct_file.name)
+                assert not moved_success.exists(), 'correct file at success'
+                assert not moved_failure.exists(), 'correct file at failure'
+
+                # and after the transfer
+                for test_entry in test_result:
+                    # execution result == -1, execution failed, so delay clean-up
+                    test_subject.clean_up(test_entry, -1, current_count=0)
+                assert not test_correct_file.exists(), 'correct file at source'
+                assert not moved_success.exists(), 'correct file at destination'
+                assert moved_failure.exists(), 'correct file at destination'
+
+                # dot file - which should be ignored
+                assert test_dot_file.exists(), 'correct file at source'
+                moved = Path(test_success_directory, test_dot_file.name)
+                assert not moved.exists(), 'dot file at destination'
+                assert test_reporter.all == 5, f'wrong all {test_reporter._summary}'
+                assert test_reporter._summary._skipped_sum == 2, f'wrong skipped {test_reporter._summary}'
+                assert test_reporter._summary._rejected_sum == 2, f'wrong rejected {test_reporter._summary}'
+
+            def _at_cadc(test_start_ts, test_end_ts):
+                test_config.cleanup_files_when_storing = False
+                cadc_client_mock = Mock(autospec=True)
+                cadc_client_mock.info.side_effect = mock_info
+                test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+                test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader, reporter=test_reporter)
+                assert test_subject is not None, 'expect construction to work'
+                test_result = test_subject.get_time_box_work(test_start_ts, test_end_ts)
+                assert len(test_result) == 3, 'wrong number of results returned'
+                assert test_result[0].entry_name == f'{tmp_dir_name}/cfht_source/correct.fits.gz', 'wrong result'
+                assert test_result[1].entry_name == f'{tmp_dir_name}/cfht_source/same_file.fits', 'wrong result'
+                assert (
+                    test_result[2].entry_name == f'{tmp_dir_name}/cfht_source/already_successful.fits'
+                ), 'wrong result'
+                for f in [test_empty_file, test_broken_file, test_correct_file, test_dot_file, test_same_file]:
+                    assert f.exists(), 'file at source'
+                    moved = Path(test_failure_directory, f.name)
+                    assert not moved.exists(), 'file at destination'
+                # clean up should do nothing
+                for test_entry in test_result:
+                    # execution result == -1, execution failed, so delay clean-up
+                    test_subject.clean_up(test_entry, -1, current_count=0)
+                for f in [test_empty_file, test_broken_file, test_correct_file, test_dot_file, test_same_file]:
+                    assert f.exists(), 'file at source'
+                    moved = Path(test_failure_directory, f.name)
+                    assert not moved.exists(), 'file at destination'
+                assert test_reporter.all == 5, 'wrong report'
+                assert test_reporter._summary._skipped_sum == 0, f'wrong skipped {test_reporter._summary}'
+                assert test_reporter._summary._rejected_sum == 2, f'wrong rejected {test_reporter._summary}'
+
+            def _move_failure(test_start_ts, test_end_ts):
+                def _move_mock():
+                    raise mc.CadcException('move mock')
+
+                move_orig = shutil.move
+                shutil.move = Mock(side_effect=_move_mock)
+                try:
+                    test_config.cleanup_files_when_storing = True
+                    test_config.task_types = [mc.TaskType.STORE]
+                    cadc_client_mock = Mock(autospec=True)
+                    cadc_client_mock.info.side_effect = mock_info
+                    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+                    test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader, reporter=test_reporter)
+                    with pytest.raises(mc.CadcException):
+                        test_result = test_subject.get_time_box_work(test_start_ts, test_end_ts)
+                    assert test_reporter.all == 0, 'wrong report'
+                    assert test_reporter._summary._skipped_sum == 0, f'wrong skipped {test_reporter._summary}'
+                    assert test_reporter._summary._rejected_sum == 0, f'wrong rejected {test_reporter._summary}'
+                finally:
+                    shutil.move = move_orig
+
+            for test in [_at_cfht, _at_cadc, _move_failure]:
+                for entry in [test_failure_directory, test_success_directory, test_source_directory]:
+                    if not entry.exists():
+                        entry.mkdir()
+                    for child in entry.iterdir():
+                        child.unlink()
+                for entry in [test_empty_file, test_dot_file]:
+                    entry.touch()
+                for source in [
+                    test_broken_source, test_correct_source, test_same_source, test_already_successful_source
+                ]:
+                    shutil.copy(source, test_source_directory)
+
+                # CFHT test case - try to move a file that would have the effect
+                # of replacing a file already in the destination directory
+                shutil.copy(test_already_successful_source, test_success_directory)
+
+                test_config.use_local_files = True
+                test_config.data_sources = [test_source_directory.as_posix()]
+                test_config.data_source_extensions = ['.fits', '.fits.gz', '.fits.fz']
+                test_config.cleanup_success_destination = test_success_directory.as_posix()
+                test_config.cleanup_failure_destination = test_failure_directory.as_posix()
+                test_config.store_modified_files_only = True
+
+                test(test_start_time.timestamp(), test_end_time.timestamp())
+    finally:
+        os.chdir(orig_cwd)
 
 
 @patch('caom2pipe.astro_composable.check_fits')
 def test_transfer_fails(check_fits_mock, test_config):
     check_fits_mock.return_value = True
-
     # set up a correct transfer
-    test_source_directory = Path('/cfht_source')
-    test_failure_directory = Path('/cfht_transfer_failure')
-    test_success_directory = Path('/cfht_transfer_success')
-    test_correct_file_1 = Path('/cfht_source/correct_1.fits.gz')
-    test_correct_file_2 = Path('/cfht_source/correct_2.fits.gz')
-    test_correct_source = Path('/test_files/correct.fits.gz')
-    test_reader = rdc.FileMetadataReader()
+    orig_dir = os.getcwd()
+    try:
+        with TemporaryDirectory() as tmp_dir_name:
+            os.chdir(tmp_dir_name)
 
-    for entry in [
-        test_failure_directory,
-        test_success_directory,
-        test_source_directory,
-    ]:
-        if not entry.exists():
-            entry.mkdir()
-        for child in entry.iterdir():
-            child.unlink()
-    shutil.copy(test_correct_source, test_correct_file_1)
-    shutil.copy(test_correct_source, test_correct_file_2)
+            test_source_directory = Path(f'{tmp_dir_name}/cfht_source')
+            test_failure_directory = Path(f'{tmp_dir_name}/cfht_transfer_failure')
+            test_success_directory = Path(f'{tmp_dir_name}/cfht_transfer_success')
+            test_correct_file_1 = Path(f'{tmp_dir_name}/cfht_source/correct_1.fits.gz')
+            test_correct_file_2 = Path(f'{tmp_dir_name}/cfht_source/correct_2.fits.gz')
+            test_correct_source = Path('/test_files/correct.fits.gz')
+            test_reader = rdc.FileMetadataReader()
 
-    test_config.data_sources = [test_source_directory.as_posix()]
+            for entry in [test_failure_directory, test_success_directory, test_source_directory]:
+                entry.mkdir()
+
+            shutil.copy(test_correct_source, test_correct_file_1)
+            shutil.copy(test_correct_source, test_correct_file_2)
+
+            test_config.data_sources = [test_source_directory.as_posix()]
+            test_config.task_types = [mc.TaskType.STORE]
+            test_config.data_source_extensions = ['.fits.gz']
+            test_config.cleanup_files_when_storing = True
+            test_config.cleanup_failure_destination = test_failure_directory.as_posix()
+            test_config.cleanup_success_destination = test_success_directory.as_posix()
+
+            cadc_client_mock = Mock(autospec=True)
+            test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+            test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader, reporter=test_reporter)
+            assert test_subject is not None, 'ctor failure'
+            test_result = test_subject.get_work()
+            assert test_result is not None, 'expect a result'
+            assert len(test_result) == 2, 'wrong number of entries in result'
+
+            match = FileInfo(id=test_correct_file_1.as_posix(), size=12, md5sum='dfb5ddab74844d911dd54552415dd8ab')
+            different = FileInfo(id=test_correct_file_2.as_posix(), size=12, md5sum='e4e153121805745792991935e04de322')
+
+            cadc_client_mock.info.side_effect = [match, different]
+            for test_entry in test_result:
+                # execution result == -1, execution failed, so delay clean-up
+                test_subject.clean_up(test_entry, -1, current_count=0)
+
+            assert not test_correct_file_1.exists(), 'file 1 should be moved'
+            assert not test_correct_file_2.exists(), 'file 2 should be moved'
+            moved_1 = Path(test_success_directory, test_correct_file_1.name)
+            moved_2 = Path(test_failure_directory, test_correct_file_2.name)
+            assert moved_1.exists(), 'file 1 not moved to correct location'
+            assert moved_2.exists(), 'file 2 not moved to correct location'
+            # no work done yet
+            assert test_reporter.all == 2, 'wrong report'
+            assert test_reporter._summary._success_sum == 0, f'wrong report {test_reporter._summary}'
+            assert test_reporter._summary._rejected_sum == 0, f'wrong report {test_reporter._summary}'
+    finally:
+        os.chdir(orig_dir)
+
+
+@patch('caom2pipe.data_source_composable.LocalFilesDataSource._verify_file')
+@patch('caom2pipe.data_source_composable.LocalFilesDataSource._move_action')
+@patch('caom2pipe.client_composable.ClientCollection')
+def test_all_local_files_some_already_stored_some_broken(clients_mock, move_mock, check_mock, test_config):
+    # work is all the list of files, some of which have been stored already, and some of which fail fitsverify
+
     test_config.task_types = [mc.TaskType.STORE]
-    test_config.data_source_extensions = ['.fits.gz']
+    test_config.use_local_files = True
+    test_config.data_sources = ['/tmp']
     test_config.cleanup_files_when_storing = True
-    test_config.cleanup_failure_destination = (
-        test_failure_directory.as_posix()
-    )
-    test_config.cleanup_success_destination = (
-        test_success_directory.as_posix()
-    )
+    test_config.cleanup_failure_destination = '/data/failure'
+    test_config.cleanup_success_destination = '/data/success'
+    test_config.store_modified_files_only = True
 
-    cadc_client_mock = Mock(autospec=True)
+    pre_success_listing, file_info_list = _create_dir_listing('/tmp', 3)
+    test_reader = Mock()
+    test_reader.file_info.get.side_effect = [file_info_list[0], None, None]
+    clients_mock.return_value.data_client.info.side_effect = [file_info_list[0], None, None]
+    check_mock.side_effect = [True, False, True]
+
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
     test_subject = dsc.LocalFilesDataSource(
-        test_config, cadc_client_mock, test_reader
+        test_config,
+        clients_mock.return_value.data_client,
+        test_reader,
+        recursive=True,
+        scheme='cadc',
+        reporter=test_reporter,
     )
-    assert test_subject is not None, 'ctor failure'
-    test_result = test_subject.get_work()
-    assert test_result is not None, 'expect a result'
-    assert len(test_result) == 2, 'wrong number of entries in result'
+    test_subject._capture_failure = Mock()
+    test_subject._capture_success = Mock()
 
-    match = FileInfo(
-        id=test_correct_file_1.as_posix(),
-        size=12,
-        md5sum='dfb5ddab74844d911dd54552415dd8ab',
-    )
-    different = FileInfo(
-        id=test_correct_file_2.as_posix(),
-        size=12,
-        md5sum='e4e153121805745792991935e04de322',
-    )
+    with patch('os.scandir') as scandir_mock:
+        scandir_mock.return_value.__enter__.return_value = pre_success_listing
+        test_result = test_subject.get_work()
+        assert test_result is not None, 'expect a result'
+        assert len(test_result) == 1, 'wrong number of results'
+        assert test_reporter.all == 3, 'wrong report'
+        assert test_reporter._summary._skipped_sum == 1, f'wrong report {test_reporter._summary}'
+        assert test_reporter._summary._rejected_sum == 1, f'wrong report {test_reporter._summary}'
+        assert move_mock.called, 'move should be called'
+        assert move_mock.call_count == 2, 'wrong move call count'
+        move_mock.assert_has_calls([call('/tmp/A0.fits', '/data/success'), call('/tmp/A1.fits', '/data/failure')]), 'wrong move_mock calls'
 
-    cadc_client_mock.info.side_effect = [match, different]
-    for test_entry in test_result:
-        # execution result == -1, execution failed, so delay clean-up
-        test_subject.clean_up(test_entry, -1, current_count=0)
 
-    assert not test_correct_file_1.exists(), 'file 1 should be moved'
-    assert not test_correct_file_2.exists(), 'file 2 should be moved'
-    moved_1 = Path(test_success_directory, test_correct_file_1.name)
-    moved_2 = Path(test_failure_directory, test_correct_file_2.name)
-    assert moved_1.exists(), 'file 1 not moved to correct location'
-    assert moved_2.exists(), 'file 2 not moved to correct location'
+def _create_dir_listing(root_dir, count, prefix='A'):
+    stat_return_value = type('', (), {})
+    stat_return_value.st_size = 123
+
+    listing_result = []
+    file_info_list = []
+    for ii in range(0, count):
+        dir_entry = type('', (), {})
+        dir_entry.name = f'{prefix}{ii}.fits'
+        dir_entry.path = f'{root_dir}/{dir_entry.name}'
+        stat_return_value.st_mtime = 1583197266.0 + 10.0 * ii
+        dir_entry.stat = Mock(return_value=stat_return_value)
+        dir_entry.is_dir = Mock(return_value=False)
+        listing_result.append(dir_entry)
+        file_info_list.append(FileInfo(id=dir_entry.name, size=123, md5sum='md5:abc'))
+    return listing_result, file_info_list
