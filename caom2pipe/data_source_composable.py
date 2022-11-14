@@ -118,10 +118,17 @@ class DataSource:
         self._extensions = None
         if config is not None:
             self._extensions = config.data_source_extensions
-        self._skipped_files = []
-        self._rejected_files = {}
+        self._rejected_files = 0
+        self._skipped_files = 0
+        self._work = deque()
         self._reporter = reporter
         self._logger = logging.getLogger(self.__class__.__name__)
+
+    def _capture_todo(self):
+        self._reporter.capture_todo(len(self._work), self._rejected_files, self._skipped_files)
+        # do not need the record of the rejected or skipped files any longer
+        self._rejected_files = 0
+        self._skipped_files = 0
 
     def clean_up(self, entry, execution_result, current_count):
         """Clean up files locally after there has been a storage attempt."""
@@ -199,10 +206,10 @@ class ListDirDataSource(DataSource):
                 self._logger.debug(f'{f_name} added to work list.')
                 work.append(f_name)
         # ensure unique entries
-        temp = deque(set(work))
-        self._reporter.capture_todo(len(temp))
+        self._work = deque(set(work))
+        self._capture_todo()
         self._logger.debug(f'End get_work.')
-        return temp
+        return self._work
 
 
 class ListDirSeparateDataSource(DataSource):
@@ -228,7 +235,7 @@ class ListDirSeparateDataSource(DataSource):
             self._logger.info(f'Look in {source} for work.')
             self._append_work(source)
         self._logger.debug('End get_work')
-        self._reporter.capture_todo(len(self._work))
+        self._capture_todo()
         return self._work
 
     def _append_work(self, entry):
@@ -291,7 +298,7 @@ class ListDirTimeBoxDataSource(DataSource):
                 )
         self._logger.debug('End get_time_box_work')
         self._temp = defaultdict(list)
-        self._reporter.capture_todo(len(self._work) + len(self._skipped_files) + len(self._rejected_files))
+        self._capture_todo()
         return self._work
 
     def _append_work(self, prev_exec_time, exec_time, entry_path):
@@ -430,13 +437,13 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                             # if the file already exists, with the same
                             # checksum, at CADC, Kanoa says move it to the
                             # 'succeeded' directory.
-                            self._skipped_files.append(entry.path)
-                            self._reporter.capture_skipped(entry.path)
+                            self._skipped_files += 1
                             self._move_action(entry.path, self._cleanup_success_directory)
+                            self._reporter.capture_success(entry.name, entry.name, datetime.utcnow().timestamp())
                 else:
                     work_with_file = True
             else:
-                self._rejected_files[entry.path] = [BaseException('_verify_file errors'), '_verify_file_errors']
+                self._rejected_files += 1
                 if self._cleanup_when_storing:
                     self._logger.warning(f'Rejecting {entry.path}. Moving to {self._cleanup_failure_directory}')
                     self._move_action(entry.path, self._cleanup_failure_directory)
@@ -454,7 +461,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             self._logger.info(f'Look in {source} for work.')
             self._find_work(source)
         self._logger.debug('End get_work')
-        self._reporter.capture_todo(len(self._work) + len(self._skipped_files) + len(self._rejected_files))
+        self._capture_todo()
         return self._work
 
     def _append_work(self, prev_exec_time, exec_time, entry_path):
@@ -580,18 +587,17 @@ class TodoFileDataSource(DataSource):
 
     def get_work(self):
         self._logger.debug(f'Begin get_work from {self._config.work_fqn}.')
-        work = deque()
+        self._work = deque()
         with open(self._config.work_fqn) as f:
             for line in f:
                 temp = line.strip()
                 if len(temp) > 0:
                     # ignore empty lines
                     self._logger.debug(f'Adding entry {temp} to work list.')
-                    work.append(temp)
-        result = work
-        self._reporter.capture_todo(len(result))
+                    self._work.append(temp)
+        self._capture_todo()
         self._logger.debug(f'End get_work.')
-        return result
+        return self._work
 
 
 def is_offset_aware(dt):
@@ -658,13 +664,13 @@ class QueryTimeBoxDataSource(DataSource):
         """
         self._logger.debug(query)
         rows = clc.query_tap_client(query, self._client)
-        result = deque()
+        self._work = deque()
         for row in rows:
             ignore_scheme, ignore_path, f_name = mc.decompose_uri(row['uri'])
-            result.append(StateRunnerMeta(f_name, row['lastModified']))
-        self._reporter.capture_todo(len(result))
+            self._work.append(StateRunnerMeta(f_name, row['lastModified']))
+        self._capture_todo()
         self._logger.debug(f'End get_time_box_work.')
-        return result
+        return self._work
 
 
 class VaultDataSource(ListDirTimeBoxDataSource):
@@ -683,15 +689,15 @@ class VaultDataSource(ListDirTimeBoxDataSource):
 
     def get_work(self):
         self._logger.debug('Begin get_work.')
-        work = deque()
+        self._work = deque()
         for source_directory in self._source_directories:
             self._logger.debug(
                 f'Searching {source_directory} for work to do.'
             )
-            self._find_work(source_directory, work)
-        self._reporter.capture_todo(len(work))
+            self._find_work(source_directory, self._work)
+        self._capture_todo()
         self._logger.debug('End get_work.')
-        return work
+        return self._work
 
     def _append_work(self, prev_exec_time, exec_time, entry):
         self._logger.info(f'Search for work in {entry}.')
@@ -807,12 +813,10 @@ class VaultCleanupDataSource(VaultDataSource):
                 elif self._store_modified_files_only:
                     # only transfer files with a different MD5 checksum
                     copy_file, ignore_meta = self._check_md5sum(entry_fqn)
-                    if not copy_file and self._cleanup_when_storing:
-                        self._move_action(
-                            entry_fqn, self._cleanup_success_directory
-                        )
-                        if self._capture_success is not None:
-                            self._capture_success(entry.name, entry.name, datetime.utcnow().timestamp())
+                    if not copy_file:
+                        self._move_action(entry_fqn, self._cleanup_success_directory)
+                        self._reporter.capture_success(entry.name, entry.name, datetime.utcnow().timestamp())
+                        self._skipped_files += 1
                 else:
                     copy_file = True
                 break
@@ -824,7 +828,7 @@ class VaultCleanupDataSource(VaultDataSource):
             self._logger.info(f'Look in {source} for work.')
             self._find_work(source)
         self._logger.debug('End get_work')
-        self._work_todo_count = len(self._work) + len(self._rejected)
+        self._capture_todo()
         return self._work
 
     def _check_md5sum(self, entry_fqn):

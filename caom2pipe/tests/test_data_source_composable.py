@@ -450,6 +450,9 @@ def test_transfer_check_fits_verify(test_config):
                 moved_failure = Path(test_failure_directory, test_correct_file.name)
                 assert not moved_success.exists(), 'correct file at success'
                 assert not moved_failure.exists(), 'correct file at failure'
+                assert test_reporter.all == 5, f'wrong all {test_reporter._summary}'
+                assert test_reporter._summary._skipped_sum == 2, f'wrong skipped {test_reporter._summary}'
+                assert test_reporter._summary._rejected_sum == 2, f'wrong rejected {test_reporter._summary}'
 
                 # and after the transfer
                 for test_entry in test_result:
@@ -462,7 +465,9 @@ def test_transfer_check_fits_verify(test_config):
                 # dot file - which should be ignored
                 assert test_dot_file.exists(), 'correct file at source'
                 moved = Path(test_success_directory, test_dot_file.name)
-                assert not moved.exists(), 'dot file at destination'
+                assert not moved.exists(), 'dot file at success destination'
+                moved = Path(test_failure_directory, test_dot_file.name)
+                assert not moved.exists(), 'dot file at failure destination'
                 assert test_reporter.all == 5, f'wrong all {test_reporter._summary}'
                 assert test_reporter._summary._skipped_sum == 2, f'wrong skipped {test_reporter._summary}'
                 assert test_reporter._summary._rejected_sum == 2, f'wrong rejected {test_reporter._summary}'

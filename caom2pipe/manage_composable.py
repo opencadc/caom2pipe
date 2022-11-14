@@ -398,8 +398,6 @@ class ExecutionReporter:
     """
     This class reports on the individual work unit successes, failures, and possible retries for the duration
     of a pipeline run.
-
-
     """
 
     def __init__(self, config, observable, application):
@@ -423,6 +421,13 @@ class ExecutionReporter:
     @property
     def success(self):
         return self._summary.success
+
+    def _count_retries(self):
+        result = []
+        if os.path.exists(self._retry_fqn):
+            with open(self._retry_fqn) as f:
+                result = f.readlines()
+        return len(result)
 
     def _count_timeouts(self, e):
         if e is not None and (
@@ -489,10 +494,6 @@ class ExecutionReporter:
             self._observable.rejected.record(reason, storage_name.obs_id)
             self._summary.add_rejections(1)
 
-    def capture_skipped(self, entry):
-        self._logger.debug(f'Skipping {entry}.')
-        self._summary.add_skipped(1)
-
     def capture_success(self, obs_id, file_name, start_time):
         """Capture, with a timestamp, the successful observations/file names
         that have been processed.
@@ -515,12 +516,16 @@ class ExecutionReporter:
         self._logger.info(msg)
         self._logger.debug('*' * len(msg))
 
-    def capture_todo(self, value):
-        self._summary.add_entries(value)
+    def capture_todo(self, todo, rejected, skipped):
+        self._logger.error(self._summary)
+        self._logger.error(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
+        self._summary.add_entries(todo + rejected + skipped)
+        # failures are already captured, so do not double-count them
+        self._summary.add_skipped(skipped)
 
-    def report(self, config):
+    def report(self):
         # self._summary.add_timeouts(self._organizer.timeouts)
-        self._summary.add_errors(config.count_retries())
+        self._summary.add_errors(self._count_retries())
         # self._summary.add_rejections(self._organizer.rejected_count)
         msg = self._summary.report()
         self._logger.info(msg)
@@ -1529,13 +1534,6 @@ class Config:
         if config is None:
             raise CadcException(f'Could not find the file {config_fqn}')
         return config
-
-    def count_retries(self):
-        result = []
-        if os.path.exists(self.retry_fqn):
-            with open(self.retry_fqn) as f:
-                result = f.readlines()
-        return len(result)
 
     def need_to_retry(self):
         """Evaluate the need to have the pipeline try to re-execute for any
