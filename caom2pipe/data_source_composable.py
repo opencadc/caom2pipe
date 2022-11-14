@@ -150,6 +150,14 @@ class DataSource:
         return deque()
 
     @property
+    def reporter(self):
+        return self._reporter
+
+    @reporter.setter
+    def reporter(self, value):
+        self._reporter = value
+
+    @property
     def start_time_ts(self):
         return self._start_time_ts
 
