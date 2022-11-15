@@ -210,10 +210,12 @@ class TodoRunner:
         self._config.update_for_retry(count)
         # the log location changes for each retry
         self._reporter.set_log_location(self._config)
+        # self._reporter.reset_for_retry()
         # change the data source handling for the retry, but preserve the original
         # clean_up behaviour
         original_data_source_cleanup = self._data_source.clean_up
-        self._data_source = data_source_composable.TodoFileDataSource(self._config, self._reporter)
+        self._data_source = data_source_composable.TodoFileDataSource(self._config)
+        self._data_source.reporter = self._reporter
         self._data_source.clean_up = original_data_source_cleanup
 
     def report(self):

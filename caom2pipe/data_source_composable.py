@@ -111,7 +111,7 @@ class DataSource:
         deque of work todo as a method implementation
     """
 
-    def __init__(self, config=None, reporter=None):
+    def __init__(self, config=None):
         self._config = config
         # if this value is used, it should be a timestamp - i.e. a float
         self._start_time_ts = None
@@ -121,7 +121,7 @@ class DataSource:
         self._rejected_files = 0
         self._skipped_files = 0
         self._work = deque()
-        self._reporter = reporter
+        self._reporter = None
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _capture_todo(self):
@@ -172,8 +172,8 @@ class ListDirDataSource(DataSource):
     listing. This is the original use_local_files: True behaviour.
     """
 
-    def __init__(self, config, chooser, reporter):
-        super().__init__(config, reporter)
+    def __init__(self, config, chooser):
+        super().__init__(config)
         self._chooser = chooser
 
     def get_work(self):
@@ -230,8 +230,8 @@ class ListDirSeparateDataSource(DataSource):
     to use as a source of files, and how to identify files of interest.
     """
 
-    def __init__(self, config, reporter):
-        super().__init__(config, reporter)
+    def __init__(self, config):
+        super().__init__(config)
         self._source_directories = config.data_sources
         self._extensions = config.data_source_extensions
         self._recursive = config.recurse_data_sources
@@ -275,8 +275,8 @@ class ListDirTimeBoxDataSource(DataSource):
       very long time, and a lot of memory, in glob/walk
     """
 
-    def __init__(self, config, reporter):
-        super().__init__(config, reporter)
+    def __init__(self, config):
+        super().__init__(config)
         self._source_directories = config.data_sources
         self._extensions = config.data_source_extensions
         self._recursive = config.recurse_data_sources
@@ -339,8 +339,8 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
     For when use_local_files: True and cleanup_when_storing: True
     """
 
-    def __init__(self, config, cadc_client, metadata_reader, recursive=True, scheme='cadc', reporter=None):
-        super().__init__(config, reporter)
+    def __init__(self, config, cadc_client, metadata_reader, recursive=True, scheme='cadc'):
+        super().__init__(config)
         self._retry_failures = config.retry_failures
         self._retry_count = config.retry_count
         self._cadc_client = cadc_client
@@ -589,8 +589,8 @@ class TodoFileDataSource(DataSource):
     contents of a file.
     """
 
-    def __init__(self, config, reporter):
-        super().__init__(config, reporter)
+    def __init__(self, config):
+        super().__init__(config)
 
     def get_work(self):
         self._logger.debug(f'Begin get_work from {self._config.work_fqn}.')
@@ -636,8 +636,8 @@ class QueryTimeBoxDataSource(DataSource):
     implementation.
     """
 
-    def __init__(self, config, reporter, preview_suffix='jpg'):
-        super().__init__(config, reporter)
+    def __init__(self, config, preview_suffix='jpg'):
+        super().__init__(config)
         self._preview_suffix = preview_suffix
         subject = clc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
@@ -688,8 +688,8 @@ class VaultDataSource(ListDirTimeBoxDataSource):
     The directory listing may be time-boxed.
     """
 
-    def __init__(self, vault_client, config, reporter):
-        super().__init__(config, reporter)
+    def __init__(self, vault_client, config):
+        super().__init__(config)
         self._vault_client = vault_client
         self._source_directories = config.data_sources
         self._data_source_extensions = config.data_source_extensions
@@ -707,6 +707,11 @@ class VaultDataSource(ListDirTimeBoxDataSource):
         return self._work
 
     def _append_work(self, prev_exec_time, exec_time, entry):
+        """
+        :param prev_exec_time: datetime.timestamp
+        :param exec_time: datetime.timestamp
+        :param entry: Vault URI
+        """
         self._logger.info(f'Search for work in {entry}.')
         # force = True means do not use the cache
         node = self._vault_client.get_node(entry, limit=None, force=True)
@@ -715,7 +720,7 @@ class VaultDataSource(ListDirTimeBoxDataSource):
             node = self._vault_client.get_node(uri, limit=None, force=True)
         for target in node.node_list:
             target_node = self._vault_client.get_node(target)
-            target_node_mtime = mc.make_time_tz(target_node.props.get('date'))
+            target_node_mtime = mc.make_time_tz(target_node.props.get('date')).timestamp()
             if target_node.type == 'vos:ContainerNode' and self._recursive:
                 if exec_time >= target_node_mtime >= prev_exec_time:
                     self._append_work(
@@ -771,8 +776,8 @@ class VaultCleanupDataSource(VaultDataSource):
     the FileInfo.
     """
 
-    def __init__(self, config, vault_client, cadc_client, reporter, scheme='cadc'):
-        super().__init__(vault_client, config, reporter)
+    def __init__(self, config, vault_client, cadc_client, scheme='cadc'):
+        super().__init__(vault_client, config)
         self._cleanup_when_storing = config.cleanup_files_when_storing
         self._cleanup_failure_directory = config.cleanup_failure_destination
         self._cleanup_success_directory = config.cleanup_success_destination
@@ -810,23 +815,35 @@ class VaultCleanupDataSource(VaultDataSource):
                 self._move_action(fqn, self._cleanup_success_directory)
             self._logger.debug('End clean_up.')
 
-    def default_filter(self, entry, entry_fqn):
-        copy_file = False
-        for extension in self._data_source_extensions:
-            if entry.endswith(extension):
-                if entry.startswith('.'):
-                    # skip dot files
-                    copy_file = False
-                elif self._store_modified_files_only:
-                    # only transfer files with a different MD5 checksum
-                    copy_file, ignore_meta = self._check_md5sum(entry_fqn)
-                    if not copy_file:
-                        self._move_action(entry_fqn, self._cleanup_success_directory)
-                        self._reporter.capture_success(entry.name, entry.name, datetime.utcnow().timestamp())
-                        self._skipped_files += 1
-                else:
-                    copy_file = True
-                break
+    def default_filter(self, target_node):
+        """
+        :param target_node: Node
+        """
+        # make a Node look like an os.DirEntry, which is expected by
+        # the super invocation
+        # dir_entry = type('', (), {})
+        # dir_entry.name = os.path.basename(target_node.uri)
+        # dir_entry.path = target_node.uri
+        copy_file = True
+        if target_node.props.get('size') == 0:
+            self._logger.info(f'Skipping 0-length {target_node.uri}')
+            copy_file = False
+        else:
+            for extension in self._data_source_extensions:
+                if target_node.uri.endswith(extension):
+                    if os.path.basename(target_node.uri).startswith('.'):
+                        # skip dot files
+                        copy_file = False
+                    elif self._store_modified_files_only:
+                        # only transfer files with a different MD5 checksum
+                        copy_file, ignore_meta = self._check_md5sum(target_node.uri)
+                        if not copy_file:
+                            self._move_action(target_node.uri, self._cleanup_success_directory)
+                            self._reporter.capture_success(
+                                target_node.uri, target_node.uri, datetime.utcnow().timestamp()
+                            )
+                            self._skipped_files += 1
+                    break
         return copy_file
 
     def get_work(self):
@@ -838,21 +855,26 @@ class VaultCleanupDataSource(VaultDataSource):
         self._capture_todo()
         return self._work
 
-    def _check_md5sum(self, entry_fqn):
-        # get the metadata from VOS
-        result = True
-        vos_meta = clc.vault_info(self._vault_client, entry_fqn)
+    def _check_md5sum(self, node):
+        """
+        :param node: Node
+        """
+        # # get the metadata from VOS
+        # result = True
+        # vos_meta = clc.vault_info(self._vault_client, entry_fqn)
         # get the metadata at CADC
-        f_name = os.path.basename(entry_fqn)
-        collection = self.get_collection(f_name)
-        cadc_name = mc.build_uri(collection, f_name, self._scheme)
-        cadc_meta = self._cadc_client.info(cadc_name)
-        if cadc_meta is not None and vos_meta.md5sum == cadc_meta.md5sum:
-            self._logger.warning(
-                f'{entry_fqn} has the same md5sum at CADC. Not transferring.'
-            )
-            result = False
-        return result, vos_meta
+        # TODO - add a MetadataReader invocation
+        # f_name = os.path.basename(entry_fqn)
+        # collection = self.get_collection(f_name)
+        # cadc_name = mc.build_uri(collection, f_name, self._scheme)
+        # cadc_meta = self._cadc_client.info(cadc_name)
+        # if cadc_meta is not None and vos_meta.md5sum == cadc_meta.md5sum:
+        #     self._logger.warning(
+        #         f'{entry_fqn} has the same md5sum at CADC. Not transferring.'
+        #     )
+        #     result = False
+        # return result, vos_meta
+        return None, None
 
     def _find_work(self, entry):
         dir_listing = self._vault_client.listdir(entry)
@@ -884,7 +906,7 @@ class VaultCleanupDataSource(VaultDataSource):
                         )
                         self._vault_client.delete(dest_fqn)
                 except exceptions.NotFoundException as not_found_e:
-                    # do thing, since the node doesn't exist
+                    # do nothing, since the node doesn't exist
                     pass
                 self._logger.warning(f'Moving {fqn} to {dest_fqn}')
                 self._vault_client.move(fqn, dest_fqn)
@@ -903,17 +925,18 @@ def data_source_factory(config, clients, state, reporter):
     :return: DataSource specialization
     """
     if config.use_local_files:
-        source = ListDirSeparateDataSource(config, reporter)
+        source = ListDirSeparateDataSource(config)
     else:
         if config.use_vos and clients.vo_client is not None:
             if config.cleanup_files_when_storing:
-                source = VaultCleanupDataSource(config, clients.vo_client, clients.data_client, reporter)
+                source = VaultCleanupDataSource(config, clients.vo_client, clients.data_client)
             else:
-                source = VaultDataSource(clients.vo_client, config, reporter)
+                source = VaultDataSource(clients.vo_client, config)
         else:
             if state:
-                source = QueryTimeBoxDataSource(config, reporter)
+                source = QueryTimeBoxDataSource(config)
             else:
-                source = TodoFileDataSource(config, reporter)
+                source = TodoFileDataSource(config)
+    source.reporter = reporter
     logging.debug(f'Created {type(source)} data_source_composable instance.')
     return source

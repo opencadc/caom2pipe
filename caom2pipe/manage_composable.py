@@ -444,6 +444,9 @@ class ExecutionReporter:
         self._failure_fqn = config.failure_fqn
         self._retry_fqn = config.retry_fqn
 
+    def reset_for_retry(self):
+        self._summary.reset_for_retry()
+
     def set_log_location(self, config):
         """Support changing log file locations during a retry."""
         self._set_log_files(config)
@@ -451,7 +454,6 @@ class ExecutionReporter:
         now_s = datetime.utcnow().timestamp()
         for fqn in [self._success_fqn, self._failure_fqn, self._retry_fqn, self._report_fqn]:
             ExecutionReporter._init_log_file(fqn, now_s)
-        self._summary.reset_for_retry()
 
     @staticmethod
     def _init_log_file(log_fqn, now_s):

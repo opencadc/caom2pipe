@@ -104,7 +104,8 @@ def test_list_dir_data_source(test_config):
 
             test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
             test_chooser = tc.TestChooser()
-            test_subject = dsc.ListDirDataSource(test_config, test_chooser, test_reporter)
+            test_subject = dsc.ListDirDataSource(test_config, test_chooser)
+            test_subject.reporter = test_reporter
             test_result = test_subject.get_work()
             assert test_result is not None, 'expected a result'
             assert len(test_result) == 4, 'wrong result'
@@ -114,7 +115,8 @@ def test_list_dir_data_source(test_config):
             assert 'TEST3.hdf5' in test_result, 'wrong hdf5'
             assert test_reporter.all == 4, 'wrong report'
 
-            test_subject = dsc.ListDirDataSource(test_config, chooser=None, reporter=test_reporter)
+            test_subject = dsc.ListDirDataSource(test_config, chooser=None)
+            test_subject.reporter = test_reporter
             test_result = test_subject.get_work()
             assert test_result is not None, 'expected a result'
             assert len(test_result) == 4, 'wrong result'
@@ -140,7 +142,8 @@ def test_todo_file(test_config):
 
             test_config.work_fqn = todo_fqn
             test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-            test_subject = dsc.TodoFileDataSource(test_config, test_reporter)
+            test_subject = dsc.TodoFileDataSource(test_config)
+            test_subject.reporter = test_reporter
             test_result = test_subject.get_work()
             assert test_result is not None, 'expect result'
             assert len(test_result) == 2, 'wrong number of files'
@@ -173,7 +176,8 @@ def test_storage_time_box_query(query_mock, test_config):
         with TemporaryDirectory() as tmp_dir_name:
             os.chdir(tmp_dir_name)
             test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-            test_subject = dsc.QueryTimeBoxDataSource(test_config, test_reporter)
+            test_subject = dsc.QueryTimeBoxDataSource(test_config)
+            test_subject.reporter = test_reporter
             test_result = test_subject.get_time_box_work(
                 prev_exec_date.timestamp(), exec_date.timestamp()
             )
@@ -232,7 +236,8 @@ def test_vault_list_dir_data_source(test_config):
         with TemporaryDirectory() as tmp_dir_name:
             os.chdir(tmp_dir_name)
             test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-            test_subject = dsc.VaultDataSource(test_vos_client, test_config, test_reporter)
+            test_subject = dsc.VaultDataSource(test_vos_client, test_config)
+            test_subject.reporter = test_reporter
             assert test_subject is not None, 'expect a test_subject'
             test_result = test_subject.get_work()
             assert test_result is not None, 'expect a test result'
@@ -274,8 +279,9 @@ def test_list_dir_time_box_data_source(test_config):
             test_exec_time_dt = datetime.utcnow()
             test_exec_time = test_exec_time_dt.timestamp() + 3600.0
 
-            test_subject = dsc.ListDirTimeBoxDataSource(test_config, test_reporter)
+            test_subject = dsc.ListDirTimeBoxDataSource(test_config)
             assert test_subject is not None, 'ctor is broken'
+            test_subject.reporter = test_reporter
             test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
             assert test_result is not None, 'expect a result'
             assert len(test_result) == 2, 'expect contents in the result'
@@ -286,7 +292,8 @@ def test_list_dir_time_box_data_source(test_config):
             assert test_reporter.all == 2, 'wrong report'
 
             test_config.recurse_data_sources = False
-            test_subject = dsc.ListDirTimeBoxDataSource(test_config, test_reporter)
+            test_subject = dsc.ListDirTimeBoxDataSource(test_config)
+            test_subject.reporter = test_reporter
             test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
             assert test_result is not None, 'expect a non-recursive result'
             assert len(test_result) == 1, 'expect contents in non-recursive result'
@@ -306,7 +313,8 @@ def test_list_dir_separate_data_source(test_config):
         '.hdf5',
     ]
     test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-    test_subject = dsc.ListDirSeparateDataSource(test_config, test_reporter)
+    test_subject = dsc.ListDirSeparateDataSource(test_config)
+    test_subject.reporter = test_reporter
     assert test_subject is not None, 'ctor is broken'
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a result'
@@ -315,7 +323,8 @@ def test_list_dir_separate_data_source(test_config):
     assert test_reporter.all == 97, 'wrong report'
 
     test_config.recurse_data_sources = False
-    test_subject = dsc.ListDirSeparateDataSource(test_config, test_reporter)
+    test_subject = dsc.ListDirSeparateDataSource(test_config)
+    test_subject.reporter = test_reporter
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a non-recursive result'
     assert len(test_result) == 93, 'expect contents in non-recursive result'
@@ -351,7 +360,8 @@ def test_vault_list_dir_time_box_data_source(test_config):
     test_config.get_executors()
     test_config.data_sources = ['vos:goliaths/wrong']
     test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-    test_subject = dsc.VaultDataSource(test_vos_client, test_config, test_reporter)
+    test_subject = dsc.VaultDataSource(test_vos_client, test_config)
+    test_subject.reporter = test_reporter
     assert test_subject is not None, 'expect a test_subject'
     test_prev_exec_time = datetime(
         year=2020,
@@ -426,7 +436,8 @@ def test_transfer_check_fits_verify(test_config):
                 cadc_client_mock = Mock(autospec=True)
                 cadc_client_mock.info.side_effect = mock_info
                 test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-                test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader, reporter=test_reporter)
+                test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader)
+                test_subject.reporter = test_reporter
 
                 assert test_subject is not None, 'expect construction to work'
                 test_result = test_subject.get_time_box_work(test_start_ts, test_end_ts)
@@ -477,7 +488,8 @@ def test_transfer_check_fits_verify(test_config):
                 cadc_client_mock = Mock(autospec=True)
                 cadc_client_mock.info.side_effect = mock_info
                 test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-                test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader, reporter=test_reporter)
+                test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader)
+                test_subject.reporter = test_reporter
                 assert test_subject is not None, 'expect construction to work'
                 test_result = test_subject.get_time_box_work(test_start_ts, test_end_ts)
                 assert len(test_result) == 3, 'wrong number of results returned'
@@ -514,7 +526,8 @@ def test_transfer_check_fits_verify(test_config):
                     cadc_client_mock = Mock(autospec=True)
                     cadc_client_mock.info.side_effect = mock_info
                     test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-                    test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader, reporter=test_reporter)
+                    test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader)
+                    test_subject.reporter = test_reporter
                     with pytest.raises(mc.CadcException):
                         test_result = test_subject.get_time_box_work(test_start_ts, test_end_ts)
                     assert test_reporter.all == 0, 'wrong report'
@@ -584,8 +597,9 @@ def test_transfer_fails(check_fits_mock, test_config):
 
             cadc_client_mock = Mock(autospec=True)
             test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-            test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader, reporter=test_reporter)
+            test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader)
             assert test_subject is not None, 'ctor failure'
+            test_subject.reporter = test_reporter
             test_result = test_subject.get_work()
             assert test_result is not None, 'expect a result'
             assert len(test_result) == 2, 'wrong number of entries in result'
@@ -639,10 +653,8 @@ def test_all_local_files_some_already_stored_some_broken(clients_mock, move_mock
         test_reader,
         recursive=True,
         scheme='cadc',
-        reporter=test_reporter,
     )
-    test_subject._capture_failure = Mock()
-    test_subject._capture_success = Mock()
+    test_subject.reporter = test_reporter
 
     with patch('os.scandir') as scandir_mock:
         scandir_mock.return_value.__enter__.return_value = pre_success_listing

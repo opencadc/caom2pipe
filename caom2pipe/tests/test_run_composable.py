@@ -418,7 +418,8 @@ def test_run_todo_list_dir_data_source_exception(
 
             test_chooser = ec.OrganizeChooser()
             test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-            test_data_source = dsc.ListDirDataSource(test_config, test_chooser, test_reporter)
+            test_data_source = dsc.ListDirDataSource(test_config, test_chooser)
+            test_data_source.reporter = test_reporter
             test_result = rc.run_by_todo(
                 config=test_config,
                 chooser=test_chooser,
@@ -471,9 +472,6 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config):
             test_config.log_to_file = True
             test_config.retry_failures = True
             test_config.retry_decay = 0
-            import logging
-            logging.error(test_config)
-
             _write_todo(test_config)
             retry_success_fqn = f'{tmp_dir_name}_0/' f'{test_config.success_log_file_name}'
             retry_failure_fqn = f'{tmp_dir_name}_0/' f'{test_config.failure_log_file_name}'
@@ -522,7 +520,6 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config):
             source_mock.assert_called_with('test_obs_id.fits.gz', 0, 0)
     finally:
         os.chdir(orig_cwd)
-    assert False, f'{test_config}'
 
 
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
@@ -967,12 +964,8 @@ def test_run_store_get_work_failures(
         with patch('os.scandir') as scandir_mock:
             scandir_mock.return_value.__enter__.return_value = [dir_entry_1, dir_entry_2]
             try:
-                data_source = dsc.LocalFilesDataSource(
-                    test_config,
-                    data_client_mock,
-                    file_metadata_reader,
-                    reporter=test_reporter,
-                )
+                data_source = dsc.LocalFilesDataSource(test_config, data_client_mock, file_metadata_reader)
+                data_source.reporter = test_reporter
                 clients_mock = ClientCollection(test_config)
                 clients_mock._data_client = data_client_mock
                 clients_mock._metadata_client = repo_client_mock
@@ -1072,7 +1065,8 @@ def test_run_ingest(
         os.getcwd = Mock(return_value=tmp_dir_name)
         try:
             test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-            test_data_source = dsc.TodoFileDataSource(test_config, reporter=test_reporter)
+            test_data_source = dsc.TodoFileDataSource(test_config)
+            test_data_source.reporter = test_reporter
             test_result = rc.run_by_todo(source=test_data_source)
             assert test_result is not None, 'expect result'
             assert test_result == 0, 'expect success'
@@ -1249,7 +1243,7 @@ def _check_log_files(
     assert success_size == 0, 'empty success file'
     assert os.path.exists(test_config.failure_fqn), 'expect failure file'
     assert os.path.exists(test_config.retry_fqn), 'expect retry file'
-    assert os.path.exists(retry_success_fqn), 'empty success file'
+    assert os.path.exists(retry_success_fqn), f'empty success file {retry_success_fqn}'
     success_size = mc.get_file_size(retry_success_fqn)
     assert success_size == 0, 'empty success file'
     assert os.path.exists(retry_failure_fqn), 'expect failure file'
