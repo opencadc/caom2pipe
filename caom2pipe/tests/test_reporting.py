@@ -67,114 +67,224 @@
 # ***********************************************************************
 #
 
+"""
+Integration testing that pytest makes easy, between:
+ the run_composable (TodoRunner, StateRunner),
+ data_source_composable (particularly LocalFilesDataSource and VaultCleanupDataSource), and
+ manage_composable refactoring of ExecutionReporter and ExecutionSummary
 
+from the previous locations across the DataSource specializations, the OrganizeExecutor, and the *Runner
+specializations.
+"""
+
+from datetime import datetime
+from tempfile import TemporaryDirectory
+
+from cadcdata import FileInfo
 from caom2pipe import data_source_composable as dsc
-from caom2pipe.manage_composable import TaskType
+from caom2pipe.manage_composable import CadcException, Config, TaskType
 from caom2pipe import run_composable as rc
 
 from unittest.mock import call, Mock, patch
 from test_data_source_composable import _create_dir_listing
+from test_run_composable import TEST_BOOKMARK, _write_state
 
 
-@patch('caom2pipe.client_composable.ClientCollection')
-def test_report_output_todo_local(clients_mock, test_config):
-    # work is all the list of files, some of which have been stored already, and some of which fail fitsverify
+def test_report_output_todo_local(test_config):
+    test_config.cleanup_files_when_storing = True
+    test_config.store_modified_files_only = True
+    # diagnostic = (
+    #     f'clean up {test_config.cleanup_files_when_storing} store modified {test_config.store_modified_files_only} '
+    #     f'subject {type(test_subject)}'
+    # )
+    # work is all the list of files,
+    #   one has been stored already,
+    #   one fails fitsverify
+    #   one fails ingestion
+    #   one succeeds
 
+    test_config.logging_level = 'DEBUG'
     test_config.task_types = [TaskType.STORE]
     test_config.use_local_files = True
     test_config.data_sources = ['/tmp']
     test_config.cleanup_failure_destination = '/data/failure'
     test_config.cleanup_success_destination = '/data/success'
+    test_config.interval = 100
 
-    pre_success_listing, file_info_list = _create_dir_listing('/tmp', 3)
+    pre_success_listing, file_info_list = _create_dir_listing('/tmp', 4)
     test_reader = Mock()
-    test_reader.file_info.get.side_effect = [file_info_list[0], None, None]
-    clients_mock.return_value.data_client.info.side_effect = [file_info_list[0], None, None]
+    # 0 stored already
+    # 1 fails fitsverify
+    # 2 fails ingestion
+    # 3 succeeds
+    different_file_info = FileInfo(id='A0.fits', md5sum='ghi')
 
-    test_end_time = None
+    test_start_time = datetime(year=2020, month=3, day=3, hour=1, minute=1, second=1)
+    test_end_time = datetime(year=2020, month=3, day=3, hour=2, minute=1, second=1)
 
-    for clean_up in [True, False]:
-        for store_modified in [True, False]:
-            test_config.cleanup_files_when_storing = clean_up
-            test_config.store_modified_files_only = store_modified
-            test_data_source = dsc.LocalFilesDataSource(
-                test_config, clients_mock.return_value.data_client, test_reader, recursive=True, scheme='cadc'
-            )
-            for state in [True, False]:
-                (
-                    test_config,
-                    clients_mock,
-                    test_builder,
-                    test_data_source,
-                    test_modify_transfer,
-                    test_reader,
-                    test_store_transfer,
-                    test_organizer,
-                ) = rc.common_runner_init(
-                    config=test_config,
-                    clients=clients_mock,
-                    name_builder=None,
-                    source=test_data_source,
-                    modify_transfer=None,
-                    metadata_reader=test_reader,
-                    state=state,
-                    store_transfer=None,
-                    meta_visitors=[],
-                    data_visitors=[],
-                    chooser=None,
+    store_modified_true_move_calls = [
+        call('/tmp/A0.fits', '/data/success'),
+        call('/tmp/A1.fits', '/data/failure'),
+        call('/tmp/A2.fits', '/data/failure'),
+        call('/tmp/A3.fits', '/data/success'),
+    ]
+
+    store_modified_false_move_calls = [
+        call('/tmp/A1.fits', '/data/failure'),
+        call('/tmp/A0.fits', '/data/success'),
+        call('/tmp/A2.fits', '/data/failure'),
+        call('/tmp/A3.fits', '/data/success'),
+    ]
+
+    store_modified_true_put_side_effect = [CadcException, None]
+    store_modified_false_put_side_effect = [None, CadcException, None]
+
+    clean_up_false_put_side_effect = [None, CadcException, None]
+
+    store_modified_true_info_side_effect = [file_info_list[0], None, None, None, file_info_list[0]]
+    store_modified_false_info_side_effect = [
+        file_info_list[0], None, file_info_list[0], file_info_list[0], file_info_list[0]
+    ]
+
+    store_modified_true_file_info_get_side_effect = [file_info_list[0], file_info_list[3], None, None]
+    store_modified_false_file_info_get_side_effect = [file_info_list[0], file_info_list[2], file_info_list[3]]
+
+    store_modified_true_skipped_sum = 1
+    store_modified_false_skipped_sum = 0
+
+    test_clients = Mock()
+    with TemporaryDirectory() as temp_dir:
+        test_config.working_directory = temp_dir
+        test_config.log_file_directory = temp_dir
+        test_config.state_fqn = f'{temp_dir}/{test_config.state_file_name}'
+        test_config.log_file_directory = temp_dir
+        test_config.failure_log_file_name = 'fail.txt'
+        test_config.retry_file_name = 'do_again.txt'
+        test_config.success_log_file_name = 'good.txt'
+        test_config.progress_file_name = 'progress.txt'
+        test_config.rejected_file_name = 'reject.txt'
+        test_config._report_fqn = f'{temp_dir}/report.txt'
+
+        for clean_up in [True, False]:
+            for store_modified in [True, False]:
+                move_calls = store_modified_false_move_calls
+                put_side_effect = store_modified_false_put_side_effect
+                info_side_effect = store_modified_false_info_side_effect
+                file_info_side_effect = store_modified_false_file_info_get_side_effect
+                skipped_sum = store_modified_false_skipped_sum
+                if store_modified:
+                    move_calls = store_modified_true_move_calls
+                    put_side_effect = store_modified_true_put_side_effect
+                    info_side_effect = store_modified_true_info_side_effect
+                    file_info_side_effect = store_modified_true_file_info_get_side_effect
+                    skipped_sum = store_modified_true_skipped_sum
+                if not clean_up:
+                    put_side_effect = clean_up_false_put_side_effect
+                    skipped_sum = store_modified_false_skipped_sum
+                test_config.cleanup_files_when_storing = clean_up
+                test_config.store_modified_files_only = store_modified
+                Config.write_to_file(test_config)
+                test_data_source = dsc.LocalFilesDataSource(
+                    test_config, test_clients.data_client, test_reader, recursive=True, scheme='cadc'
                 )
-                check_mock = Mock()
-                # FITS files are valid, invalid, valid
-                check_mock.side_effect = [True, False, True]
-                test_data_source._check_file = check_mock
-                move_mock = Mock()
-                test_data_source._move_action = move_mock
-                if state:
-                    test_subject = rc.StateRunner(
+                _write_state(test_start_time, test_config.state_fqn)
+                for state in [True, False]:
+                    # import logging
+                    # logging.error('')
+                    # logging.error('')
+                    # logging.error('')
+                    # logging.error('')
+                    (
                         test_config,
-                        test_organizer,
+                        test_clients,
                         test_builder,
                         test_data_source,
                         test_reader,
-                        'TEST_BOOKMARK',
-                        'DEFAULT',
-                        test_end_time,
+                        test_organizer,
+                        test_observable,
+                        test_reporter,
+                    ) = rc.common_runner_init(
+                        config=test_config,
+                        clients=test_clients,
+                        name_builder=None,
+                        source=test_data_source,
+                        modify_transfer=None,
+                        metadata_reader=test_reader,
+                        state=state,
+                        store_transfer=None,
+                        meta_visitors=[],
+                        data_visitors=[],
+                        chooser=None,
+                        application='DEFAULT',
                     )
-                else:
-                    test_subject = rc.TodoRunner(
-                        test_config, test_organizer, test_builder, test_data_source, test_reader, 'DEFAULT'
-                    )
+                    # 0 stored already
+                    # 1 fails fitsverify
+                    # 2 fails ingestion
+                    # 3 succeeds
+                    test_clients.data_client.info.side_effect = info_side_effect
+                    test_clients.data_client.put.side_effect = put_side_effect
+                    verify_mock = Mock()
+                    # FITS files are valid, invalid, valid, valid
+                    verify_mock.side_effect = [True, False, True, True]
+                    test_reader.file_info.get.side_effect = file_info_side_effect
+                    test_data_source._verify_file = verify_mock
+                    if state:
+                        test_subject = rc.StateRunner(
+                            test_config,
+                            test_organizer,
+                            test_builder,
+                            test_data_source,
+                            test_reader,
+                            TEST_BOOKMARK,
+                            test_observable,
+                            test_reporter,
+                            test_end_time,
+                        )
+                    else:
+                        test_subject = rc.TodoRunner(
+                            test_config,
+                            test_organizer,
+                            test_builder,
+                            test_data_source,
+                            test_reader,
+                            test_observable,
+                            test_reporter,
+                        )
 
-                diagnostic = f'clean up {clean_up} store modified {store_modified} subject {type(test_subject)}'
-                with patch('os.scandir') as scandir_mock:
-                    scandir_mock.return_value.__enter__.return_value = pre_success_listing
-                    test_result = test_subject.run()
-                    assert test_result is not None, f'expect a result {diagnostic}'
-                    assert test_result == 0, f'expect success {diagnostic}'
-                    assert test_subject._organizer._capture_failure.called, f'expect failure count {diagnostic}'
-                    assert (
-                        test_subject._organizer._capture_failure.call_count == 1
-                    ), f'wrong capture failure call count {diagnostic}'
-                    assert test_subject._organizer._capture_success.called, f'expect success count {diagnostic}'
-                    assert (
-                        test_subject._organizer._capture_success.call_count == 1
-                    ), f'wrong capture success call count {diagnostic}'
-                    assert move_mock.called, f'move should be called {diagnostic}'
-                    assert move_mock.call_count == 2, f'wrong move call count {diagnostic}'
-                    move_mock.assert_has_calls(
-                        [
-                            call('/tmp/A0.fits', '/data/success'),
-                            call('/tmp/A1.fits', '/data/failure'),
-                        ]
-                    ), f'wrong move_mock calls {diagnostic}'
-                    test_report = test_subject._report
-                    assert test_report._entries_sum == 3, f'entries {diagnostic}'
-                    assert test_report._success_sum == 1, f'success {diagnostic}'
-                    assert test_report._timeouts_sum == 0, f'timeouts {diagnostic}'
-                    assert test_report._retry_sum == 0, f'retry {diagnostic}'
-                    assert test_report._errors_sum == 1, f'errors {diagnostic}'
-                    assert test_report._rejection_sum == 0, f'rejection {diagnostic}'
-                    assert test_report._disregarded_sum == 1, f'disregarded {diagnostic}'
+                    diagnostic = f'clean up {clean_up} store modified {store_modified} subject {type(test_subject)}'
+                    _y(test_subject, pre_success_listing, move_calls, skipped_sum, clean_up, diagnostic)
+
+
+def _y(test_subject, pre_success_listing, move_calls, skipped_sum, clean_up, diagnostic):
+    move_mock = Mock()
+    test_subject._data_source._move_action = move_mock
+
+    with patch('os.scandir') as scandir_mock:
+        scandir_mock.return_value.__enter__.return_value = pre_success_listing
+        try:
+            test_result = test_subject.run()
+        except Exception as e:
+            import logging
+            import traceback
+            logging.error(traceback.format_exc())
+            assert False, f'{e} {diagnostic}'
+
+        assert test_result is not None, f'expect a result {diagnostic}'
+        assert test_result == -1, f'there are some failures {diagnostic}'
+        if clean_up:
+            assert move_mock.called, f'move should be called {diagnostic}'
+            assert move_mock.call_count == 4, f'wrong move call count {diagnostic}'
+            move_mock.assert_has_calls(move_calls)
+        else:
+            assert not move_mock.called, f'move should not be called {diagnostic}'
+        test_report = test_subject._data_source._reporter._summary
+        assert test_report._entries_sum == 4, f'entries {diagnostic} {test_report.report()}'
+        assert test_report._success_sum == 2, f'success {diagnostic} {test_report.report()}'
+        assert test_report._timeouts_sum == 0, f'timeouts {diagnostic} {test_report.report()}'
+        assert test_report._retry_sum == 0, f'retry {diagnostic} {test_report.report()}'
+        assert test_report._errors_sum == 2, f'errors {diagnostic} {test_report.report()}'
+        assert test_report._rejected_sum == 1, f'rejection {diagnostic} {test_report.report()}'
+        assert test_report._skipped_sum == skipped_sum, f'skipped {diagnostic} {test_report.report()}'
 
 
 @patch('caom2pipe.client_composable.ClientCollection')
@@ -231,7 +341,7 @@ def test_report_output_todo_vo(clients_mock, test_config):
                 check_mock = Mock()
                 # FITS files are valid, invalid, valid
                 check_mock.side_effect = [True, False, True]
-                test_data_source._check_file = check_mock
+                test_data_source._verify_file = check_mock
                 move_mock = Mock()
                 test_data_source._move_action = move_mock
                 test_subject = rc.TodoRunner(
