@@ -173,13 +173,6 @@ class CaomExecute:
             self.cadc_client = clients.data_client
             self.caom_repo_client = clients.metadata_client
         self._clients = clients
-        self.stream = None
-        if hasattr(config, 'stream'):
-            self.stream = (
-                None
-                if config.features.supports_latest_client
-                else config.stream
-            )
         self.meta_visitors = meta_visitors
         self.observable = observable
         self.log_file_directory = None
@@ -267,7 +260,7 @@ class CaomExecute:
 
     def _cadc_put(self, source_fqn, uri):
         interim_fqn = self._decompressor.fix_compression(source_fqn)
-        self.cadc_client.put(os.path.dirname(interim_fqn), uri, self.stream)
+        self.cadc_client.put(os.path.dirname(interim_fqn), uri, None)
         # fix FileInfo that becomes out-dated by decompression during a STORE
         # task, in this common location, affecting all collections
         if source_fqn != interim_fqn:
@@ -291,7 +284,6 @@ class CaomExecute:
             kwargs = {
                 'working_directory': self._working_dir,
                 'clients': self._clients,
-                'stream': self.stream,
                 'storage_name': self._storage_name,
                 'metadata_reader': self._metadata_reader,
                 'observable': self.observable,
@@ -485,7 +477,6 @@ class DataVisit(CaomExecute):
             'storage_name': self._storage_name,
             'log_file_directory': self._log_file_directory,
             'clients': self._clients,
-            'stream': self.stream,
             'observable': self.observable,
             'metadata_reader': self._metadata_reader,
         }

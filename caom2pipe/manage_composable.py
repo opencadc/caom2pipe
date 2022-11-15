@@ -617,7 +617,6 @@ class Config:
         self._logging_level = None
         self._log_to_file = False
         self._log_file_directory = None
-        self._stream = None
         self._storage_host = None
         self._task_types = []
         self._success_log_file_name = None
@@ -841,16 +840,6 @@ class Config:
     @recurse_data_sources.setter
     def recurse_data_sources(self, value):
         self._recurse_data_sources = value
-
-    @property
-    def stream(self):
-        """the ad 'stream' that goes with the archive - use when storing
-        files"""
-        return self._stream
-
-    @stream.setter
-    def stream(self, value):
-        self._stream = value
 
     @property
     def storage_host(self):
@@ -1189,7 +1178,6 @@ class Config:
             f'  storage_inventory_resource_id:: '
             f'{self.storage_inventory_resource_id}\n'
             f'  store_modified_files_only:: {self.store_modified_files_only}\n'
-            f'  stream:: {self.stream}\n'
             f'  success_fqn:: {self.success_fqn}\n'
             f'  success_log_file_name:: {self.success_log_file_name}\n'
             f'  tap_id:: {self.tap_id}\n'
@@ -1278,7 +1266,6 @@ class Config:
             self.log_file_directory = config.get(
                 'log_file_directory', self.working_directory
             )
-            self.stream = config.get('stream', 'raw')
             self.task_types = Config._obtain_task_types(config, [])
             self.collection = config.get('collection', 'TEST')
             self.archive = config.get('archive', self.collection)
@@ -1498,9 +1485,6 @@ class PreviewVisitor:
             self._logger.warning(
                 'Visitor needs a clients.data_client parameter to store previews.'
             )
-        self._stream = kwargs.get('stream')
-        if self._stream is None:
-            self._logger.warning('No stream parameter.')
         self._observable = kwargs.get('observable')
         if self._observable is None:
             raise CadcException('Visitor needs a observable parameter.')
@@ -1530,7 +1514,6 @@ class PreviewVisitor:
     def __str__(self):
         return (
             f'working directory: {self._working_dir}\n'
-            f'stream: {self._stream}\n'
             f'science file: {self._storage_name.file_name}\n'
         )
 
@@ -1617,9 +1600,7 @@ class PreviewVisitor:
             and self._clients.data_client is not None
         ):
             for uri, entry in self._previews.items():
-                self._clients.data_client.put(
-                    self._working_dir, uri, self._stream
-                )
+                self._clients.data_client.put(self._working_dir, uri)
 
     def _gen_thumbnail(self):
         self._logger.debug(
@@ -2696,55 +2677,6 @@ def convert_to_ts(value):
 def sizeof(x):
     """Encapsulate returning the memory size in bytes."""
     return sys.getsizeof(x)
-
-
-def data_put(
-    client,
-    working_directory,
-    file_name,
-    archive,
-    stream='raw',
-    mime_type=None,
-    mime_encoding=None,
-    metrics=None,
-):
-    """
-    Make a copy of a locally available file by writing it to CADC. Assumes
-    file and directory locations are correct. Requires a checksum comparison
-    by the client.
-
-    :param client: The CadcDataClient for write access to CADC storage.
-    :param working_directory: Where 'file_name' exists locally.
-    :param file_name: What to copy to CADC storage.
-    :param archive: Which archive to associate the file with.
-    :param stream: Defaults to raw - use is deprecated, however necessary it
-        may be at the current moment to the 'put_file' call.
-    :param mime_type: Because libmagic can't see inside a zipped fits file.
-    :param mime_encoding: Also because libmagic can't see inside a zipped
-        fits file.
-    :param metrics: Tracking success execution times, and failure counts.
-    """
-    start = datetime.utcnow().timestamp()
-    cwd = os.getcwd()
-    try:
-        os.chdir(working_directory)
-        client.put_file(
-            archive,
-            file_name,
-            archive_stream=stream,
-            mime_type=mime_type,
-            mime_encoding=mime_encoding,
-            md5_check=True,
-        )
-        file_size = os.stat(file_name).st_size
-    except Exception as e:
-        metrics.observe_failure('put', 'data', file_name)
-        logging.debug(traceback.format_exc())
-        raise CadcException(f'Failed to store data with {e}')
-    finally:
-        os.chdir(cwd)
-    end = datetime.utcnow().timestamp()
-    metrics.observe(start, end, file_size, 'put', 'data', file_name)
 
 
 def build_uri(archive, file_name, scheme='ad'):

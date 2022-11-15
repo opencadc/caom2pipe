@@ -486,6 +486,16 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 self._move_action(fqn, self._cleanup_success_directory)
         self._logger.debug('End clean_up.')
 
+    def _check_file(self, fqn):
+        """
+        Check file content for correctness, by whatever rules the file needs to conform to. The default
+        implementation is for FITS files only.
+
+        :param fqn: str fully-qualified file name
+        :return: True if the file passes the check, False otherwise
+        """
+        return ac.check_fitsverify(fqn)
+
     def default_filter(self, entry):
         """
         :param entry: os.DirEntry
@@ -498,7 +508,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             elif '.hdf5' in entry.name:
                 # no hdf5 validation
                 pass
-            elif ac.check_fitsverify(entry.path):
+            elif self._check_file(entry.path):
                 # only work with files that pass the FITS verification
                 if self._cleanup_when_storing:
                     if self._store_modified_files_only:

@@ -354,37 +354,6 @@ def test_get_artifact_metadata():
     ), 'wrong checksum'
 
 
-@patch('cadcdata.core.CadcDataClient')
-@patch('caom2pipe.manage_composable.Metrics')
-def test_data_put(mock_metrics, mock_client):
-    if not os.path.exists(f'{tc.TEST_FILES_DIR}/TEST.fits'):
-        with open(f'{tc.TEST_FILES_DIR}/TEST.fits', 'w') as f:
-            f.write('test content')
-
-    mc.data_put(
-        mock_client,
-        tc.TEST_FILES_DIR,
-        'TEST.fits',
-        'TEST',
-        'default',
-        metrics=mock_metrics,
-    )
-    mock_client.put_file.assert_called_with(
-        'TEST',
-        'TEST.fits',
-        archive_stream='default',
-        md5_check=True,
-        mime_encoding=None,
-        mime_type=None,
-    ), 'mock not called'
-    assert mock_metrics.observe.called, 'mock not called'
-    args, kwargs = mock_metrics.observe.call_args
-    assert args[2] == 12, 'wrong size'
-    assert args[3] == 'put', 'wrong endpoint'
-    assert args[4] == 'data', 'wrong service'
-    assert args[5] == 'TEST.fits', 'wrong id'
-
-
 def test_state():
     if os.path.exists(TEST_STATE_FILE):
         os.unlink(TEST_STATE_FILE)
@@ -668,7 +637,9 @@ def test_query_tap(caps_mock, base_mock, test_config):
 
 
 def test_visit():
+
     class TestVisitor(mc.PreviewVisitor):
+
         def __init__(self, **kwargs):
             super().__init__(archive='VLASS', **kwargs)
 
@@ -746,9 +717,7 @@ def test_visit():
             cadc_client_mock.put.call_count == expected_call_count
         ), 'put called wrong number of times'
         # it's an ad call, so there's a stream parameter
-        cadc_client_mock.put.assert_called_with(
-            '/test_files', 'cadc:VLASS/test_obs_id_prev.jpg', 'stream'
-        )
+        cadc_client_mock.put.assert_called_with('/test_files', 'cadc:VLASS/test_obs_id_prev.jpg')
     except Exception as e:
         assert False, f'{str(e)}'
     # assert False
