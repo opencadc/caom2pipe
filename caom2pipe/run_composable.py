@@ -349,14 +349,12 @@ class StateRunner(TodoRunner):
                 )
                 save_time = exec_time
                 self._organizer.success_count = 0
-                entries = self._data_source.get_time_box_work(
-                    prev_exec_time, exec_time
-                )
+                self._reporter.set_log_location(self._config)
+                entries = self._data_source.get_time_box_work(prev_exec_time, exec_time)
                 num_entries = len(entries)
 
                 if num_entries > 0:
                     self._logger.info(f'Processing {self._reporter.all} entries.')
-                    self._reporter.set_log_location(self._config)
                     pop_action = entries.pop
                     if isinstance(entries, deque):
                         pop_action = entries.popleft
@@ -504,9 +502,7 @@ def common_runner_init(
         clients,
         name_builder,
         source,
-        modify_transfer,
         metadata_reader,
-        store_transfer,
         organizer,
         observable,
         reporter,
@@ -556,9 +552,7 @@ def run_by_todo(
         clients,
         name_builder,
         source,
-        modify_transfer,
         metadata_reader,
-        store_transfer,
         organizer,
         observable,
         reporter,
@@ -634,9 +628,7 @@ def run_by_state(
         clients,
         name_builder,
         source,
-        modify_transfer,
         metadata_reader,
-        store_transfer,
         organizer,
         observable,
         reporter,

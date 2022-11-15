@@ -667,7 +667,7 @@ def _create_dir_listing(root_dir, count, prefix='A'):
         dir_entry = type('', (), {})
         dir_entry.name = f'{prefix}{ii}.fits'
         dir_entry.path = f'{root_dir}/{dir_entry.name}'
-        stat_return_value.st_mtime = 1583197266.0 + 10.0 * ii
+        stat_return_value.st_mtime = 1583197266.0 + 5.0 * ii
         dir_entry.stat = Mock(return_value=stat_return_value)
         dir_entry.is_dir = Mock(return_value=False)
         listing_result.append(dir_entry)

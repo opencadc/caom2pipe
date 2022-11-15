@@ -304,9 +304,9 @@ class ListDirTimeBoxDataSource(DataSource):
                 self._work.append(
                     StateRunnerMeta(entry_name=entry, entry_ts=mtime)
                 )
-        self._logger.debug('End get_time_box_work')
         self._temp = defaultdict(list)
         self._capture_todo()
+        self._logger.debug('End get_time_box_work')
         return self._work
 
     def _append_work(self, prev_exec_time, exec_time, entry_path):
@@ -460,7 +460,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 work_with_file = False
         else:
             work_with_file = False
-        self._logger.debug(f'Done default_filter says work_with_file is {work_with_file} for {entry}')
+        self._logger.debug(f'Done default_filter says work_with_file is {work_with_file} for {entry.name}')
         return work_with_file
 
     def get_work(self):
@@ -532,7 +532,6 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 )
                 temp_storage_name._destination_uris = [destination_name]
                 self._metadata_reader.set_file_info(temp_storage_name)
-
                 if (
                     self._metadata_reader.file_info.get(destination_name).md5sum.replace('md5:', '')
                     == cadc_meta.md5sum.replace('md5:', '')

@@ -286,11 +286,11 @@ class State:
                 self.logger.warning(f'No content found for {key}')
             else:
                 self.context[key] = value
-                logging.debug(f'Saving context {value} {self.fqn}')
+                self.logger.debug(f'Saving context {value} {self.fqn}')
                 write_as_yaml(self.content, self.fqn)
         else:
             self.bookmarks[key]['last_record'] = value
-            logging.debug(f'Saving bookmarked last record {value} {self.fqn}')
+            self.logger.debug(f'Saving bookmarked last record {value} {self.fqn}')
             write_as_yaml(self.content, self.fqn)
 
 
@@ -475,7 +475,7 @@ class ExecutionReporter:
         :e Exception to log - the entire stack trace, which, if logging
             level is not set to debug, will be lost for debugging purposes.
         """
-        self._summary.add_rejections(1)
+        self._summary.add_errors(1)
         self._count_timeouts(stack_trace)
         with open(self._failure_fqn, 'a') as failure:
             if e.args is not None and len(e.args) > 1:
@@ -502,6 +502,7 @@ class ExecutionReporter:
         :start_time seconds since beginning of execution.
         """
         self._summary.add_successes(1)
+        # logging.error(f'begin capture success {self._summary._success_sum}')
         execution_s = datetime.utcnow().timestamp() - start_time
         success = open(self._success_fqn, 'a')
         try:
@@ -517,16 +518,14 @@ class ExecutionReporter:
         self._logger.debug('*' * len(msg))
 
     def capture_todo(self, todo, rejected, skipped):
-        self._logger.error(self._summary)
-        self._logger.error(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
+        # self._logger.error(self._summary)
+        # self._logger.error(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
         self._summary.add_entries(todo + rejected + skipped)
-        # failures are already captured, so do not double-count them
+        self._summary.add_rejections(rejected)
         self._summary.add_skipped(skipped)
 
     def report(self):
-        # self._summary.add_timeouts(self._organizer.timeouts)
         self._summary.add_errors(self._count_retries())
-        # self._summary.add_rejections(self._organizer.rejected_count)
         msg = self._summary.report()
         self._logger.info(msg)
         write_to_file(self._report_fqn, msg)
@@ -637,6 +636,8 @@ class ExecutionSummary:
         return msg
 
     def reset_for_retry(self):
+        # pass  TODO - not sure if this implementation is correct
+        # don't know if this is the right thing to do
         self._success_sum = 0
 
 
