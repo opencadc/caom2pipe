@@ -735,8 +735,6 @@ def test_store(compressor_mock, access_mock, file_info_mock, test_config):
         )
         assert test_subject is not None, 'expect construction'
         os.mkdir(os.path.join(tmp_dir_name, test_sn.obs_id))
-        import logging
-        logging.getLogger('root').setLevel(logging.DEBUG)
         test_subject.execute({'storage_name': test_sn})
         assert test_subject.working_dir == os.path.join(tmp_dir_name, 'test_obs_id'), 'wrong working directory'
         assert (

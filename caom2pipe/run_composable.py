@@ -452,6 +452,26 @@ def common_runner_init(
     chooser,
     application,
 ):
+    """The common initialization code between TodoRunner and StateRunner uses. <collection>2caom2 implementations can
+    use the defaults created here for the 'run' call, or they can provide their own specializations of the various
+    classes required to store data and ingest metadata at CADC.
+
+    :param config Config instance
+    :param clients: ClientCollection instance
+    :param name_builder NameBuilder extension that creates an instance of a StorageName extension, from an entry from
+        a DataSourceComposable listing
+    :param source DataSource implementation, if there's a special data source
+    :param modify_transfer Transfer extension that identifies how to retrieve data from a source for modification of
+        CAOM2 metadata. By this time, files are usually stored at CADC, so it's probably a CadcTransfer instance, but
+        this allows for the case that a file is never stored at CADC. Try to guess what this one is.
+    :param metadata_reader: MetadataReader instance
+    :param state: bool True if using StateRunner
+    :param store_transfer Transfer extension that identifies hot to retrieve data from a source for storage at CADC,
+        probably an HTTP or FTP site. Don't try to guess what this one is.
+    :param meta_visitors list of modules with visit methods, that expect the metadata of a work file to exist on disk
+    :param data_visitors list of modules with visit methods, that expect the work file to exist on disk
+    :param chooser OrganizerChooser, if there's rules that are unique to a collection about file naming.
+    """
     if config is None:
         config = mc.Config()
         config.get_executors()
