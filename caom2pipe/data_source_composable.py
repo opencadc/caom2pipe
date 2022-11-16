@@ -147,6 +147,10 @@ class DataSource:
         return deque()
 
     def get_time_box_work(self, prev_exec_time, exec_time):
+        """
+        :param prev_exec_time: tz-aware datetime.timestamp
+        :param exec_time: tz-aware datetime.timestamp
+        """
         return deque()
 
     @property
@@ -285,8 +289,8 @@ class ListDirTimeBoxDataSource(DataSource):
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         """
-        :param prev_exec_time datetime start of the timestamp chunk
-        :param exec_time datetime end of the timestamp chunk
+        :param prev_exec_time tz-aware datetime.timestamp start of the timestamp chunk
+        :param exec_time tz-aware datetime.timestamp end of the timestamp chunk
         :return: a deque of StateRunnerMeta instances, with
             prev_exec_time <= os.stat.mtime <= exec_time, and sorted by
             os.stat.mtime
@@ -647,8 +651,8 @@ class QueryTimeBoxDataSource(DataSource):
         Get a set of file names from a collection. Limit the entries by
         time-boxing on lastModified, and don't include previews.
 
-        :param prev_exec_time timestamp start of the time-boxed chunk
-        :param exec_time timestamp end of the time-boxed chunk
+        :param prev_exec_time tz-aware datetime.timestamp start of the time-boxed chunk
+        :param exec_time tz-aware datetime.timestamp end of the time-boxed chunk
         :return: a list of StateRunnerMeta instances in the CADC storage system
         """
         # SG 8-09-22

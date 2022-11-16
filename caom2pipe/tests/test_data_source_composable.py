@@ -364,36 +364,19 @@ def test_vault_list_dir_time_box_data_source(test_config):
     test_subject.reporter = test_reporter
     assert test_subject is not None, 'expect a test_subject'
     test_prev_exec_time = datetime(
-        year=2020,
-        month=9,
-        day=15,
-        hour=10,
-        minute=0,
-        second=0,
-        tzinfo=timezone.utc,
-    )
+        year=2020, month=9, day=15, hour=10, minute=0, second=0, tzinfo=timezone.utc
+    ).timestamp()
     test_exec_time = datetime(
-        year=2020,
-        month=9,
-        day=16,
-        hour=10,
-        minute=0,
-        second=0,
-        tzinfo=timezone.utc,
-    )
-    test_result = test_subject.get_time_box_work(
-        test_prev_exec_time, test_exec_time
-    )
+        year=2020, month=9, day=16, hour=10, minute=0, second=0, tzinfo=timezone.utc
+    ).timestamp()
+    test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
     assert test_result is not None, 'expect a test result'
     assert len(test_result) == 1, 'wrong number of results'
     assert (
         'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
         == test_result[0].entry_name
     ), 'wrong name result'
-    assert (
-        datetime(2020, 9, 15, 19, 55, 3, 67000, tzinfo=timezone.utc)
-        == test_result[0].entry_ts
-    ), 'wrong ts result'
+    assert 1600199703.067 == test_result[0].entry_ts, 'wrong ts result'
     assert test_reporter.all == 1, 'wrong report'
 
 
