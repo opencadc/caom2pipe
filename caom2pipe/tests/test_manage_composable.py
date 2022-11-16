@@ -335,10 +335,8 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.product_type == ProductType.WEIGHT, 'wrong product type'
-    assert result.content_length == 383, 'wrong length'
-    assert (
-        result.content_checksum.uri == 'md5:fa7ce4f21e6c3dda14fbc910a0d280b0'
-    ), 'wrong checksum'
+    assert result.content_length == 368, 'wrong length'
+    assert result.content_checksum.uri == 'md5:e9db496ab9e875cc13ea52d4cc9db2c7', 'wrong checksum'
 
     # update action
     result.content_checksum = ChecksumURI('md5:abc')
@@ -347,9 +345,7 @@ def test_get_artifact_metadata():
     )
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
-    assert (
-        result.content_checksum.uri == 'md5:fa7ce4f21e6c3dda14fbc910a0d280b0'
-    ), 'wrong checksum'
+    assert result.content_checksum.uri == 'md5:e9db496ab9e875cc13ea52d4cc9db2c7', 'wrong checksum'
 
 
 def test_state():

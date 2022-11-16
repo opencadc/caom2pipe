@@ -274,10 +274,7 @@ def declare_client(config, metrics=None):
     storage."""
     subject = define_subject(config)
     cadc_client = StorageClientWrapper(
-        using_storage_inventory=True,
-        resource_id=config.storage_inventory_resource_id,
-        subject=subject,
-        metrics=metrics,
+        resource_id=config.storage_inventory_resource_id, subject=subject, metrics=metrics
     )
     return cadc_client
 
