@@ -1168,14 +1168,15 @@ class Config:
     @rejected_directory.setter
     def rejected_directory(self, value):
         self._rejected_directory = value
-        if self._rejected_directory is not None:
-            self.rejected_fqn = os.path.join(
-                self._rejected_directory, self._rejected_file_name
-            )
-        elif self._log_file_directory is not None:
-            self.rejected_fqn = os.path.join(
-                self._log_file_directory, self._rejected_file_name
-            )
+        if self._rejected_file_name is not None:
+            if self._rejected_directory is not None:
+                self.rejected_fqn = os.path.join(
+                    self._rejected_directory, self._rejected_file_name
+                )
+            elif self._log_file_directory is not None:
+                self.rejected_fqn = os.path.join(
+                    self._log_file_directory, self._rejected_file_name
+                )
 
     @property
     def rejected_file_name(self):
@@ -1429,6 +1430,29 @@ class Config:
                 else:
                     logging.warning(f'Unexpected features item:{ii}.')
         return feature_flags
+
+    def change_working_directory(self, new_directory):
+        """Mostly for test support."""
+        def _set_value(existing, new_name):
+            return existing if existing is not None else new_name
+
+        self.working_directory = new_directory
+        self.work_file = _set_value(self._work_file, 'todo.txt')
+        self.state_file_name = _set_value(self._state_file_name, 'state.yml')
+
+        self._log_file_directory = f'{new_directory}/logs'
+        self.failure_log_file_name = _set_value(self._failure_log_file_name, 'failure_log.txt')
+        self.progress_file_name = _set_value(self._progress_file_name, 'progress.txt')
+        self.retry_file_name = _set_value(self._retry_file_name, 'retries.txt')
+        self.success_log_file_name = _set_value(self._success_log_file_name, 'success_log.txt')
+
+        self._report_fqn = os.path.join(
+            self.log_file_directory, f'{os.path.basename(self.working_directory)}_report.txt'
+        )
+
+        self.rejected_directory = f'{new_directory}/rejected'
+        self.rejected_file_name = _set_value(self._rejected_file_name, 'rejected.yml')
+        self.observable_directory = f'{new_directory}/metrics'
 
     def get(self):
         """Look up the configuration values in the data structure extracted
