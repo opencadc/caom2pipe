@@ -888,6 +888,8 @@ class Config:
         self._features = Features()
         self._cleanup_failure_destination = None
         self._cleanup_success_destination = None
+        self._preview_scheme = 'cadc'
+        self._scheme = 'cadc'
         self._storage_inventory_resource_id = None
 
     @property
@@ -1323,6 +1325,24 @@ class Config:
         self._observable_directory = value
 
     @property
+    def preview_scheme(self):
+        """Preview scheme for Artifact URIs, which may be different based on who creates the file."""
+        return self._preview_scheme
+
+    @preview_scheme.setter
+    def preview_scheme(self, value):
+        self._preview_scheme = value
+
+    @property
+    def scheme(self):
+        """Scheme for Artifact URIs"""
+        return self._scheme
+
+    @scheme.setter
+    def scheme(self, value):
+        self._scheme = value
+
+    @property
     def source_host(self):
         """Host that is the source of something. Initial use case as ftp
         host name."""
@@ -1364,6 +1384,7 @@ class Config:
             f'  logging_level:: {self.logging_level}\n'
             f'  observable_directory:: {self.observable_directory}\n'
             f'  observe_execution:: {self.observe_execution}\n'
+            f'  preview_scheme:: {self.preview_scheme}\n'
             f'  progress_file_name:: {self.progress_file_name}\n'
             f'  progress_fqn:: {self.progress_fqn}\n'
             f'  proxy_file_name:: {self.proxy_file_name}\n'
@@ -1379,6 +1400,7 @@ class Config:
             f'  retry_failures:: {self.retry_failures}\n'
             f'  retry_file_name:: {self.retry_file_name}\n'
             f'  retry_fqn:: {self.retry_fqn}\n'
+            f'  scheme:: {self.scheme}\n'
             f'  slack_channel:: {self.slack_channel}\n'
             f'  slack_token:: secret\n'
             f'  source_host:: {self.source_host}\n'
@@ -1542,10 +1564,12 @@ class Config:
             self.store_modified_files_only = config.get(
                 'store_modified_files_only', False
             )
+            self.preview_scheme = config.get('preview_scheme', 'cadc')
             self._report_fqn = os.path.join(
                 self.log_file_directory,
                 f'{os.path.basename(self.working_directory)}_report.txt',
             )
+            self.scheme = config.get('scheme', 'cadc')
         except KeyError as e:
             raise CadcException(f'Error in config file {e}')
 
@@ -1698,10 +1722,7 @@ class PreviewVisitor:
     files in CADC storage, and cleaning up things left behind on disk.
     """
 
-    def __init__(
-        self, archive, release_type=None, mime_type='image/jpeg', **kwargs
-    ):
-        self._archive = archive
+    def __init__(self, release_type=None, mime_type='image/jpeg', **kwargs):
         self._release_type = release_type
         self._mime_type = mime_type
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -1894,6 +1915,7 @@ class StorageName:
     # string value for the scheme of the file URI. Defaults to the fall-back
     # scheme for Storage Inventory
     scheme = 'cadc'
+    preview_scheme = 'cadc'
 
     def __init__(
         self,
@@ -1938,12 +1960,8 @@ class StorageName:
             f'destination_uris: {self.destination_uris}'
         )
 
-    def _get_uri(self, file_name):
-        return build_uri(
-            scheme=StorageName.scheme,
-            archive=StorageName.collection,
-            file_name=file_name,
-        )
+    def _get_uri(self, file_name, scheme):
+        return build_uri(scheme=scheme, archive=StorageName.collection, file_name=file_name)
 
     @property
     def file_id(self):
@@ -1952,9 +1970,7 @@ class StorageName:
     @property
     def file_uri(self):
         """The CADC Storage URI for the file."""
-        return self._get_uri(
-            self._file_name.replace('.gz', '').replace('.bz2', '')
-        )
+        return self._get_uri(self._file_name.replace('.gz', '').replace('.bz2', ''), StorageName.scheme)
 
     @property
     def file_name(self):
@@ -1988,12 +2004,12 @@ class StorageName:
     @property
     def prev_uri(self):
         """The preview URI."""
-        return self._get_uri(self.prev)
+        return self._get_uri(self.prev, StorageName.preview_scheme)
 
     @property
     def thumb_uri(self):
         """The thumbnail URI."""
-        return self._get_uri(self.thumb)
+        return self._get_uri(self.thumb, StorageName.preview_scheme)
 
     @property
     def obs_id(self):
@@ -2058,16 +2074,12 @@ class StorageName:
             if '.fits' in entry:
                 self._destination_uris.append(
                     self._get_uri(
-                        os.path.basename(temp.path)
-                        .replace('.gz', '')
-                        .replace('.bz2', '')
-                        .replace('.header', '')
+                        os.path.basename(temp.path).replace('.gz', '').replace('.bz2', '').replace('.header', ''),
+                        StorageName.scheme,
                     )
                 )
             else:
-                self._destination_uris.append(
-                    self._get_uri(os.path.basename(temp.path)),
-                )
+                self._destination_uris.append(self._get_uri(os.path.basename(temp.path), StorageName.scheme))
 
     def set_file_id(self):
         if self._file_id is None:
@@ -2120,7 +2132,7 @@ class Validator:
     def __init__(
         self,
         source_name,
-        scheme='ad',
+        scheme='cadc',
         preview_suffix='jpg',
         source_tz=timezone.utc,
     ):

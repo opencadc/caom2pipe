@@ -478,9 +478,12 @@ def common_runner_init(
 
     _set_logging(config)
     logging.debug(
-        f'Setting collection to {config.collection} in StorageName.'
+        f'Setting collection to {config.collection}, preview scheme to {config.preview_scheme} and scheme to '
+        f'{config.scheme} in StorageName.'
     )
     mc.StorageName.collection = config.collection
+    mc.StorageName.preview_scheme = config.preview_scheme
+    mc.StorageName.scheme = config.scheme
 
     observable = mc.Observable(mc.Rejected(config.rejected_fqn), mc.Metrics(config))
     reporter = mc.ExecutionReporter(config, observable, application)
