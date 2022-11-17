@@ -1732,9 +1732,6 @@ class PreviewVisitor:
             self._logger.warning(
                 'Visitor needs a clients.data_client parameter to store previews.'
             )
-        self._observable = kwargs.get('observable')
-        if self._observable is None:
-            raise CadcException('Visitor needs a observable parameter.')
         self._storage_name = kwargs.get('storage_name')
         if self._storage_name is None:
             raise CadcException('Visitor needs a storage_name parameter.')
