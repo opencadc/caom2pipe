@@ -477,6 +477,7 @@ class ExecutionReporter:
         :e Exception to log - the entire stack trace, which, if logging
             level is not set to debug, will be lost for debugging purposes.
         """
+        self._logger.debug('Begin capture_failure')
         self._summary.add_errors(1)
         self._count_timeouts(stack_trace)
         with open(self._failure_fqn, 'a') as failure:
@@ -495,6 +496,7 @@ class ExecutionReporter:
         else:
             self._observable.rejected.record(reason, storage_name.obs_id)
             self._summary.add_rejections(1)
+        self._logger.debug('End capture_failure')
 
     def capture_success(self, obs_id, file_name, start_time):
         """Capture, with a timestamp, the successful observations/file names
@@ -503,8 +505,8 @@ class ExecutionReporter:
         :file_name file name being processed
         :start_time seconds since beginning of execution.
         """
+        self._logger.debug('Begin capture_success')
         self._summary.add_successes(1)
-        # logging.error(f'begin capture success {self._summary._success_sum}')
         execution_s = datetime.utcnow().timestamp() - start_time
         success = open(self._success_fqn, 'a')
         try:
@@ -527,7 +529,6 @@ class ExecutionReporter:
         self._summary.add_skipped(skipped)
 
     def report(self):
-        self._summary.add_errors(self._count_retries())
         msg = self._summary.report()
         self._logger.info(msg)
         write_to_file(self._report_fqn, msg)
