@@ -499,11 +499,10 @@ class ExecutionReporter:
         self._logger.debug('End capture_failure')
 
     def capture_success(self, obs_id, file_name, start_time):
-        """Capture, with a timestamp, the successful observations/file names
-        that have been processed.
-        :obs_id observation ID being processed
-        :file_name file name being processed
-        :start_time seconds since beginning of execution.
+        """Capture, with a timestamp, the successful observations/file names that have been processed.
+        :param obs_id str observation ID being processed
+        :param file_name str file name being processed
+        :param start_time int seconds since beginning of execution.
         """
         self._logger.debug('Begin capture_success')
         self._summary.add_successes(1)
@@ -522,8 +521,7 @@ class ExecutionReporter:
         self._logger.debug('*' * len(msg))
 
     def capture_todo(self, todo, rejected, skipped):
-        # self._logger.error(self._summary)
-        # self._logger.error(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
+        self._logger.debug(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
         self._summary.add_entries(todo + rejected + skipped)
         self._summary.add_rejections(rejected)
         self._summary.add_skipped(skipped)

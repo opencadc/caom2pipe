@@ -746,7 +746,7 @@ def test_store(compressor_mock, access_mock, file_info_mock, test_config):
         ), 'wrong destination'
         assert test_data_client.put.called, 'data put not called'
         test_data_client.put.assert_called_with(
-            f'{tmp_dir_name}/test_obs_id', 'cadc:TEST/test_file.fits', None
+            f'{tmp_dir_name}/test_obs_id', 'cadc:TEST/test_file.fits'
         ), 'wrong put call args'
 
 

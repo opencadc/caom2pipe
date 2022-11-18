@@ -859,8 +859,8 @@ def test_run_store_ingest_failure(
                 data_client_mock.return_value.put.call_count == 2
             ), 'wrong number of puts'
             put_calls = [
-                call('/data', 'cadc:OMM/dao_c122_2021_005157_e.fits', None),
-                call('/data', 'cadc:OMM/dao_c122_2021_005157.fits', None),
+                call('/data', 'cadc:OMM/dao_c122_2021_005157_e.fits'),
+                call('/data', 'cadc:OMM/dao_c122_2021_005157.fits'),
             ]
             data_client_mock.return_value.put.assert_has_calls(
                 put_calls, any_order=False
@@ -1172,7 +1172,7 @@ def test_vo_with_cleanup(
             ), 'move args'
             assert clients_mock.data_client.put.called, 'put call'
             clients_mock.data_client.put.assert_called_with(
-                tmp_dir_name, 'cadc:DAO/sky_cam_image.fits', None
+                tmp_dir_name, 'cadc:DAO/sky_cam_image.fits'
             ), 'wrong put call args'
         finally:
             os.getcwd = getcwd_orig
@@ -1210,7 +1210,6 @@ def test_store_from_to_cadc(clients_mock, get_work_mock, test_config):
     clients_mock.return_value.data_client.put.assert_called_with(
         '/usr/src/app/caom2pipe/caom2pipe/tests/abc',
         f'cadc:{test_config.collection}/{test_f_name}',
-        None,  # stream
     ), 'wrong put params'
 
 

@@ -184,7 +184,6 @@ def test_run_state(client_mock):
             client_mock.data_client.put.assert_called_with(
                 f'{tmp_dir_name}/test_obs_id',
                 'cadc:TEST/test_file.fits',
-                None,
             ), 'wrong call args'
 
             # state file checking

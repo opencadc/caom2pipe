@@ -259,7 +259,7 @@ class CaomExecute:
 
     def _cadc_put(self, source_fqn, uri):
         interim_fqn = self._decompressor.fix_compression(source_fqn)
-        self.cadc_client.put(os.path.dirname(interim_fqn), uri, None)
+        self.cadc_client.put(os.path.dirname(interim_fqn), uri)
         # fix FileInfo that becomes out-dated by decompression during a STORE
         # task, in this common location, affecting all collections
         if source_fqn != interim_fqn:
