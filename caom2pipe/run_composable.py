@@ -493,16 +493,16 @@ def common_runner_init(
     clients.metrics = observable.metrics
     if name_builder is None:
         name_builder = name_builder_composable.builder_factory(config)
+    if metadata_reader is None:
+        metadata_reader = reader_composable.reader_factory(config, clients)
     if source is None:
-        source = data_source_composable.data_source_factory(config, clients, state, reporter)
+        source = data_source_composable.data_source_factory(config, clients, state, metadata_reader, reporter)
     else:
         source.reporter = reporter
     if modify_transfer is None:
         modify_transfer = transfer_composable.modify_transfer_factory(
             config, clients
         )
-    if metadata_reader is None:
-        metadata_reader = reader_composable.reader_factory(config, clients)
 
     if store_transfer is None:
         store_transfer = transfer_composable.store_transfer_factory(

@@ -80,6 +80,7 @@ from cadcutils import exceptions
 from caom2pipe import astro_composable as ac
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
+from caom2pipe import name_builder_composable as nbc
 
 __all__ = [
     'DataSource',
@@ -91,6 +92,7 @@ __all__ = [
     'QueryTimeBoxDataSource',
     'StateRunnerMeta',
     'TodoFileDataSource',
+    'VaultCleanupDataSource',
     'VaultDataSource',
 ]
 
@@ -773,25 +775,26 @@ class VaultDataSource(ListDirTimeBoxDataSource):
 
 class VaultCleanupDataSource(VaultDataSource):
     """
-    This implementation will clean up a vos: data source, but it will
-    not retry it.
-
-    This implementation does not yet rely on a MetadataReader for caching
-    the FileInfo.
+    This implementation will clean up a vos: data source.
     """
 
-    def __init__(self, config, vault_client, cadc_client, scheme='cadc'):
+    def __init__(self, config, vault_client, cadc_client, metadata_reader):
         super().__init__(vault_client, config)
         self._cleanup_when_storing = config.cleanup_files_when_storing
         self._cleanup_failure_directory = config.cleanup_failure_destination
         self._cleanup_success_directory = config.cleanup_success_destination
+        self._retry_failures = config.retry_failures
+        self._retry_count = config.retry_count
         self._store_modified_files_only = config.store_modified_files_only
         self._collection = config.collection
         self._recursive = config.recurse_data_sources
         self._cadc_client = cadc_client
-        self._scheme = scheme
-        self._work = deque()
-        self._logger = logging.getLogger(self.__class__.__name__)
+        self._scheme = config.scheme
+        self._metadata_reader = metadata_reader
+        if mc.TaskType.STORE not in config.task_types:
+            # do not clean up files unless the STORE task is configured
+            self._cleanup_when_storing = False
+            self._logger.info('Not STORE\'ing data - ignore config.yml cleanup_files_when_storing setting.')
 
     def get_collection(self, f_name):
         return self._collection
@@ -801,53 +804,56 @@ class VaultCleanupDataSource(VaultDataSource):
         Move a file to the success or failure location, depending on whether
         a file with the same checksum is at CADC.
         """
-        if self._cleanup_when_storing:
-            self._logger.debug(f'Begin clean_up with {entry}')
+        self._logger.debug(f'Begin clean_up with {entry}')
+        if self._cleanup_when_storing and (
+            (not self._retry_failures)
+            or (self._retry_failures and current_count >= self._retry_count)
+            or (self._retry_failures and execution_result == 0)
+        ):
             if isinstance(entry, str):
                 fqn = entry
             else:
                 fqn = entry.entry_name
+            storage_name = nbc.GuessingBuilder(mc.StorageName).build(fqn)
             self._logger.debug(f'Clean up {fqn}')
-            check_result, vos_meta = self._check_md5sum(fqn)
-            if check_result:
-                # if vos_meta is None, it's already been cleaned up,
-                # due to astropy fits verify failure cleanup
-                if vos_meta is not None:
+            if storage_name.destination_uris[0] in self._metadata_reader.file_info:
+                if self._check_md5sum(storage_name.destination_uris[0]):
                     # the transfer itself failed, so track as a failure
                     self._move_action(fqn, self._cleanup_failure_directory)
+                else:
+                    self._move_action(fqn, self._cleanup_success_directory)
             else:
-                self._move_action(fqn, self._cleanup_success_directory)
+                self._logger.warning(f'No clean up for {fqn} because there is no vos metadata.')
             self._logger.debug('End clean_up.')
 
-    def default_filter(self, target_node):
+    def default_filter(self, dir_entry_fqn):
         """
-        :param target_node: Node
+        :param dir_entry_fqn: str that is a vos URI
         """
-        # make a Node look like an os.DirEntry, which is expected by
-        # the super invocation
-        # dir_entry = type('', (), {})
-        # dir_entry.name = os.path.basename(target_node.uri)
-        # dir_entry.path = target_node.uri
-        copy_file = True
-        if target_node.props.get('size') == 0:
-            self._logger.info(f'Skipping 0-length {target_node.uri}')
-            copy_file = False
-        else:
-            for extension in self._data_source_extensions:
-                if target_node.uri.endswith(extension):
-                    if os.path.basename(target_node.uri).startswith('.'):
-                        # skip dot files
+        copy_file = False
+        for extension in self._data_source_extensions:
+            if dir_entry_fqn.endswith(extension):
+                copy_file = True
+                if os.path.basename(dir_entry_fqn).startswith('.'):
+                    # skip dot files
+                    copy_file = False
+                else:
+                    storage_name = nbc.GuessingBuilder(mc.StorageName).build(dir_entry_fqn)
+                    self._metadata_reader.set_file_info(storage_name)
+                    if self._metadata_reader.file_info[storage_name.destination_uris[0]].size == 0:
+                        self._logger.info(f'Skipping 0-length {dir_entry_fqn}')
                         copy_file = False
                     elif self._store_modified_files_only:
                         # only transfer files with a different MD5 checksum
-                        copy_file, ignore_meta = self._check_md5sum(target_node.uri)
+                        copy_file = self._check_md5sum(storage_name.destination_uris[0])
                         if not copy_file:
-                            self._move_action(target_node.uri, self._cleanup_success_directory)
-                            self._reporter.capture_success(
-                                target_node.uri, target_node.uri, datetime.utcnow().timestamp()
-                            )
                             self._skipped_files += 1
-                    break
+                            self._move_action(dir_entry_fqn, self._cleanup_success_directory)
+                            self._reporter.capture_success(
+                                dir_entry_fqn, os.path.basename(dir_entry_fqn), datetime.utcnow().timestamp()
+                            )
+                break
+        self._logger.debug(f'Done default_filter says copy_file is {copy_file} for {dir_entry_fqn}')
         return copy_file
 
     def get_work(self):
@@ -859,35 +865,27 @@ class VaultCleanupDataSource(VaultDataSource):
         self._capture_todo()
         return self._work
 
-    def _check_md5sum(self, node):
+    def _check_md5sum(self, destination_uri):
         """
-        :param node: Node
+        :param destination_uri: str CADC storage system URI
         """
-        # # get the metadata from VOS
-        # result = True
-        # vos_meta = clc.vault_info(self._vault_client, entry_fqn)
+        result = True
         # get the metadata at CADC
-        # TODO - add a MetadataReader invocation
-        # f_name = os.path.basename(entry_fqn)
-        # collection = self.get_collection(f_name)
-        # cadc_name = mc.build_uri(collection, f_name, self._scheme)
-        # cadc_meta = self._cadc_client.info(cadc_name)
-        # if cadc_meta is not None and vos_meta.md5sum == cadc_meta.md5sum:
-        #     self._logger.warning(
-        #         f'{entry_fqn} has the same md5sum at CADC. Not transferring.'
-        #     )
-        #     result = False
-        # return result, vos_meta
-        return None, None
+        cadc_meta = self._cadc_client.info(destination_uri)
+        if cadc_meta is not None and self._metadata_reader.file_info[destination_uri].md5sum == cadc_meta.md5sum:
+            self._logger.warning(f'{destination_uri} has the same md5sum at CADC. Not transferring.')
+            result = False
+        return result
 
     def _find_work(self, entry):
+        # dir_listing is a list of str
         dir_listing = self._vault_client.listdir(entry)
         for dir_entry in dir_listing:
             dir_entry_fqn = f'{entry}/{dir_entry}'
             if self._vault_client.isdir(dir_entry_fqn) and self._recursive:
                 self._find_work(dir_entry_fqn)
             else:
-                if self.default_filter(dir_entry, dir_entry_fqn):
+                if self.default_filter(dir_entry_fqn):
                     self._logger.info(f'Adding {dir_entry_fqn} to work list.')
                     self._work.append(dir_entry_fqn)
 
@@ -920,7 +918,7 @@ class VaultCleanupDataSource(VaultDataSource):
                 raise mc.CadcException(e)
 
 
-def data_source_factory(config, clients, state, reporter):
+def data_source_factory(config, clients, state, reader, reporter):
     """
     :param config: manage_composable.Config
     :param clients: client_composable.ClientCollection
@@ -933,7 +931,7 @@ def data_source_factory(config, clients, state, reporter):
     else:
         if config.use_vos and clients.vo_client is not None:
             if config.cleanup_files_when_storing:
-                source = VaultCleanupDataSource(config, clients.vo_client, clients.data_client)
+                source = VaultCleanupDataSource(config, clients.vo_client, clients.data_client, reader)
             else:
                 source = VaultDataSource(clients.vo_client, config)
         else:

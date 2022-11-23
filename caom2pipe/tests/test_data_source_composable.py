@@ -72,6 +72,7 @@ import shutil
 
 from astropy.table import Table
 from cadctap import CadcTapClient
+from cadcutils import exceptions
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -650,6 +651,136 @@ def test_all_local_files_some_already_stored_some_broken(clients_mock, move_mock
         assert move_mock.called, 'move should be called'
         assert move_mock.call_count == 2, 'wrong move call count'
         move_mock.assert_has_calls([call('/tmp/A0.fits', '/data/success'), call('/tmp/A1.fits', '/data/failure')]), 'wrong move_mock calls'
+
+
+@patch('caom2pipe.client_composable.vault_info', autospec=True)
+def test_vo_transfer_check_fits_verify(vault_info_mock, test_config):
+    test_match_file_info = FileInfo(id='vos:abc/def.fits', md5sum='ghi')
+    test_different_file_info = FileInfo(id='vos:abc/def.fits', md5sum='ghi')
+    test_file_info = [test_match_file_info, test_different_file_info]
+
+    test_data_client = Mock(autospec=True)
+    test_vos_client = Mock(autospec=True)
+
+    test_config.data_source_extensions = ['.fits.gz']
+    test_config.data_sources = ['vos:DAO/Archive/Incoming']
+    test_config.cleanup_failure_destination = 'vos:DAO/failure'
+    test_config.cleanup_success_destination = 'vos:DAO/success'
+    test_config.recurse_data_sources = False
+
+    def _mock_listdir(entry):
+        if entry.endswith('Incoming'):
+            return ['dao123.fits.gz', 'dao456.fits', 'Yesterday', '.dot.fits.gz']
+        else:
+            return []
+
+    test_vos_client.listdir.side_effect = _mock_listdir
+    test_vos_client.isdir.side_effect = [False, False, True, False, False, False, True, False]
+    test_reader = rdc.VaultReader(test_vos_client)
+
+    for case in [True, False]:
+        test_config.cleanup_files_when_storing = case
+        vault_info_mock.side_effect = test_file_info
+        test_data_client.info.side_effect = test_file_info
+
+        test_subject = dsc.VaultCleanupDataSource(test_config, test_vos_client, test_data_client, test_reader)
+        assert test_subject is not None, 'expect ctor to work'
+        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+        test_subject.reporter = test_reporter
+        test_result = test_subject.get_work()
+
+        assert test_result is not None, 'expect a work list'
+        assert len(test_result) == 1, 'wrong work list entries'
+        assert test_result[0] == 'vos:DAO/Archive/Incoming/dao123.fits.gz', 'wrong work entry'
+
+        assert test_vos_client.isdir.call_count == 4, 'wrong is_dir count'
+        test_vos_client.isdir.reset_mock()
+        # no work done yet
+        assert test_reporter.all == 1, 'wrong report'
+        assert test_reporter._summary._success_sum == 0, f'wrong report {test_reporter._summary}'
+        assert test_reporter._summary._rejected_sum == 0, f'wrong report {test_reporter._summary}'
+        assert test_reporter._summary._skipped_sum == 0, f'wrong report {test_reporter._summary}'
+
+    # test the case when the md5sums are the same, so the transfer does
+    # not occur, but the file ends up in the success location
+    test_vos_client.isdir.side_effect = [False, False, True, False]
+    test_config.cleanup_files_when_storing = True
+    test_config.store_modified_files_only = True
+    test_config.task_types = [mc.TaskType.STORE]
+    vault_info_mock.return_value = test_match_file_info
+    test_data_client.info.return_value = test_match_file_info
+    test_vos_client.status.raises = exceptions.NotFoundException
+
+    second_test_subject = dsc.VaultCleanupDataSource(test_config, test_vos_client, test_data_client, test_reader)
+    assert second_test_subject is not None, 'second ctor fails'
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    second_test_subject.reporter = test_reporter
+    second_test_result = second_test_subject.get_work()
+    assert second_test_result is not None, 'expect a second result'
+    assert len(second_test_result) == 0, 'should be no successes'
+    assert test_vos_client.move.called, 'expect a success move call'
+    test_vos_client.move.assert_called_with(
+        'vos:DAO/Archive/Incoming/dao123.fits.gz', 'vos:DAO/success/dao123.fits.gz'
+    )
+    assert test_vos_client.status.called, 'expect a status call'
+    assert test_reporter.all == 1, 'wrong report'
+    assert test_reporter._summary._success_sum == 1, f'wrong report {test_reporter._summary}'
+    assert test_reporter._summary._rejected_sum == 0, f'wrong report {test_reporter._summary}'
+    assert test_reporter._summary._skipped_sum == 1, f'wrong report {test_reporter._summary}'
+
+
+def test_data_source_exists(test_config):
+    # test the case where the destination file already exists, so the
+    # move cleanup has to remove it first
+    import logging
+    logging.getLogger('root').setLevel(logging.DEBUG)
+    test_uri = 'cadc:OMM/dest_fqn.fits'
+    test_config.cleanup_failure_destination = 'vos:test/failure'
+    test_config.cleanup_success_destination = 'vos:test/success'
+    test_config.data_sources = 'vos:test'
+    test_config.data_source_extensions = ['.fits']
+    test_config.cleanup_files_when_storing = True
+    test_config.task_types = [mc.TaskType.STORE]
+    test_vos_client = Mock(autospec=True)
+    test_data_client = Mock(autospec=True)
+    test_reader = rdc.VaultReader(test_vos_client)
+    test_reader.file_info[test_uri] = FileInfo(id=test_uri, md5sum='ghi')
+    test_subject = dsc.VaultCleanupDataSource(test_config, test_vos_client, test_data_client, test_reader)
+    assert test_subject is not None, 'ctor failure'
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_subject.reporter = test_reporter
+    test_subject._work = ['vos:test/dest_fqn.fits']
+
+    def _get_node(uri, limit=None, force=None):
+        assert uri == 'vos:test/dest_fqn.fits', f'wrong vo check {uri}'
+        node = type('', (), {})()
+        node.props = {'length': 42, 'MD5': 'ghi', 'lastmod': 'Sept 10 2021'}
+        return node
+
+    test_vos_client.get_node.side_effect = _get_node
+
+    # mock that the same file already exists as CADC
+    def _get_info(uri):
+        assert uri == test_uri, f'wrong storage check {uri}'
+        return FileInfo(id=uri, md5sum='ghi')
+
+    test_data_client.info.side_effect = _get_info
+
+    # destination file exists at CADC
+    def _status(uri):
+        assert uri == 'vos:test/success/dest_fqn.fits', f'wrong status check {uri}'
+        return True
+
+    test_vos_client.status.side_effect = _status
+
+    # test execution
+    for entry in test_subject._work:
+        test_subject.clean_up(entry, 'ignore1', 'ignore2')
+    assert test_vos_client.status.called, 'expect status call'
+    assert test_vos_client.delete.called, 'expect delete call'
+    test_vos_client.delete.assert_called_with('vos:test/success/dest_fqn.fits')
+    assert test_vos_client.move.called, 'expect move call'
+    test_vos_client.move.assert_called_with('vos:test/dest_fqn.fits', 'vos:test/success/dest_fqn.fits')
 
 
 def _create_dir_listing(root_dir, count, prefix='A'):
