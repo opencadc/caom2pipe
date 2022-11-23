@@ -1,4 +1,3 @@
-archive: NEOSS
 cache_file_name: cache.yml
 cache_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/cache.yml
 cleanup_files_when_storing: False
@@ -8,11 +7,9 @@ data_sources: []
 failure_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/failure_log.txt
 failure_log_file_name: failure_log.txt
 features:
-  expects_retry: True
   run_in_airflow: True
   supports_catalog: True
   supports_composite: False
-  supports_latest_client: False
   supports_multiple_files: True
 interval: 10
 is_connected: True

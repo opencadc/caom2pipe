@@ -382,7 +382,6 @@ def test_scrape(test_config):
         test_sn = tc.TestStorageName(source_names=[f'{tc.TEST_FILES_DIR}/correct.fits'])
         test_executor = ec.Scrape(
             test_config,
-            observable=None,
             meta_visitors=[],
             metadata_reader=test_reader,
         )
@@ -400,7 +399,6 @@ def test_data_scrape_execute(test_config):
         test_executor = ec.DataScrape(
             test_config,
             test_data_visitors,
-            observable=None,
             metadata_reader=None,
         )
         os.mkdir(os.path.join(tmp_dir_name, test_sn.obs_id))
@@ -482,25 +480,7 @@ def test_organize_executes_client_visit(test_config):
     assert test_oe._executors is not None
     assert len(test_oe._executors) == 1
     assert isinstance(test_oe._executors[0], ec.MetaVisit)
-    clients_mock.return_value.metadata_client.read.assert_not_called, 'mock should not be called?'
-
-
-def test_do_one(test_config):
-    test_config.task_types = []
-    test_reader = Mock(autospec=True)
-    test_organizer = ec.OrganizeExecutes(
-        test_config, 'test2caom2', [], [], metadata_reader=test_reader
-    )
-    # no client
-    test_result = test_organizer.do_one(tc.TestStorageName())
-    assert test_result is not None
-    assert test_result == -1
-
-    # client
-    test_config.features.use_clients = True
-    test_result = test_organizer.do_one(tc.TestStorageName())
-    assert test_result is not None
-    assert test_result == -1
+    clients_mock.return_value.metadata_client.read.assert_not_called(), 'mock should not be called?'
 
 
 def test_storage_name():
@@ -551,19 +531,6 @@ def test_choose_exceptions(test_config):
             test_config, 'command name', [], []
         )
         test_organizer.choose()
-
-
-@patch('sys.exit', Mock(side_effect=MyExitError))
-def test_storage_name_failure(test_config):
-    test_config.log_to_file = True
-    assert not os.path.exists(test_config.success_fqn)
-    assert not os.path.exists(test_config.failure_fqn)
-    assert not os.path.exists(test_config.retry_fqn)
-    test_organizer = ec.OrganizeExecutes(test_config, 'command name', [], [])
-    test_organizer.choose()
-    assert os.path.exists(test_config.success_fqn)
-    assert os.path.exists(test_config.failure_fqn)
-    assert os.path.exists(test_config.retry_fqn)
 
 
 def test_organize_executes_client_do_one(test_config):
@@ -701,7 +668,7 @@ def test_data_visit(client_mock, access_mock, test_config):
         file_name='test_obs_id.fits',
         source_names=['ad:TEST/test_obs_id.fits'],
     )
-    test_transferrer = transfer_composable.CadcTransfer()
+    test_transferrer = transfer_composable.CadcTransfer(clients.data_client)
     test_transferrer.cadc_client = client_mock
     test_transferrer.observable = test_observable
 
@@ -768,8 +735,6 @@ def test_store(compressor_mock, access_mock, file_info_mock, test_config):
         )
         assert test_subject is not None, 'expect construction'
         os.mkdir(os.path.join(tmp_dir_name, test_sn.obs_id))
-        import logging
-        logging.getLogger('root').setLevel(logging.DEBUG)
         test_subject.execute({'storage_name': test_sn})
         assert test_subject.working_dir == os.path.join(tmp_dir_name, 'test_obs_id'), 'wrong working directory'
         assert (
@@ -781,7 +746,7 @@ def test_store(compressor_mock, access_mock, file_info_mock, test_config):
         ), 'wrong destination'
         assert test_data_client.put.called, 'data put not called'
         test_data_client.put.assert_called_with(
-            f'{tmp_dir_name}/test_obs_id', 'cadc:TEST/test_file.fits', None
+            f'{tmp_dir_name}/test_obs_id', 'cadc:TEST/test_file.fits'
         ), 'wrong put call args'
 
 

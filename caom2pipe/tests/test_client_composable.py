@@ -74,6 +74,8 @@ from cadcdata import FileInfo
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 
+from shutil import copy
+from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 import test_conf as tc
@@ -82,12 +84,21 @@ import test_conf as tc
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 def test_clients(get_access_mock):
     get_access_mock.return_value = 'https://localhost'
-    test_config = mc.Config()
-    test_config.get_executors()
-    test_config.resource_id = 'ivo://cadc.nrc.ca/test'
-    test_config.tap_id = 'ivo://cadc.nrc.ca/test'
-    test_subject = clc.ClientCollection(test_config)
-    assert test_subject is not None, 'ctor failure'
+    test_config_fqn = f'{tc.TEST_DATA_DIR}/config.yml'
+    cwd_dir = os.getcwd()
+    try:
+        with TemporaryDirectory() as tmp_dir_name:
+            os.chdir(tmp_dir_name)
+            copy(test_config_fqn, f'{tmp_dir_name}/config.yml')
+
+            test_config = mc.Config()
+            test_config.get_executors()
+            test_config.resource_id = 'ivo://cadc.nrc.ca/test'
+            test_config.tap_id = 'ivo://cadc.nrc.ca/test'
+            test_subject = clc.ClientCollection(test_config)
+            assert test_subject is not None, 'ctor failure'
+    finally:
+        os.chdir(cwd_dir)
 
 
 @patch('cadcdata.storageinv.StorageInventoryClient')
