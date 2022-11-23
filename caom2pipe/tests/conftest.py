@@ -7,7 +7,7 @@ import test_conf as tc
 
 @pytest.fixture(scope='function')
 def test_config():
-    mc.StorageName.collection = None
+    mc.StorageName.collection = 'OMM'
     mc.StorageName.scheme = 'cadc'
     mc.StorageName.collection_pattern = '.*'
     test_config = mc.Config()
@@ -33,7 +33,6 @@ def test_config():
         f'{test_config.log_file_directory}/' f'test_report.txt'
     )
     test_config.storage_inventory_resource_id = 'ivo://cadc.nrc.ca/TEST'
-    test_config.stream = 'TEST'
     for f_name in [
         test_config.failure_fqn,
         test_config.success_fqn,
