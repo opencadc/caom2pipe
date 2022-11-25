@@ -293,6 +293,15 @@ class State:
             self.logger.debug(f'Saving bookmarked last record {value} {self.fqn}')
             write_as_yaml(self.content, self.fqn)
 
+    @staticmethod
+    def write_bookmark(state_fqn, book_mark, time_str):
+        bookmark = {
+            'bookmarks': {
+                f'{book_mark}': {'last_record': f'{time_str}'},
+            }
+        }
+        write_as_yaml(bookmark, state_fqn)
+
 
 class Rejected:
     """Persist information between pipeline invocations about the observation
