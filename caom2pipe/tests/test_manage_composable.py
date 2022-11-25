@@ -522,15 +522,15 @@ class TestValidator(mc.Validator):
 @patch('cadcdata.core.net.BaseWsClient.post')
 @patch('cadcdata.core.net.BaseWsClient.get')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_validator(caps_mock, ad_mock, tap_mock):
+def test_validator(caps_mock, ad_mock, tap_mock, test_config, tmpdir):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     tap_response = Mock()
     tap_response.status_code = 200
     tap_response.iter_content.return_value = [
         b'uri\n'
-        b'ad:NEOSS/NEOS_SCI_2019213215700_cord.fits\n'
-        b'ad:NEOSS/NEOS_SCI_2019213215700_cor.fits\n'
-        b'ad:NEOSS/NEOS_SCI_2019213215700.fits\n'
+        b'cadc:NEOSSAT/NEOS_SCI_2019213215700_cord.fits\n'
+        b'cadc:NEOSSAT/NEOS_SCI_2019213215700_cor.fits\n'
+        b'cadc:NEOSSAT/NEOS_SCI_2019213215700.fits\n'
     ]
 
     tap_mock.return_value.__enter__.return_value = tap_response
@@ -538,16 +538,15 @@ def test_validator(caps_mock, ad_mock, tap_mock):
     ad_response.status_code = 200
     ad_response.text = []
     ad_mock.return_value = ad_response
-
-    getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
-
-    cert_file = f'{tc.TEST_DATA_DIR}/test_proxy.pem'
-    if not os.path.exists(cert_file):
-        with open(cert_file, 'w') as f:
+    orig_cwd = os.getcwd()
+    try:
+        os.chdir(tmpdir)
+        test_config.change_working_directory(tmpdir)
+        test_config.proxy_file_name = 'proxy.pem'
+        test_config.write_to_file(test_config)
+        with open(test_config.proxy_fqn, 'w') as f:
             f.write('test content')
 
-    try:
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
         test_destination_meta = (
             test_subject._read_list_from_destination_meta()
@@ -561,10 +560,6 @@ def test_validator(caps_mock, ad_mock, tap_mock):
             f'{test_destination_meta[0]}'
         )
 
-        test_listing_fqn = f'{tc.TEST_DATA_DIR}/{mc.VALIDATE_OUTPUT}'
-        if os.path.exists(test_listing_fqn):
-            os.unlink(test_listing_fqn)
-
         test_source, test_meta, test_data = test_subject.validate()
         assert test_source is not None, 'expected source result'
         assert test_meta is not None, 'expected meta dest result'
@@ -572,14 +567,15 @@ def test_validator(caps_mock, ad_mock, tap_mock):
         assert len(test_source) == 0, 'wrong number of source results'
         assert len(test_meta) == 3, 'wrong # of meta dest results'
         assert len(test_data) == 0, 'wrong # of meta dest results'
+        test_listing_fqn = f'{tmpdir}/{mc.VALIDATE_OUTPUT}'
         assert os.path.exists(test_listing_fqn), 'should create file record'
     finally:
-        os.getcwd = getcwd_orig
+        os.chdir(orig_cwd)
 
 
 @patch('cadcdata.core.net.BaseWsClient.post')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_validator2(caps_mock, ad_mock):
+def test_validator2(caps_mock, ad_mock, test_config, tmpdir):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     response = Mock()
     response.status_code = 200
@@ -592,9 +588,15 @@ def test_validator2(caps_mock, ad_mock):
         b'2019-10-23T16:27:47.000\tNEOS_SCI_2015347002500_clean.fits\n'
     ]
     ad_mock.return_value.__enter__.return_value = response
-    getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+    orig_cwd = os.getcwd()
     try:
+        os.chdir(tmpdir)
+        test_config.change_working_directory(tmpdir)
+        test_config.proxy_file_name = 'proxy.pem'
+        test_config.write_to_file(test_config)
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
+
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
         test_destination_data = (
             test_subject._read_list_from_destination_data()
@@ -611,7 +613,7 @@ def test_validator2(caps_mock, ad_mock):
             f'{test_result["ingestDate"]}'
         )
     finally:
-        os.getcwd = getcwd_orig
+        os.chdir(orig_cwd)
 
 
 @patch('cadcutils.net.ws.BaseWsClient.post')
@@ -773,11 +775,14 @@ def test_make_time():
         ), f'wrong result {test_result} want {value}'
 
 
-def test_cache():
-    get_cwd_orig = os.getcwd
-    test_dir = f'{tc.TEST_DATA_DIR}/test_config_dir'
-    os.getcwd = Mock(return_value=test_dir)
+def test_cache(test_config, tmpdir):
+    test_config.change_working_directory(tmpdir)
+    test_config.cache_file_name = 'cache.yml'
+    orig_cwd = os.getcwd()
     try:
+        os.chdir(tmpdir)
+        test_config.write_to_file(test_config)
+        copy(f'{tc.TEST_DATA_DIR}/cache.yml', tmpdir)
         test_subject = mc.Cache()
         assert test_subject is not None, 'expect a return value'
         with pytest.raises(mc.CadcException):
@@ -787,7 +792,7 @@ def test_cache():
         test_result = test_subject.get_from('not_found')
         assert test_result == [], 'expect no execution failure'
     finally:
-        os.getcwd = get_cwd_orig
+        os.chdir(orig_cwd)
 
 
 def test_value_repair_cache(test_config, tmpdir):
