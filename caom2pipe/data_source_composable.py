@@ -284,9 +284,7 @@ class ListDirTimeBoxDataSource(DataSource):
     def __init__(self, config):
         super().__init__(config)
         self._source_directories = config.data_sources
-        self._extensions = config.data_source_extensions
         self._recursive = config.recurse_data_sources
-        self._work = deque()
         self._temp = defaultdict(list)
 
     def get_time_box_work(self, prev_exec_time, exec_time):
@@ -697,8 +695,6 @@ class VaultDataSource(ListDirTimeBoxDataSource):
     def __init__(self, vault_client, config):
         super().__init__(config)
         self._vault_client = vault_client
-        self._source_directories = config.data_sources
-        self._data_source_extensions = config.data_source_extensions
 
     def get_work(self):
         self._logger.debug('Begin get_work.')
@@ -718,7 +714,7 @@ class VaultDataSource(ListDirTimeBoxDataSource):
         :param exec_time: datetime.timestamp
         :param entry: Vault URI
         """
-        self._logger.info(f'Search for work in {entry}.')
+        self._logger.info(f'Begin _append_work in {entry}.')
         # force = True means do not use the cache
         node = self._vault_client.get_node(entry, limit=None, force=True)
         while node.type == 'vos:LinkNode':
@@ -739,6 +735,7 @@ class VaultDataSource(ListDirTimeBoxDataSource):
                         self._logger.info(
                             f'Add {target_node.uri} to work list.'
                         )
+        self._logger.debug('End _append_work')
 
     def _find_work(self, source_directory, work):
         node = self._vault_client.get_node(
@@ -831,7 +828,7 @@ class VaultCleanupDataSource(VaultDataSource):
         :param dir_entry_fqn: str that is a vos URI
         """
         copy_file = False
-        for extension in self._data_source_extensions:
+        for extension in self._extensions:
             if dir_entry_fqn.endswith(extension):
                 copy_file = True
                 if os.path.basename(dir_entry_fqn).startswith('.'):

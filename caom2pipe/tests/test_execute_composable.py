@@ -76,7 +76,6 @@ from unittest.mock import Mock, patch, ANY
 from astropy.io import fits
 from hashlib import md5
 from shutil import copy
-from tempfile import TemporaryDirectory
 
 from cadcdata import FileInfo
 from caom2 import SimpleObservation, Algorithm
@@ -129,7 +128,7 @@ class LocalTestVisit:
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_meta_visit_delete_create_execute(access_mock, test_config):
+def test_meta_visit_delete_create_execute(access_mock, test_config, tmpdir):
     access_mock.return_value = 'https://localhost:2022'
     data_client_mock = Mock()
     data_client_mock.get_file_info.return_value = {'name': 'test_file.fits'}
@@ -139,21 +138,20 @@ def test_meta_visit_delete_create_execute(access_mock, test_config):
     clients._data_client = data_client_mock
     clients._metadata_client = repo_client_mock
     test_observer = Mock()
-    with TemporaryDirectory() as tmp_dir_name:
-        test_sn = tc.TestStorageName()
-        test_config.working_directory = tmp_dir_name
-        os.mkdir(os.path.join(tmp_dir_name, test_sn.obs_id))
-        test_executor = ec.MetaVisitDeleteCreate(
-            test_config,
-            [],
-            observable=test_observer,
-            metadata_reader=Mock(autospec=True),
-            clients=clients,
-        )
-        test_executor.execute({'storage_name': test_sn})
-        assert repo_client_mock.delete.called, 'delete call missed'
-        assert repo_client_mock.create.called, 'create call missed'
-        assert test_observer.metrics.observe.called, 'observe not called'
+    test_sn = tc.TestStorageName()
+    test_config.change_working_directory(tmpdir)
+    os.mkdir(os.path.join(tmpdir, test_sn.obs_id))
+    test_executor = ec.MetaVisitDeleteCreate(
+        test_config,
+        [],
+        observable=test_observer,
+        metadata_reader=Mock(autospec=True),
+        clients=clients,
+    )
+    test_executor.execute({'storage_name': test_sn})
+    assert repo_client_mock.delete.called, 'delete call missed'
+    assert repo_client_mock.create.called, 'create call missed'
+    assert test_observer.metrics.observe.called, 'observe not called'
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
@@ -187,98 +185,96 @@ def test_client_visit(access_mock, test_config):
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_data_execute(access_mock, test_config):
+def test_data_execute(access_mock, test_config, tmpdir):
     access_mock.return_value = 'https://localhost:2022'
     mc.StorageName.collection = 'TEST'
     test_obs_id = 'test_obs_id'
-    with TemporaryDirectory() as tmp_dir_name:
-        test_dir = os.path.join(tmp_dir_name, test_obs_id)
-        test_config.working_directory = tmp_dir_name
-        os.mkdir(test_dir, mode=0o755)
-        test_fits_fqn = os.path.join(test_dir, tc.TestStorageName().file_name)
-        precondition = open(test_fits_fqn, 'w')
-        precondition.close()
+    test_dir = os.path.join(tmpdir, test_obs_id)
+    test_config.change_working_directory(tmpdir)
+    os.mkdir(test_dir, mode=0o755)
+    test_fits_fqn = os.path.join(test_dir, tc.TestStorageName().file_name)
+    precondition = open(test_fits_fqn, 'w')
+    precondition.close()
 
-        test_data_visitors = [TestVisit]
-        repo_client_mock = Mock()
-        data_client_mock = Mock()
-        clients = ClientCollection(test_config)
-        clients._data_client = data_client_mock
-        clients._metadata_client = repo_client_mock
-        test_observer = Mock()
-        test_transferrer = transfer_composable.VoTransfer()
-        test_transferrer.cadc_client = data_client_mock
+    test_data_visitors = [TestVisit]
+    repo_client_mock = Mock()
+    data_client_mock = Mock()
+    clients = ClientCollection(test_config)
+    clients._data_client = data_client_mock
+    clients._metadata_client = repo_client_mock
+    test_observer = Mock()
+    test_transferrer = transfer_composable.VoTransfer()
+    test_transferrer.cadc_client = data_client_mock
 
-        ec.CaomExecute._data_cmd_info = Mock(side_effect=_get_fname)
-        repo_client_mock.read.side_effect = tc.mock_read
+    ec.CaomExecute._data_cmd_info = Mock(side_effect=_get_fname)
+    repo_client_mock.read.side_effect = tc.mock_read
 
-        # run the test
-        test_executor = ec.DataVisit(
-            test_config,
-            test_data_visitors,
-            test_observer,
-            test_transferrer,
-            clients,
-            metadata_reader=None,
-        )
-        test_executor.execute({'storage_name': tc.TestStorageName()})
+    # run the test
+    test_executor = ec.DataVisit(
+        test_config,
+        test_data_visitors,
+        test_observer,
+        test_transferrer,
+        clients,
+        metadata_reader=None,
+    )
+    test_executor.execute({'storage_name': tc.TestStorageName()})
 
-        # check that things worked as expected
-        assert repo_client_mock.read.called, 'read call missed'
-        assert repo_client_mock.update.called, 'update call missed'
-        assert test_observer.metrics.observe.called, 'observe not called'
+    # check that things worked as expected
+    assert repo_client_mock.read.called, 'read call missed'
+    assert repo_client_mock.update.called, 'update call missed'
+    assert test_observer.metrics.observe.called, 'observe not called'
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_data_execute_v(access_mock, test_config):
+def test_data_execute_v(access_mock, test_config, tmpdir):
     access_mock.return_value = 'https://localhost:2022'
     mc.StorageName.collection = 'TEST'
     test_obs_id = 'test_obs_id'
-    with TemporaryDirectory() as tmp_dir_name:
-        test_config.working_directory = tmp_dir_name
-        test_dir = os.path.join(tmp_dir_name, test_obs_id)
-        test_fits_fqn = os.path.join(test_dir, 'test_obs_id.fits.gz')
-        if not os.path.exists(test_dir):
-            os.mkdir(test_dir, mode=0o755)
+    test_config.change_working_directory(tmpdir)
+    test_dir = os.path.join(tmpdir, test_obs_id)
+    test_fits_fqn = os.path.join(test_dir, 'test_obs_id.fits.gz')
+    if not os.path.exists(test_dir):
+        os.mkdir(test_dir, mode=0o755)
 
-        test_data_visitors = [TestVisit]
-        repo_client_mock = Mock(autospec=True)
-        cadc_client_mock = Mock(autospec=True)
-        cadc_client_mock.copy.side_effect = tc.mock_copy_md5
-        clients = ClientCollection(test_config)
-        clients._data_client = cadc_client_mock
-        clients._metadata_client = repo_client_mock
-        test_observer = Mock(autospec=True)
-        test_transferrer = transfer_composable.VoTransfer()
-        test_transferrer.cadc_client = cadc_client_mock
+    test_data_visitors = [TestVisit]
+    repo_client_mock = Mock(autospec=True)
+    cadc_client_mock = Mock(autospec=True)
+    cadc_client_mock.copy.side_effect = tc.mock_copy_md5
+    clients = ClientCollection(test_config)
+    clients._data_client = cadc_client_mock
+    clients._metadata_client = repo_client_mock
+    test_observer = Mock(autospec=True)
+    test_transferrer = transfer_composable.VoTransfer()
+    test_transferrer.cadc_client = cadc_client_mock
 
-        ec.CaomExecute._data_cmd_info = Mock(side_effect=_get_fname)
-        repo_client_mock.read.side_effect = tc.mock_read
+    ec.CaomExecute._data_cmd_info = Mock(side_effect=_get_fname)
+    repo_client_mock.read.side_effect = tc.mock_read
 
-        test_sn = tc.TestStorageName()
-        test_sn.source_names = ['ad:TEST/test_obs_id.fits.gz']
+    test_sn = tc.TestStorageName()
+    test_sn.source_names = ['ad:TEST/test_obs_id.fits.gz']
 
-        # run the test
-        test_executor = ec.DataVisit(
-            test_config,
-            test_data_visitors,
-            test_observer,
-            test_transferrer,
-            clients,
-            metadata_reader=None,
-        )
-        test_executor.execute({'storage_name': test_sn})
+    # run the test
+    test_executor = ec.DataVisit(
+        test_config,
+        test_data_visitors,
+        test_observer,
+        test_transferrer,
+        clients,
+        metadata_reader=None,
+    )
+    test_executor.execute({'storage_name': test_sn})
 
-        # check that things worked as expected
-        assert repo_client_mock.read.called, 'read call missed'
-        assert repo_client_mock.update.called, 'update call missed'
-        assert test_observer.metrics.observe.called, 'observe not called'
-        assert cadc_client_mock.copy.called, 'copy not called'
-        cadc_client_mock.copy.assert_called_with(
-            'cadc:TEST/test_obs_id.fits',
-            test_fits_fqn.replace('.gz', ''),
-            send_md5=True,
-        ), 'wrong call args'
+    # check that things worked as expected
+    assert repo_client_mock.read.called, 'read call missed'
+    assert repo_client_mock.update.called, 'update call missed'
+    assert test_observer.metrics.observe.called, 'observe not called'
+    assert cadc_client_mock.copy.called, 'copy not called'
+    cadc_client_mock.copy.assert_called_with(
+        'cadc:TEST/test_obs_id.fits',
+        test_fits_fqn.replace('.gz', ''),
+        send_md5=True,
+    ), 'wrong call args'
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
@@ -327,12 +323,8 @@ def test_data_local_execute(access_mock, test_config):
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
-def test_data_store(fix_mock, access_mock, test_config):
+def test_data_store(fix_mock, access_mock, test_config, tmpdir):
     access_mock.return_value = 'https://localhost:2022'
-    test_dir = f'{tc.TEST_DATA_DIR}/test_obs_id'
-    if os.path.exists(test_dir):
-        os.rmdir(test_dir)
-
     data_client_mock = Mock()
     clients = ClientCollection(test_config)
     clients._data_client = data_client_mock
@@ -349,7 +341,7 @@ def test_data_store(fix_mock, access_mock, test_config):
     mock_metadata_reader = Mock()
     mock_metadata_reader.file_info = {}
     try:
-        test_config.working_directory = tc.TEST_DATA_DIR
+        test_config.change_working_directory(tmpdir)
         test_executor = ec.Store(
             test_config,
             observable=test_observer,
@@ -368,51 +360,39 @@ def test_data_store(fix_mock, access_mock, test_config):
         os.path.exists = path_orig
 
 
-def test_scrape(test_config):
-    # clean up from previous tests
-    test_sn = tc.TestStorageName()
-    model_fqn = os.path.join(tc.TEST_DATA_DIR, test_sn.model_file_name)
-    if os.path.exists(model_fqn):
-        os.remove(model_fqn)
-
-    with TemporaryDirectory() as tmp_dir_name:
-        test_config.working_directory = tmp_dir_name
-        test_config.logging_level = 'INFO'
-        test_reader = FileMetadataReader()
-        test_sn = tc.TestStorageName(source_names=[f'{tc.TEST_FILES_DIR}/correct.fits'])
-        test_executor = ec.Scrape(
-            test_config,
-            meta_visitors=[],
-            metadata_reader=test_reader,
-        )
-        os.mkdir(os.path.join(tmp_dir_name, test_sn.obs_id))
-        test_executor.execute({'storage_name': test_sn})
+def test_scrape(test_config, tmpdir):
+    test_config.change_working_directory(tmpdir)
+    test_config.logging_level = 'INFO'
+    test_reader = FileMetadataReader()
+    test_sn = tc.TestStorageName(source_names=[f'{tc.TEST_FILES_DIR}/correct.fits'])
+    test_executor = ec.Scrape(
+        test_config,
+        meta_visitors=[],
+        metadata_reader=test_reader,
+    )
+    os.mkdir(os.path.join(tmpdir, test_sn.obs_id))
+    test_executor.execute({'storage_name': test_sn})
 
 
-def test_data_scrape_execute(test_config):
+def test_data_scrape_execute(test_config, tmpdir):
     test_config.log_to_file = True
     test_data_visitors = [TestVisit]
-    with TemporaryDirectory() as tmp_dir_name:
-        test_config.working_directory = tmp_dir_name
-        test_sn = tc.TestStorageName()
-        # run the test
-        test_executor = ec.DataScrape(
-            test_config,
-            test_data_visitors,
-            metadata_reader=None,
-        )
-        os.mkdir(os.path.join(tmp_dir_name, test_sn.obs_id))
-        copy(
-            f'{tc.TEST_DATA_DIR}/fpf_start_obs.xml',
-            f'{tc.TEST_DATA_DIR}/test_obs_id.xml',
-        )
-        test_executor.execute({'storage_name': test_sn})
+    test_config.change_working_directory(tmpdir)
+    test_sn = tc.TestStorageName()
+    # run the test
+    test_executor = ec.DataScrape(
+        test_config,
+        test_data_visitors,
+        metadata_reader=None,
+    )
+    os.mkdir(test_config.log_file_directory)
+    copy(f'{tc.TEST_DATA_DIR}/fpf_start_obs.xml', f'{test_config.log_file_directory}/test_obs_id.xml')
+    test_executor.execute({'storage_name': test_sn})
 
 
-def test_organize_executes_chooser(test_config):
+def test_organize_executes_chooser(test_config, tmpdir):
+    test_config.change_working_directory(tmpdir)
     test_config.use_local_files = True
-    log_file_directory = os.path.join(tc.THIS_DIR, 'logs')
-    test_config.log_file_directory = log_file_directory
     test_config.features.supports_composite = True
 
     test_config.task_types = [mc.TaskType.INGEST]
@@ -430,7 +410,7 @@ def test_organize_executes_chooser(test_config):
     assert len(test_oe._executors) == 1
     assert isinstance(test_oe._executors[0], ec.MetaVisitDeleteCreate)
     test_oe._executors[0].storage_name = tc.TestStorageName()
-    assert test_oe._executors[0].working_dir == os.path.join(tc.THIS_DIR, 'test_obs_id'), 'working_dir'
+    assert test_oe._executors[0].working_dir == os.path.join(tmpdir, 'test_obs_id'), 'working_dir'
     test_config.use_local_files = False
     test_config.task_types = [mc.TaskType.INGEST]
     test_oe = ec.OrganizeExecutes(
@@ -645,7 +625,7 @@ def test_organize_executes_client_do_one(test_config):
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2utils.data_util.StorageClientWrapper')
-def test_data_visit(client_mock, access_mock, test_config):
+def test_data_visit(client_mock, access_mock, test_config, tmpdir):
     access_mock.return_value = 'https://localhost:2022'
     client_mock.get.side_effect = Mock(autospec=True)
     test_repo_client = Mock(autospec=True)
@@ -672,43 +652,39 @@ def test_data_visit(client_mock, access_mock, test_config):
     test_transferrer.cadc_client = client_mock
     test_transferrer.observable = test_observable
 
-    with TemporaryDirectory() as tmp_dir_name:
-        test_config.working_directory = tmp_dir_name
-        test_subject = ec.DataVisit(
-            test_config,
-            test_data_visitors,
-            test_observable,
-            test_transferrer,
-            clients,
-            metadata_reader=None,
-        )
-        os.mkdir(os.path.join(tmp_dir_name, test_sn.obs_id))
-        test_subject.execute({'storage_name': test_sn})
-        assert client_mock.get.called, 'should be called'
-        client_mock.get.assert_called_with(
-            f'{tmp_dir_name}/test_obs_id', test_sn.destination_uris[0]
-        ), 'wrong get call args'
-        test_repo_client.read.assert_called_with(
-            'TEST', 'test_obs_id'
-        ), 'wrong values'
-        assert test_repo_client.update.called, 'expect an execution'
-        # TODO - why is the log file directory NOT the working directory?
+    test_config.change_working_directory(tmpdir)
+    test_subject = ec.DataVisit(
+        test_config,
+        test_data_visitors,
+        test_observable,
+        test_transferrer,
+        clients,
+        metadata_reader=None,
+    )
+    os.mkdir(os.path.join(tmpdir, test_sn.obs_id))
+    test_subject.execute({'storage_name': test_sn})
+    assert client_mock.get.called, 'should be called'
+    client_mock.get.assert_called_with(f'{tmpdir}/test_obs_id', test_sn.destination_uris[0])
+    test_repo_client.read.assert_called_with(
+        'TEST', 'test_obs_id'
+    ), 'wrong values'
+    assert test_repo_client.update.called, 'expect an execution'
+    # TODO - why is the log file directory NOT the working directory?
 
-        args, kwargs = dv_mock.visit.call_args
-        assert kwargs.get('working_directory') == f'{tmp_dir_name}/test_obs_id'
-        assert (
-            kwargs.get('storage_name') == test_sn
-        ), 'wrong storage name parameter'
-        assert kwargs.get('log_file_directory') == tc.TEST_DATA_DIR
+    args, kwargs = dv_mock.visit.call_args
+    assert kwargs.get('working_directory') == f'{tmpdir}/test_obs_id'
+    assert (
+        kwargs.get('storage_name') == test_sn
+    ), 'wrong storage name parameter'
+    assert kwargs.get('log_file_directory') == f'{tmpdir}/logs'
 
 
 @patch('caom2pipe.execute_composable.get_local_file_info')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.execute_composable.FitsForCADCDecompressor.fix_compression')
-def test_store(compressor_mock, access_mock, file_info_mock, test_config):
+def test_store(compressor_mock, access_mock, file_info_mock, test_config, tmpdir):
     access_mock.return_value = 'https://localhost:2022'
     file_info_mock.return_value = FileInfo(id='nonexistent.fits')
-    # test_config.working_directory = tc.TEST_DATA_DIR
     test_sn = tc.TestStorageName(
         obs_id='test_obs_id',
         source_names=['vos:goliaths/nonexistent.fits.gz'],
@@ -721,33 +697,30 @@ def test_store(compressor_mock, access_mock, file_info_mock, test_config):
     test_transferrer.get.side_effect = _transfer_get_mock
     test_metadata_reader = Mock()
     test_metadata_reader.file_info = {}
-    with TemporaryDirectory() as tmp_dir_name:
-        test_config.working_directory = tmp_dir_name
-        compressor_mock.return_value = (
-            f'{test_config.working_directory}/test_obs_id/nonexistent.fits'
-        )
-        test_subject = ec.Store(
-            test_config,
-            test_observable,
-            test_transferrer,
-            clients,
-            metadata_reader=test_metadata_reader,
-        )
-        assert test_subject is not None, 'expect construction'
-        os.mkdir(os.path.join(tmp_dir_name, test_sn.obs_id))
-        test_subject.execute({'storage_name': test_sn})
-        assert test_subject.working_dir == os.path.join(tmp_dir_name, 'test_obs_id'), 'wrong working directory'
-        assert (
-            len(test_subject._storage_name.destination_uris) == 1
-        ), 'wrong file count'
-        assert (
-            test_subject._storage_name.destination_uris[0]
-            == 'cadc:TEST/test_file.fits'
-        ), 'wrong destination'
-        assert test_data_client.put.called, 'data put not called'
-        test_data_client.put.assert_called_with(
-            f'{tmp_dir_name}/test_obs_id', 'cadc:TEST/test_file.fits'
-        ), 'wrong put call args'
+    test_config.change_working_directory(tmpdir)
+    compressor_mock.return_value = (
+        f'{test_config.working_directory}/test_obs_id/nonexistent.fits'
+    )
+    test_subject = ec.Store(
+        test_config,
+        test_observable,
+        test_transferrer,
+        clients,
+        metadata_reader=test_metadata_reader,
+    )
+    assert test_subject is not None, 'expect construction'
+    os.mkdir(os.path.join(tmpdir, test_sn.obs_id))
+    test_subject.execute({'storage_name': test_sn})
+    assert test_subject.working_dir == os.path.join(tmpdir, 'test_obs_id'), 'wrong working directory'
+    assert (
+        len(test_subject._storage_name.destination_uris) == 1
+    ), 'wrong file count'
+    assert (
+        test_subject._storage_name.destination_uris[0]
+        == 'cadc:TEST/test_file.fits'
+    ), 'wrong destination'
+    assert test_data_client.put.called, 'data put not called'
+    test_data_client.put.assert_called_with(f'{tmpdir}/test_obs_id', 'cadc:TEST/test_file.fits')
 
 
 @patch('caom2pipe.execute_composable.get_local_file_info')
@@ -853,7 +826,7 @@ def test_store_newer_files_only_flag_client(
 
 @patch('caom2utils.data_util.StorageInventoryClient')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_data_visit_params(access_mock, client_mock):
+def test_data_visit_params(access_mock, client_mock, test_config, tmpdir):
     access_mock.return_value = 'https://localhost:2022'
     test_wd = '/tmp/abc'
     if os.path.exists(test_wd):
@@ -867,13 +840,14 @@ def test_data_visit_params(access_mock, client_mock):
         source_names=['vos:DAO/incoming/abc.fits.gz'],
     )
 
-    test_config = mc.Config()
     test_config.task_types = [mc.TaskType.MODIFY]
-    test_config.working_directory = '/tmp'
+    test_config.change_working_directory(tmpdir)
     test_config.logging_level = 'DEBUG'
     test_config.proxy_file_name = 'proxy.pem'
-    test_config.proxy_fqn = f'{tc.TEST_DATA_DIR}/proxy.pem'
     test_config.resource_id = 'ivo:cadc.nrc.ca/test'
+
+    with open(test_config.proxy_fqn, 'w') as f:
+        f.write('test content')
 
     test_cadc_client = Mock(autospec=True)
     test_caom_client = Mock(autospec=True)
@@ -891,31 +865,29 @@ def test_data_visit_params(access_mock, client_mock):
     test_observable = Mock(autospec=True)
     test_transferrer = Mock(autospec=True)
 
-    with TemporaryDirectory() as tmp_dir_name:
-        test_config.working_directory = tmp_dir_name
-        os.mkdir(os.path.join(test_config.working_directory, storage_name.obs_id))
-        test_config.use_local_files = False
-        test_subject = ec.DataVisit(
-            test_config,
-            test_data_visitors,
-            test_observable,
-            test_transferrer,
-            clients,
-            metadata_reader=None,
-        )
-        assert test_subject is not None, 'broken ctor'
-        test_subject.execute({'storage_name': storage_name})
-        assert data_visitor.visit.called, 'expect visit call'
-        data_visitor.visit.assert_called_with(
-            ANY,
-            working_directory=f'{tmp_dir_name}/abc',
-            storage_name=storage_name,
-            log_file_directory=None,
-            observable=ANY,
-            clients=ANY,
-            metadata_reader=ANY,
-        ), f'wrong visit params {storage_name.source_names}'
-        data_visitor.visit.reset_mock()
+    os.mkdir(os.path.join(test_config.working_directory, storage_name.obs_id))
+    test_config.use_local_files = False
+    test_subject = ec.DataVisit(
+        test_config,
+        test_data_visitors,
+        test_observable,
+        test_transferrer,
+        clients,
+        metadata_reader=None,
+    )
+    assert test_subject is not None, 'broken ctor'
+    test_subject.execute({'storage_name': storage_name})
+    assert data_visitor.visit.called, 'expect visit call'
+    data_visitor.visit.assert_called_with(
+        ANY,
+        working_directory=f'{tmpdir}/abc',
+        storage_name=storage_name,
+        log_file_directory=f'{tmpdir}/logs',
+        observable=ANY,
+        clients=ANY,
+        metadata_reader=None,
+    )
+    data_visitor.visit.reset_mock()
 
 
 def test_decompress():

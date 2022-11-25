@@ -78,7 +78,6 @@ specializations.
 """
 
 from datetime import datetime
-from tempfile import TemporaryDirectory
 
 from cadcdata import FileInfo
 from caom2pipe import data_source_composable as dsc
@@ -90,7 +89,7 @@ from test_data_source_composable import _create_dir_listing
 from test_run_composable import TEST_BOOKMARK, _write_state
 
 
-def test_report_output_todo_local(test_config):
+def test_report_output_todo_local(test_config, tmpdir):
     test_config.cleanup_files_when_storing = True
     test_config.store_modified_files_only = True
     # work is all the list of files,
@@ -144,133 +143,123 @@ def test_report_output_todo_local(test_config):
     vo_client_get_node_side_effect = vo_listing
 
     test_clients = Mock()
-    with TemporaryDirectory() as temp_dir:
-        test_config.working_directory = temp_dir
-        test_config.log_file_directory = temp_dir
-        test_config.state_fqn = f'{temp_dir}/{test_config.state_file_name}'
-        test_config.log_file_directory = temp_dir
-        test_config.failure_log_file_name = 'fail.txt'
-        test_config.retry_file_name = 'do_again.txt'
-        test_config.success_log_file_name = 'good.txt'
-        test_config.progress_file_name = 'progress.txt'
-        test_config.rejected_file_name = 'reject.txt'
-        test_config._report_fqn = f'{temp_dir}/report.txt'
+    test_config.change_working_directory(tmpdir)
 
-        for clean_up in [True, False]:
-            for store_modified in [True, False]:
-                move_calls = store_modified_false_move_calls
-                put_side_effect = store_modified_false_put_side_effect
-                info_side_effect = store_modified_false_info_side_effect
-                file_info_side_effect = store_modified_false_file_info_get_side_effect
+    for clean_up in [True, False]:
+        for store_modified in [True, False]:
+            move_calls = store_modified_false_move_calls
+            put_side_effect = store_modified_false_put_side_effect
+            info_side_effect = store_modified_false_info_side_effect
+            file_info_side_effect = store_modified_false_file_info_get_side_effect
+            skipped_sum = store_modified_false_skipped_sum
+            if store_modified:
+                move_calls = store_modified_true_move_calls
+                put_side_effect = store_modified_true_put_side_effect
+                info_side_effect = store_modified_true_info_side_effect
+                file_info_side_effect = store_modified_true_file_info_get_side_effect
+                skipped_sum = store_modified_true_skipped_sum
+            if not clean_up:
+                put_side_effect = clean_up_false_put_side_effect
                 skipped_sum = store_modified_false_skipped_sum
-                if store_modified:
-                    move_calls = store_modified_true_move_calls
-                    put_side_effect = store_modified_true_put_side_effect
-                    info_side_effect = store_modified_true_info_side_effect
-                    file_info_side_effect = store_modified_true_file_info_get_side_effect
-                    skipped_sum = store_modified_true_skipped_sum
-                if not clean_up:
-                    put_side_effect = clean_up_false_put_side_effect
-                    skipped_sum = store_modified_false_skipped_sum
-                test_config.cleanup_files_when_storing = clean_up
-                test_config.store_modified_files_only = store_modified
+            test_config.cleanup_files_when_storing = clean_up
+            test_config.store_modified_files_only = store_modified
 
-                # for using_local in [True, False]:
-                for using_local in [True]:
-                    if using_local:
-                        test_config.use_local_files = True
-                        test_config.data_sources = ['/tmp']
-                        test_config.cleanup_failure_destination = '/data/failure'
-                        test_config.cleanup_success_destination = '/data/success'
-                        test_data_source = dsc.LocalFilesDataSource(
-                            test_config, test_clients.data_client, test_reader, recursive=True, scheme='cadc'
-                        )
-                    else:
-                        test_config.use_local_files = False
-                        test_config.data_sources = ['vos://cadc.nrc.ca!vault/goliaths/test']
-                        test_config.cleanup_failure_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/failure'
-                        test_config.cleanup_success_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/success'
-                        test_data_source = dsc.VaultCleanupDataSource(
-                            test_config, test_clients.vo_client, test_clients.data_client, scheme='cadc'
-                        )
-                    Config.write_to_file(test_config)
-                    _write_state(test_start_time, test_config.state_fqn)
-                    for state in [True, False]:
-                        # import logging
-                        # logging.error('')
-                        # logging.error('')
-                        # logging.error('')
-                        # logging.error('')
-                        (
+            # for using_local in [True, False]:
+            for using_local in [True]:
+                if using_local:
+                    test_config.use_local_files = True
+                    test_config.data_sources = ['/tmp']
+                    test_config.cleanup_failure_destination = '/data/failure'
+                    test_config.cleanup_success_destination = '/data/success'
+                    test_data_source = dsc.LocalFilesDataSource(
+                        test_config, test_clients.data_client, test_reader, recursive=True, scheme='cadc'
+                    )
+                else:
+                    test_config.use_local_files = False
+                    test_config.data_sources = ['vos://cadc.nrc.ca!vault/goliaths/test']
+                    test_config.cleanup_failure_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/failure'
+                    test_config.cleanup_success_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/success'
+                    test_data_source = dsc.VaultCleanupDataSource(
+                        test_config, test_clients.vo_client, test_clients.data_client, scheme='cadc'
+                    )
+                Config.write_to_file(test_config)
+                _write_state(test_start_time, test_config.state_fqn)
+                for state in [True, False]:
+                    # import logging
+                    # logging.error('')
+                    # logging.error('')
+                    # logging.error('')
+                    # logging.error('')
+                    (
+                        test_config,
+                        test_clients,
+                        test_builder,
+                        test_data_source,
+                        test_reader,
+                        test_organizer,
+                        test_observable,
+                        test_reporter,
+                    ) = rc.common_runner_init(
+                        config=test_config,
+                        clients=test_clients,
+                        name_builder=None,
+                        source=test_data_source,
+                        modify_transfer=None,
+                        metadata_reader=test_reader,
+                        state=state,
+                        store_transfer=None,
+                        meta_visitors=[],
+                        data_visitors=[],
+                        chooser=None,
+                        application='DEFAULT',
+                    )
+                    # 0 stored already
+                    # 1 fails fitsverify
+                    # 2 fails ingestion
+                    # 3 succeeds
+                    test_clients.data_client.info.side_effect = info_side_effect
+                    test_clients.data_client.put.side_effect = put_side_effect
+                    test_clients.vo_client.listdir.side_effect = vo_client_listing_side_effect
+                    test_clients.vo_client.get_node.side_effect = vo_client_get_node_side_effect
+                    verify_mock = Mock()
+                    # FITS files are valid, invalid, valid, valid
+                    verify_mock.side_effect = [True, False, True, True]
+                    test_reader.file_info.get.side_effect = file_info_side_effect
+                    test_data_source._verify_file = verify_mock
+                    if state:
+                        test_subject = rc.StateRunner(
                             test_config,
-                            test_clients,
+                            test_organizer,
                             test_builder,
                             test_data_source,
                             test_reader,
-                            test_organizer,
+                            TEST_BOOKMARK,
                             test_observable,
                             test_reporter,
-                        ) = rc.common_runner_init(
-                            config=test_config,
-                            clients=test_clients,
-                            name_builder=None,
-                            source=test_data_source,
-                            modify_transfer=None,
-                            metadata_reader=test_reader,
-                            state=state,
-                            store_transfer=None,
-                            meta_visitors=[],
-                            data_visitors=[],
-                            chooser=None,
-                            application='DEFAULT',
+                            test_end_time,
                         )
-                        # 0 stored already
-                        # 1 fails fitsverify
-                        # 2 fails ingestion
-                        # 3 succeeds
-                        test_clients.data_client.info.side_effect = info_side_effect
-                        test_clients.data_client.put.side_effect = put_side_effect
-                        test_clients.vo_client.listdir.side_effect = vo_client_listing_side_effect
-                        test_clients.vo_client.get_node.side_effect = vo_client_get_node_side_effect
-                        verify_mock = Mock()
-                        # FITS files are valid, invalid, valid, valid
-                        verify_mock.side_effect = [True, False, True, True]
-                        test_reader.file_info.get.side_effect = file_info_side_effect
-                        test_data_source._verify_file = verify_mock
-                        if state:
-                            test_subject = rc.StateRunner(
-                                test_config,
-                                test_organizer,
-                                test_builder,
-                                test_data_source,
-                                test_reader,
-                                TEST_BOOKMARK,
-                                test_observable,
-                                test_reporter,
-                                test_end_time,
-                            )
-                        else:
-                            test_subject = rc.TodoRunner(
-                                test_config,
-                                test_organizer,
-                                test_builder,
-                                test_data_source,
-                                test_reader,
-                                test_observable,
-                                test_reporter,
-                            )
+                    else:
+                        test_subject = rc.TodoRunner(
+                            test_config,
+                            test_organizer,
+                            test_builder,
+                            test_data_source,
+                            test_reader,
+                            test_observable,
+                            test_reporter,
+                        )
 
-                        diagnostic = (
-                            f'clean up {clean_up} store modified {store_modified} subject {type(test_subject)} '
-                            f'source {type(test_data_source)}'
-                        )
-                        if isinstance(test_data_source, dsc.LocalFilesDataSource):
-                            with patch('os.scandir') as scandir_mock:
-                                scandir_mock.return_value.__enter__.return_value = pre_success_listing
-                                _y(test_subject, move_calls, skipped_sum, clean_up, diagnostic)
-                        else:
+                    diagnostic = (
+                        f'clean up {clean_up} store modified {store_modified} subject {type(test_subject)} '
+                        f'source {type(test_data_source)}'
+                    )
+                    if isinstance(test_data_source, dsc.LocalFilesDataSource):
+                        with patch('os.scandir') as scandir_mock:
+                            scandir_mock.return_value.__enter__.return_value = pre_success_listing
                             _y(test_subject, move_calls, skipped_sum, clean_up, diagnostic)
-                            assert False
+                    else:
+                        _y(test_subject, move_calls, skipped_sum, clean_up, diagnostic)
+                        assert False
 
 
 def _y(test_subject, move_calls, skipped_sum, clean_up, diagnostic):

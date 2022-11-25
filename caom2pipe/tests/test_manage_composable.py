@@ -72,7 +72,6 @@ import pytest
 
 from datetime import datetime, timedelta, timezone
 from shutil import copy
-from tempfile import TemporaryDirectory
 from unittest.mock import Mock, patch
 
 from caom2 import ProductType, ReleaseType, Artifact, ChecksumURI
@@ -841,111 +840,103 @@ def test_cache():
         os.getcwd = get_cwd_orig
 
 
-def test_value_repair_cache(test_config):
+def test_value_repair_cache(test_config, tmpdir):
+    test_config.change_working_directory(tmpdir)
     cache_file_name = 'value_repair_cache.yml'
+    test_config.cache_file_name = cache_file_name
+    test_config.write_to_file(test_config)
     test_cache_fqn = f'{tc.TEST_DATA_DIR}/{cache_file_name}'
-    cwd_dir = os.getcwd()
-    try:
-        with TemporaryDirectory() as tmp_dir_name:
-            os.chdir(tmp_dir_name)
+    copy(test_cache_fqn, f'{tmpdir}/{cache_file_name}')
 
-            copy(test_cache_fqn, f'{tmp_dir_name}/{cache_file_name}')
+    test_subject = mc.ValueRepairCache()
+    assert test_subject is not None, 'expect a result'
 
-            test_config.cache_file_name = cache_file_name
-            test_config.working_directory = tmp_dir_name
-            mc.Config.write_to_file(test_config)
+    test_observation = mc.read_obs_from_file(
+        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
+    )
+    test_product_id = 'GN2001BQ013-04'
+    test_artifact_uri = 'gemini:GEM/GN2001BQ013-04.fits'
+    test_part = '0'
+    test_chunk_index = 0
+    test_plane = test_observation.planes[test_product_id]
+    test_artifact = test_plane.artifacts[test_artifact_uri]
+    test_part = test_artifact.parts[test_part]
+    test_chunk = test_part.chunks[test_chunk_index]
+    assert test_observation.type == 'Dark', 'repair initial condition'
+    assert test_observation.proposal.pi_name == 'jjk', 'pi name ic'
+    assert test_plane.meta_release == datetime(
+        1990, 1, 1, 0, 0
+    ), 'plane meta release ic'
+    assert math.isclose(
+        test_chunk.position.axis.function.ref_coord.coord1.pix,
+        512.579594886106,
+    ), 'position pix ic'
+    assert test_artifact.uri == test_artifact_uri, 'artifact uri ic'
+    assert test_part.product_type is ProductType.CALIBRATION, 'part ic'
+    assert test_chunk.position.coordsys == 'ICRS', 'un-changed ic'
+    assert test_observation.intent is None, 'None ic'
+    assert test_observation.environment.seeing is None, 'None ic'
+    assert test_chunk.position.axis.axis1.ctype == 'RA---TAN', 'unchanged ic'
 
-            test_subject = mc.ValueRepairCache()
-            assert test_subject is not None, 'expect a result'
+    test_subject.repair(test_observation)
 
-            test_observation = mc.read_obs_from_file(
-                os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
-            )
-            test_product_id = 'GN2001BQ013-04'
-            test_artifact_uri = 'gemini:GEM/GN2001BQ013-04.fits'
-            test_part = '0'
-            test_chunk_index = 0
-            test_plane = test_observation.planes[test_product_id]
-            test_artifact = test_plane.artifacts[test_artifact_uri]
-            test_part = test_artifact.parts[test_part]
-            test_chunk = test_part.chunks[test_chunk_index]
-            assert test_observation.type == 'Dark', 'repair initial condition'
-            assert test_observation.proposal.pi_name == 'jjk', 'pi name ic'
-            assert test_plane.meta_release == datetime(
-                1990, 1, 1, 0, 0
-            ), 'plane meta release ic'
-            assert math.isclose(
-                test_chunk.position.axis.function.ref_coord.coord1.pix,
-                512.579594886106,
-            ), 'position pix ic'
-            assert test_artifact.uri == test_artifact_uri, 'artifact uri ic'
-            assert test_part.product_type is ProductType.CALIBRATION, 'part ic'
-            assert test_chunk.position.coordsys == 'ICRS', 'un-changed ic'
-            assert test_observation.intent is None, 'None ic'
-            assert test_observation.environment.seeing is None, 'None ic'
-            assert test_chunk.position.axis.axis1.ctype == 'RA---TAN', 'unchanged ic'
+    assert test_observation.type == 'DARK', 'repair failed'
+    assert (
+        test_observation.proposal.pi_name == 'JJ Kavelaars'
+    ), 'proposal pi name repair failed'
+    assert test_plane.meta_release == datetime(
+        2000, 1, 1, 0, 0
+    ), 'plane meta release repair failed'
+    assert math.isclose(
+        test_chunk.position.axis.function.ref_coord.coord1.pix,
+        512.57959987654321,
+    ), 'position pix repair failed'
+    assert (
+        test_artifact.uri == 'cadc:GEMINI/GN2001BQ013-04.fits'
+    ), f'uri repair failed {test_artifact.uri}'
+    assert test_part.product_type is None, 'product type repair failed'
 
-            test_subject.repair(test_observation)
+    # check that values that do not match are un-changed
+    assert test_chunk.position.coordsys == 'ICRS', 'should be un-changed'
+    # check that None values are not set - it's a _repair_ function, after
+    # all, and the code cannot repair something that does not exist
+    assert (
+        test_observation.intent == ObservationIntentType.SCIENCE
+    ), 'None value should be set, since "none" was the original type'
+    assert (
+        test_observation.environment.seeing is None
+    ), 'None remains None because the original is a specific value'
+    assert (
+        test_chunk.position.axis.axis1.ctype == 'RA---TAN'
+    ), 'unchanged post'
 
-            assert test_observation.type == 'DARK', 'repair failed'
-            assert (
-                test_observation.proposal.pi_name == 'JJ Kavelaars'
-            ), 'proposal pi name repair failed'
-            assert test_plane.meta_release == datetime(
-                2000, 1, 1, 0, 0
-            ), 'plane meta release repair failed'
-            assert math.isclose(
-                test_chunk.position.axis.function.ref_coord.coord1.pix,
-                512.57959987654321,
-            ), 'position pix repair failed'
-            assert (
-                test_artifact.uri == 'cadc:GEMINI/GN2001BQ013-04.fits'
-            ), f'uri repair failed {test_artifact.uri}'
-            assert test_part.product_type is None, 'product type repair failed'
+    with pytest.raises(mc.CadcException):
+        # pre-condition of 'Unexpected repair key' error
+        test_subject._value_repair = {'unknown': 'unknown'}
+        test_subject.repair(test_observation)
 
-            # check that values that do not match are un-changed
-            assert test_chunk.position.coordsys == 'ICRS', 'should be un-changed'
-            # check that None values are not set - it's a _repair_ function, after
-            # all, and the code cannot repair something that does not exist
-            assert (
-                test_observation.intent == ObservationIntentType.SCIENCE
-            ), 'None value should be set, since "none" was the original type'
-            assert (
-                test_observation.environment.seeing is None
-            ), 'None remains None because the original is a specific value'
-            assert (
-                test_chunk.position.axis.axis1.ctype == 'RA---TAN'
-            ), 'unchanged post'
+    with pytest.raises(mc.CadcException):
+        # try to set an attribute that cannot be assigned
+        test_subject._value_repair = {
+            'observation.instrument.name': {'gmos': 'GMOS-N'},
+        }
+        test_subject.repair(test_observation)
 
-            with pytest.raises(mc.CadcException):
-                # pre-condition of 'Unexpected repair key' error
-                test_subject._value_repair = {'unknown': 'unknown'}
-                test_subject.repair(test_observation)
+    # pre-condition of 'Could not figure out attribute name' the attribute is
+    # not set in the test observation, so the observation should remain
+    # unchanged
+    test_observation = mc.read_obs_from_file(
+        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
+    )
 
-            with pytest.raises(mc.CadcException):
-                # try to set an attribute that cannot be assigned
-                test_subject._value_repair = {
-                    'observation.instrument.name': {'gmos': 'GMOS-N'},
-                }
-                test_subject.repair(test_observation)
+    test_subject._value_repair = {'chunk.observable.dependent': 'not_found'}
+    test_subject.repair(test_observation)
 
-            # pre-condition of 'Could not figure out attribute name' the attribute is
-            # not set in the test observation, so the observation should remain
-            # unchanged
-            test_observation = mc.read_obs_from_file(
-                os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
-            )
-
-            test_subject._value_repair = {'chunk.observable.dependent': 'not_found'}
-            test_subject.repair(test_observation)
-
-            test_compare_observation = mc.read_obs_from_file(
-                os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
-            )
-            test_diff = get_differences(test_compare_observation, test_observation)
-            assert test_diff is None, 'expect no comparison error'
-    finally:
-        os.chdir(cwd_dir)
+    test_compare_observation = mc.read_obs_from_file(
+        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
+    )
+    test_diff = get_differences(test_compare_observation, test_observation)
+    assert test_diff is None, 'expect no comparison error'
 
 
 def test_extract_file_name_from_uri():
@@ -980,22 +971,17 @@ def test_use_vos():
     assert test_config.use_vos is False, 'use_local_files data source'
 
 
-def test_log_directory_construction(test_config):
-    orig_dir = os.getcwd()
-    try:
-        with TemporaryDirectory() as tmp_dir_name:
-            test_config.log_to_file = True
-            test_config.log_file_directory = tmp_dir_name
-            # reset the fqn's
-            test_config.success_log_file_name = 'good.txt'
-            test_config.failure_log_file_name = 'bad.txt'
-            test_config.retry_file_name = 'again.txt'
-            assert not os.path.exists(test_config.success_fqn)
-            assert not os.path.exists(test_config.failure_fqn)
-            assert not os.path.exists(test_config.retry_fqn)
-            ignore = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-            assert os.path.exists(test_config.success_fqn)
-            assert os.path.exists(test_config.failure_fqn)
-            assert os.path.exists(test_config.retry_fqn)
-    finally:
-        os.chdir(orig_dir)
+def test_log_directory_construction(test_config, tmpdir):
+    test_config.log_to_file = True
+    test_config.log_file_directory = tmpdir
+    # reset the fqn's
+    test_config.success_log_file_name = 'good.txt'
+    test_config.failure_log_file_name = 'bad.txt'
+    test_config.retry_file_name = 'again.txt'
+    assert not os.path.exists(test_config.success_fqn)
+    assert not os.path.exists(test_config.failure_fqn)
+    assert not os.path.exists(test_config.retry_fqn)
+    ignore = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    assert os.path.exists(test_config.success_fqn)
+    assert os.path.exists(test_config.failure_fqn)
+    assert os.path.exists(test_config.retry_fqn)

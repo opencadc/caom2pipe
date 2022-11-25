@@ -71,7 +71,6 @@ import logging
 import os
 
 from datetime import datetime, timedelta
-from tempfile import TemporaryDirectory
 
 import dateutil.tz
 from unittest.mock import patch, Mock
@@ -121,7 +120,7 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_run_state(client_mock):
+def test_run_state(client_mock, tmpdir):
     client_mock.metadata_client.read.side_effect = tc.mock_read
     client_mock.data_client.info.return_value = FileInfo(
         id='cadc:TEST/anything.fits',
@@ -129,114 +128,95 @@ def test_run_state(client_mock):
         md5sum='9473fdd0d880a43c21b7778d34872157',
     )
     metadata_reader_mock = Mock(autospec=True)
-    orig_cwd = os.getcwd()
-    try:
-        with TemporaryDirectory() as tmp_dir_name:
-            os.chdir(tmp_dir_name)
+    caom2pipe_bookmark = 'caom2_timestamp'
+    test_config = mc.Config()
+    test_config.change_working_directory(tmpdir)
+    test_config.collection = 'TEST'
+    test_config.interval = 10
+    test_config.log_to_file = True
+    test_config.logging_level = 'INFO'
+    test_config.proxy_file_name = 'cadcproxy.pem'
+    test_config.resource_id = 'ivo://cadc.nrc.ca/sc2repo'
+    test_config.tap_id = 'ivo://cadc.nrc.ca/sc2tap'
+    test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY]
+    test_config.use_local_files = False
+    test_config.storage_inventory_resource_id = 'ivo://cadc.nrc.ca/test'
+    test_start_time, test_end_time = _get_times(test_config, caom2pipe_bookmark)
 
-            caom2pipe_bookmark = 'caom2_timestamp'
-            test_config = mc.Config()
-            test_config.working_directory = tmp_dir_name
-            test_config.collection = 'TEST'
-            test_config.interval = 10
-            test_config.log_file_directory = f'{tmp_dir_name}/logs'
-            test_config.failure_fqn = f'{test_config.log_file_directory}/failure_log.txt'
-            test_config.log_to_file = True
-            test_config.logging_level = 'INFO'
-            test_config.progress_file_name = 'progress.txt'
-            test_config.proxy_file_name = f'{tmp_dir_name}/cadcproxy.pem'
-            test_config.rejected_file_name = 'rejected.yml'
-            test_config.rejected_directory = f'{tmp_dir_name}/rejected'
-            test_config._report_fqn = f'{test_config.log_file_directory}/app_report.txt'
-            test_config.resource_id = 'ivo://cadc.nrc.ca/sc2repo'
-            test_config.retry_file_name = 'retries.txt'
-            test_config.retry_fqn = f'{test_config.log_file_directory}/{test_config.retry_file_name}'
-            test_config.state_file_name = 'state.yml'
-            test_config.success_fqn = f'{test_config.log_file_directory}/success_log.txt'
-            test_config.tap_id = 'ivo://cadc.nrc.ca/sc2tap'
-            test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY]
-            test_config.use_local_files = False
-            test_config.storage_inventory_resource_id = 'ivo://cadc.nrc.ca/test'
-            test_start_time, test_end_time = _get_times(test_config, caom2pipe_bookmark)
+    with open(test_config.proxy_fqn, 'w') as f:
+        f.write('test content\n')
 
-            with open(test_config.proxy_fqn, 'w') as f:
-                f.write('test content\n')
+    test_data_source = TestListDirTimeBoxDataSource()
+    test_builder = nbc.GuessingBuilder(tc.TestStorageName)
+    transferrer = TestTransfer(tmpdir)
 
-            test_data_source = TestListDirTimeBoxDataSource()
-            test_builder = nbc.GuessingBuilder(tc.TestStorageName)
-            transferrer = TestTransfer(tmp_dir_name)
+    test_result = rc.run_by_state(
+        bookmark_name=caom2pipe_bookmark,
+        config=test_config,
+        end_time=test_end_time,
+        name_builder=test_builder,
+        source=test_data_source,
+        modify_transfer=transferrer,
+        store_transfer=transferrer,
+        clients=client_mock,
+        metadata_reader=metadata_reader_mock,
+    )
 
-            test_result = rc.run_by_state(
-                bookmark_name=caom2pipe_bookmark,
-                config=test_config,
-                end_time=test_end_time,
-                name_builder=test_builder,
-                source=test_data_source,
-                modify_transfer=transferrer,
-                store_transfer=transferrer,
-                clients=client_mock,
-                metadata_reader=metadata_reader_mock,
-            )
+    assert test_result is not None, 'expect a result'
+    assert test_result == 0, 'expect success'
+    assert client_mock.data_client.put.called, 'expect put call'
+    client_mock.data_client.put.assert_called_with(f'{tmpdir}/test_obs_id', 'cadc:TEST/test_file.fits')
 
-            assert test_result is not None, 'expect a result'
-            assert test_result == 0, 'expect success'
-            assert client_mock.data_client.put.called, 'expect put call'
-            client_mock.data_client.put.assert_called_with(
-                f'{tmp_dir_name}/test_obs_id',
-                'cadc:TEST/test_file.fits',
-            ), 'wrong call args'
+    # state file checking
+    test_state = mc.State(test_config.state_fqn)
+    assert test_state is not None, 'expect state content'
+    test_checkpoint = test_state.get_bookmark(caom2pipe_bookmark)
+    assert test_checkpoint == test_end_time, 'wrong bookmark'
 
-            # state file checking
-            test_state = mc.State(test_config.state_fqn)
-            assert test_state is not None, 'expect state content'
-            test_checkpoint = test_state.get_bookmark(caom2pipe_bookmark)
-            assert test_checkpoint == test_end_time, 'wrong bookmark'
+    # success file testing
+    assert os.path.exists(test_config.log_file_directory), 'log directory'
+    assert os.path.exists(test_config.success_fqn), 'success fqn'
+    assert os.path.exists(test_config.progress_fqn), 'progress fqn'
+    log_file = f'{test_config.log_file_directory}/test_obs_id.log'
+    actual = glob.glob(f'{test_config.log_file_directory}/**')
+    assert os.path.exists(log_file), f'specific log file {actual}'
+    xml_file = f'{test_config.log_file_directory}/test_obs_id.xml'
+    assert os.path.exists(xml_file), f'xml file {actual}'
 
-            # success file testing
-            assert os.path.exists(test_config.log_file_directory), 'log directory'
-            assert os.path.exists(test_config.success_fqn), 'success fqn'
-            assert os.path.exists(test_config.progress_fqn), 'progress fqn'
-            log_file = f'{test_config.log_file_directory}/test_obs_id.log'
-            actual = glob.glob(f'{test_config.log_file_directory}/**')
-            assert os.path.exists(log_file), f'specific log file {actual}'
-            xml_file = f'{test_config.log_file_directory}/test_obs_id.xml'
-            assert os.path.exists(xml_file), f'xml file {actual}'
-
-            # reporting testing
-            report_file = f'{test_config.log_file_directory}/app_report.txt'
-            assert os.path.exists(report_file), f'report file {actual}'
-            pass_through_test = False
-            with open(report_file) as f:
-                for line in f:
-                    pass_through_test = True
-                    if 'Number' in line:
-                        bits = line.split(':')
-                        found = False
-                        if 'Inputs' in bits[0]:
-                            assert bits[1].strip() == '1', 'wrong inputs'
-                            found = True
-                        elif 'Successes' in bits[0]:
-                            assert bits[1].strip() == '1', 'wrong successes'
-                            found = True
-                        elif 'Timeouts' in bits[0]:
-                            assert bits[1].strip() == '0', 'wrong timeouts'
-                            found = True
-                        elif 'Retries' in bits[0]:
-                            assert bits[1].strip() == '0', 'wrong retries'
-                            found = True
-                        elif 'Errors' in bits[0]:
-                            assert bits[1].strip() == '0', 'wrong errors'
-                            found = True
-                        elif 'Rejections' in bits[0]:
-                            assert bits[1].strip() == '0', 'wrong rejections'
-                            found = True
-                        elif 'Skipped' in bits[0]:
-                            assert bits[1].strip() == '0', 'wrong skipped'
-                            found = True
-                        assert found, f'{line}'
-            assert pass_through_test, 'found a report file and checked it'
-    finally:
-        os.chdir(orig_cwd)
+    # reporting testing
+    prefix = os.path.basename(test_config.working_directory)
+    report_file = f'{test_config.log_file_directory}/{prefix}_report.txt'
+    assert os.path.exists(report_file), f'report file {actual}'
+    pass_through_test = False
+    with open(report_file) as f:
+        for line in f:
+            pass_through_test = True
+            if 'Number' in line:
+                bits = line.split(':')
+                found = False
+                if 'Inputs' in bits[0]:
+                    assert bits[1].strip() == '1', 'wrong inputs'
+                    found = True
+                elif 'Successes' in bits[0]:
+                    assert bits[1].strip() == '1', 'wrong successes'
+                    found = True
+                elif 'Timeouts' in bits[0]:
+                    assert bits[1].strip() == '0', 'wrong timeouts'
+                    found = True
+                elif 'Retries' in bits[0]:
+                    assert bits[1].strip() == '0', 'wrong retries'
+                    found = True
+                elif 'Errors' in bits[0]:
+                    assert bits[1].strip() == '0', 'wrong errors'
+                    found = True
+                elif 'Rejections' in bits[0]:
+                    assert bits[1].strip() == '0', 'wrong rejections'
+                    found = True
+                elif 'Skipped' in bits[0]:
+                    assert bits[1].strip() == '0', 'wrong skipped'
+                    found = True
+                assert found, f'{line}'
+    assert pass_through_test, 'found a report file and checked it'
 
 
 def _get_times(test_config, caom2pipe_bookmark):
