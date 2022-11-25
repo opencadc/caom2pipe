@@ -134,89 +134,91 @@ def test_query_endpoint_session():
     session_mock.get.assert_called_with('https://localhost', timeout=25)
 
 
-def test_config_class():
-    getcwd_orig = os.getcwd
+def test_config_class(tmp_path):
+    config_content = f"""cache_file_name: cache.yml
+cache_fqn: {tmp_path}/cache.yml
+cleanup_files_when_storing: False
+collection: NEOSSAT
+data_source_extensions: ['.fits']
+data_sources: []
+failure_fqn: {tmp_path}/failure_log.txt
+failure_log_file_name: failure_log.txt
+features:
+  run_in_airflow: True
+  supports_catalog: True
+  supports_composite: False
+  supports_multiple_files: True
+interval: 10
+is_connected: True
+log_file_directory: {tmp_path}
+log_to_file: False
+logging_level: DEBUG
+observe_execution: False
+progress_file_name: progress.txt
+progress_fqn: {tmp_path}/progress.txt
+proxy_file_name: test_proxy.pem
+proxy_fqn: {tmp_path}/test_proxy.pem
+recurse_data_sources: False
+rejected_directory: {tmp_path}/test_config_dir
+rejected_file_name: rejected.yml
+rejected_fqn: {tmp_path}/test_config_dir/rejected.yml
+report_fqn: {tmp_path}/data_report.txt
+resource_id: ivo://cadc.nrc.ca/sc2repo
+retry_count: 1
+retry_failures: False
+retry_file_name: retries.txt
+retry_fqn: {tmp_path}/retries.txt
+state_file_name: state.yml
+state_fqn: {tmp_path}/state.yml
+storage_inventory_resource_id: raven
+store_modified_files_only: False
+stream: raw
+success_fqn: {tmp_path}/success_log.txt
+success_log_file_name: success_log.txt
+tap_id: ivo://cadc.nrc.ca/sc2tap
+task_types:
+  - visit
+  - modify
+use_local_files: False
+work_file: todo.txt
+work_fqn: {tmp_path}/todo.txt
+working_directory: {tmp_path}
+"""
+
+    orig_cwd = os.getcwd()
     try:
-        os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+        os.chdir(tmp_path)
+        with open(f'{tmp_path}/config.yml', 'w') as f:
+            f.write(config_content)
+
         test_config = mc.Config()
         test_config.get_executors()
         assert test_config is not None
         assert test_config.work_file == 'todo.txt'
         assert test_config.features is not None
-        assert test_config.features.supports_composite is False
-        assert test_config.working_directory == tc.TEST_DATA_DIR, 'wrong dir'
-        assert (
-            test_config.work_fqn == f'{tc.TEST_DATA_DIR}/todo.txt'
-        ), 'work_fqn'
+        assert test_config.features.supports_composite is False, 'supports composite'
+        assert test_config.working_directory == tmp_path.as_posix(), 'wrong dir'
+        assert test_config.work_fqn == f'{tmp_path}/todo.txt', 'work_fqn'
         assert test_config.collection == 'NEOSSAT', 'collection'
-        assert (
-            test_config.log_file_directory == tc.TEST_DATA_DIR
-        ), 'logging dir'
-        assert (
-            test_config.success_fqn == f'{tc.TEST_DATA_DIR}/success_log.txt'
-        ), 'success fqn'
-        assert (
-            test_config.success_log_file_name == 'success_log.txt'
-        ), 'success file'
-        assert (
-            test_config.failure_fqn == f'{tc.TEST_DATA_DIR}/failure_log.txt'
-        ), 'failure fqn'
-        assert (
-            test_config.failure_log_file_name == 'failure_log.txt'
-        ), 'failure file'
+        assert test_config.log_file_directory == tmp_path.as_posix(), 'logging dir'
+        assert test_config.success_fqn == f'{tmp_path}/success_log.txt', 'success fqn'
+        assert test_config.success_log_file_name == 'success_log.txt', 'success file'
+        assert test_config.failure_fqn == f'{tmp_path}/failure_log.txt', 'failure fqn'
+        assert test_config.failure_log_file_name == 'failure_log.txt', 'failure file'
         assert test_config.retry_file_name == 'retries.txt', 'retry file'
-        assert (
-            test_config.retry_fqn == f'{tc.TEST_DATA_DIR}/retries.txt'
-        ), 'retry fqn'
-        assert (
-            test_config.proxy_file_name == 'test_proxy.pem'
-        ), 'proxy file name'
-        assert (
-            test_config.proxy_fqn == f'{tc.TEST_DATA_DIR}/test_proxy.pem'
-        ), 'proxy fqn'
+        assert test_config.retry_fqn == f'{tmp_path}/retries.txt', 'retry fqn'
+        assert test_config.proxy_file_name == 'test_proxy.pem', 'proxy file name'
+        assert test_config.proxy_fqn == f'{tmp_path}/test_proxy.pem', 'proxy fqn'
         assert test_config.state_file_name == 'state.yml', 'state file name'
-        assert (
-            test_config.state_fqn == f'{tc.TEST_DATA_DIR}/state.yml'
-        ), 'state fqn'
-        assert (
-            test_config.rejected_directory == tc.TEST_DATA_DIR
-        ), 'wrong rejected dir'
-        assert (
-            test_config.rejected_file_name == 'rejected.yml'
-        ), 'wrong rejected file'
-        assert (
-            test_config.rejected_fqn == f'{tc.TEST_DATA_DIR}/rejected.yml'
-        ), 'wrong rejected fqn'
-        assert (
-            test_config.features.run_in_airflow is True
-        ), 'wrong runs in airflow'
-        assert (
-            test_config.features.supports_catalog is True
-        ), 'wrong supports catalog'
-        test_config.features.supports_catalog = False
-        assert (
-            test_config.features.supports_catalog is False
-        ), 'modified supports catalog'
-        assert test_config.data_source_extensions == [
-            '.fits.gz'
-        ], 'extensions'
+        assert test_config.state_fqn == f'{tmp_path}/state.yml', 'state fqn'
+        assert test_config.rejected_directory == f'{tmp_path}/test_config_dir', 'wrong rejected dir'
+        assert test_config.rejected_file_name == 'rejected.yml', 'wrong rejected file'
+        assert test_config.rejected_fqn == f'{tmp_path}/test_config_dir/rejected.yml', 'wrong rejected fqn'
+        assert test_config.features.run_in_airflow is True, 'wrong runs in airflow'
+        assert test_config.features.supports_catalog is True, 'wrong supports catalog'
+        assert test_config.data_source_extensions == ['.fits'], 'extensions'
     finally:
-        os.getcwd = getcwd_orig
-
-
-def test_config_class_feature_true():
-    getcwd_orig = os.getcwd
-    try:
-        os.getcwd = Mock(
-            return_value=os.path.join(tc.TEST_DATA_DIR, 'features_test')
-        )
-        test_config = mc.Config()
-        test_config.get_executors()
-        assert test_config is not None
-        assert test_config.features is not None
-        assert test_config.features.supports_catalog is True
-    finally:
-        os.getcwd = getcwd_orig
+        os.chdir(orig_cwd)
 
 
 def test_exec_cmd():
@@ -718,70 +720,21 @@ def test_visit():
     # assert False
 
 
-def test_config_write():
-    config_content = """cache_file_name: cache.yml
-cache_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/cache.yml
-cleanup_files_when_storing: False
-collection: NEOSSAT
-data_source_extensions: ['.fits']
-data_sources: []
-failure_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/failure_log.txt
-failure_log_file_name: failure_log.txt
-features:
-  run_in_airflow: True
-  supports_catalog: True
-  supports_composite: False
-  supports_multiple_files: True
-interval: 10
-is_connected: True
-log_file_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data
-log_to_file: False
-logging_level: DEBUG
-observe_execution: False
-progress_file_name: progress.txt
-progress_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/progress.txt
-proxy_file_name: test_proxy.pem
-proxy_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_proxy.pem
-recurse_data_sources: False
-rejected_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_config_dir
-rejected_file_name: rejected.yml
-rejected_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_config_dir/rejected.yml
-report_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/data_report.txt
-resource_id: ivo://cadc.nrc.ca/sc2repo
-retry_count: 1
-retry_failures: False
-retry_file_name: retries.txt
-retry_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/retries.txt
-state_file_name: state.yml
-state_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/state.yml
-storage_inventory_resource_id: raven
-store_modified_files_only: False
-stream: raw
-success_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/success_log.txt
-success_log_file_name: success_log.txt
-tap_id: ivo://cadc.nrc.ca/sc2tap
-task_types:
-  - visit
-  - modify
-use_local_files: False
-work_file: todo.txt
-work_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/todo.txt
-working_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data
-"""
-
-    get_cwd_orig = os.getcwd
-    test_dir = f'{tc.TEST_DATA_DIR}/test_config_dir'
-    os.getcwd = Mock(return_value=test_dir)
+def test_config_write(tmpdir):
+    """Test that TaskType read/write is working"""
+    orig_cwd = os.getcwd()
     try:
+        os.chdir(tmpdir)
         test_config = mc.Config()
-        test_config.get_executors()
+        test_config.working_directory = tmpdir
+        test_config.logging_level = 'WARNING'
         scrape_found = False
         if mc.TaskType.SCRAPE in test_config.task_types:
             test_config.task_types = [mc.TaskType.VISIT, mc.TaskType.MODIFY]
             scrape_found = True
         else:
             test_config.task_types = [mc.TaskType.SCRAPE]
-        mc.Config.write_to_file(test_config)
+        test_config.write_to_file(test_config)
         second_config = mc.Config()
         second_config.get_executors()
         if scrape_found:
@@ -790,10 +743,7 @@ working_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data
         else:
             assert mc.TaskType.SCRAPE in test_config.task_types, 'scrape end'
     finally:
-        os.getcwd = get_cwd_orig
-        fqn = f'{test_dir}/config.yml'
-        with open(fqn, 'w') as f:
-            f.write(config_content)
+        os.chdir(orig_cwd)
 
 
 def test_reverse_lookup():

@@ -219,33 +219,23 @@ def test_data_get(mock_client):
     assert test_metrics.failures['data']['get']['TEST_get.fits'] == 1, 'count'
 
 
-def test_define_subject():
+def test_define_subject(test_config, tmpdir):
+    # proxy pre-condition
+    test_config.change_working_directory(tmpdir)
+    test_config.proxy_file_name = 'proxy.pem'
 
-    getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+    with open(test_config.proxy_fqn, 'w') as f:
+        f.write('proxy content')
 
-    try:
-        test_config = mc.Config()
-        test_config.get_executors()
-        test_config.proxy_fqn = None
-        # proxy pre-condition
-        test_config.proxy_fqn = f'{tc.TEST_DATA_DIR}/proxy.pem'
+    test_subject = clc.define_subject(test_config)
+    assert test_subject is not None, 'expect a proxy subject'
+    test_config.proxy_fqn = '/nonexistent'
+    with pytest.raises(mc.CadcException):
+        clc.define_subject(test_config)
 
-        if not os.path.exists(test_config.proxy_fqn):
-            with open(test_config.proxy_fqn, 'w') as f:
-                f.write('proxy content')
-
-        test_subject = clc.define_subject(test_config)
-        assert test_subject is not None, 'expect a proxy subject'
-        test_config.proxy_fqn = '/nonexistent'
-        with pytest.raises(mc.CadcException):
-            clc.define_subject(test_config)
-
-        test_config.proxy_fqn = None
-        with pytest.raises(mc.CadcException):
-            clc.define_subject(test_config)
-    finally:
-        os.getcwd = getcwd_orig
+    test_config.proxy_fqn = None
+    with pytest.raises(mc.CadcException):
+        clc.define_subject(test_config)
 
 
 @patch('caom2repo.core.CAOM2RepoClient')
