@@ -86,13 +86,16 @@ from os import chdir, getcwd
 from cadcdata import FileInfo
 from caom2pipe import data_source_composable as dsc
 from caom2pipe.manage_composable import CadcException, Config, TaskType
-from caom2pipe.transfer_composable import VoScienceCleanupTransfer, VoScienceTransfer
+from caom2pipe.transfer_composable import VoScienceTransfer
 from caom2pipe import run_composable as rc
 from traceback import format_exc
 
 from unittest.mock import call, Mock, patch
 from test_data_source_composable import _create_dir_listing
 from test_run_composable import TEST_BOOKMARK, _write_state
+
+TEST_START_TIME = datetime(year=2020, month=3, day=3, hour=1, minute=1, second=1)
+TEST_END_TIME = datetime(year=2020, month=3, day=3, hour=2, minute=1, second=1)
 
 
 def test_report_output_todo_local(test_config, tmpdir):
@@ -109,77 +112,50 @@ def test_report_output_todo_local(test_config, tmpdir):
         test_config.logging_level = 'INFO'
         test_config.task_types = [TaskType.STORE]
         test_config.interval = 100
+        test_config.use_local_files = True
+        test_config.data_sources = ['/tmp']
+        test_config.cleanup_failure_destination = '/data/failure'
+        test_config.cleanup_success_destination = '/data/success'
+        test_config.change_working_directory(tmpdir)
 
         pre_success_listing, file_info_list = _create_dir_listing('/tmp', 4)
         test_reader = Mock()
 
-        test_start_time = datetime(year=2020, month=3, day=3, hour=1, minute=1, second=1)
-        test_end_time = datetime(year=2020, month=3, day=3, hour=2, minute=1, second=1)
-
-        store_modified_true_move_calls = [
-            call('/tmp/A0.fits', '/data/success'),
-            call('/tmp/A1.fits', '/data/failure'),
-            call('/tmp/A2.fits', '/data/failure'),
-            call('/tmp/A3.fits', '/data/success'),
-        ]
-
-        store_modified_false_move_calls = [
-            call('/tmp/A1.fits', '/data/failure'),
-            call('/tmp/A0.fits', '/data/success'),
-            call('/tmp/A2.fits', '/data/failure'),
-            call('/tmp/A3.fits', '/data/success'),
-        ]
-
-        store_modified_true_put_side_effect = [CadcException, None]
-        store_modified_false_put_side_effect = [None, CadcException, None]
-
-        clean_up_false_put_side_effect = [None, CadcException, None]
-
-        store_modified_true_info_side_effect = [file_info_list[0], None, None, None, file_info_list[0]]
-        store_modified_false_info_side_effect = [
-            file_info_list[0],
-            None,
-            file_info_list[0],
-            file_info_list[0],
-            file_info_list[0],
-        ]
-
-        store_modified_true_file_info_get_side_effect = [file_info_list[0], file_info_list[3], None, None]
-        store_modified_false_file_info_get_side_effect = [file_info_list[0], file_info_list[2], file_info_list[3]]
-
-        store_modified_true_skipped_sum = 1
-        store_modified_false_skipped_sum = 0
-
         test_clients = Mock()
-        test_config.change_working_directory(tmpdir)
 
         for clean_up in [True, False]:
             for store_modified in [True, False]:
-                move_calls = store_modified_false_move_calls
-                put_side_effect = store_modified_false_put_side_effect
-                info_side_effect = store_modified_false_info_side_effect
-                file_info_side_effect = store_modified_false_file_info_get_side_effect
-                skipped_sum = store_modified_false_skipped_sum
+                move_calls = [
+                    call('/tmp/A1.fits', '/data/failure'),
+                    call('/tmp/A0.fits', '/data/success'),
+                    call('/tmp/A2.fits', '/data/failure'),
+                    call('/tmp/A3.fits', '/data/success'),
+                ]
+                put_side_effect = [None, CadcException, None]
+                info_side_effect = [file_info_list[0], None, file_info_list[0], file_info_list[0], file_info_list[0]]
+                file_info_side_effect = [file_info_list[0], file_info_list[2], file_info_list[3]]
+                skipped_sum = 0
                 if store_modified:
-                    move_calls = store_modified_true_move_calls
-                    put_side_effect = store_modified_true_put_side_effect
-                    info_side_effect = store_modified_true_info_side_effect
-                    file_info_side_effect = store_modified_true_file_info_get_side_effect
-                    skipped_sum = store_modified_true_skipped_sum
+                    move_calls = [
+                        call('/tmp/A0.fits', '/data/success'),
+                        call('/tmp/A1.fits', '/data/failure'),
+                        call('/tmp/A2.fits', '/data/failure'),
+                        call('/tmp/A3.fits', '/data/success'),
+                    ]
+                    put_side_effect = [CadcException, None]
+                    info_side_effect = [file_info_list[0], None, None, None, file_info_list[0]]
+                    file_info_side_effect = [file_info_list[0], file_info_list[3], None, None]
+                    skipped_sum = 1
                 if not clean_up:
-                    put_side_effect = clean_up_false_put_side_effect
-                    skipped_sum = store_modified_false_skipped_sum
+                    put_side_effect = [None, CadcException, None]
+                    skipped_sum = 0
                 test_config.cleanup_files_when_storing = clean_up
                 test_config.store_modified_files_only = store_modified
-                test_config.use_local_files = True
-                test_config.data_sources = ['/tmp']
-                test_config.cleanup_failure_destination = '/data/failure'
-                test_config.cleanup_success_destination = '/data/success'
                 test_data_source = dsc.LocalFilesDataSource(
                     test_config, test_clients.data_client, test_reader, recursive=True, scheme='cadc'
                 )
                 Config.write_to_file(test_config)
-                _write_state(test_start_time, test_config.state_fqn)
+                _write_state(TEST_START_TIME, test_config.state_fqn)
                 for state in [True, False]:
                     (
                         test_config,
@@ -225,7 +201,7 @@ def test_report_output_todo_local(test_config, tmpdir):
                             TEST_BOOKMARK,
                             test_observable,
                             test_reporter,
-                            test_end_time,
+                            TEST_END_TIME,
                         )
                     else:
                         test_subject = rc.TodoRunner(
@@ -283,85 +259,46 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
         chdir(tmpdir)
         test_config.task_types = [TaskType.STORE]
         test_config.interval = 100
-
-        pre_success_listing, file_info_list = _create_dir_listing('/tmp', 4)
-        test_reader = Mock()
-
-        test_start_time = datetime(year=2020, month=3, day=3, hour=1, minute=1, second=1)
-        test_end_time = datetime(year=2020, month=3, day=3, hour=2, minute=1, second=1)
-
-        move_calls = [
-            call(
-                'vos://cadc.nrc.ca!vault/goliaths/test/A0.fits',
-                'vos://cadc.nrc.ca!vault/goliaths/test/success',
-            ),
-            call(
-                'vos://cadc.nrc.ca!vault/goliaths/test/A1.fits',
-                'vos://cadc.nrc.ca!vault/goliaths/test/failure',
-            ),
-            call(
-                'vos://cadc.nrc.ca!vault/goliaths/test/A2.fits',
-                'vos://cadc.nrc.ca!vault/goliaths/test/failure',
-            ),
-            call(
-                'vos://cadc.nrc.ca!vault/goliaths/test/A3.fits',
-                'vos://cadc.nrc.ca!vault/goliaths/test/success',
-            ),
-        ]
-
-        store_modified_true_put_side_effect = [CadcException, None]
-        store_modified_false_put_side_effect = [None, CadcException, None]
-
-        clean_up_false_put_side_effect = [None, CadcException, None]
-
-        store_modified_true_info_side_effect = [file_info_list[0], None, None, None, None, None, file_info_list[3]]
-        store_modified_false_info_side_effect = [
-            file_info_list[0],
-            None,
-            None,
-            file_info_list[0],
-        ]
-
-        vo_listing, vo_file_info_list, vo_listdir = _get_node_listing(4)
-        vo_client_listing_side_effect = vo_listdir
-        vo_client_get_node_side_effect = vo_listing
-
-        test_clients = Mock()
         test_config.change_working_directory(tmpdir)
         test_config.logging_level = 'INFO'
+        test_config.use_local_files = False
+        test_config.data_sources = ['vos://cadc.nrc.ca!vault/goliaths/test']
+        test_config.cleanup_failure_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/failure'
+        test_config.cleanup_success_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/success'
+
+        ignore_pre_success_listing, file_info_list = _create_dir_listing('/tmp', 4)
+        vo_listing, vo_file_info_list, vo_listdir = _get_node_listing(4)
+        test_reader = Mock()
+        test_reader.file_info = {
+            'cadc:OMM/A0.fits': file_info_list[0],
+            'cadc:OMM/A1.fits': file_info_list[1],
+            'cadc:OMM/A2.fits': file_info_list[2],
+            'cadc:OMM/A3.fits': file_info_list[3],
+        }
+        test_clients = Mock()
 
         for clean_up in [True, False]:
             for store_modified in [True, False]:
-                put_side_effect = store_modified_false_put_side_effect
-                info_side_effect = store_modified_false_info_side_effect
+                put_side_effect = [None, CadcException, None]
+                info_side_effect = [file_info_list[0], None, None, file_info_list[0]]
                 skipped_sum = 0
                 if store_modified:
-                    put_side_effect = store_modified_true_put_side_effect
-                    info_side_effect = store_modified_true_info_side_effect
+                    put_side_effect = [CadcException, None]
+                    info_side_effect = [file_info_list[0], None, None, None, None, None, file_info_list[3]]
                     skipped_sum = 1
                 test_config.cleanup_files_when_storing = clean_up
                 test_config.store_modified_files_only = store_modified
-                test_config.use_local_files = False
-                test_config.data_sources = ['vos://cadc.nrc.ca!vault/goliaths/test']
-                test_config.cleanup_failure_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/failure'
-                test_config.cleanup_success_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/success'
                 if clean_up:
                     store_transfer = VoScienceTransfer(test_clients.vo_client)
                 else:
                     store_transfer = VoScienceTransfer(test_clients.vo_client)
-                    put_side_effect = clean_up_false_put_side_effect
+                    put_side_effect = [None, CadcException, None]
 
-                test_reader.file_info = {
-                    'cadc:OMM/A0.fits': file_info_list[0],
-                    'cadc:OMM/A1.fits': file_info_list[1],
-                    'cadc:OMM/A2.fits': file_info_list[2],
-                    'cadc:OMM/A3.fits': file_info_list[3],
-                }
                 test_data_source = dsc.VaultCleanupDataSource(
                     test_config, test_clients.vo_client, test_clients.data_client, test_reader
                 )
                 Config.write_to_file(test_config)
-                _write_state(test_start_time, test_config.state_fqn)
+                _write_state(TEST_START_TIME, test_config.state_fqn)
                 # state == True is incremental operation
                 for state in [True, False]:
                     (
@@ -394,10 +331,10 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                     test_clients.data_client.info.side_effect = info_side_effect
                     test_clients.data_client.put.side_effect = put_side_effect
                     test_clients.vo_client.isdir.return_value = False
-                    test_clients.vo_client.listdir.side_effect = vo_client_listing_side_effect
+                    test_clients.vo_client.listdir.side_effect = vo_listdir
                     if not state:
                         test_clients.vo_client.listdir.side_effect = [vo_listdir.node_list]
-                    test_clients.vo_client.get_node.side_effect = vo_client_get_node_side_effect
+                    test_clients.vo_client.get_node.side_effect = vo_listing
                     if store_modified:
                         # FITS files are valid, invalid, valid, valid, but the verify is called in the transfer, so
                         # the first 'valid' check never happens
@@ -415,7 +352,7 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                             TEST_BOOKMARK,
                             test_observable,
                             test_reporter,
-                            test_end_time,
+                            TEST_END_TIME,
                         )
                     else:
                         test_subject = rc.TodoRunner(
@@ -445,7 +382,24 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                     if clean_up:
                         assert ds_move_mock.called, f'ds move should be called {diagnostic}'
                         assert ds_move_mock.call_count == 4, f'ds wrong move call count {diagnostic}'
-                        ds_move_mock.assert_has_calls(move_calls)
+                        ds_move_mock.assert_has_calls([
+                            call(
+                                'vos://cadc.nrc.ca!vault/goliaths/test/A0.fits',
+                                'vos://cadc.nrc.ca!vault/goliaths/test/success',
+                            ),
+                            call(
+                                'vos://cadc.nrc.ca!vault/goliaths/test/A1.fits',
+                                'vos://cadc.nrc.ca!vault/goliaths/test/failure',
+                            ),
+                            call(
+                                'vos://cadc.nrc.ca!vault/goliaths/test/A2.fits',
+                                'vos://cadc.nrc.ca!vault/goliaths/test/failure',
+                            ),
+                            call(
+                                'vos://cadc.nrc.ca!vault/goliaths/test/A3.fits',
+                                'vos://cadc.nrc.ca!vault/goliaths/test/success',
+                            ),
+                        ])
                     else:
                         if store_modified:
                             assert ds_move_mock.called, f'ds move should be called {diagnostic}'
