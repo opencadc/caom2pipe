@@ -289,28 +289,6 @@ def test_get_file_meta():
     assert result['size'] == 0, result['size']
 
 
-@patch('cadcdata.core.net.BaseWsClient.post')
-@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_read_file_list_from_archive(caps_mock, ad_mock):
-    caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
-    response = Mock()
-    response.status_code = 200
-    response.iter_content.return_value = [b'fileName\n']
-    ad_mock.return_value.__enter__.return_value = response
-    test_config = mc.Config()
-    test_config.resource_id = 'ivo://cadc.nrc.ca/sc2tap'
-
-    result = mc.read_file_list_from_archive(
-        test_config,
-        'test_app_name',
-        '2018-11-18T22:39:56.186443+00:00',
-        '2018-11-19T22:39:56.186443+00:00',
-    )
-    assert result is not None
-    assert type(result) is list
-    assert len(result) == 0
-
-
 def test_write_to_file():
     content = ['a.txt', 'b.jpg', 'c.fits.gz']
     test_fqn = f'{tc.TEST_DATA_DIR}/test_out.txt'

@@ -139,8 +139,8 @@ __all__ = [
     'Observable',
     'query_endpoint',
     'query_endpoint_session',
+    'read_as_yaml',
     'read_csv_file',
-    'read_file_list_from_archive',
     'read_from_file',
     'read_obs_from_file',
     'Rejected',
@@ -2756,33 +2756,6 @@ def update_typed_set(typed_set, new_set):
 def format_time_for_query(from_time):
     length = len(datetime.now().strftime('%Y-%m-%dT%H:%M:%S'))
     return datetime.strptime(from_time[:length], '%Y-%m-%dT%H:%M:%S')
-
-
-def read_file_list_from_archive(config, app_name, prev_exec_date, exec_date):
-    """Code to execute a time-boxed query for files that have arrived in ad.
-
-    :param config Config instance
-    :param app_name Information used in the http connection for tracing
-        queries.
-    :param prev_exec_date Timestamp that indicates the beginning of the
-        chunk of time. Results will be > than this time.
-    :param exec_date Timestamp. that indicates the end of the chunk of time.
-        Results will be <= this time.
-    """
-    start_time = format_time_for_query(prev_exec_date)
-    end_time = format_time_for_query(exec_date)
-    ad_resource_id = 'ivo://cadc.nrc.ca/ad'
-    query = (
-        f"SELECT A.uri, min(A.contentLastModified) "
-        f"FROM inventory.Artifact AS A "
-        f"WHERE A.uri LIKE '%:{config.collection}/%' "
-        f"AND A.contentLastModified > '{start_time}' and A.contentLastModified <= '{end_time}' "
-        f"ORDER BY A.contentLastModified "
-        f"GROUP BY A.contentLastModified"
-    )
-    logging.debug(f'Query is {query}')
-    temp = query_tap(query, config.proxy_fqn, config.resource_id)
-    return [ii for ii in temp['fileName']]
 
 
 def get_keyword(headers, keyword):

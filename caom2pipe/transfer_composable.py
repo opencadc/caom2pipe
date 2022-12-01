@@ -200,6 +200,7 @@ class ScienceTransfer(Transfer):
         """Action take on failure is completely dependent on where the
         file originated, and any cleanup configuration."""
         try:
+            # clean up the interim location between the source and CADC
             if os.path.exists(destination_fqn):
                 os.unlink(destination_fqn)
         except Exception as e:
@@ -293,6 +294,7 @@ class VoScienceCleanupTransfer(VoScienceTransfer):
             )
 
     def failure_action(self, original_fqn, destination_fqn, msg):
+        self._logger.debug('Begin failure_action')
         try:
             if os.path.exists(destination_fqn):
                 os.unlink(destination_fqn)
@@ -304,9 +306,11 @@ class VoScienceCleanupTransfer(VoScienceTransfer):
             raise mc.CadcException(e)
 
         self._move_action(original_fqn, self._failure_destination)
+        self._logger.debug('End failure_action')
+        raise mc.CadcException(msg)
 
     def _move_action(self, original_fqn, destination):
-        self._logger.debug('Begin _move_action')
+        self._logger.debug(f'Begin _move_action from {original_fqn} to {destination}')
         if self._cleanup_when_storing:
             f_name = os.path.basename(original_fqn)
             move_destination = os.path.join(destination, f_name)

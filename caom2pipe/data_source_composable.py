@@ -405,7 +405,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             else:
                 fqn = entry.entry_name
             self._logger.debug(f'Clean up {fqn}')
-            if self._check_md5sum(fqn):
+            if self._is_remote_different(fqn):
                 # the transfer itself failed, so track as a failure
                 self._move_action(fqn, self._cleanup_failure_directory)
             else:
@@ -439,7 +439,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 if self._cleanup_when_storing:
                     if self._store_modified_files_only:
                         # only transfer files with a different MD5 checksum
-                        work_with_file = self._check_md5sum(entry.path)
+                        work_with_file = self._is_remote_different(entry.path)
                         if not work_with_file:
                             self._logger.warning(
                                 f'{entry.path} has the same md5sum at CADC. '
@@ -460,7 +460,9 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     self._logger.warning(f'Rejecting {entry.path}. Moving to {self._cleanup_failure_directory}')
                     self._move_action(entry.path, self._cleanup_failure_directory)
                 temp_storage_name = mc.StorageName(file_name=entry.name)
-                self._reporter.capture_failure(temp_storage_name, BaseException('_verify_file errors'), '_verify_file errors')
+                self._reporter.capture_failure(
+                    temp_storage_name, BaseException('_verify_file errors'), '_verify_file errors'
+                )
                 work_with_file = False
         else:
             work_with_file = False
@@ -507,10 +509,11 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                                     entry.path
                                 )
 
-    def _check_md5sum(self, entry_path):
+    def _is_remote_different(self, entry_path):
         """
-        :return: boolean False if the metadata is the same locally as at
-            CADC, True otherwise
+        Check whether a file is different at its source than it is at CADC, using md5sum comparisons.
+
+        :return: boolean False if the data is the same locally as at CADC, True otherwise
         """
         # get the metadata locally
         result = True
@@ -548,7 +551,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             )
         temp_text = 'different' if result else 'same'
         self._logger.debug(
-            f'Done _check_md5sum for {entry_path} result is {temp_text} at '
+            f'Done _is_remote_different for {entry_path} result is {temp_text} at '
             f'CADC.'
         )
         return result
@@ -721,7 +724,8 @@ class VaultDataSource(ListDirTimeBoxDataSource):
             uri = node.target
             node = self._vault_client.get_node(uri, limit=None, force=True)
         for target in node.node_list:
-            target_node = self._vault_client.get_node(target)
+            target_fqn = f'{node.uri}/{target}'
+            target_node = self._vault_client.get_node(target_fqn)
             target_node_mtime = mc.make_time_tz(target_node.props.get('date')).timestamp()
             if target_node.type == 'vos:ContainerNode' and self._recursive:
                 if exec_time >= target_node_mtime >= prev_exec_time:
@@ -729,8 +733,8 @@ class VaultDataSource(ListDirTimeBoxDataSource):
                         prev_exec_time, exec_time, target_node.uri
                     )
             else:
-                if self.default_filter(target_node):
-                    if exec_time >= target_node_mtime >= prev_exec_time:
+                if exec_time >= target_node_mtime >= prev_exec_time:
+                    if self.default_filter(target_node):
                         self._temp[target_node_mtime].append(target_node.uri)
                         self._logger.info(
                             f'Add {target_node.uri} to work list.'
@@ -814,7 +818,7 @@ class VaultCleanupDataSource(VaultDataSource):
             storage_name = nbc.GuessingBuilder(mc.StorageName).build(fqn)
             self._logger.debug(f'Clean up {fqn}')
             if storage_name.destination_uris[0] in self._metadata_reader.file_info:
-                if self._check_md5sum(storage_name.destination_uris[0]):
+                if self._is_remote_different(storage_name.destination_uris[0]):
                     # the transfer itself failed, so track as a failure
                     self._move_action(fqn, self._cleanup_failure_directory)
                 else:
@@ -823,10 +827,14 @@ class VaultCleanupDataSource(VaultDataSource):
                 self._logger.warning(f'No clean up for {fqn} because there is no vos metadata.')
             self._logger.debug('End clean_up.')
 
-    def default_filter(self, dir_entry_fqn):
+    def default_filter(self, dir_entry):
         """
-        :param dir_entry_fqn: str that is a vos URI
+        :param dir_entry: either an str that is a vos URI, or a vos.Node
         """
+        dir_entry_fqn = dir_entry
+        if not isinstance(dir_entry, str):
+            dir_entry_fqn = dir_entry.uri
+        self._logger.debug(f'Begin default_filter with {dir_entry_fqn}')
         copy_file = False
         for extension in self._extensions:
             if dir_entry_fqn.endswith(extension):
@@ -842,7 +850,7 @@ class VaultCleanupDataSource(VaultDataSource):
                         copy_file = False
                     elif self._store_modified_files_only:
                         # only transfer files with a different MD5 checksum
-                        copy_file = self._check_md5sum(storage_name.destination_uris[0])
+                        copy_file = self._is_remote_different(storage_name.destination_uris[0])
                         if not copy_file:
                             self._skipped_files += 1
                             self._move_action(dir_entry_fqn, self._cleanup_success_directory)
@@ -862,15 +870,16 @@ class VaultCleanupDataSource(VaultDataSource):
         self._capture_todo()
         return self._work
 
-    def _check_md5sum(self, destination_uri):
+    def _is_remote_different(self, destination_uri):
         """
         :param destination_uri: str CADC storage system URI
         """
+        self._logger.debug(f'Begin _is_remote_different {destination_uri}')
         result = True
         # get the metadata at CADC
         cadc_meta = self._cadc_client.info(destination_uri)
         if cadc_meta is not None and self._metadata_reader.file_info[destination_uri].md5sum == cadc_meta.md5sum:
-            self._logger.warning(f'{destination_uri} has the same md5sum at CADC. Not transferring.')
+            self._logger.warning(f'{destination_uri} has the same md5sum at CADC.')
             result = False
         return result
 

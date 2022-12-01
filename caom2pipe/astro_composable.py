@@ -183,7 +183,7 @@ def check_fitsverify(fqn):
                 output is not None
                 and len(output) > 0
                 and output[0] is not None
-                and ( 'and 0 errors' in output.decode('utf-8') or 'verification OK:' in output.decode('utf-8') )
+                and ('and 0 errors' in output.decode('utf-8') or 'verification OK:' in output.decode('utf-8'))
             ):
                 result = True
             if not result:

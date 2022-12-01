@@ -307,28 +307,9 @@ def test_list_dir_separate_data_source(test_config):
 
 
 def test_vault_list_dir_time_box_data_source(test_config):
-    node1 = type('', (), {})()
-    node1.props = {
-        'date': '2020-09-15 19:55:03.067000+00:00',
-        'size': 14,
-    }
-    node1.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
-    node1.type = 'vos:DataNode'
-    node2 = type('', (), {})()
-    node2.props = {
-        'date': '2020-09-13 19:55:03.067000+00:00',
-        'size': 12,
-    }
-    node2.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/994899p_moc.fits'
-    node2.type = 'vos:DataNode'
-
-    node3 = type('', (), {})()
-    node3.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc'
-    node3.type = 'vos:ContainerNode'
-    node3.node_list = ['994898p_moc.fits', '994899p_moc.fits']
-
+    node_listing = _create_vault_listing()
     test_vos_client = Mock()
-    test_vos_client.get_node.side_effect = [node3, node1, node2]
+    test_vos_client.get_node.side_effect = node_listing
     test_config.data_sources = ['vos:goliaths/wrong']
     test_config.data_source_extensions = ['.fits']
     test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
@@ -348,8 +329,20 @@ def test_vault_list_dir_time_box_data_source(test_config):
         'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
         == test_result[0].entry_name
     ), 'wrong name result'
+    # the timestamp from the record in the test_result, which should be between the start and stop times
     assert 1600199703.067 == test_result[0].entry_ts, 'wrong ts result'
+    test_entry_dt = datetime.fromtimestamp(test_result[0].entry_ts)
+    assert test_entry_dt == datetime(year=2020, month=9, day=15, hour=19, minute=55, second=3, microsecond=67000)
     assert test_reporter.all == 1, 'wrong report'
+    assert test_vos_client.get_node.called, 'get_node call'
+    assert test_vos_client.get_node.call_count == 3, 'get_node call count'
+    test_vos_client.get_node.assert_has_calls(
+        [
+            call('vos:goliaths/wrong', limit=None, force=True),
+            call('vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'),
+            call('vos://cadc.nrc.ca!vault/goliaths/moc/994899p_moc.fits')
+        ]
+    )
 
 
 def test_transfer_check_fits_verify(test_config, tmpdir):
@@ -687,6 +680,60 @@ def test_vo_transfer_check_fits_verify(vault_info_mock, test_config):
     assert test_reporter._summary._skipped_sum == 1, f'wrong report {test_reporter._summary}'
 
 
+def test_vault_clean_up_get_time_box(test_config):
+    test_match_file_info = FileInfo(id='vos:abc/def.fits', md5sum='ghi')
+    test_different_file_info = FileInfo(id='vos:abc/def.fits', md5sum='ghi')
+    test_file_info = [test_match_file_info, test_different_file_info]
+
+    test_data_client = Mock(autospec=True)
+
+    test_config.data_source_extensions = ['.fits']
+    test_config.data_sources = ['vos:DAO/Archive/Incoming']
+    test_config.cleanup_failure_destination = 'vos:DAO/failure'
+    test_config.cleanup_success_destination = 'vos:DAO/success'
+    test_config.store_modified_files_only = True
+    test_config.recurse_data_sources = False
+
+    node_listing = _create_vault_listing()
+    test_vos_client = Mock(autospec=True)
+
+    for cleanup_files in [True, False]:
+        # get_node is called twice for each DataNode, once originally, and a second time by the MetadataReader
+        test_vos_client.get_node.side_effect = [
+            node_listing[0], node_listing[1], node_listing[1], node_listing[2], node_listing[2]
+        ]
+        test_reader = rdc.VaultReader(test_vos_client)
+        test_config.cleanup_files_when_storing = cleanup_files
+        test_data_client.info.side_effect = test_file_info
+
+        test_subject = dsc.VaultCleanupDataSource(test_config, test_vos_client, test_data_client, test_reader)
+        assert test_subject is not None, 'expect ctor to work'
+        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+        test_subject.reporter = test_reporter
+        test_prev_exec_time = datetime(
+            year=2020, month=9, day=15, hour=10, minute=0, second=0, tzinfo=timezone.utc
+        ).timestamp()
+        test_exec_time = datetime(
+            year=2020, month=9, day=16, hour=10, minute=0, second=0, tzinfo=timezone.utc
+        ).timestamp()
+        test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
+
+        assert test_result is not None, 'expect a work list'
+        assert len(test_result) == 1, 'wrong work list entries'
+        assert test_result[0].entry_name == 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits', 'wrong work entry url'
+        assert test_result[0].entry_ts == 1600199703.067, 'wrong work entry timestamp on file modification'
+
+        assert test_vos_client.isdir.call_count == 0, 'wrong is_dir count'
+        # skip count should be 0, because the time-box should exclude 994899p_moc.fits
+        assert test_reporter.all == 1, f'wrong report {test_reporter._summary}'
+        assert test_reporter._summary._success_sum == 0, f'wrong success  {test_reporter._summary}'
+        assert test_reporter._summary._rejected_sum == 0, f'wrong rejected {test_reporter._summary}'
+        assert test_reporter._summary._skipped_sum == 0, f'wrong skipped {test_reporter._summary}'
+        assert test_reporter._summary._errors_sum == 0, f'wrong errors {test_reporter._summary}'
+        # no work done yet, no clean ups called
+        assert not test_vos_client.move.called, 'move mock'
+
+
 def test_data_source_exists(test_config):
     # test the case where the destination file already exists, so the
     # move cleanup has to remove it first
@@ -755,3 +802,29 @@ def _create_dir_listing(root_dir, count, prefix='A'):
         listing_result.append(dir_entry)
         file_info_list.append(FileInfo(id=dir_entry.name, size=123, md5sum='md5:abc'))
     return listing_result, file_info_list
+
+
+def _create_vault_listing():
+    node1 = type('', (), {})()
+    node1.props = {
+        'date': '2020-09-15 19:55:03.067000+00:00',
+        'size': 14,
+        'MD5': 'def',
+    }
+    node1.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
+    node1.type = 'vos:DataNode'
+    node2 = type('', (), {})()
+    node2.props = {
+        'date': '2020-09-13 19:55:03.067000+00:00',
+        'size': 12,
+        'MD5': 'ghi',
+    }
+    node2.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc/994899p_moc.fits'
+    node2.type = 'vos:DataNode'
+
+    node3 = type('', (), {})()
+    node3.uri = 'vos://cadc.nrc.ca!vault/goliaths/moc'
+    node3.type = 'vos:ContainerNode'
+    node3.node_list = ['994898p_moc.fits', '994899p_moc.fits']
+
+    return [node3, node1, node2]
