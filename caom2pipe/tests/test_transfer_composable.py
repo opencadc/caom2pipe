@@ -81,7 +81,7 @@ import test_conf
 @patch('caom2utils.data_util.StorageClientWrapper', autospec=True)
 def test_cadc_transfer(client_mock, caps_mock):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
-    test_subject = tc.CadcTransfer()
+    test_subject = tc.CadcTransfer(client_mock)
     assert test_subject is not None, 'expect a result'
     test_config = mc.Config()
     test_config.rejected_fqn = '/tmp/rejected.yml'
@@ -89,7 +89,6 @@ def test_cadc_transfer(client_mock, caps_mock):
         mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)
     )
     test_subject.observable = test_observable
-    test_subject.cadc_client = client_mock
     test_source = 'ad:TEST/test_file.fits'
     test_destination = '/tmp/test_file.fits'
     test_subject.get(test_source, test_destination)
@@ -145,7 +144,6 @@ def test_http_transfer(get_mock):
     get_mock.side_effect = Mock(autospec=True)
     test_config = mc.Config()
     test_config.working_directory = test_conf.TEST_DATA_DIR
-    test_config.netrc_file = 'test_netrc'
     test_config.rejected_fqn = '/tmp/rejected.yml'
     test_observable = mc.Observable(
         mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)
@@ -171,7 +169,6 @@ def test_ftp_transfer(data_get_mock):
     data_get_mock.side_effect = Mock(autospec=True)
     test_config = mc.Config()
     test_config.working_directory = test_conf.TEST_DATA_DIR
-    test_config.netrc_file = 'test_netrc'
     test_config.rejected_fqn = '/tmp/rejected.yml'
     test_observable = mc.Observable(
         mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)

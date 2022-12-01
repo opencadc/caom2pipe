@@ -71,6 +71,7 @@ import os
 import pytest
 
 from datetime import datetime, timedelta, timezone
+from shutil import copy
 from unittest.mock import Mock, patch
 
 from caom2 import ProductType, ReleaseType, Artifact, ChecksumURI
@@ -133,91 +134,91 @@ def test_query_endpoint_session():
     session_mock.get.assert_called_with('https://localhost', timeout=25)
 
 
-def test_config_class():
-    getcwd_orig = os.getcwd
+def test_config_class(tmp_path):
+    config_content = f"""cache_file_name: cache.yml
+cache_fqn: {tmp_path}/cache.yml
+cleanup_files_when_storing: False
+collection: NEOSSAT
+data_source_extensions: ['.fits']
+data_sources: []
+failure_fqn: {tmp_path}/failure_log.txt
+failure_log_file_name: failure_log.txt
+features:
+  run_in_airflow: True
+  supports_catalog: True
+  supports_composite: False
+  supports_multiple_files: True
+interval: 10
+is_connected: True
+log_file_directory: {tmp_path}
+log_to_file: False
+logging_level: DEBUG
+observe_execution: False
+progress_file_name: progress.txt
+progress_fqn: {tmp_path}/progress.txt
+proxy_file_name: test_proxy.pem
+proxy_fqn: {tmp_path}/test_proxy.pem
+recurse_data_sources: False
+rejected_directory: {tmp_path}/test_config_dir
+rejected_file_name: rejected.yml
+rejected_fqn: {tmp_path}/test_config_dir/rejected.yml
+report_fqn: {tmp_path}/data_report.txt
+resource_id: ivo://cadc.nrc.ca/sc2repo
+retry_count: 1
+retry_failures: False
+retry_file_name: retries.txt
+retry_fqn: {tmp_path}/retries.txt
+state_file_name: state.yml
+state_fqn: {tmp_path}/state.yml
+storage_inventory_resource_id: raven
+store_modified_files_only: False
+stream: raw
+success_fqn: {tmp_path}/success_log.txt
+success_log_file_name: success_log.txt
+tap_id: ivo://cadc.nrc.ca/sc2tap
+task_types:
+  - visit
+  - modify
+use_local_files: False
+work_file: todo.txt
+work_fqn: {tmp_path}/todo.txt
+working_directory: {tmp_path}
+"""
+
+    orig_cwd = os.getcwd()
     try:
-        os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+        os.chdir(tmp_path)
+        with open(f'{tmp_path}/config.yml', 'w') as f:
+            f.write(config_content)
+
         test_config = mc.Config()
         test_config.get_executors()
         assert test_config is not None
         assert test_config.work_file == 'todo.txt'
         assert test_config.features is not None
-        assert test_config.features.supports_composite is False
-        assert test_config.working_directory == tc.TEST_DATA_DIR, 'wrong dir'
-        assert (
-            test_config.work_fqn == f'{tc.TEST_DATA_DIR}/todo.txt'
-        ), 'work_fqn'
-        assert test_config.netrc_file == 'test_netrc', 'netrc'
-        assert test_config.archive == 'NEOSS', 'archive'
+        assert test_config.features.supports_composite is False, 'supports composite'
+        assert test_config.working_directory == tmp_path.as_posix(), 'wrong dir'
+        assert test_config.work_fqn == f'{tmp_path}/todo.txt', 'work_fqn'
         assert test_config.collection == 'NEOSSAT', 'collection'
-        assert (
-            test_config.log_file_directory == tc.TEST_DATA_DIR
-        ), 'logging dir'
-        assert (
-            test_config.success_fqn == f'{tc.TEST_DATA_DIR}/success_log.txt'
-        ), 'success fqn'
-        assert (
-            test_config.success_log_file_name == 'success_log.txt'
-        ), 'success file'
-        assert (
-            test_config.failure_fqn == f'{tc.TEST_DATA_DIR}/failure_log.txt'
-        ), 'failure fqn'
-        assert (
-            test_config.failure_log_file_name == 'failure_log.txt'
-        ), 'failure file'
+        assert test_config.log_file_directory == tmp_path.as_posix(), 'logging dir'
+        assert test_config.success_fqn == f'{tmp_path}/success_log.txt', 'success fqn'
+        assert test_config.success_log_file_name == 'success_log.txt', 'success file'
+        assert test_config.failure_fqn == f'{tmp_path}/failure_log.txt', 'failure fqn'
+        assert test_config.failure_log_file_name == 'failure_log.txt', 'failure file'
         assert test_config.retry_file_name == 'retries.txt', 'retry file'
-        assert (
-            test_config.retry_fqn == f'{tc.TEST_DATA_DIR}/retries.txt'
-        ), 'retry fqn'
-        assert (
-            test_config.proxy_file_name == 'test_proxy.pem'
-        ), 'proxy file name'
-        assert (
-            test_config.proxy_fqn == f'{tc.TEST_DATA_DIR}/test_proxy.pem'
-        ), 'proxy fqn'
+        assert test_config.retry_fqn == f'{tmp_path}/retries.txt', 'retry fqn'
+        assert test_config.proxy_file_name == 'test_proxy.pem', 'proxy file name'
+        assert test_config.proxy_fqn == f'{tmp_path}/test_proxy.pem', 'proxy fqn'
         assert test_config.state_file_name == 'state.yml', 'state file name'
-        assert (
-            test_config.state_fqn == f'{tc.TEST_DATA_DIR}/state.yml'
-        ), 'state fqn'
-        assert (
-            test_config.rejected_directory == tc.TEST_DATA_DIR
-        ), 'wrong rejected dir'
-        assert (
-            test_config.rejected_file_name == 'rejected.yml'
-        ), 'wrong rejected file'
-        assert (
-            test_config.rejected_fqn == f'{tc.TEST_DATA_DIR}/rejected.yml'
-        ), 'wrong rejected fqn'
-        assert (
-            test_config.features.run_in_airflow is True
-        ), 'wrong runs in airflow'
-        assert (
-            test_config.features.supports_catalog is True
-        ), 'wrong supports catalog'
-        test_config.features.supports_catalog = False
-        assert (
-            test_config.features.supports_catalog is False
-        ), 'modified supports catalog'
-        assert test_config.data_source_extensions == [
-            '.fits.gz'
-        ], 'extensions'
+        assert test_config.state_fqn == f'{tmp_path}/state.yml', 'state fqn'
+        assert test_config.rejected_directory == f'{tmp_path}/test_config_dir', 'wrong rejected dir'
+        assert test_config.rejected_file_name == 'rejected.yml', 'wrong rejected file'
+        assert test_config.rejected_fqn == f'{tmp_path}/test_config_dir/rejected.yml', 'wrong rejected fqn'
+        assert test_config.features.run_in_airflow is True, 'wrong runs in airflow'
+        assert test_config.features.supports_catalog is True, 'wrong supports catalog'
+        assert test_config.data_source_extensions == ['.fits'], 'extensions'
     finally:
-        os.getcwd = getcwd_orig
-
-
-def test_config_class_feature_true():
-    getcwd_orig = os.getcwd
-    try:
-        os.getcwd = Mock(
-            return_value=os.path.join(tc.TEST_DATA_DIR, 'features_test')
-        )
-        test_config = mc.Config()
-        test_config.get_executors()
-        assert test_config is not None
-        assert test_config.features is not None
-        assert test_config.features.supports_latest_client is True
-    finally:
-        os.getcwd = getcwd_orig
+        os.chdir(orig_cwd)
 
 
 def test_exec_cmd():
@@ -288,28 +289,6 @@ def test_get_file_meta():
     assert result['size'] == 0, result['size']
 
 
-@patch('cadcdata.core.net.BaseWsClient.post')
-@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_read_file_list_from_archive(caps_mock, ad_mock):
-    caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
-    response = Mock()
-    response.status_code = 200
-    response.iter_content.return_value = [b'fileName\n']
-    ad_mock.return_value.__enter__.return_value = response
-    test_config = mc.Config()
-    test_config.resource_id = 'ivo://cadc.nrc.ca/sc2tap'
-
-    result = mc.read_file_list_from_archive(
-        test_config,
-        'test_app_name',
-        '2018-11-18T22:39:56.186443+00:00',
-        '2018-11-19T22:39:56.186443+00:00',
-    )
-    assert result is not None
-    assert type(result) is list
-    assert len(result) == 0
-
-
 def test_write_to_file():
     content = ['a.txt', 'b.jpg', 'c.fits.gz']
     test_fqn = f'{tc.TEST_DATA_DIR}/test_out.txt'
@@ -337,10 +316,8 @@ def test_get_artifact_metadata():
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.product_type == ProductType.WEIGHT, 'wrong product type'
-    assert result.content_length == 410, 'wrong length'
-    assert (
-        result.content_checksum.uri == 'md5:4252762f594c2a2640ba652ca80d748a'
-    ), 'wrong checksum'
+    assert result.content_length == 368, 'wrong length'
+    assert result.content_checksum.uri == 'md5:e9db496ab9e875cc13ea52d4cc9db2c7', 'wrong checksum'
 
     # update action
     result.content_checksum = ChecksumURI('md5:abc')
@@ -349,9 +326,7 @@ def test_get_artifact_metadata():
     )
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
-    assert (
-        result.content_checksum.uri == 'md5:4252762f594c2a2640ba652ca80d748a'
-    ), 'wrong checksum'
+    assert result.content_checksum.uri == 'md5:e9db496ab9e875cc13ea52d4cc9db2c7', 'wrong checksum'
 
 
 def test_state():
@@ -525,15 +500,15 @@ class TestValidator(mc.Validator):
 @patch('cadcdata.core.net.BaseWsClient.post')
 @patch('cadcdata.core.net.BaseWsClient.get')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_validator(caps_mock, ad_mock, tap_mock):
+def test_validator(caps_mock, ad_mock, tap_mock, test_config, tmpdir):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     tap_response = Mock()
     tap_response.status_code = 200
     tap_response.iter_content.return_value = [
         b'uri\n'
-        b'ad:NEOSS/NEOS_SCI_2019213215700_cord.fits\n'
-        b'ad:NEOSS/NEOS_SCI_2019213215700_cor.fits\n'
-        b'ad:NEOSS/NEOS_SCI_2019213215700.fits\n'
+        b'cadc:NEOSSAT/NEOS_SCI_2019213215700_cord.fits\n'
+        b'cadc:NEOSSAT/NEOS_SCI_2019213215700_cor.fits\n'
+        b'cadc:NEOSSAT/NEOS_SCI_2019213215700.fits\n'
     ]
 
     tap_mock.return_value.__enter__.return_value = tap_response
@@ -541,16 +516,15 @@ def test_validator(caps_mock, ad_mock, tap_mock):
     ad_response.status_code = 200
     ad_response.text = []
     ad_mock.return_value = ad_response
-
-    getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
-
-    cert_file = f'{tc.TEST_DATA_DIR}/test_proxy.pem'
-    if not os.path.exists(cert_file):
-        with open(cert_file, 'w') as f:
+    orig_cwd = os.getcwd()
+    try:
+        os.chdir(tmpdir)
+        test_config.change_working_directory(tmpdir)
+        test_config.proxy_file_name = 'proxy.pem'
+        test_config.write_to_file(test_config)
+        with open(test_config.proxy_fqn, 'w') as f:
             f.write('test content')
 
-    try:
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
         test_destination_meta = (
             test_subject._read_list_from_destination_meta()
@@ -564,10 +538,6 @@ def test_validator(caps_mock, ad_mock, tap_mock):
             f'{test_destination_meta[0]}'
         )
 
-        test_listing_fqn = f'{tc.TEST_DATA_DIR}/{mc.VALIDATE_OUTPUT}'
-        if os.path.exists(test_listing_fqn):
-            os.unlink(test_listing_fqn)
-
         test_source, test_meta, test_data = test_subject.validate()
         assert test_source is not None, 'expected source result'
         assert test_meta is not None, 'expected meta dest result'
@@ -575,14 +545,15 @@ def test_validator(caps_mock, ad_mock, tap_mock):
         assert len(test_source) == 0, 'wrong number of source results'
         assert len(test_meta) == 3, 'wrong # of meta dest results'
         assert len(test_data) == 0, 'wrong # of meta dest results'
+        test_listing_fqn = f'{tmpdir}/{mc.VALIDATE_OUTPUT}'
         assert os.path.exists(test_listing_fqn), 'should create file record'
     finally:
-        os.getcwd = getcwd_orig
+        os.chdir(orig_cwd)
 
 
 @patch('cadcdata.core.net.BaseWsClient.post')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_validator2(caps_mock, ad_mock):
+def test_validator2(caps_mock, ad_mock, test_config, tmpdir):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
     response = Mock()
     response.status_code = 200
@@ -595,9 +566,15 @@ def test_validator2(caps_mock, ad_mock):
         b'2019-10-23T16:27:47.000\tNEOS_SCI_2015347002500_clean.fits\n'
     ]
     ad_mock.return_value.__enter__.return_value = response
-    getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+    orig_cwd = os.getcwd()
     try:
+        os.chdir(tmpdir)
+        test_config.change_working_directory(tmpdir)
+        test_config.proxy_file_name = 'proxy.pem'
+        test_config.write_to_file(test_config)
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
+
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
         test_destination_data = (
             test_subject._read_list_from_destination_data()
@@ -614,7 +591,7 @@ def test_validator2(caps_mock, ad_mock):
             f'{test_result["ingestDate"]}'
         )
     finally:
-        os.getcwd = getcwd_orig
+        os.chdir(orig_cwd)
 
 
 @patch('cadcutils.net.ws.BaseWsClient.post')
@@ -723,73 +700,21 @@ def test_visit():
     # assert False
 
 
-def test_config_write():
-    config_content = """archive: NEOSS
-cache_file_name: cache.yml
-cache_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/cache.yml
-cleanup_files_when_storing: False
-collection: NEOSSAT
-data_source_extensions: ['.fits']
-data_sources: []
-failure_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/failure_log.txt
-failure_log_file_name: failure_log.txt
-features:
-  expects_retry: True
-  run_in_airflow: True
-  supports_catalog: True
-  supports_composite: False
-  supports_latest_client: False
-  supports_multiple_files: True
-interval: 10
-is_connected: True
-log_file_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data
-log_to_file: False
-logging_level: DEBUG
-observe_execution: False
-progress_file_name: progress.txt
-progress_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/progress.txt
-proxy_file_name: test_proxy.pem
-proxy_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_proxy.pem
-recurse_data_sources: False
-rejected_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_config_dir
-rejected_file_name: rejected.yml
-rejected_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/test_config_dir/rejected.yml
-report_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/data_report.txt
-resource_id: ivo://cadc.nrc.ca/sc2repo
-retry_count: 1
-retry_failures: False
-retry_file_name: retries.txt
-retry_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/retries.txt
-state_file_name: state.yml
-state_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/state.yml
-storage_inventory_resource_id: raven
-store_modified_files_only: False
-stream: raw
-success_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/success_log.txt
-success_log_file_name: success_log.txt
-tap_id: ivo://cadc.nrc.ca/sc2tap
-task_types:
-  - visit
-  - modify
-use_local_files: False
-work_file: todo.txt
-work_fqn: /usr/src/app/caom2pipe/caom2pipe/tests/data/todo.txt
-working_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data
-"""
-
-    get_cwd_orig = os.getcwd
-    test_dir = f'{tc.TEST_DATA_DIR}/test_config_dir'
-    os.getcwd = Mock(return_value=test_dir)
+def test_config_write(tmpdir):
+    """Test that TaskType read/write is working"""
+    orig_cwd = os.getcwd()
     try:
+        os.chdir(tmpdir)
         test_config = mc.Config()
-        test_config.get_executors()
+        test_config.working_directory = tmpdir
+        test_config.logging_level = 'WARNING'
         scrape_found = False
         if mc.TaskType.SCRAPE in test_config.task_types:
             test_config.task_types = [mc.TaskType.VISIT, mc.TaskType.MODIFY]
             scrape_found = True
         else:
             test_config.task_types = [mc.TaskType.SCRAPE]
-        mc.Config.write_to_file(test_config)
+        test_config.write_to_file(test_config)
         second_config = mc.Config()
         second_config.get_executors()
         if scrape_found:
@@ -798,10 +723,7 @@ working_directory: /usr/src/app/caom2pipe/caom2pipe/tests/data
         else:
             assert mc.TaskType.SCRAPE in test_config.task_types, 'scrape end'
     finally:
-        os.getcwd = get_cwd_orig
-        fqn = f'{test_dir}/config.yml'
-        with open(fqn, 'w') as f:
-            f.write(config_content)
+        os.chdir(orig_cwd)
 
 
 def test_reverse_lookup():
@@ -831,11 +753,14 @@ def test_make_time():
         ), f'wrong result {test_result} want {value}'
 
 
-def test_cache():
-    get_cwd_orig = os.getcwd
-    test_dir = f'{tc.TEST_DATA_DIR}/test_config_dir'
-    os.getcwd = Mock(return_value=test_dir)
+def test_cache(test_config, tmpdir):
+    test_config.change_working_directory(tmpdir)
+    test_config.cache_file_name = 'cache.yml'
+    orig_cwd = os.getcwd()
     try:
+        os.chdir(tmpdir)
+        test_config.write_to_file(test_config)
+        copy(f'{tc.TEST_DATA_DIR}/cache.yml', tmpdir)
         test_subject = mc.Cache()
         assert test_subject is not None, 'expect a return value'
         with pytest.raises(mc.CadcException):
@@ -845,10 +770,17 @@ def test_cache():
         test_result = test_subject.get_from('not_found')
         assert test_result == [], 'expect no execution failure'
     finally:
-        os.getcwd = get_cwd_orig
+        os.chdir(orig_cwd)
 
 
-def test_value_repair_cache():
+def test_value_repair_cache(test_config, tmpdir):
+    test_config.change_working_directory(tmpdir)
+    cache_file_name = 'value_repair_cache.yml'
+    test_config.cache_file_name = cache_file_name
+    test_config.write_to_file(test_config)
+    test_cache_fqn = f'{tc.TEST_DATA_DIR}/{cache_file_name}'
+    copy(test_cache_fqn, f'{tmpdir}/{cache_file_name}')
+
     test_subject = mc.ValueRepairCache()
     assert test_subject is not None, 'expect a result'
 
@@ -970,3 +902,19 @@ def test_use_vos():
     assert test_config.use_vos is True, 'mixed data source'
     test_config.data_sources = ['/data/vos/2022', '/data/vos/2021']
     assert test_config.use_vos is False, 'use_local_files data source'
+
+
+def test_log_directory_construction(test_config, tmpdir):
+    test_config.log_to_file = True
+    test_config.log_file_directory = tmpdir
+    # reset the fqn's
+    test_config.success_log_file_name = 'good.txt'
+    test_config.failure_log_file_name = 'bad.txt'
+    test_config.retry_file_name = 'again.txt'
+    assert not os.path.exists(test_config.success_fqn)
+    assert not os.path.exists(test_config.failure_fqn)
+    assert not os.path.exists(test_config.retry_fqn)
+    ignore = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    assert os.path.exists(test_config.success_fqn)
+    assert os.path.exists(test_config.failure_fqn)
+    assert os.path.exists(test_config.retry_fqn)

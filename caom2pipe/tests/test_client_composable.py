@@ -74,18 +74,23 @@ from cadcdata import FileInfo
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 
+from shutil import copy
 from unittest.mock import Mock, patch
 
 import test_conf as tc
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-def test_clients(get_access_mock):
+def test_clients(get_access_mock, test_config, tmpdir):
     get_access_mock.return_value = 'https://localhost'
-    test_config = mc.Config()
-    test_config.get_executors()
+    test_config_fqn = f'{tc.TEST_DATA_DIR}/config.yml'
+    copy(test_config_fqn, f'{tmpdir}/config.yml')
+    test_config.change_working_directory(tmpdir)
+    test_config.proxy_file_name = 'test_proxy.pem'
     test_config.resource_id = 'ivo://cadc.nrc.ca/test'
     test_config.tap_id = 'ivo://cadc.nrc.ca/test'
+    with open(test_config.proxy_fqn, 'w') as f:
+        f.write('test content')
     test_subject = clc.ClientCollection(test_config)
     assert test_subject is not None, 'ctor failure'
 
@@ -214,49 +219,23 @@ def test_data_get(mock_client):
     assert test_metrics.failures['data']['get']['TEST_get.fits'] == 1, 'count'
 
 
-def test_define_subject():
+def test_define_subject(test_config, tmpdir):
+    # proxy pre-condition
+    test_config.change_working_directory(tmpdir)
+    test_config.proxy_file_name = 'proxy.pem'
 
-    getcwd_orig = os.getcwd
-    os.getcwd = Mock(return_value=tc.TEST_DATA_DIR)
+    with open(test_config.proxy_fqn, 'w') as f:
+        f.write('proxy content')
 
-    try:
-        test_config = mc.Config()
-        test_config.get_executors()
-        test_config.proxy_fqn = None
-        test_config.netrc_file = 'test_netrc'
-        test_netrc_fqn = os.path.join(
-            test_config.working_directory, test_config.netrc_file
-        )
-        if not os.path.exists(test_netrc_fqn):
-            with open(test_netrc_fqn, 'w') as f:
-                f.write(
-                    'machine www.example.com login userid password userpass'
-                )
+    test_subject = clc.define_subject(test_config)
+    assert test_subject is not None, 'expect a proxy subject'
+    test_config.proxy_fqn = '/nonexistent'
+    with pytest.raises(mc.CadcException):
+        clc.define_subject(test_config)
 
-        test_subject = clc.define_subject(test_config)
-        assert test_subject is not None, 'expect a netrc subject'
-        test_config.netrc_file = 'nonexistent'
-        test_subject = clc.define_subject(test_config)
-        assert test_subject is None, 'expect no subject, cannot find content'
-        test_config.netrc_file = None
-        # proxy pre-condition
-        test_config.proxy_fqn = f'{tc.TEST_DATA_DIR}/proxy.pem'
-
-        if not os.path.exists(test_config.proxy_fqn):
-            with open(test_config.proxy_fqn, 'w') as f:
-                f.write('proxy content')
-
-        test_subject = clc.define_subject(test_config)
-        assert test_subject is not None, 'expect a proxy subject'
-        test_config.proxy_fqn = '/nonexistent'
-        with pytest.raises(mc.CadcException):
-            clc.define_subject(test_config)
-
-        test_config.proxy_fqn = None
-        with pytest.raises(mc.CadcException):
-            clc.define_subject(test_config)
-    finally:
-        os.getcwd = getcwd_orig
+    test_config.proxy_fqn = None
+    with pytest.raises(mc.CadcException):
+        clc.define_subject(test_config)
 
 
 @patch('caom2repo.core.CAOM2RepoClient')

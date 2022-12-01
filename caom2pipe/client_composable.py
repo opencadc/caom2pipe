@@ -274,10 +274,7 @@ def declare_client(config, metrics=None):
     storage."""
     subject = define_subject(config)
     cadc_client = StorageClientWrapper(
-        using_storage_inventory=config.features.supports_latest_client,
-        resource_id=config.storage_inventory_resource_id,
-        subject=subject,
-        metrics=metrics,
+        resource_id=config.storage_inventory_resource_id, subject=subject, metrics=metrics
     )
     return cadc_client
 
@@ -291,22 +288,10 @@ def define_subject(config):
             f'Using proxy certificate {config.proxy_fqn} for credentials.'
         )
         subject = net.Subject(username=None, certificate=config.proxy_fqn)
-    elif config.netrc_file is not None:
-        netrc_fqn = os.path.join(config.working_directory, config.netrc_file)
-        if os.path.exists(netrc_fqn):
-            logging.debug(f'Using netrc file {netrc_fqn} for credentials.')
-            subject = net.Subject(
-                username=None, certificate=None, netrc=netrc_fqn
-            )
-        else:
-            logging.warning(f'Cannot find netrc file {netrc_fqn}')
     else:
-        logging.warning(
-            f'Proxy certificate is {config.proxy_fqn}, netrc file is '
-            f'{config.netrc_file}.'
-        )
+        logging.warning(f'Proxy certificate is {config.proxy_fqn}.')
         raise mc.CadcException(
-            'No credentials provided (proxy certificate or netrc file). '
+            'No credentials provided (proxy certificate). '
             'Cannot create an anonymous subject.'
         )
     return subject

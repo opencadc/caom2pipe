@@ -82,7 +82,6 @@ import traceback
 
 from collections import deque
 from datetime import datetime, timezone
-from shutil import move
 from time import sleep
 
 from caom2pipe import client_composable as cc
@@ -94,6 +93,7 @@ from caom2pipe import reader_composable
 from caom2pipe import transfer_composable
 
 __all__ = [
+    'common_runner_init',
     'get_utc_now',
     'get_utc_now_tz',
     'run_by_state',
@@ -101,76 +101,6 @@ __all__ = [
     'StateRunner',
     'TodoRunner',
 ]
-
-
-class RunnerReport:
-    """
-    This class contains metrics for reporting on pipeline runs.
-    """
-
-    def __init__(self, location, application):
-        self._version = (
-            '0.0.0' if application == 'DEFAULT' else mc.get_version(
-                application
-            )
-        )
-        self._location = os.path.basename(location)
-        self._start_time = get_utc_now_tz().timestamp()
-        self._entries_sum = 0
-        self._timeouts_sum = 0
-        self._retry_sum = 0
-        self._errors_sum = 0
-        self._success_sum = 0
-        self._rejection_sum = 0
-
-    def add_entries(self, value):
-        self._entries_sum += value
-
-    def add_timeouts(self, value):
-        self._timeouts_sum += value
-
-    def add_retries(self, value):
-        self._retry_sum += value
-
-    def add_errors(self, value):
-        self._errors_sum += value
-
-    def add_successes(self, value):
-        self._success_sum += value
-
-    def add_rejections(self, value):
-        self._rejection_sum += value
-
-    def report(self):
-        msg1 = f'Location: {self._location}'
-        msg2 = f'Date: {datetime.isoformat(datetime.utcnow())}'
-        execution_time = get_utc_now_tz().timestamp() - self._start_time
-        msg3 = f'Execution Time: {execution_time:.2f} s'
-        msg4 = f'Version: {self._version}'
-        msg5 = f'    Number of Inputs: {self._entries_sum}'
-        msg6 = f' Number of Successes: {self._success_sum}'
-        msg7 = f'  Number of Timeouts: {self._timeouts_sum}'
-        msg8 = f'   Number of Retries: {self._retry_sum}'
-        msg9 = f'    Number of Errors: {self._errors_sum}'
-        msg10 = f'Number of Rejections: {self._rejection_sum}'
-        max_length = max(
-            len(msg1),
-            len(msg2),
-            len(msg3),
-            len(msg4),
-            len(msg5),
-            len(msg6),
-            len(msg7),
-            len(msg8),
-            len(msg9),
-            len(msg10),
-        )
-        msg_highlight = '*' * max_length
-        msg = (
-            f'\n\n{msg_highlight}\n{msg1}\n{msg2}\n{msg3}\n{msg4}\n{msg5}\n'
-            f'{msg6}\n{msg7}\n{msg8}\n{msg9}\n{msg10}\n{msg_highlight}\n\n'
-        )
-        return msg
 
 
 class TodoRunner:
@@ -188,7 +118,8 @@ class TodoRunner:
         builder,
         data_source,
         metadata_reader,
-        application,
+        observable,
+        reporter,
     ):
         self._builder = builder
         self._data_source = data_source
@@ -198,31 +129,21 @@ class TodoRunner:
         # the list of work to be done, containing whatever is returned from
         # the DataSource instance
         self._todo_list = []
-        self._reporter = RunnerReport(
-            self._config.working_directory, application
-        )
+        self._observable = observable
+        self._reporter = reporter
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _build_todo_list(self):
-        self._logger.debug(
-            f'Begin _build_todo_list with '
-            f'{self._data_source.__class__.__name__}.'
-        )
+        self._logger.debug(f'Begin _build_todo_list.')
         self._todo_list = self._data_source.get_work()
-        self._organizer.complete_record_count = len(self._todo_list)
-        self._logger.info(
-            f'Processing {self._organizer.complete_record_count} records.'
-        )
+        self._logger.info(f'Processing {self._reporter.all} records.')
         self._logger.debug('End _build_todo_list.')
 
     def _finish_run(self):
         mc.create_dir(self._config.log_file_directory)
-        self._organizer.observable.rejected.persist_state()
-        self._organizer.observable.metrics.capture()
-        msg = (
-            f'Done, processed {self._organizer.success_count} of '
-            f'{self._organizer.complete_record_count} correctly.'
-        )
+        self._observable.rejected.persist_state()
+        self._observable.metrics.capture()
+        msg = f'Done, processed {self._reporter.success} of {self._reporter.all} correctly.'
         self._logger.info('-' * len(msg))
         self._logger.info(msg)
         self._logger.info('-' * len(msg))
@@ -238,10 +159,8 @@ class TodoRunner:
                 self._logger.error(
                     f'{storage_name.obs_id} failed naming validation check.'
                 )
-                self._organizer.capture_failure(
-                    storage_name,
-                    BaseException('Invalid name format'),
-                    'Invalid name format.',
+                self._reporter.capture_failure(
+                    storage_name, BaseException('Invalid name format'), 'Invalid name format.'
                 )
                 result = -1
         except Exception as e:
@@ -255,9 +174,7 @@ class TodoRunner:
                 storage_name = mc.StorageName(
                     obs_id=entry, source_names=[entry]
                 )
-            self._organizer.capture_failure(
-                storage_name, e, traceback.format_exc()
-            )
+            self._reporter.capture_failure(storage_name, e, traceback.format_exc())
             self._logger.info(
                 f'Execution failed for {storage_name.file_name} with {e}'
             )
@@ -292,34 +209,24 @@ class TodoRunner:
     def _reset_for_retry(self, count):
         self._config.update_for_retry(count)
         # the log location changes for each retry
-        self._organizer.set_log_location()
-        # change the data source handling, but preserve the original
+        self._reporter.set_log_location(self._config)
+        # self._reporter.reset_for_retry()
+        # change the data source handling for the retry, but preserve the original
         # clean_up behaviour
         original_data_source_cleanup = self._data_source.clean_up
-        self._data_source = data_source_composable.TodoFileDataSource(
-            self._config
-        )
+        self._data_source = data_source_composable.TodoFileDataSource(self._config)
+        self._data_source.reporter = self._reporter
         self._data_source.clean_up = original_data_source_cleanup
 
     def report(self):
-        self._reporter.add_timeouts(self._organizer.timeouts)
-        self._reporter.add_errors(self._config.count_retries())
-        self._reporter.add_rejections(self._organizer.rejected_count)
-        msg = self._reporter.report()
-        self._logger.info(msg)
-        if os.path.exists(self._config.report_fqn) and os.path.getsize(self._config.report_fqn) != 0:
-            back_fqn = self._config.report_fqn.replace('.txt', f'.{get_utc_now_tz().timestamp()}.txt')
-            move(self._config.report_fqn, back_fqn)
-        mc.write_to_file(self._config.report_fqn, msg)
+        self._reporter.report()
 
     def run(self):
         self._logger.debug('Begin run.')
         self._build_todo_list()
-        self._reporter.add_entries(self._organizer.complete_record_count)
         # have the choose call here, so that retries don't change the set of tasks to be executed
         self._organizer.choose()
         result = self._run_todo_list(current_count=0)
-        self._reporter.add_successes(self._organizer.success_count)
         self._logger.debug('End run.')
         return result
 
@@ -334,17 +241,11 @@ class TodoRunner:
                 self._reset_for_retry(count)
                 # make another file list
                 self._build_todo_list()
-                self._reporter.add_retries(
-                    self._organizer.complete_record_count
-                )
+                self._reporter.capture_retry()
                 decay_interval = self._config.retry_decay * (count + 1) * 60
-                self._logger.warning(
-                    f'Retry {self._organizer.complete_record_count} entries '
-                    f'at {decay_interval} seconds from now.'
-                )
+                self._logger.warning(f'Retry {self._reporter.all} entries at {decay_interval} seconds from now.')
                 sleep(decay_interval)
                 result |= self._run_todo_list(current_count=count + 1)
-                self._reporter.add_successes(self._organizer.success_count)
                 if not self._config.need_to_retry():
                     break
             self._logger.warning(f'Done retry attempts with result {result}.')
@@ -355,8 +256,10 @@ class TodoRunner:
 
 
 class StateRunner(TodoRunner):
-    """This is StateRunner with all times as timestamps (i.e. float),
-    somewhat enforced by the use of the StateRunnerMeta class.
+    """
+    This class brings together the mechanisms for identifying the time-boxed lists of work to be done
+    (DataSource specializations), and the mechanisms for translating a list of work into a collection-specific name
+    (StorageNameBuilder specializations).
     """
 
     def __init__(
@@ -367,16 +270,12 @@ class StateRunner(TodoRunner):
         data_source,
         metadata_reader,
         bookmark_name,
-        application,
+        observable,
+        reporter,
         max_ts=None,
     ):
         super().__init__(
-            config,
-            organizer,
-            builder,
-            data_source,
-            metadata_reader,
-            application,
+            config, organizer, builder, data_source, metadata_reader, observable, reporter
         )
         self._bookmark_name = bookmark_name
         max_ts_in_s = None
@@ -388,7 +287,6 @@ class StateRunner(TodoRunner):
             if max_ts_in_s is None
             else max_ts_in_s
         )
-        self._logger = logging.getLogger(self.__class__.__name__)
 
     def _record_progress(
         self, count, cumulative_count, start_time, save_time
@@ -435,8 +333,6 @@ class StateRunner(TodoRunner):
             f'{datetime.utcfromtimestamp(self._end_time)}'
         )
         result = 0
-        cumulative = 0
-        cumulative_correct = 0
         if prev_exec_time == self._end_time:
             self._logger.info(
                 f'Start time is the same as end time '
@@ -455,15 +351,12 @@ class StateRunner(TodoRunner):
                 )
                 save_time = exec_time
                 self._organizer.success_count = 0
-                entries = self._data_source.get_time_box_work(
-                    prev_exec_time, exec_time
-                )
+                self._reporter.set_log_location(self._config)
+                entries = self._data_source.get_time_box_work(prev_exec_time, exec_time)
                 num_entries = len(entries)
 
                 if num_entries > 0:
-                    self._logger.info(f'Processing {num_entries} entries.')
-                    self._organizer.complete_record_count = num_entries
-                    self._organizer.set_log_location()
+                    self._logger.info(f'Processing {self._reporter.all} entries.')
                     pop_action = entries.pop
                     if isinstance(entries, deque):
                         pop_action = entries.popleft
@@ -481,8 +374,6 @@ class StateRunner(TodoRunner):
                     self._metadata_reader.reset()
                     self._finish_run()
 
-                cumulative += num_entries
-                cumulative_correct += self._organizer.success_count
                 self._record_progress(
                     num_entries, cumulative, start_time, save_time
                 )
@@ -506,8 +397,6 @@ class StateRunner(TodoRunner):
                 ).timestamp()
                 exec_time = min(new_time, self._end_time)
 
-        self._reporter.add_entries(cumulative)
-        self._reporter.add_successes(cumulative_correct)
         state.save_state(
             self._bookmark_name, datetime.utcfromtimestamp(exec_time)
         )
@@ -517,21 +406,19 @@ class StateRunner(TodoRunner):
         )
         self._logger.info('=' * len(msg))
         self._logger.info(msg)
-        self._logger.info(
-            f'{cumulative_correct} of {cumulative} records processed '
-            f'correctly.'
-        )
+        self._logger.info(f'{self._reporter.success} of {self._reporter.all} records processed correctly.')
         self._logger.info('=' * len(msg))
         return result
 
 
 def _set_logging(config):
     formatter = logging.Formatter(
-        '%(asctime)s:%(levelname)-8s:%(name)-12s:%(lineno)-4d:%(message)s'
+        '%(asctime)s:%(levelname)-7s:%(name)-12s:%(lineno)-4d:%(message)s'
     )
     for handler in logging.getLogger().handlers:
         handler.setLevel(config.logging_level)
         handler.setFormatter(formatter)
+    logging.getLogger('root').setLevel(config.logging_level)
 
 
 def get_utc_now():
@@ -548,7 +435,7 @@ def get_utc_now_tz():
     return datetime.now(tz=timezone.utc)
 
 
-def _common_init(
+def common_runner_init(
     config,
     clients,
     name_builder,
@@ -557,45 +444,90 @@ def _common_init(
     metadata_reader,
     state,
     store_transfer,
+    meta_visitors,
+    data_visitors,
+    chooser,
+    application,
 ):
+    """The common initialization code between TodoRunner and StateRunner uses. <collection>2caom2 implementations can
+    use the defaults created here for the 'run' call, or they can provide their own specializations of the various
+    classes required to store data and ingest metadata at CADC.
+
+    :param config Config instance
+    :param clients: ClientCollection instance
+    :param name_builder NameBuilder extension that creates an instance of a StorageName extension, from an entry from
+        a DataSourceComposable listing
+    :param source DataSource implementation, if there's a special data source
+    :param modify_transfer Transfer extension that identifies how to retrieve data from a source for modification of
+        CAOM2 metadata. By this time, files are usually stored at CADC, so it's probably a CadcTransfer instance, but
+        this allows for the case that a file is never stored at CADC. Try to guess what this one is.
+    :param metadata_reader: MetadataReader instance
+    :param state: bool True if using StateRunner
+    :param store_transfer Transfer extension that identifies hot to retrieve data from a source for storage at CADC,
+        probably an HTTP or FTP site. Don't try to guess what this one is.
+    :param meta_visitors list of modules with visit methods, that expect the metadata of a work file to exist on disk
+    :param data_visitors list of modules with visit methods, that expect the work file to exist on disk
+    :param chooser OrganizerChooser, if there's rules that are unique to a collection about file naming.
+    """
     if config is None:
         config = mc.Config()
         config.get_executors()
 
     _set_logging(config)
     logging.debug(
-        f'Setting collection to {config.collection} in StorageName.'
+        f'Setting collection to {config.collection}, preview scheme to {config.preview_scheme} and scheme to '
+        f'{config.scheme} in StorageName.'
     )
     mc.StorageName.collection = config.collection
+    mc.StorageName.preview_scheme = config.preview_scheme
+    mc.StorageName.scheme = config.scheme
 
+    observable = mc.Observable(mc.Rejected(config.rejected_fqn), mc.Metrics(config))
+    reporter = mc.ExecutionReporter(config, observable, application)
+    reporter.set_log_location(config)
     if clients is None:
         clients = cc.ClientCollection(config)
+    clients.metrics = observable.metrics
     if name_builder is None:
         name_builder = name_builder_composable.builder_factory(config)
+    if metadata_reader is None:
+        metadata_reader = reader_composable.reader_factory(config, clients)
     if source is None:
-        source = data_source_composable.data_source_factory(
-            config, clients, state
-        )
+        source = data_source_composable.data_source_factory(config, clients, state, metadata_reader, reporter)
+    else:
+        source.reporter = reporter
     if modify_transfer is None:
         modify_transfer = transfer_composable.modify_transfer_factory(
             config, clients
         )
-    if metadata_reader is None:
-        metadata_reader = reader_composable.reader_factory(config, clients)
 
     if store_transfer is None:
         store_transfer = transfer_composable.store_transfer_factory(
             config, clients
         )
 
+    organizer = ec.OrganizeExecutes(
+        config,
+        meta_visitors,
+        data_visitors,
+        chooser,
+        store_transfer,
+        modify_transfer,
+        metadata_reader,
+        clients,
+        observable,
+        reporter,
+    )
+
     return (
         config,
         clients,
         name_builder,
         source,
-        modify_transfer,
         metadata_reader,
-        store_transfer,
+        organizer,
+        observable,
+        reporter,
     )
 
 
@@ -642,10 +574,11 @@ def run_by_todo(
         clients,
         name_builder,
         source,
-        modify_transfer,
         metadata_reader,
-        store_transfer,
-    ) = _common_init(
+        organizer,
+        observable,
+        reporter,
+    ) = common_runner_init(
         config,
         clients,
         name_builder,
@@ -654,23 +587,14 @@ def run_by_todo(
         metadata_reader,
         False,
         store_transfer,
-    )
-    organizer = ec.OrganizeExecutes(
-        config,
         meta_visitors,
         data_visitors,
         chooser,
-        store_transfer,
-        modify_transfer,
-        metadata_reader=metadata_reader,
-        clients=clients,
+        application,
     )
 
-    source.capture_failure = organizer.capture_failure
-    source.capture_success = organizer.capture_success
-
     runner = TodoRunner(
-        config, organizer, name_builder, source, metadata_reader, application
+        config, organizer, name_builder, source, metadata_reader, observable, reporter
     )
     result = runner.run()
     result |= runner.run_retry()
@@ -726,10 +650,11 @@ def run_by_state(
         clients,
         name_builder,
         source,
-        modify_transfer,
         metadata_reader,
-        store_transfer,
-    ) = _common_init(
+        organizer,
+        observable,
+        reporter,
+    ) = common_runner_init(
         config,
         clients,
         name_builder,
@@ -738,24 +663,14 @@ def run_by_state(
         metadata_reader,
         True,
         store_transfer,
+        meta_visitors,
+        data_visitors,
+        chooser,
+        application,
     )
 
     if end_time is None:
         end_time = get_utc_now_tz()
-
-    organizer = ec.OrganizeExecutes(
-        config,
-        meta_visitors,
-        data_visitors,
-        chooser,
-        store_transfer,
-        modify_transfer,
-        metadata_reader,
-        clients,
-    )
-
-    source.capture_failure = organizer.capture_failure
-    source.capture_success = organizer.capture_success
 
     runner = StateRunner(
         config,
@@ -764,7 +679,8 @@ def run_by_state(
         source,
         metadata_reader,
         bookmark_name,
-        application,
+        observable,
+        reporter,
         end_time,
     )
     result = runner.run()
@@ -782,6 +698,7 @@ def run_single(
     store_transfer=None,
     modify_transfer=None,
     metadata_reader=None,
+    application='DEFAULT',
 ):
     """Process a single entry by StorageName detail.
 
@@ -800,18 +717,18 @@ def run_single(
         instance, but this allows for the case that a file is never stored
         at CADC. Try to guess what this one is.
     :param metadata_reader MetadataReader instance
+    :param application str Name for finding the version
     """
-    # TODO - this does not follow the current implementation pattern -
-    # maybe there's a rethink required
-    # missing the metrics and the reporting
-    #
     logging.debug(f'Begin run_single {config.work_fqn}')
+    observable = mc.Observable(mc.Rejected(config.rejected_fqn), mc.Metrics(config))
+    reporter = mc.ExecutionReporter(config, observable, application)
+    reporter.set_log_location(config)
     clients = cc.ClientCollection(config)
+    clients.metrics = observable.metrics
     if modify_transfer is None:
         modify_transfer = transfer_composable.modify_transfer_factory(
             config, clients
         )
-
     if metadata_reader is None:
         metadata_reader = reader_composable.reader_factory(config, clients)
     organizer = ec.OrganizeExecutes(
@@ -823,6 +740,8 @@ def run_single(
         modify_transfer,
         metadata_reader,
         clients,
+        observable,
+        reporter,
     )
     organizer.complete_record_count = 1
     organizer.choose()
