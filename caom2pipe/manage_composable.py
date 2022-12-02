@@ -315,6 +315,7 @@ class Rejected:
     MISSING = 'missing_at_source'
     NO_INSTRUMENT = 'no_instrument'
     NO_PREVIEW = 'no_preview'
+    OLD_VERSION = 'old_version'
 
     # A map to the logging message string representing acknowledged rejections
     reasons = {
@@ -323,8 +324,8 @@ class Rejected:
         INVALID_FORMAT: 'Invalid observation ID',
         MISSING: 'Could not find JSON record for',
         NO_INSTRUMENT: 'Unknown value for instrument',
-        NO_PREVIEW: 'Not Found for url: '
-        'https://archive.gemini.edu/preview',
+        NO_PREVIEW: 'Not Found for url: https://archive.gemini.edu/preview',
+        OLD_VERSION: 'Recorded without checking',
     }
 
     def __init__(self, fqn):

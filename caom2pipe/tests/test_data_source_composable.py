@@ -564,7 +564,7 @@ def test_transfer_fails(check_fits_mock, test_config, tmpdir):
 @patch('caom2pipe.data_source_composable.LocalFilesDataSource._verify_file')
 @patch('caom2pipe.data_source_composable.LocalFilesDataSource._move_action')
 @patch('caom2pipe.client_composable.ClientCollection')
-def test_all_local_files_some_already_stored_some_broken(clients_mock, move_mock, check_mock, test_config):
+def test_all_local_files_some_already_stored_some_broken(clients_mock, move_mock, verify_mock, test_config):
     # work is all the list of files, some of which have been stored already, and some of which fail fitsverify
 
     test_config.task_types = [mc.TaskType.STORE]
@@ -579,7 +579,7 @@ def test_all_local_files_some_already_stored_some_broken(clients_mock, move_mock
     test_reader = Mock()
     test_reader.file_info.get.side_effect = [file_info_list[0], None, None]
     clients_mock.return_value.data_client.info.side_effect = [file_info_list[0], None, None]
-    check_mock.side_effect = [True, False, True]
+    verify_mock.side_effect = [True, False, True]
 
     test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
     test_subject = dsc.LocalFilesDataSource(
