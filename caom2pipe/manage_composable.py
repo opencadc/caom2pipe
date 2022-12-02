@@ -1970,6 +1970,7 @@ class StorageName:
 
     @property
     def file_id(self):
+        """The file name with all file type and compression extensions removed"""
         return self._file_id
 
     @property
