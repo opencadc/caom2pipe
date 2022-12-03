@@ -900,6 +900,7 @@ class Config:
         self._preview_scheme = 'cadc'
         self._scheme = 'cadc'
         self._storage_inventory_resource_id = None
+        self._storage_inventory_tap_resource_id = None
 
     @property
     def is_connected(self):
@@ -1078,6 +1079,14 @@ class Config:
     @storage_inventory_resource_id.setter
     def storage_inventory_resource_id(self, value):
         self._storage_inventory_resource_id = value
+
+    @property
+    def storage_inventory_tap_resource_id(self):
+        return self._storage_inventory_tap_resource_id
+
+    @storage_inventory_tap_resource_id.setter
+    def storage_inventory_tap_resource_id(self, value):
+        self._storage_inventory_tap_resource_id = value
 
     @property
     def task_types(self):
@@ -1415,8 +1424,8 @@ class Config:
             f'  source_host:: {self.source_host}\n'
             f'  state_file_name:: {self.state_file_name}\n'
             f'  state_fqn:: {self.state_fqn}\n'
-            f'  storage_inventory_resource_id:: '
-            f'{self.storage_inventory_resource_id}\n'
+            f'  storage_inventory_resource_id:: {self.storage_inventory_resource_id}\n'
+            f'  storage_inventory_tap_resource_id:: {self.storage_inventory_tap_resource_id}\n'
             f'  store_modified_files_only:: {self.store_modified_files_only}\n'
             f'  success_fqn:: {self.success_fqn}\n'
             f'  success_log_file_name:: {self.success_log_file_name}\n'
@@ -1569,6 +1578,9 @@ class Config:
             self.storage_inventory_resource_id = config.get(
                 'storage_inventory_resource_id',
                 'ivo://cadc.nrc.ca/global/raven',
+            )
+            self.storage_inventory_tap_resource_id = config.get(
+                'storage_inventory_tap_resource_id', 'ivo://cadc.nrc.ca/global/luskan'
             )
             self.store_modified_files_only = config.get(
                 'store_modified_files_only', False
@@ -2197,7 +2209,6 @@ class Validator:
         """Code to execute a query for files and the arrival time, that are in
         CADC storage.
         """
-        ad_resource_id = 'ivo://cadc.nrc.ca/ad'
         query = (
             f"SELECT A.uri, A.contentLastModified "
             f"FROM inventory.Artifact AS A "
@@ -2205,7 +2216,7 @@ class Validator:
             f"AND A.uri NOT LIKE '%{self._preview_suffix}'"
         )
         self._logger.debug(f'Query is {query}')
-        return query_tap(query, self._config.proxy_fqn, ad_resource_id)
+        return query_tap(query, self._config.proxy_fqn, self._config.storage_inventory_tap_resource_id)
 
     def _read_list_from_destination_meta(self):
         query = (
