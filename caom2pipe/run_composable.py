@@ -98,6 +98,7 @@ __all__ = [
     'get_utc_now_tz',
     'run_by_state',
     'run_by_todo',
+    'set_logging',
     'StateRunner',
     'TodoRunner',
 ]
@@ -411,7 +412,7 @@ class StateRunner(TodoRunner):
         return result
 
 
-def _set_logging(config):
+def set_logging(config):
     formatter = logging.Formatter(
         '%(asctime)s:%(levelname)-7s:%(name)-12s:%(lineno)-4d:%(message)s'
     )
@@ -473,7 +474,7 @@ def common_runner_init(
         config = mc.Config()
         config.get_executors()
 
-    _set_logging(config)
+    set_logging(config)
     logging.debug(
         f'Setting collection to {config.collection}, preview scheme to {config.preview_scheme} and scheme to '
         f'{config.scheme} in StorageName.'
