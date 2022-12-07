@@ -5,7 +5,6 @@ todo_file_name: todo.txt
 state_file_name: state.yml
 use_local_files: False
 logging_level: DEBUG
-archive: NEOSS
 collection: NEOSSAT
 data_source_extensions:
   - .fits.gz

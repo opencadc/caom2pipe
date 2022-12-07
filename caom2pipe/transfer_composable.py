@@ -95,15 +95,7 @@ class Transfer:
 
     def __init__(self):
         self._client = None
-        self._observable = None
-
-    @property
-    def observable(self):
-        return self._observable
-
-    @observable.setter
-    def observable(self, value):
-        self._observable = value
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get(self, source, dest_fqn):
         """
@@ -138,18 +130,9 @@ class CadcTransfer(Transfer):
     Uses the StorageClientWrapper to manage transfers from CADC to local disk.
     """
 
-    def __init__(self):
+    def __init__(self, cadc_client):
         super().__init__()
-        self._cadc_client = None
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    @property
-    def cadc_client(self):
-        return self._cadc_client
-
-    @cadc_client.setter
-    def cadc_client(self, value):
-        self._cadc_client = value
+        self._cadc_client = cadc_client
 
     def get(self, source, dest_fqn):
         """
@@ -175,7 +158,6 @@ class VoTransfer(Transfer):
     def __init__(self):
         super().__init__()
         self._cadc_client = None
-        self._logger = logging.getLogger(self.__class__.__name__)
 
     @property
     def cadc_client(self):
@@ -196,16 +178,7 @@ class ScienceTransfer(Transfer):
     """
 
     def __init__(self):
-        self._observable = None
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    @property
-    def observable(self):
-        return self._observable
-
-    @observable.setter
-    def observable(self, value):
-        self._observable = value
+        super().__init__()
 
     def check(self, dest_fqn, original_fqn):
         result = True
@@ -227,6 +200,7 @@ class ScienceTransfer(Transfer):
         """Action take on failure is completely dependent on where the
         file originated, and any cleanup configuration."""
         try:
+            # clean up the interim location between the source and CADC
             if os.path.exists(destination_fqn):
                 os.unlink(destination_fqn)
         except Exception as e:
@@ -244,8 +218,7 @@ class HttpTransfer(ScienceTransfer):
     """
 
     def __init__(self):
-        self._observable = None
-        self._logger = logging.getLogger(self.__class__.__name__)
+        super().__init__()
 
     def get(self, source, dest_fqn):
         """
@@ -265,9 +238,8 @@ class FtpTransfer(ScienceTransfer):
     """
 
     def __init__(self, ftp_host):
+        super().__init__()
         self._ftp_host = ftp_host
-        self._observable = None
-        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get(self, source, dest_fqn):
         """
@@ -290,7 +262,6 @@ class VoScienceTransfer(ScienceTransfer):
     def __init__(self, vo_client):
         super().__init__()
         self._vo_client = vo_client
-        self._logger = logging.getLogger(self.__class__.__name__)
 
     def get(self, source, dest_fqn):
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
@@ -323,6 +294,7 @@ class VoScienceCleanupTransfer(VoScienceTransfer):
             )
 
     def failure_action(self, original_fqn, destination_fqn, msg):
+        self._logger.debug('Begin failure_action')
         try:
             if os.path.exists(destination_fqn):
                 os.unlink(destination_fqn)
@@ -334,9 +306,11 @@ class VoScienceCleanupTransfer(VoScienceTransfer):
             raise mc.CadcException(e)
 
         self._move_action(original_fqn, self._failure_destination)
+        self._logger.debug('End failure_action')
+        raise mc.CadcException(msg)
 
     def _move_action(self, original_fqn, destination):
-        self._logger.debug('Begin _move_action')
+        self._logger.debug(f'Begin _move_action from {original_fqn} to {destination}')
         if self._cleanup_when_storing:
             f_name = os.path.basename(original_fqn)
             move_destination = os.path.join(destination, f_name)
@@ -355,14 +329,12 @@ class VoScienceCleanupTransfer(VoScienceTransfer):
 def modify_transfer_factory(config, clients):
     modify_transfer = None
     if not config.use_local_files:
-        modify_transfer = CadcTransfer()
-        modify_transfer.client = clients.data_client
+        modify_transfer = CadcTransfer(clients.data_client)
     return modify_transfer
 
 
 def store_transfer_factory(config, clients):
     store_transfer = None
     if mc.TaskType.STORE in config.task_types:
-        store_transfer = CadcTransfer()
-        store_transfer.client = clients.data_client
+        store_transfer = CadcTransfer(clients.data_client)
     return store_transfer

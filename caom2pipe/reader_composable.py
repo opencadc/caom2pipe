@@ -88,7 +88,7 @@ __all__ = [
 
 
 class MetadataReader:
-    """Wrap the mechanism for retrieving metadata that is used to create a
+    """Wrap the mechanism for retrieving metadata from the data source, that is used to create a
     CAOM2 record, and to make decisions about how to create that record. Use
     cases are:
         - FITS files on local disk
