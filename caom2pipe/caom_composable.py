@@ -1071,10 +1071,11 @@ class TelescopeMapping:
     mapping, using the 'update' method.
     """
 
-    def __init__(self, storage_name, headers, clients):
+    def __init__(self, storage_name, headers, clients, observable=None):
         self._storage_name = storage_name
         self._headers = headers
         self._clients = clients
+        self._observable = observable
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def accumulate_blueprint(self, bp, application=None):
@@ -1140,6 +1141,7 @@ class Fits2caom2Visitor:
         self._storage_name = kwargs.get('storage_name')
         self._metadata_reader = kwargs.get('metadata_reader')
         self._clients = kwargs.get('clients')
+        self._observable = kwargs.get('observable')
         self._dump_config = False
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -1161,7 +1163,7 @@ class Fits2caom2Visitor:
         return parser
 
     def _get_mapping(self, headers):
-        return TelescopeMapping(self._storage_name, headers, self._clients)
+        return TelescopeMapping(self._storage_name, headers, self._clients, self._observable)
 
     def visit(self):
         self._logger.debug('Begin visit')
