@@ -115,25 +115,13 @@ def test_validator(caps_mock, ad_mock, tap_mock, test_config, tmpdir):
             f.write('test content')
 
         test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
-        test_destination_meta = (
-            test_subject._read_list_from_destination_meta()
-        )
-        assert test_destination_meta is not None, 'expected result'
-        assert len(test_destination_meta) == 3, 'wrong number of results'
-        assert (
-            test_destination_meta.loc[0, 'f_name'] == 'NEOS_SCI_2019213215700_cord.fits'
-        ), (
-            f'wrong value format, should be just a file name, '
-            f'{test_destination_meta.loc[0, "f_name"]}'
-        )
-
-        test_source, test_meta, test_data = test_subject.validate()
-        assert test_source is not None, 'expected source result'
-        assert test_meta is not None, 'expected meta dest result'
-        assert test_data is not None, 'expected data dest result'
-        assert len(test_source) == 0, 'wrong number of source results'
-        assert len(test_meta) == 3, 'wrong # of meta dest results'
-        assert len(test_data) == 0, 'wrong # of meta dest results'
+        test_source_missing, test_data_missing, test_data_older = test_subject.validate()
+        assert test_source_missing is not None, 'expected source result'
+        assert test_data_missing is not None, 'expected data dest result'
+        assert test_data_older is not None, 'expected data older result'
+        assert len(test_source_missing) == 0, 'wrong number of source results'
+        assert len(test_data_missing) == 3, 'wrong # of data dest results'
+        assert len(test_data_older) == 0, 'wrong # of data older results'
         test_listing_fqn = f'{tmpdir}/{VALIDATE_OUTPUT}'
         assert os.path.exists(test_listing_fqn), 'should create file record'
     finally:
