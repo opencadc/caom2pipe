@@ -82,7 +82,6 @@ import yaml
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from dateutil import tz
 from enum import Enum
 from hashlib import md5
 from importlib_metadata import version
@@ -152,8 +151,6 @@ __all__ = [
     'to_int',
     'to_str',
     'update_typed_set',
-    'VALIDATE_OUTPUT',
-    'Validator',
     'ValueRepairCache',
     'write_obs_to_file',
     'write_to_file',
@@ -161,7 +158,6 @@ __all__ = [
 
 ISO_8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 READ_BLOCK_SIZE = 8 * 1024
-VALIDATE_OUTPUT = 'validated.yml'
 
 
 class CadcException(Exception):
@@ -317,6 +313,7 @@ class Rejected:
     MYSTERY_VALUE = 'mystery_value'
     NO_INSTRUMENT = 'no_instrument'
     NO_PREVIEW = 'no_preview'
+    OLD_VERSION = 'old_version'
 
     # A map to the logging message string representing acknowledged rejections
     reasons = {
@@ -327,8 +324,8 @@ class Rejected:
         MISSING: 'Could not find JSON record for',
         MYSTERY_VALUE: 'Unexpected value in enumerated type',
         NO_INSTRUMENT: 'Unknown value for instrument',
-        NO_PREVIEW: 'Not Found for url: '
-        'https://archive.gemini.edu/preview',
+        NO_PREVIEW: 'Not Found for url: https://archive.gemini.edu/preview',
+        OLD_VERSION: 'Recorded without checking',
     }
 
     def __init__(self, fqn):
@@ -907,6 +904,7 @@ class Config:
         self._preview_scheme = 'cadc'
         self._scheme = 'cadc'
         self._storage_inventory_resource_id = None
+        self._storage_inventory_tap_resource_id = None
 
     @property
     def is_connected(self):
@@ -1085,6 +1083,14 @@ class Config:
     @storage_inventory_resource_id.setter
     def storage_inventory_resource_id(self, value):
         self._storage_inventory_resource_id = value
+
+    @property
+    def storage_inventory_tap_resource_id(self):
+        return self._storage_inventory_tap_resource_id
+
+    @storage_inventory_tap_resource_id.setter
+    def storage_inventory_tap_resource_id(self, value):
+        self._storage_inventory_tap_resource_id = value
 
     @property
     def task_types(self):
@@ -1422,8 +1428,8 @@ class Config:
             f'  source_host:: {self.source_host}\n'
             f'  state_file_name:: {self.state_file_name}\n'
             f'  state_fqn:: {self.state_fqn}\n'
-            f'  storage_inventory_resource_id:: '
-            f'{self.storage_inventory_resource_id}\n'
+            f'  storage_inventory_resource_id:: {self.storage_inventory_resource_id}\n'
+            f'  storage_inventory_tap_resource_id:: {self.storage_inventory_tap_resource_id}\n'
             f'  store_modified_files_only:: {self.store_modified_files_only}\n'
             f'  success_fqn:: {self.success_fqn}\n'
             f'  success_log_file_name:: {self.success_log_file_name}\n'
@@ -1576,6 +1582,9 @@ class Config:
             self.storage_inventory_resource_id = config.get(
                 'storage_inventory_resource_id',
                 'ivo://cadc.nrc.ca/global/raven',
+            )
+            self.storage_inventory_tap_resource_id = config.get(
+                'storage_inventory_tap_resource_id', 'ivo://cadc.nrc.ca/global/luskan'
             )
             self.store_modified_files_only = config.get(
                 'store_modified_files_only', False
@@ -2126,174 +2135,6 @@ class StorageName:
     @staticmethod
     def is_preview(entry):
         return '.jpg' in entry
-
-
-class Validator:
-    """
-    Compares the state of CAOM entries at CADC with the state of the source
-    of the data. Identifies files that are in CAOM entries that do not exist
-    at the source, and files at the source that are not represented in CAOM.
-    Checks that the timestamp associated with the file at the source is less
-    than the ad timestamp.
-
-    CADC is the destination, where the data and metadata originate from
-    is the source.
-
-    The method 'read_from_source' must be implemented for validate to
-    run to completion.
-    """
-
-    def __init__(
-        self,
-        source_name,
-        scheme='cadc',
-        preview_suffix='jpg',
-        source_tz=timezone.utc,
-    ):
-        """
-
-        :param source_name: String value used for logging
-        :param scheme: string which encapsulates scheme as used in CAOM
-            Artifact URIs. The default of 'ad' means the canonical version
-            of the file is stored at CADC.
-        :param preview_suffix String value that is excluded from queries,
-            because it's produced at CADC, so something like '256.jpg' should
-            work for Gemini.
-        :param source_tz String representation of timezone name, as understood
-            by pytz.
-        """
-        self._config = Config()
-        self._config.get_executors()
-        self._source = []
-        self._destination_data = []
-        self._destination_meta = []
-        self._source_name = source_name
-        self._scheme = scheme
-        self._preview_suffix = preview_suffix
-        self._source_tz = source_tz
-        self._logger = logging.getLogger(self.__class__.__name__)
-
-    def _filter_result(self):
-        """The default implementation does nothing, but this allows
-        implementations that extend this class to remove entries from
-        the comparison results for whatever reason might come up."""
-        pass
-
-    def _find_unaligned_dates(self, source, meta, data):
-        result = set()
-        if len(data) > 0:
-            # AD - 2019-11-18 - 'ad' timezone is US/Pacific
-            dest_tz = tz.gettz('US/Pacific')
-            for f_name in meta:
-                if f_name in source and f_name in data['fileName']:
-                    source_dt = datetime.fromtimestamp(source[f_name])
-                    source_in_tz = source_dt.replace(tzinfo=self._source_tz)
-                    source_utc = source_in_tz.astimezone(timezone.utc)
-                    mask = data['fileName'] == f_name
-                    # 0 - only one row in the mask
-                    # 1 - timestamps are the second column
-                    dest_dt_orig = data[mask][0][1]
-                    dest_dt = datetime.strptime(dest_dt_orig, ISO_8601_FORMAT)
-                    dest_pac = dest_dt.replace(tzinfo=dest_tz)
-                    dest_utc = dest_pac.astimezone(timezone.utc)
-                    if dest_utc < source_utc:
-                        result.add(f_name)
-        return result
-
-    def _read_list_from_destination_data(self):
-        """Code to execute a query for files and the arrival time, that are in
-        CADC storage.
-        """
-        ad_resource_id = 'ivo://cadc.nrc.ca/ad'
-        query = (
-            f"SELECT A.uri, A.contentLastModified "
-            f"FROM inventory.Artifact AS A "
-            f"WHERE A.uri LIKE '%:{self._config.collection}/%' "
-            f"AND A.uri NOT LIKE '%{self._preview_suffix}'"
-        )
-        self._logger.debug(f'Query is {query}')
-        return query_tap(query, self._config.proxy_fqn, ad_resource_id)
-
-    def _read_list_from_destination_meta(self):
-        query = (
-            f"SELECT A.uri FROM caom2.Observation AS O "
-            f"JOIN caom2.Plane AS P ON O.obsID = P.obsID "
-            f"JOIN caom2.Artifact AS A ON P.planeID = A.planeID "
-            f"WHERE O.collection='{self._config.collection}' "
-            f"AND A.uri not like '%{self._preview_suffix}'"
-        )
-        self._logger.debug(f'Query is {query}')
-        temp = query_tap(query, self._config.proxy_fqn, self._config.tap_id)
-        return Validator.filter_meta(temp)
-
-    def read_from_source(self):
-        """Read the entire source site listing. This function is expected to
-        return a dict of all the file names available from the source, where
-        the keys are the file names, and the values are the timestamps at the
-        source."""
-        raise NotImplementedError()
-
-    def validate(self):
-        self._logger.info('Query destination metadata.')
-        dest_meta_temp = self._read_list_from_destination_meta()
-
-        self._logger.info('Query source metadata.')
-        source_temp = self.read_from_source()
-
-        self._logger.info('Find files that do not appear at CADC.')
-        self._destination_meta = find_missing(
-            dest_meta_temp, source_temp.keys()
-        )
-
-        self._logger.info(
-            f'Find files that do not appear at {self._source_name}.'
-        )
-        self._source = find_missing(source_temp.keys(), dest_meta_temp)
-
-        self._logger.info('Query destination data.')
-        dest_data_temp = self._read_list_from_destination_data()
-
-        self._logger.info(
-            f'Find files that are newer at {self._source_name} '
-            f'than at CADC.'
-        )
-        self._destination_data = self._find_unaligned_dates(
-            source_temp, dest_meta_temp, dest_data_temp
-        )
-
-        self._logger.info(f'Filter the results.')
-        self._filter_result()
-
-        self._logger.info('Log the results.')
-        result = {
-            f'{self._source_name}': self._source,
-            'cadc': self._destination_meta,
-            'timestamps': self._destination_data,
-        }
-        result_fqn = os.path.join(
-            self._config.working_directory, VALIDATE_OUTPUT
-        )
-        write_as_yaml(result, result_fqn)
-
-        self._logger.info(
-            f'Results:\n'
-            f'  - {len(self._source)} files at {self._source_name} that are '
-            f'not referenced by CADC CAOM entries\n'
-            f'  - {len(self._destination_meta)} CAOM entries at CADC that do '
-            f'not reference {self._source_name} files\n'
-            f'  - {len(self._destination_data)} files that are newer at '
-            f'{self._source_name} than in CADC storage'
-        )
-        return self._source, self._destination_meta, self._destination_data
-
-    def write_todo(self):
-        """Write a todo.txt file, given the list of entries available from
-        the source, that are not currently at the destination (CADC)."""
-        raise NotImplementedError()
-
-    @staticmethod
-    def filter_meta(meta):
-        return [CaomName(ii.strip()).file_name for ii in meta['uri']]
 
 
 def compare_observations(actual_fqn, expected_fqn):

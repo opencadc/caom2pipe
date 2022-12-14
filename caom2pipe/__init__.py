@@ -8,3 +8,4 @@ from .name_builder_composable import *  # noqa
 from .run_composable import *  # noqa
 from .transfer_composable import *  # noqa
 from .translate_composable import *  # noqa
+from .validator_composable import *  # noqa
