@@ -307,8 +307,10 @@ class Rejected:
     NO_REASON = ''
     BAD_DATA = 'bad_data'
     BAD_METADATA = 'bad_metadata'
+    INVALID_FILE_NAME = 'invalid_file_name'
     INVALID_FORMAT = 'is_valid_fails'
     MISSING = 'missing_at_source'
+    MYSTERY_VALUE = 'mystery_value'
     NO_INSTRUMENT = 'no_instrument'
     NO_PREVIEW = 'no_preview'
     OLD_VERSION = 'old_version'
@@ -317,8 +319,10 @@ class Rejected:
     reasons = {
         BAD_DATA: 'Header missing END card',
         BAD_METADATA: 'Cannot build an observation',
+        INVALID_FILE_NAME: 'Invalid name format',
         INVALID_FORMAT: 'Invalid observation ID',
         MISSING: 'Could not find JSON record for',
+        MYSTERY_VALUE: 'Unexpected value in enumerated type',
         NO_INSTRUMENT: 'Unknown value for instrument',
         NO_PREVIEW: 'Not Found for url: https://archive.gemini.edu/preview',
         OLD_VERSION: 'Recorded without checking',
@@ -385,6 +389,9 @@ class Rejected:
     def is_bad_metadata(self, obs_id):
         return obs_id in self.content[Rejected.BAD_METADATA]
 
+    def is_mystery_value(self, file_name):
+        return file_name in self.content[Rejected.MYSTERY_VALUE]
+
     def is_no_preview(self, file_name):
         return file_name in self.content[Rejected.NO_PREVIEW]
 
@@ -397,6 +404,7 @@ class Rejected:
         for reason, text in Rejected.reasons.items():
             if text in message:
                 result = reason
+                break
         return result
 
 
