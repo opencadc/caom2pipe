@@ -165,9 +165,7 @@ class Validator:
 
     def read_from_source(self):
         """Read the entire source site listing. This function is expected to
-        return a dict of all the file names available from the source, where
-        the keys are the file names, and the values are the timestamps at the
-        source."""
+        return a pandas.DataFrame with at least columns timestamp, and f_name."""
         raise NotImplementedError()
 
     def validate(self):
