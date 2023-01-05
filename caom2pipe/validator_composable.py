@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
@@ -69,7 +68,6 @@
 import logging
 import os
 
-import pandas as pd
 from datetime import timezone
 
 from cadcutils.net import Subject
@@ -135,6 +133,7 @@ class Validator:
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _find_unaligned_dates(self, source, data):
+        import pandas as pd
         newer = pd.DataFrame()
         if len(data) > 0:
             # SG - 08-09-22 - All timestamps in the SI databases are in UT.
@@ -228,4 +227,5 @@ class Validator:
 
     @staticmethod
     def make_timestamp(a):
+        import pandas as pd
         return pd.to_datetime(a)
