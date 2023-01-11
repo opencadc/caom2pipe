@@ -190,15 +190,12 @@ class Validator:
         self._destination_older = self._find_unaligned_dates(source_temp, dest_data_temp)
 
         self._logger.info('Log the results.')
-        result = {
-            f'{self._source_name}': self._source_missing,
-            'cadc': self._destination_missing,
-            'timestamps': self._destination_older,
-        }
-        result_fqn = os.path.join(
-            self._config.working_directory, VALIDATE_OUTPUT
-        )
-        write_as_yaml(result, result_fqn)
+        source_missing_fqn = os.path.join(self._config.working_directory, 'not_at_cadc.txt')
+        dest_missing_fqn = os.path.join(self._config.working_directory, f'not_at_{self._source_name}.txt')
+        newer_timestamps_fqn = os.path.join(self._config.working_directory, f'newer_at_{self._source_name}.txt')
+        self._source_missing.to_csv(source_missing_fqn, header=False, index=False)
+        self._destination_missing.to_csv(dest_missing_fqn, header=False, index=False)
+        self._destination_older.to_csv(newer_timestamps_fqn, header=False, index=False)
 
         self._logger.info(
             f'Results:\n'
