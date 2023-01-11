@@ -72,7 +72,7 @@ from datetime import timezone
 
 from cadcutils.net import Subject
 from cadctap import CadcTapClient
-from caom2pipe.manage_composable import Config, query_tap_pandas, write_as_yaml
+from caom2pipe.manage_composable import Config, query_tap_pandas
 from caom2pipe.run_composable import set_logging
 
 __all__ = ['Validator', 'VALIDATE_OUTPUT']
@@ -131,6 +131,15 @@ class Validator:
         self._preview_suffix = preview_suffix
         self._source_tz = source_tz
         self._logger = logging.getLogger(self.__class__.__name__)
+        if self._config.log_to_file and os.path.exists(self._config.log_file_directory):
+            log_fqn = os.path.join(self._config.log_file_directory, f'{self._source_name}_validate_log.txt')
+            log_handler = logging.FileHandler(log_fqn)
+            formatter = logging.Formatter(
+                '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s'
+            )
+            log_handler.setLevel(self._config.logging_level)
+            log_handler.setFormatter(formatter)
+            logging.getLogger().addHandler(log_handler)
 
     def _find_unaligned_dates(self, source, data):
         import pandas as pd
