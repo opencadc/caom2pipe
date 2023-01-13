@@ -180,6 +180,8 @@ class Validator:
         # SOURCE
         self._logger.info('Query source data.')
         source_temp = self.read_from_source()
+        source_temp_fqn = os.path.join(self._config.working_directory, 'source_temp.txt')
+        source_temp.to_csv(source_temp_fqn, header=False, index=False)
 
         # DATA
         self._logger.info('Query destination data.')
