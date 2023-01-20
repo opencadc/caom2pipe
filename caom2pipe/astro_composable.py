@@ -69,6 +69,7 @@
 import io
 import logging
 import requests
+import subprocess
 import traceback
 
 from astropy import units
@@ -101,6 +102,7 @@ __all__ = [
     'build_plane_time_sample',
     'build_ra_dec_as_deg',
     'check_fits',
+    'check_fitsverify',
     'convert_time',
     'FilterMetadataCache',
     'get_datetime',
@@ -109,9 +111,11 @@ __all__ = [
     'get_timedelta_in_s',
     'get_vo_table',
     'get_vo_table_session',
+    'is_good_date',
     'make_headers_from_file',
     'read_fits_data',
     'SVO_URL',
+    'to_mjd',
 ]
 
 SVO_URL = 'http://svo2.cab.inta-csic.es/svo/theory/fps3/fps.php?ID='
@@ -161,6 +165,36 @@ def check_fits(fqn):
         return False
 
     return True
+
+
+def check_fitsverify(fqn):
+    """
+    Execute fitsverify on fqn
+    :return: bool True if compliant, False if Error count > 0
+    """
+    result = False
+    if '.fits' in fqn:
+        cmd = f'fitsverify -q {fqn}'
+        logging.debug(cmd)
+        cmd_array = cmd.split()
+        try:
+            output, outerr = subprocess.Popen(
+                cmd_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            ).communicate()
+            if (
+                output is not None
+                and len(output) > 0
+                and output[0] is not None
+                and ('and 0 errors' in output.decode('utf-8') or 'verification OK:' in output.decode('utf-8'))
+            ):
+                result = True
+            if not result:
+                logging.error(f'fitsverify failed with:\n{output.decode("utf-8")}{outerr.decode("utf-8")}')
+        except Exception as e:
+            logging.debug(f'Error with command {cmd}:: {e}')
+            logging.debug(traceback.format_exc())
+            raise mc.CadcException(f'Could not execute cmd {cmd}. Exception {e}')
+    return result
 
 
 def check_h5(fqn):
@@ -227,6 +261,9 @@ def get_datetime(from_value):
             except ValueError:
                 # VLASS has a format astropy fails to understand '%H:%M:%S'
                 # CFHT 2019/11/26
+                # CFHT 'Mon Nov 27 15:58:17 HST 2006'
+                # CFHT 2003/03/29,01:34:54
+                # CFHT 2019-11-21T00:00:00
                 # Gemini 2019-11-01 00:01:34.610517+00:00
                 # DDO 12/02/95
                 if '+00:00' in from_value:
@@ -238,6 +275,9 @@ def get_datetime(from_value):
                     '%Y-%m-%d %H:%M:%S.%f',
                     '%d/%m/%y',
                     '%d/%m/%y %H:%M:%S',
+                    '%a %b %d %H:%M:%S HST %Y',
+                    '%Y/%m/%d,%H:%M:%S',
+                    '%Y-%m-%dT%H:%M:%S',
                 ]:
                     try:
                         result = Time(dt_datetime.strptime(from_value, fmt))
@@ -585,3 +625,41 @@ class FilterMetadataCache:
         if cw is not None and fwhm is not None:
             result = cw / fwhm
         return result
+
+
+def is_good_date(value, start_date, check_end_date=True, end_date=Time(dt_datetime.utcnow(), scale='utc')):
+    """
+    Check that dates exist within a range.
+
+    :param value: value to be checked
+    :param start_date: astropy.time.Time, representation mjd
+    :param check_end_date: bool when True, also check the end date range
+    :param end_date: astropy.time.Time, for checking future release dates
+    :return:
+    """
+    # local import for Docker image dependencies
+    import numpy
+    result = True
+    if value is None:
+        result = False
+    elif isinstance(value, numpy.float64):
+        # astropy.time.Time.value is this type
+        if start_date.value > value or (check_end_date and value > end_date.value):
+            result = False
+    elif isinstance(value, dt_datetime) or isinstance(value, Time):
+        if start_date > value or (check_end_date and value > end_date):
+            result = False
+    elif isinstance(value, str):
+        temp = get_datetime(value)
+        if start_date > temp or (check_end_date and temp > end_date):
+            result = False
+    return result
+
+
+def to_mjd(value):
+    """
+    Confine astropy.time.Time to mjd conversion to a single module.
+    :param value: str time in an MJD format.
+    :return: astropy.time.Time
+    """
+    return None if value is None else Time(value, format='mjd')

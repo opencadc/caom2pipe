@@ -110,12 +110,9 @@ class StorageNameBuilder:
 
 
 class StorageNameInstanceBuilder(StorageNameBuilder):
-    def __init__(self, config):
+    def __init__(self, config, scheme='cadc'):
         super().__init__()
-        self._scheme = (
-            'cadc' if config.features.supports_latest_client else 'ad'
-        )
-        mc.StorageName.scheme = self._scheme
+        mc.StorageName.scheme = scheme
         mc.StorageName.collection = config.collection
 
     def build(self, entry):
