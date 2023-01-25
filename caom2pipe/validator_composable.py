@@ -72,7 +72,7 @@ from datetime import timezone
 
 from cadcutils.net import Subject
 from cadctap import CadcTapClient
-from caom2pipe.manage_composable import Config, query_tap_pandas, write_as_yaml
+from caom2pipe.manage_composable import Config, query_tap_pandas
 from caom2pipe.run_composable import set_logging
 
 __all__ = ['Validator', 'VALIDATE_OUTPUT']
@@ -131,6 +131,15 @@ class Validator:
         self._preview_suffix = preview_suffix
         self._source_tz = source_tz
         self._logger = logging.getLogger(self.__class__.__name__)
+        if self._config.log_to_file and os.path.exists(self._config.log_file_directory):
+            log_fqn = os.path.join(self._config.log_file_directory, f'{self._source_name}_validate_log.txt')
+            log_handler = logging.FileHandler(log_fqn)
+            formatter = logging.Formatter(
+                '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s'
+            )
+            log_handler.setLevel(self._config.logging_level)
+            log_handler.setFormatter(formatter)
+            logging.getLogger().addHandler(log_handler)
 
     def _find_unaligned_dates(self, source, data):
         import pandas as pd
@@ -171,6 +180,8 @@ class Validator:
         # SOURCE
         self._logger.info('Query source data.')
         source_temp = self.read_from_source()
+        source_temp_fqn = os.path.join(self._config.working_directory, 'source_temp.txt')
+        source_temp.to_csv(source_temp_fqn, header=False, index=False)
 
         # DATA
         self._logger.info('Query destination data.')
@@ -190,15 +201,12 @@ class Validator:
         self._destination_older = self._find_unaligned_dates(source_temp, dest_data_temp)
 
         self._logger.info('Log the results.')
-        result = {
-            f'{self._source_name}': self._source_missing,
-            'cadc': self._destination_missing,
-            'timestamps': self._destination_older,
-        }
-        result_fqn = os.path.join(
-            self._config.working_directory, VALIDATE_OUTPUT
-        )
-        write_as_yaml(result, result_fqn)
+        source_missing_fqn = os.path.join(self._config.working_directory, 'not_at_cadc.txt')
+        dest_missing_fqn = os.path.join(self._config.working_directory, f'not_at_{self._source_name}.txt')
+        newer_timestamps_fqn = os.path.join(self._config.working_directory, f'newer_at_{self._source_name}.txt')
+        self._source_missing.to_csv(source_missing_fqn, header=False, index=False)
+        self._destination_missing.to_csv(dest_missing_fqn, header=False, index=False)
+        self._destination_older.to_csv(newer_timestamps_fqn, header=False, index=False)
 
         self._logger.info(
             f'Results:\n'

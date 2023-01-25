@@ -86,8 +86,8 @@ class TestValidator(Validator):
         return pd.DataFrame({'f_name': []})
 
 
-@patch('cadcdata.core.net.BaseWsClient.post')
-@patch('cadcdata.core.net.BaseWsClient.get')
+@patch('cadcutils.net.BaseWsClient.post')
+@patch('cadcutils.net.BaseWsClient.get')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 def test_validator(caps_mock, ad_mock, tap_mock, test_config, tmpdir):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
@@ -122,13 +122,14 @@ def test_validator(caps_mock, ad_mock, tap_mock, test_config, tmpdir):
         assert len(test_source_missing) == 0, 'wrong number of source results'
         assert len(test_data_missing) == 3, 'wrong # of data dest results'
         assert len(test_data_older) == 0, 'wrong # of data older results'
-        test_listing_fqn = f'{tmpdir}/{VALIDATE_OUTPUT}'
-        assert os.path.exists(test_listing_fqn), 'should create file record'
+        for n in ['not_at_cadc.txt', 'not_at_TEST_SOURCE_NAME.txt', 'newer_at_TEST_SOURCE_NAME.txt']:
+            test_listing_fqn = f'{tmpdir}/{n}'
+            assert os.path.exists(test_listing_fqn), f'should create file record {n}'
     finally:
         os.chdir(orig_cwd)
 
 
-@patch('cadcdata.core.net.BaseWsClient.post')
+@patch('cadcutils.net.BaseWsClient.post')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 def test_validator2(caps_mock, storage_mock, test_config, tmpdir):
     caps_mock.return_value = 'https://sc2.canfar.net/sc2repo'
