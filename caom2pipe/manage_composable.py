@@ -571,7 +571,7 @@ class ExecutionSummary:
         - Number of rejections: the number of entries that are rejected due to well-known processing failures. These
              rejections include those caused by fitsverify or hd5check failures.
         - Number of skipped: the number of entries with a checksum that is the same at the data source as it is in
-             CADC storage. If the checksum is the same, the pipeline can make no changes to either the data or metdata,
+             CADC storage. If the checksum is the same, the pipeline can make no changes to either the data or metadata,
              so it doesn't try.
         """
         self._version = '0.0.0' if application == 'DEFAULT' else get_version(application)
