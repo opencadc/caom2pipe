@@ -220,7 +220,7 @@ def test_run_state(
     # tap_mock is used by the data_source_composable class
     visit_meta_mock.side_effect = _mock_visit
     clients_mock.return_value.metadata_client.read.side_effect = _mock_read2
-    tap_query_mock.side_effect = _mock_get_work
+    tap_query_mock.side_effect = _mock_query_table2
 
     test_end_time = datetime.fromtimestamp(1579740838, tz=timezone.utc)
     start_time = test_end_time - timedelta(seconds=900)
@@ -309,7 +309,7 @@ def test_run_state_log_to_file_true(
         )
     )
     visit_meta_mock.side_effect = _mock_visit
-    tap_mock.side_effect = _mock_get_work
+    tap_mock.side_effect = _mock_query_table2
 
     test_end_time = datetime.fromtimestamp(1579740838, tz=tz.UTC)
     start_time = test_end_time - timedelta(seconds=900)
@@ -406,8 +406,8 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config, tmp
     test_config.retry_failures = True
     test_config.retry_decay = 0
     _write_todo(test_config)
-    retry_success_fqn = f'{tmpdir}/logs_0/' f'{test_config.success_log_file_name}'
-    retry_failure_fqn = f'{tmpdir}/logs_0/' f'{test_config.failure_log_file_name}'
+    retry_success_fqn = f'{tmpdir}/logs_0/{test_config.success_log_file_name}'
+    retry_failure_fqn = f'{tmpdir}/logs_0/{test_config.failure_log_file_name}'
     retry_retry_fqn = f'{tmpdir}/logs_0/{test_config.retry_file_name}'
     do_one_mock.side_effect = _mock_do_one
 
@@ -453,37 +453,33 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config, tmp
     source_mock.assert_called_with('test_obs_id.fits.gz', 0, 0)
 
 
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
-@patch('caom2pipe.data_source_composable.CadcTapClient')
+@patch('caom2pipe.data_source_composable.CadcTapClient', autospec=True)
 @patch(
     'caom2pipe.data_source_composable.QueryTimeBoxDataSource.'
     'get_time_box_work'
 )
-@pytest.mark.skip('')
-def test_run_state_retry(get_work_mock, tap_mock, do_one_mock, test_config):
-    _write_state(rc.get_utc_now_tz())
-    (
-        retry_success_fqn,
-        retry_failure_fqn,
-        retry_retry_fqn,
-    ) = _clean_up_log_files(test_config)
+def test_run_state_retry(get_work_mock, tap_mock, do_one_mock, clients_mock, test_config, tmpdir):
+    test_config.change_working_directory(tmpdir)
+    _write_state(rc.get_now_tz(timezone.utc), test_config.state_fqn)
+    retry_success_fqn = f'{tmpdir}/logs_0/{test_config.success_log_file_name}'
+    retry_failure_fqn = f'{tmpdir}/logs_0/{test_config.failure_log_file_name}'
+    retry_retry_fqn = f'{tmpdir}/logs_0/{test_config.retry_file_name}'
+
     global call_count
     call_count = 0
-    # get_work_mock.return_value.get_time_box_work.side_effect = _mock_get_work
     get_work_mock.side_effect = _mock_get_work
     do_one_mock.side_effect = _mock_do_one
 
     test_config.log_to_file = True
     test_config.retry_failures = True
-    test_config.state_fqn = STATE_FILE
+    test_config.retry_count = 1
+    test_config.retry_decay = 0
     test_config.interval = 10
     test_config.logging_level = 'DEBUG'
 
-    test_result = rc.run_by_state(
-        config=test_config,
-        command_name=TEST_COMMAND,
-        bookmark_name=TEST_BOOKMARK,
-    )
+    test_result = rc.run_by_state(config=test_config, bookmark_name=TEST_BOOKMARK)
 
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect failure'
@@ -498,69 +494,6 @@ def test_run_state_retry(get_work_mock, tap_mock, do_one_mock, test_config):
     assert tap_mock.called, 'init should be called'
 
 
-# TODO - make this work with TodoRunner AND StateRunner
-# for the 'finish_run' call
-@pytest.mark.skip('')
-def test_capture_failure(test_config):
-    start_s = datetime.utcnow().timestamp()
-    test_obs_id = 'test_obs_id'
-    test_obs_id_2 = 'test_obs_id_2'
-    log_file_directory = os.path.join(tc.THIS_DIR, 'logs')
-    test_config.log_to_file = True
-    test_config.log_file_directory = log_file_directory
-    success_log_file_name = 'success_log.txt'
-    test_config.success_log_file_name = success_log_file_name
-    failure_log_file_name = 'failure_log.txt'
-    test_config.failure_log_file_name = failure_log_file_name
-    retry_file_name = 'retries.txt'
-    test_config.retry_file_name = retry_file_name
-    rejected_file_name = 'rejected.yml'
-    test_config.rejected_file_name = rejected_file_name
-
-    # clean up from last execution
-    if not os.path.exists(log_file_directory):
-        os.mkdir(log_file_directory)
-    if os.path.exists(test_config.success_fqn):
-        os.remove(test_config.success_fqn)
-    if os.path.exists(test_config.failure_fqn):
-        os.remove(test_config.failure_fqn)
-    if os.path.exists(test_config.retry_fqn):
-        os.remove(test_config.retry_fqn)
-    if os.path.exists(test_config.rejected_fqn):
-        os.remove(test_config.rejected_fqn)
-
-    test_oe = ec.OrganizeExecutesWithDoOne(test_config, 'command', [], [])
-    test_sname = tc.TestStorageName(obs_id=test_obs_id_2)
-    test_oe.capture_failure(test_sname, 'Cannot build an observation')
-    test_sname = tc.TestStorageName(obs_id=test_obs_id)
-    test_oe.capture_failure(test_sname, 'exception text')
-    test_oe.capture_success(test_obs_id, 'C121212_01234_CAL.fits.gz', start_s)
-    test_oe.finish_run(test_config)
-
-    assert os.path.exists(test_config.success_fqn)
-    assert os.path.exists(test_config.failure_fqn)
-    assert os.path.exists(test_config.retry_fqn)
-    assert os.path.exists(test_config.rejected_fqn)
-
-    success_content = open(test_config.success_fqn).read()
-    assert (
-        'test_obs_id C121212_01234_CAL.fits.gz' in success_content
-    ), 'wrong content'
-    retry_content = open(test_config.retry_fqn).read()
-    assert retry_content == 'test_obs_id\n'
-    failure_content = open(test_config.failure_fqn).read()
-    assert failure_content.endswith(
-        'Unknown error. Check specific log.\n'
-    ), failure_content
-    assert os.path.exists(test_config.rejected_fqn), test_config.rejected_fqn
-    rejected_content = mc.read_as_yaml(test_config.rejected_fqn)
-    assert rejected_content is not None, 'expect a result'
-    test_result = rejected_content.get('bad_metadata')
-    assert test_result is not None, 'wrong result'
-    assert len(test_result) == 1, 'wrong number of entries'
-    assert test_result[0] == test_obs_id, 'wrong entry'
-
-
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 def test_time_box(clients_mock, test_config, tmpdir):
     # test that the time boxes increment as expected, to a maximum value
@@ -571,15 +504,15 @@ def test_time_box(clients_mock, test_config, tmpdir):
 
     test_config.interval = 700
 
-    for test_timezone in [timezone.utc, tz.gettz('US/Mountain')]:
-
-        _write_state('23-Jul-2019 09:51', test_config.state_fqn)
-        test_end_time = datetime(2019, 7, 24, 9, 20, tzinfo=test_timezone)
+    for test_tz in [timezone.utc, tz.gettz('US/Mountain')]:
+        test_start_time = datetime(2019, 7, 23, 9, 51, tzinfo=test_tz)
+        _write_state(test_start_time, test_config.state_fqn)
+        test_end_time = datetime(2019, 7, 24, 9, 20, tzinfo=test_tz)
 
         class MakeTimeBoxWork(dsc.DataSource):
 
             def __init__(self):
-                super().__init__(test_config, test_timezone)
+                super().__init__(test_config, test_tz)
                 self.todo_call_count = 0
                 self.zero_called = False
                 self.one_called = False
@@ -587,21 +520,16 @@ def test_time_box(clients_mock, test_config, tmpdir):
 
             def get_time_box_work(self, prev_exec_dt, exec_dt):
                 if self.todo_call_count == 0:
-                    test_p_time = datetime(2019, 7, 23, 9, 51, tzinfo=timezone.utc).astimezone(test_timezone)
-                    assert prev_exec_dt == test_p_time, f'wrong prev 0 {test_timezone} {prev_exec_dt} {test_p_time}'
-                    test_e_time = datetime(2019, 7, 23, 21, 31, tzinfo=timezone.utc).astimezone(test_timezone)
-                    assert exec_dt == test_e_time, 'wrong exec 0'
+                    assert prev_exec_dt == datetime(2019, 7, 23, 9, 51, tzinfo=test_tz), f'prev 0 {test_tz}'
+                    assert exec_dt == datetime(2019, 7, 23, 21, 31, tzinfo=test_tz), 'wrong exec 0'
                     self.zero_called = True
                 elif self.todo_call_count == 1:
-                    test_p_time = datetime(2019, 7, 23, 21, 31, tzinfo=timezone.utc).astimezone(test_timezone)
-                    test_e_time = datetime(2019, 7, 24, 9, 11, tzinfo=timezone.utc).astimezone(test_timezone)
-                    assert prev_exec_dt == test_p_time, 'wrong prev 1'
-                    assert exec_dt == test_e_time, 'wrong exec 1'
+                    assert prev_exec_dt == datetime(2019, 7, 23, 21, 31, tzinfo=test_tz), 'wrong prev 1'
+                    assert exec_dt == datetime(2019, 7, 24, 9, 11, tzinfo=test_tz), 'wrong exec 1'
                     self.one_called = True
                 elif self.todo_call_count == 2:
-                    test_p_time = datetime(2019, 7, 24, 9, 11, tzinfo=timezone.utc).astimezone(test_timezone)
-                    assert prev_exec_dt == test_p_time, 'wrong exec 2'
-                    assert exec_dt == test_end_time, f'wrong exec 2 {test_timezone}'
+                    assert prev_exec_dt == datetime(2019, 7, 24, 9, 11, tzinfo=test_tz), 'wrong exec 2'
+                    assert exec_dt == test_end_time, f'wrong exec 2 {test_tz}'
                     self.two_called = True
                 self.todo_call_count += 1
                 assert self.todo_call_count <= 4, 'loop is written wrong'
@@ -626,88 +554,85 @@ def test_time_box(clients_mock, test_config, tmpdir):
         assert test_work.todo_call_count == 3, 'wrong todo call count'
 
 
-def test_time_box_equal(test_config):
-    _write_state('23-Jul-2019 09:51')
-    test_config.state_fqn = STATE_FILE
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+def test_time_box_equal(clients_mock, test_config, tmpdir):
+    # test that if the end datetime is the same as the start datetime, there are no calls
+    test_config.change_working_directory(tmpdir)
     test_config.interval = 700
 
-    class MakeWork(mc.Work):
+    for test_timezone in [timezone.utc, tz.gettz('US/Mountain')]:
+        test_start_time = test_end_time = datetime(2019, 7, 23, 9, 51, tzinfo=test_timezone)
+        _write_state(test_start_time, test_config.state_fqn)
 
-        def __init__(self):
-            super(MakeWork, self).__init__(
-                mc.make_seconds('23-Jul-2019 09:51'))
-            self.todo_call_count = 0
-            self.zero_called = False
-            self.one_called = False
-            self.two_called = False
+        class MakeWork(dsc.DataSource):
 
-        def initialize(self):
-            pass
+            def __init__(self):
+                super().__init__(test_config, test_timezone)
+                self.todo_call_count = 0
 
-        def todo(self, prev_exec_ts, exec_ts):
-            self.todo_call_count += 1
-            assert self.todo_call_count <= 4, 'loop is written wrong'
-            return []
+            def get_time_box_work(self, prev_exec_dt, exec_dt):
+                self.todo_call_count += 1
+                assert self.todo_call_count <= 4, 'loop is written wrong'
+                return deque()
 
-    test_work = MakeWork()
+        test_work = MakeWork()
 
-    test_result = ec.run_from_state(test_config,
-                                    sname=mc.StorageName,
-                                    command_name=COMMAND_NAME,
-                                    meta_visitors=None,
-                                    data_visitors=None,
-                                    bookmark_name=TEST_BOOKMARK,
-                                    work=test_work)
-    assert test_result is not None, 'expect a result'
-    test_state = mc.State(test_config.state_fqn)
-    assert test_state.get_bookmark(TEST_BOOKMARK) == \
-        datetime(2019, 7, 23, 9, 51)
-    assert test_work.todo_call_count == 0, 'wrong todo call count'
+        test_result = rc.run_by_state(
+            test_config,
+            meta_visitors=None,
+            data_visitors=None,
+            bookmark_name=TEST_BOOKMARK,
+            end_time=test_end_time,
+            source=test_work,
+        )
+        assert test_result is not None, 'expect a result'
+        test_state = mc.State(test_config.state_fqn)
+        assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
+        assert test_work.todo_call_count == 0, 'wrong todo call count'
 
 
-@pytest.mark.skip('')
-def test_time_box_once_through(test_config):
-    _write_state('23-Jul-2019 09:51')
-    test_config.state_fqn = STATE_FILE
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+def test_time_box_once_through(clients_mock, test_config, tmpdir):
+    test_config.change_working_directory(tmpdir)
     test_config.interval = 700
 
-    # class MakeWork(mc.Work):
-    #
-    #     def __init__(self):
-    #         super(MakeWork, self).__init__(
-    #             mc.make_seconds('23-Jul-2019 12:20'))
-    #         self.todo_call_count = 0
-    #         self.zero_called = False
-    #
-    #     def initialize(self):
-    #         pass
-    #
-    #     def todo(self, prev_exec_dt, exec_dt):
-    #         if self.todo_call_count == 0:
-    #             assert prev_exec_dt == datetime(2019, 7, 23, 9, 51), \
-    #                 'wrong prev'
-    #             assert exec_dt == datetime(2019, 7, 23, 12, 20), 'wrong exec'
-    #             self.zero_called = True
-    #         self.todo_call_count += 1
-    #         assert self.todo_call_count <= 4, 'loop is written wrong'
-    #         return []
-    #
-    # test_work = MakeWork()
-    #
-    # test_result = ec.run_from_state(test_config,
-    #                                 sname=mc.StorageName,
-    #                                 command_name=COMMAND_NAME,
-    #                                 meta_visitors=None,
-    #                                 data_visitors=None,
-    #                                 bookmark_name=TEST_BOOKMARK,
-    #                                 work=test_work)
-    # assert test_result is not None, 'expect a result'
-    #
-    # test_state = mc.State(test_config.state_fqn)
-    # assert test_work.zero_called, 'missed zero'
-    # assert test_state.get_bookmark(TEST_BOOKMARK) == \
-    #     datetime(2019, 7, 23, 12, 20)
-    # assert test_work.todo_call_count == 1, 'wrong todo call count'
+    for test_timezone in [timezone.utc, tz.gettz('US/Mountain')]:
+        test_start_time = datetime(2019, 7, 23, 9, 51, tzinfo=test_timezone)
+        _write_state(test_start_time, test_config.state_fqn)
+        test_end_time = datetime(2019, 7, 23, 12, 20, tzinfo=test_timezone)
+
+        class MakeWork(dsc.DataSource):
+
+            def __init__(self):
+                super().__init__(test_config, test_timezone)
+                self.todo_call_count = 0
+                self.zero_called = False
+
+            def get_time_box_work(self, prev_exec_dt, exec_dt):
+                if self.todo_call_count == 0:
+                    assert prev_exec_dt == datetime(2019, 7, 23, 9, 51, tzinfo=test_timezone), 'prev'
+                    assert exec_dt == datetime(2019, 7, 23, 12, 20, tzinfo=test_timezone), 'wrong exec'
+                    self.zero_called = True
+                self.todo_call_count += 1
+                assert self.todo_call_count <= 4, 'loop is written wrong'
+                return deque()
+
+        test_work = MakeWork()
+
+        test_result = rc.run_by_state(
+            test_config,
+            meta_visitors=None,
+            data_visitors=None,
+            bookmark_name=TEST_BOOKMARK,
+            source=test_work,
+            end_time=test_end_time,
+        )
+        assert test_result is not None, 'expect a result'
+
+        test_state = mc.State(test_config.state_fqn)
+        assert test_work.zero_called, 'missed zero'
+        assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
+        assert test_work.todo_call_count == 1, 'wrong todo call count'
 
 
 @patch('caom2pipe.execute_composable.CaomExecute._caom2_store')
@@ -1088,27 +1013,6 @@ def test_store_from_to_cadc(clients_mock, get_work_mock, test_config):
     ), 'wrong put params'
 
 
-def _clean_up_log_files(test_config):
-    retry_success_fqn = (
-        f'{tc.TEST_DATA_DIR}_0/' f'{test_config.success_log_file_name}'
-    )
-    retry_failure_fqn = (
-        f'{tc.TEST_DATA_DIR}_0/' f'{test_config.failure_log_file_name}'
-    )
-    retry_retry_fqn = f'{tc.TEST_DATA_DIR}_0/{test_config.retry_file_name}'
-    for ii in [
-        test_config.success_fqn,
-        test_config.failure_fqn,
-        test_config.retry_fqn,
-        retry_failure_fqn,
-        retry_retry_fqn,
-        retry_success_fqn,
-    ]:
-        if os.path.exists(ii):
-            os.unlink(ii)
-    return retry_success_fqn, retry_failure_fqn, retry_retry_fqn
-
-
 def _check_log_files(
     test_config, retry_success_fqn, retry_failure_fqn, retry_retry_fqn
 ):
@@ -1158,11 +1062,11 @@ def _mock_get_work(arg1, arg2):
     return _mock_query(None, None, None)
 
 
-def _mock_get_work2(arg1, **kwargs):
-    return _mock_query(None, None, None)
+def _mock_query_table2(arg1, arg2):
+    return _mock_query_table(None, None, None)
 
 
-def _mock_query(arg1, arg2, arg3):
+def _mock_query_table(arg1, arg2, arg3):
     global call_count
     if call_count == 0:
         call_count = 1
@@ -1174,6 +1078,16 @@ def _mock_query(arg1, arg2, arg3):
         )
     else:
         return Table.read('fileName,ingestDate\n'.split('\n'), format='csv')
+
+
+def _mock_query(arg1, arg2, arg3):
+    temp = deque()
+    global call_count
+    if call_count == 0:
+        call_count = 1
+        temp.append(dsc.StateRunnerMeta('NEOS_SCI_2015347000000_clean.fits', '2019-10-23T16:27:19.000'))
+        return temp
+    return temp
 
 
 def _mock_do_one(arg1):

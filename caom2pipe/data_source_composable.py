@@ -504,11 +504,8 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     # otherwise the entry.stat() call will sometimes fail.
                     if not entry.name.startswith('.'):
                         entry_stats = entry.stat()
-                        if (
-                            exec_time
-                            >= entry_stats.st_mtime
-                            >= prev_exec_time
-                        ):
+                        entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime, tz=self._timezone)
+                        if exec_time >= entry_st_mtime_dt >= prev_exec_time:
                             if self.default_filter(entry):
                                 self._temp[entry_stats.st_mtime].append(
                                     entry.path
@@ -654,30 +651,30 @@ class QueryTimeBoxDataSource(DataSource):
         subject = clc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
 
-    def get_time_box_work(self, prev_exec_time, exec_time):
+    def get_time_box_work(self, prev_exec_dt, exec_dt):
         """
         Get a set of file names from a collection. Limit the entries by
         time-boxing on lastModified, and don't include previews.
 
-        :param prev_exec_time tz-aware datetime.timestamp start of the time-boxed chunk
-        :param exec_time tz-aware datetime.timestamp end of the time-boxed chunk
+        :param prev_exec_dt tz-aware datetime start of the time-boxed chunk
+        :param exec_dt tz-aware datetime end of the time-boxed chunk
         :return: a list of StateRunnerMeta instances in the CADC storage system
         """
         # SG 8-09-22
-        # All timestamps in the SI databases are in UT
+        # All timestamps in the SI databases are in UTC
         #
-        # SGo - the Docker images all run at UTC, so just use the timestamps as retrieved/stored in state.yml file.
+        # SGo
         # Use 'lastModified', because that should be the later timestamp (avoid eventual consistency lags).
         self._logger.debug(f'Begin get_time_box_work.')
         db_fmt = '%Y-%m-%d %H:%M:%S.%f'
-        prev_exec_time_utc = datetime.strftime(datetime.utcfromtimestamp(prev_exec_time), db_fmt)
-        exec_time_utc = datetime.strftime(datetime.utcfromtimestamp(exec_time), db_fmt)
+        prev_exec_dt_utc = datetime.strftime(prev_exec_dt.astimezone(timezone.utc), db_fmt)
+        exec_dt_utc = datetime.strftime(exec_dt.astimezone(timezone.utc), db_fmt)
         query = f"""
             SELECT A.uri, A.lastModified
             FROM inventory.Artifact AS A
             WHERE A.uri NOT LIKE '%{self._preview_suffix}'
-            AND A.lastModified > '{prev_exec_time_utc}'
-            AND A.lastModified <= '{exec_time_utc}'
+            AND A.lastModified > '{prev_exec_dt_utc}'
+            AND A.lastModified <= '{exec_dt_utc}'
             AND split_part( split_part( A.uri, '/', 1 ), ':', 2 ) = '{self._config.collection}'
             ORDER BY A.lastModified ASC
         """

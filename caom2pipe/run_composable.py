@@ -301,11 +301,11 @@ class StateRunner(TodoRunner):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
 
         state = mc.State(self._config.state_fqn)
-        if self._data_source.start_time is None:
+        if self._data_source.start_dt is None:
             temp = state.get_bookmark(self._bookmark_name)
             start_time = temp.astimezone(self._data_source.timezone)
         else:
-            start_time = self._data_source.start_time
+            start_time = self._data_source.start_dt
 
         # make sure prev_exec_time is offset-aware type datetime.timestamp
         prev_exec_time = start_time
@@ -420,7 +420,7 @@ def common_runner_init(
     use the defaults created here for the 'run' call, or they can provide their own specializations of the various
     classes required to store data and ingest metadata at CADC.
 
-    :param config Config instance
+    :param config: Config instance
     :param clients: ClientCollection instance
     :param name_builder NameBuilder extension that creates an instance of a StorageName extension, from an entry from
         a DataSourceComposable listing
@@ -435,6 +435,7 @@ def common_runner_init(
     :param meta_visitors list of modules with visit methods, that expect the metadata of a work file to exist on disk
     :param data_visitors list of modules with visit methods, that expect the work file to exist on disk
     :param chooser OrganizerChooser, if there's rules that are unique to a collection about file naming.
+    :param application str representation of application name, for retrieving version
     """
     if config is None:
         config = mc.Config()
@@ -586,7 +587,7 @@ def run_by_state(
 ):
     """A default implementation for using the StateRunner.
 
-    :param config Config instance
+    :param config: Config instance
     :param name_builder NameBuilder extension that creates an instance of
         a StorageName extension, from an entry from a DataSourceComposable
         listing
