@@ -73,7 +73,7 @@ import traceback
 
 from collections import deque, defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from cadctap import CadcTapClient
 from cadcutils import exceptions
@@ -113,10 +113,10 @@ class DataSource:
         deque of work todo as a method implementation
     """
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, zone=timezone.utc):
         self._config = config
-        # if this value is used, it should be a timestamp - i.e. a float
-        self._start_time_ts = None
+        # if this value is used, it should be a timezone-aware datetime
+        self._start_dt = None
         self._extensions = None
         if config is not None:
             self._extensions = config.data_source_extensions
@@ -124,6 +124,7 @@ class DataSource:
         self._skipped_files = 0
         self._work = deque()
         self._reporter = None
+        self._timezone = zone
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _capture_todo(self):
@@ -148,10 +149,10 @@ class DataSource:
     def get_work(self):
         return deque()
 
-    def get_time_box_work(self, prev_exec_time, exec_time):
+    def get_time_box_work(self, prev_exec_dt, exec_dt):
         """
-        :param prev_exec_time: tz-aware datetime.timestamp
-        :param exec_time: tz-aware datetime.timestamp
+        :param prev_exec_dt: tz-aware datetime
+        :param exec_dt: tz-aware datetime
         """
         return deque()
 
@@ -164,12 +165,16 @@ class DataSource:
         self._reporter = value
 
     @property
-    def start_time_ts(self):
-        return self._start_time_ts
+    def start_dt(self):
+        return self._start_dt
 
-    @start_time_ts.setter
-    def start_time_ts(self, value):
-        self._start_time_ts = value
+    @start_dt.setter
+    def start_dt(self, value):
+        self._start_dt = value
+
+    @property
+    def timezone(self):
+        return self._timezone
 
 
 class ListDirDataSource(DataSource):

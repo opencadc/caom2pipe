@@ -389,24 +389,24 @@ def test_make_seconds():
 def test_increment_time():
     t1 = '2017-06-26T17:07:21.527'
     t1_dt = datetime.strptime(t1, mc.ISO_8601_FORMAT)
-    result = mc.increment_time_tz(t1_dt, 10)
+    result = mc.increment_time_tz(t1_dt, 10, zone=timezone.utc)
     assert result is not None, 'expect a result'
-    assert result == datetime(2017, 6, 26, 17, 17, 21, 527000), 'wrong result'
+    assert result == datetime(2017, 6, 26, 17, 17, 21, 527000, tzinfo=timezone.utc), 'wrong result'
 
     t2 = '2017-07-26T17:07:21.527'
     t2_dt = datetime.strptime(t2, mc.ISO_8601_FORMAT)
-    result = mc.increment_time_tz(t2_dt, 5)
+    result = mc.increment_time_tz(t2_dt, 5, zone=timezone.utc)
     assert result is not None, 'expect a result'
-    assert result == datetime(2017, 7, 26, 17, 12, 21, 527000), 'wrong result'
+    assert result == datetime(2017, 7, 26, 17, 12, 21, 527000, tzinfo=timezone.utc), 'wrong result'
 
     t3 = 1571595618.0
-    result = mc.increment_time_tz(t3, 15)
+    result = mc.increment_time_tz(t3, 15, zone=timezone.utc)
     assert result == datetime(
         2019, 10, 20, 18, 35, 18, tzinfo=timezone.utc
     ), 'wrong t3 result'
 
     with pytest.raises(NotImplementedError):
-        mc.increment_time_tz(t2_dt, 23, '%f')
+        mc.increment_time_tz(t2_dt, 23, timezone.utc, '%f')
 
 
 @patch('requests.get')

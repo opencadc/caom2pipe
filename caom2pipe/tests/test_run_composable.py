@@ -73,6 +73,7 @@ import os
 from astropy.table import Table
 from collections import deque
 from datetime import datetime, timedelta, timezone
+from dateutil import tz
 
 from unittest.mock import Mock, patch, call
 import test_conf as tc
@@ -226,12 +227,8 @@ def test_run_state(
 
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.interval = 10
-    individual_log_file = (
-        f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
-    )
-
     test_config.change_working_directory(tmpdir)
-    test_config.state_file_name = 'state.yml'
+    individual_log_file = f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
     _write_state(start_time, test_config.state_fqn)
 
     test_chooser = ec.OrganizeChooser()
@@ -291,63 +288,65 @@ def test_run_state_log_to_file_true(
     clients_mock,
     tap_mock2,
     test_config,
+    tmpdir,
 ):
     # tap_mock2 is needed by the data_source_composable specialization
     # this test is about making sure the summary .txt files are copied
     # as expected when there is more than one time-box
-    pattern = None
-    try:
-        clients_mock.return_value.metadata_client.read.side_effect = Mock(
-            return_value=SimpleObservation(
-                collection=test_config.collection,
-                observation_id='def',
-                algorithm=Algorithm('test'),
-            )
+
+    global call_count
+    call_count = 0
+
+    test_config.change_working_directory(tmpdir)
+    if not os.path.exists(os.path.dirname(test_config.success_fqn)):
+        os.mkdir(os.path.dirname(test_config.success_fqn))
+
+    clients_mock.return_value.metadata_client.read.side_effect = Mock(
+        return_value=SimpleObservation(
+            collection=test_config.collection,
+            observation_id='def',
+            algorithm=Algorithm('test'),
         )
-        visit_meta_mock.side_effect = _mock_visit
-        tap_mock.side_effect = _mock_get_work
+    )
+    visit_meta_mock.side_effect = _mock_visit
+    tap_mock.side_effect = _mock_get_work
 
-        test_end_time = datetime.fromtimestamp(1579740838)
-        start_time = test_end_time - timedelta(seconds=900)
-        _write_state(start_time)
+    test_end_time = datetime.fromtimestamp(1579740838, tz=tz.UTC)
+    start_time = test_end_time - timedelta(seconds=900)
+    _write_state(start_time)
 
-        test_config.task_types = [mc.TaskType.INGEST]
-        test_config.log_to_file = True
-        test_config.state_fqn = STATE_FILE
-        test_config.interval = 10
-        pattern = f'{test_config.success_fqn.split(".")[0]}*'
+    test_config.task_types = [mc.TaskType.INGEST]
+    test_config.log_to_file = True
+    test_config.state_fqn = STATE_FILE
+    test_config.interval = 10
+    pattern = f'{test_config.success_fqn.split(".")[0]}*'
 
-        if os.path.exists(test_config.progress_fqn):
-            os.unlink(test_config.progress_fqn)
+    if os.path.exists(test_config.progress_fqn):
+        os.unlink(test_config.progress_fqn)
 
-        # preconditions for the success file: - one file named pattern.txt
-        #
-        original_success_files = glob.glob(pattern)
-        for entry in original_success_files:
-            os.unlink(entry)
-        if not os.path.exists(test_config.success_fqn):
-            with open(test_config.success_fqn, 'w') as f:
-                f.write('test content\n')
+    # preconditions for the success file: - only one file named pattern.txt
+    #
+    original_success_files = glob.glob(pattern)
+    for entry in original_success_files:
+        os.unlink(entry)
+    if not os.path.exists(test_config.success_fqn):
+        with open(test_config.success_fqn, 'w') as f:
+            f.write('test content\n')
 
-        test_chooser = ec.OrganizeChooser()
-        test_result = rc.run_by_state(
-            config=test_config,
-            chooser=test_chooser,
-            bookmark_name=TEST_BOOKMARK,
-            end_time=test_end_time,
-        )
-        assert test_result is not None, 'expect a result'
-        assert test_result == 0, 'expect success'
-        assert os.path.exists(
-            test_config.progress_fqn
-        ), 'expect progress file'
-        file_count = glob.glob(pattern)
-        assert len(file_count) == 2, 'wrong number of success files'
-    finally:
-        if pattern is not None:
-            original_success_files = glob.glob(pattern)
-            for entry in original_success_files:
-                os.unlink(entry)
+    test_chooser = ec.OrganizeChooser()
+    test_result = rc.run_by_state(
+        config=test_config,
+        chooser=test_chooser,
+        bookmark_name=TEST_BOOKMARK,
+        end_time=test_end_time,
+    )
+    assert test_result is not None, 'expect a result'
+    assert test_result == 0, 'expect success'
+    assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+    file_count = glob.glob(pattern)
+    # 3 = 2 iterations through the state information, + 1 existing success file
+    # one of the iterations through the state information processes one file
+    assert len(file_count) == 3, 'wrong number of success files'
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
@@ -562,104 +561,108 @@ def test_capture_failure(test_config):
     assert test_result[0] == test_obs_id, 'wrong entry'
 
 
-# TODO make these into useful tests somewhere
-@pytest.mark.skip('')
-def test_time_box(test_config):
-    _write_state('23-Jul-2019 09:51')
-    test_config.state_fqn = STATE_FILE
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+def test_time_box(clients_mock, test_config, tmpdir):
+    # test that the time boxes increment as expected, to a maximum value
+    # time-boxing is handled by DataSource specializations, and is in the time zone of the data source
+    # end timestamp is handled by StateRunner
+
+    test_config.change_working_directory(tmpdir)
+
     test_config.interval = 700
 
-    # class MakeWork(mc.Work):
-    #
-    #     def __init__(self):
-    #         super(MakeWork, self).__init__(
-    #             mc.make_seconds('24-Jul-2019 09:20'))
-    #         self.todo_call_count = 0
-    #         self.zero_called = False
-    #         self.one_called = False
-    #         self.two_called = False
-    #
-    #     def initialize(self):
-    #         pass
-    #
-    #     def todo(self, prev_exec_date, exec_date):
-    #         if self.todo_call_count == 0:
-    #             assert prev_exec_date == datetime(2019, 7, 23, 9, 51), \
-    #                 'wrong prev'
-    #             assert exec_date == datetime(2019, 7, 23, 21, 31), 'wrong exec'
-    #             self.zero_called = True
-    #         elif self.todo_call_count == 1:
-    #             assert prev_exec_date == datetime(2019, 7, 23, 21, 31), \
-    #                 'wrong prev'
-    #             assert exec_date == datetime(2019, 7, 24, 9, 11), 'wrong exec'
-    #             self.one_called = True
-    #         elif self.todo_call_count == 2:
-    #             assert prev_exec_date == datetime(2019, 7, 24, 9, 11), \
-    #                 'wrong exec'
-    #             assert exec_date == datetime(2019, 7, 24, 9, 20), 'wrong exec'
-    #             self.two_called = True
-    #         self.todo_call_count += 1
-    #         assert self.todo_call_count <= 4, 'loop is written wrong'
-    #         return []
-    #
-    # test_work = MakeWork()
-    #
-    # test_result = ec.run_from_state(test_config,
-    #                                 sname=mc.StorageName,
-    #                                 command_name=COMMAND_NAME,
-    #                                 meta_visitors=None,
-    #                                 data_visitors=None,
-    #                                 bookmark_name=TEST_BOOKMARK,
-    #                                 work=test_work)
-    # assert test_result is not None, 'expect a result'
-    #
-    # test_state = mc.State(test_config.state_fqn)
-    # assert test_work.zero_called, 'missed zero'
-    # assert test_work.one_called, 'missed one'
-    # assert test_work.two_called, 'missed two'
-    # assert test_state.get_bookmark(TEST_BOOKMARK) == \
-    #     datetime(2019, 7, 24, 9, 20)
-    # assert test_work.todo_call_count == 3, 'wrong todo call count'
+    for test_timezone in [timezone.utc, tz.gettz('US/Mountain')]:
+
+        _write_state('23-Jul-2019 09:51', test_config.state_fqn)
+        test_end_time = datetime(2019, 7, 24, 9, 20, tzinfo=test_timezone)
+
+        class MakeTimeBoxWork(dsc.DataSource):
+
+            def __init__(self):
+                super().__init__(test_config, test_timezone)
+                self.todo_call_count = 0
+                self.zero_called = False
+                self.one_called = False
+                self.two_called = False
+
+            def get_time_box_work(self, prev_exec_dt, exec_dt):
+                if self.todo_call_count == 0:
+                    test_p_time = datetime(2019, 7, 23, 9, 51, tzinfo=timezone.utc).astimezone(test_timezone)
+                    assert prev_exec_dt == test_p_time, f'wrong prev 0 {test_timezone} {prev_exec_dt} {test_p_time}'
+                    test_e_time = datetime(2019, 7, 23, 21, 31, tzinfo=timezone.utc).astimezone(test_timezone)
+                    assert exec_dt == test_e_time, 'wrong exec 0'
+                    self.zero_called = True
+                elif self.todo_call_count == 1:
+                    test_p_time = datetime(2019, 7, 23, 21, 31, tzinfo=timezone.utc).astimezone(test_timezone)
+                    test_e_time = datetime(2019, 7, 24, 9, 11, tzinfo=timezone.utc).astimezone(test_timezone)
+                    assert prev_exec_dt == test_p_time, 'wrong prev 1'
+                    assert exec_dt == test_e_time, 'wrong exec 1'
+                    self.one_called = True
+                elif self.todo_call_count == 2:
+                    test_p_time = datetime(2019, 7, 24, 9, 11, tzinfo=timezone.utc).astimezone(test_timezone)
+                    assert prev_exec_dt == test_p_time, 'wrong exec 2'
+                    assert exec_dt == test_end_time, f'wrong exec 2 {test_timezone}'
+                    self.two_called = True
+                self.todo_call_count += 1
+                assert self.todo_call_count <= 4, 'loop is written wrong'
+                return deque()
+
+        test_work = MakeTimeBoxWork()
+
+        test_result = rc.run_by_state(
+            test_config,
+            meta_visitors=None,
+            data_visitors=None,
+            bookmark_name=TEST_BOOKMARK,
+            end_time=test_end_time,
+            source=test_work,
+        )
+        assert test_result is not None, 'expect a result'
+        assert test_work.zero_called, 'missed zero'
+        assert test_work.one_called, 'missed one'
+        assert test_work.two_called, 'missed two'
+        test_state = mc.State(test_config.state_fqn)
+        assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
+        assert test_work.todo_call_count == 3, 'wrong todo call count'
 
 
-@pytest.mark.skip('')
 def test_time_box_equal(test_config):
     _write_state('23-Jul-2019 09:51')
     test_config.state_fqn = STATE_FILE
     test_config.interval = 700
 
-    # class MakeWork(mc.Work):
-    #
-    #     def __init__(self):
-    #         super(MakeWork, self).__init__(
-    #             mc.make_seconds('23-Jul-2019 09:51'))
-    #         self.todo_call_count = 0
-    #         self.zero_called = False
-    #         self.one_called = False
-    #         self.two_called = False
-    #
-    #     def initialize(self):
-    #         pass
-    #
-    #     def todo(self, prev_exec_date, exec_date):
-    #         self.todo_call_count += 1
-    #         assert self.todo_call_count <= 4, 'loop is written wrong'
-    #         return []
-    #
-    # test_work = MakeWork()
-    #
-    # test_result = ec.run_from_state(test_config,
-    #                                 sname=mc.StorageName,
-    #                                 command_name=COMMAND_NAME,
-    #                                 meta_visitors=None,
-    #                                 data_visitors=None,
-    #                                 bookmark_name=TEST_BOOKMARK,
-    #                                 work=test_work)
-    # assert test_result is not None, 'expect a result'
-    # test_state = mc.State(test_config.state_fqn)
-    # assert test_state.get_bookmark(TEST_BOOKMARK) == \
-    #     datetime(2019, 7, 23, 9, 51)
-    # assert test_work.todo_call_count == 0, 'wrong todo call count'
+    class MakeWork(mc.Work):
+
+        def __init__(self):
+            super(MakeWork, self).__init__(
+                mc.make_seconds('23-Jul-2019 09:51'))
+            self.todo_call_count = 0
+            self.zero_called = False
+            self.one_called = False
+            self.two_called = False
+
+        def initialize(self):
+            pass
+
+        def todo(self, prev_exec_ts, exec_ts):
+            self.todo_call_count += 1
+            assert self.todo_call_count <= 4, 'loop is written wrong'
+            return []
+
+    test_work = MakeWork()
+
+    test_result = ec.run_from_state(test_config,
+                                    sname=mc.StorageName,
+                                    command_name=COMMAND_NAME,
+                                    meta_visitors=None,
+                                    data_visitors=None,
+                                    bookmark_name=TEST_BOOKMARK,
+                                    work=test_work)
+    assert test_result is not None, 'expect a result'
+    test_state = mc.State(test_config.state_fqn)
+    assert test_state.get_bookmark(TEST_BOOKMARK) == \
+        datetime(2019, 7, 23, 9, 51)
+    assert test_work.todo_call_count == 0, 'wrong todo call count'
 
 
 @pytest.mark.skip('')
@@ -679,11 +682,11 @@ def test_time_box_once_through(test_config):
     #     def initialize(self):
     #         pass
     #
-    #     def todo(self, prev_exec_date, exec_date):
+    #     def todo(self, prev_exec_dt, exec_dt):
     #         if self.todo_call_count == 0:
-    #             assert prev_exec_date == datetime(2019, 7, 23, 9, 51), \
+    #             assert prev_exec_dt == datetime(2019, 7, 23, 9, 51), \
     #                 'wrong prev'
-    #             assert exec_date == datetime(2019, 7, 23, 12, 20), 'wrong exec'
+    #             assert exec_dt == datetime(2019, 7, 23, 12, 20), 'wrong exec'
     #             self.zero_called = True
     #         self.todo_call_count += 1
     #         assert self.todo_call_count <= 4, 'loop is written wrong'

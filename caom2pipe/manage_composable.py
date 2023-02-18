@@ -2728,6 +2728,23 @@ def convert_to_ts(value):
     return result
 
 
+def convert_to_ts_tz(value, zone):
+    """
+    Converts to seconds since the epoch. Tries to be lenient about the
+    type of the incoming value.
+    :param value:
+    :param zone: timezone
+    :return: float that represents seconds since the epoch.
+    """
+    if isinstance(value, datetime):
+        result = value.replace(tzinfo=zone).timestamp()
+    elif isinstance(value, float):
+        result = value
+    else:
+        result = make_seconds(value)
+    return result
+
+
 def sizeof(x):
     """Encapsulate returning the memory size in bytes."""
     return sys.getsizeof(x)
@@ -2978,22 +2995,26 @@ def increment_time(this_ts, by_interval, unit='%M'):
     return datetime.fromtimestamp(temp)
 
 
-def increment_time_tz(this_ts, by_interval, unit='%M'):
+def increment_time_tz(this_ts, by_interval, zone, unit='%M'):
     """
     Increment time by an interval. Times should be in datetime format, but
     a modest attempt is made to check for otherwise.
 
     :param this_ts: datetime
     :param by_interval: integer - e.g. 10, for a 10 minute increment
+    :param zone: timezone
     :param unit: the formatting string, default is minutes
     :return: this_ts incremented by interval amount. Offset-aware.
     """
     if isinstance(this_ts, datetime):
-        time_dt = this_ts
+        if zone == this_ts.tzinfo:
+            time_dt = this_ts
+        else:
+            time_dt = this_ts.astimezone(zone)
     elif isinstance(this_ts, str):
-        time_dt = make_time(this_ts)
+        time_dt = make_time(this_ts).astimezone(zone)
     else:
-        time_dt = datetime.fromtimestamp(this_ts, tz=timezone.utc)
+        time_dt = datetime.fromtimestamp(this_ts, tz=zone)
     if unit == '%M':
         temp = time_dt + timedelta(minutes=by_interval)
     else:

@@ -95,7 +95,7 @@ from caom2pipe import transfer_composable
 __all__ = [
     'common_runner_init',
     'get_utc_now',
-    'get_utc_now_tz',
+    'get_now_tz',
     'run_by_state',
     'run_by_todo',
     'set_logging',
@@ -273,37 +273,22 @@ class StateRunner(TodoRunner):
         bookmark_name,
         observable,
         reporter,
-        max_ts=None,
+        max_dt=None,
     ):
         super().__init__(
             config, organizer, builder, data_source, metadata_reader, observable, reporter
         )
         self._bookmark_name = bookmark_name
-        max_ts_in_s = None
-        if max_ts is not None:
-            max_ts_in_s = mc.convert_to_ts(max_ts)
-        # end time is a datetime.timestamp
-        self._end_time = (
-            get_utc_now_tz().timestamp()
-            if max_ts_in_s is None
-            else max_ts_in_s
-        )
+        # end time is a datetime
+        self._end_time = (datetime.now(self._data_source.timezone) if max_dt is None else max_dt)
 
     def _record_progress(
         self, count, cumulative_count, start_time, save_time
     ):
-        start_time_dt = datetime.utcfromtimestamp(start_time)
-        save_time_dt = datetime.utcfromtimestamp(save_time)
         with open(self._config.progress_fqn, 'a') as progress:
             progress.write(
-                f'{datetime.now()} current:: {save_time_dt} {count} '
-                f'since:: {start_time_dt}:: {cumulative_count}\n'
+                f'{datetime.now()} current:: {save_time} {count} since:: {start_time}:: {cumulative_count}\n'
             )
-
-    def _wrap_state_save(self, state, save_time):
-        state.save_state(
-            self._bookmark_name, datetime.utcfromtimestamp(save_time)
-        )
 
     def run(self):
         """
@@ -316,40 +301,28 @@ class StateRunner(TodoRunner):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
 
         state = mc.State(self._config.state_fqn)
-        if self._data_source.start_time_ts is None:
+        if self._data_source.start_time is None:
             temp = state.get_bookmark(self._bookmark_name)
-            start_time = mc.convert_to_ts(temp)
+            start_time = temp.astimezone(self._data_source.timezone)
         else:
-            start_time = self._data_source.start_time_ts
+            start_time = self._data_source.start_time
 
         # make sure prev_exec_time is offset-aware type datetime.timestamp
         prev_exec_time = start_time
-        incremented_ts = mc.increment_time_tz(
-            prev_exec_time, self._config.interval
-        ).timestamp()
-        exec_time = min(incremented_ts, self._end_time)
+        incremented = mc.increment_time_tz(prev_exec_time, self._config.interval, self._data_source.timezone)
+        exec_time = min(incremented, self._end_time)
 
-        self._logger.debug(
-            f'Starting at {datetime.utcfromtimestamp(start_time)}, ending at '
-            f'{datetime.utcfromtimestamp(self._end_time)}'
-        )
+        self._logger.info(f'Starting at {start_time}, ending at {self._end_time}')
         result = 0
         if prev_exec_time == self._end_time:
-            self._logger.info(
-                f'Start time is the same as end time '
-                f'{datetime.utcfromtimestamp(start_time)}, stopping.'
-            )
+            self._logger.info(f'Start time is the same as end time {start_time}, stopping.')
             exec_time = prev_exec_time
         else:
             cumulative = 0
             result = 0
             self._organizer.choose()
             while exec_time <= self._end_time:
-                self._logger.info(
-                    f'Processing from '
-                    f'{datetime.utcfromtimestamp(prev_exec_time)} to '
-                    f'{datetime.utcfromtimestamp(exec_time)}'
-                )
+                self._logger.info(f'Processing from {prev_exec_time} to {exec_time}')
                 save_time = exec_time
                 self._organizer.success_count = 0
                 self._reporter.set_log_location(self._config)
@@ -364,9 +337,10 @@ class StateRunner(TodoRunner):
                     while len(entries) > 0:
                         entry = pop_action()
                         result |= self._process_entry(entry.entry_name, 0)
-                        save_time = min(
-                            mc.convert_to_ts(entry.entry_ts), exec_time
+                        temp_time = min(
+                            mc.convert_to_ts_tz(entry.entry_ts, self._data_source.timezone), exec_time.timestamp()
                         )
+                        save_time = datetime.fromtimestamp(temp_time, self._data_source.timezone)
                     # this reset call is outside the while process_entry loop
                     # for GEMINI which gets all the metadata for an interval in
                     # a single call, and it wouldn't be polite to throw away
@@ -378,9 +352,7 @@ class StateRunner(TodoRunner):
                 self._record_progress(
                     num_entries, cumulative, start_time, save_time
                 )
-                state.save_state(
-                    self._bookmark_name, datetime.utcfromtimestamp(save_time)
-                )
+                state.save_state(self._bookmark_name, save_time)
 
                 if exec_time == self._end_time:
                     # the last interval will always have the exec time
@@ -393,18 +365,11 @@ class StateRunner(TodoRunner):
                     # comparison, just because this one exists
                     break
                 prev_exec_time = exec_time
-                new_time = mc.increment_time_tz(
-                    prev_exec_time, self._config.interval
-                ).timestamp()
+                new_time = mc.increment_time_tz(prev_exec_time, self._config.interval, self._data_source.timezone)
                 exec_time = min(new_time, self._end_time)
 
-        state.save_state(
-            self._bookmark_name, datetime.utcfromtimestamp(exec_time)
-        )
-        msg = (
-            f'Done for {self._bookmark_name}, saved state is '
-            f'{datetime.utcfromtimestamp(exec_time)}'
-        )
+        state.save_state(self._bookmark_name, exec_time)
+        msg = f'Done for {self._bookmark_name}, saved state is {exec_time}'
         self._logger.info('=' * len(msg))
         self._logger.info(msg)
         self._logger.info(f'{self._reporter.success} of {self._reporter.all} records processed correctly.')
@@ -427,13 +392,14 @@ def get_utc_now():
     return datetime.utcnow()
 
 
-def get_utc_now_tz():
-    """So that utcnow can be mocked. And serendipitously, the guidance from
+def get_now_tz(zone):
+    """So that now can be mocked. And serendipitously, the guidance from
     the dateutil maintainer is not to use this anymore:
     https://blog.ganssle.io/articles/2019/11/utcnow.html
-    :return an offset-aware datetime.datetime
+    :param zone timezone
+    :return an timezone-aware datetime.datetime
     """
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=zone)
 
 
 def common_runner_init(
@@ -671,7 +637,7 @@ def run_by_state(
     )
 
     if end_time is None:
-        end_time = get_utc_now_tz()
+        end_time = get_now_tz(source.timezone)
 
     runner = StateRunner(
         config,

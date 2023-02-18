@@ -80,7 +80,7 @@ specializations.
 import logging
 
 
-from datetime import datetime
+from datetime import datetime, timezone
 from os import chdir, getcwd
 
 from cadcdata import FileInfo
@@ -94,8 +94,8 @@ from unittest.mock import call, Mock, patch
 from test_data_source_composable import _create_dir_listing
 from test_run_composable import TEST_BOOKMARK, _write_state
 
-TEST_START_TIME = datetime(year=2020, month=3, day=3, hour=1, minute=1, second=1)
-TEST_END_TIME = datetime(year=2020, month=3, day=3, hour=2, minute=1, second=1)
+TEST_START_TIME = datetime(year=2020, month=3, day=3, hour=1, minute=1, second=1, tzinfo=timezone.utc)
+TEST_END_TIME = datetime(year=2020, month=3, day=3, hour=2, minute=1, second=1, tzinfo=timezone.utc)
 
 
 def test_report_output_todo_local(test_config, tmpdir):
