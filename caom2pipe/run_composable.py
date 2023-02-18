@@ -337,10 +337,7 @@ class StateRunner(TodoRunner):
                     while len(entries) > 0:
                         entry = pop_action()
                         result |= self._process_entry(entry.entry_name, 0)
-                        temp_time = min(
-                            mc.convert_to_ts_tz(entry.entry_ts, self._data_source.timezone), exec_time.timestamp()
-                        )
-                        save_time = datetime.fromtimestamp(temp_time, self._data_source.timezone)
+                        save_time = min(entry.entry_dt, exec_time)
                     # this reset call is outside the while process_entry loop
                     # for GEMINI which gets all the metadata for an interval in
                     # a single call, and it wouldn't be polite to throw away

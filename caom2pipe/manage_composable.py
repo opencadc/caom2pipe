@@ -2933,7 +2933,7 @@ def make_time(from_str):
     return result
 
 
-def make_time_tz(from_value):
+def make_time_tz(from_value, zone=timezone.utc):
     """
     Make an offset-aware datetime value. Input parameters should be in
     datetime format, but a modest attempt is made to check for otherwise.
@@ -2944,6 +2944,7 @@ def make_time_tz(from_value):
     - make_seconds checks for time zones and adjusts there
 
     :param from_value a representation of time.
+    :param zone timezone
     :return the time as an offset-aware datetime
 
     from_value accepted types:
@@ -2957,16 +2958,16 @@ def make_time_tz(from_value):
     if isinstance(from_value, datetime):
         result = from_value
         if from_value.tzinfo is None:
-            result = from_value.replace(tzinfo=timezone.utc)
+            result = from_value.replace(tzinfo=zone)
     elif isinstance(from_value, str):
         temp = make_seconds(from_value)
         result = None
         if temp is not None:
-            result = datetime.fromtimestamp(temp, tz=timezone.utc)
+            result = datetime.fromtimestamp(temp, tz=zone)
     elif isinstance(from_value, float):
-        result = datetime.fromtimestamp(from_value, tz=timezone.utc)
+        result = datetime.fromtimestamp(from_value, tz=zone)
     else:
-        result = from_value.fromtimestamp(from_value, tz=timezone.utc)
+        result = from_value.fromtimestamp(from_value, tz=zone)
     return result
 
 

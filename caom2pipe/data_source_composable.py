@@ -292,55 +292,47 @@ class ListDirTimeBoxDataSource(DataSource):
         self._recursive = config.recurse_data_sources
         self._temp = defaultdict(list)
 
-    def get_time_box_work(self, prev_exec_time, exec_time):
+    def get_time_box_work(self, prev_exec_dt, exec_dt):
         """
-        :param prev_exec_time tz-aware datetime.timestamp start of the timestamp chunk
-        :param exec_time tz-aware datetime.timestamp end of the timestamp chunk
+        :param prev_exec_dt tz-aware datetime start of the time-boxed chunk
+        :param exec_dt tz-aware datetime end of the time-goxed chunk
         :return: a deque of StateRunnerMeta instances, with
             prev_exec_time <= os.stat.mtime <= exec_time, and sorted by
             os.stat.mtime
         """
         self._logger.debug(
-            f'Begin get_time_box_work from {prev_exec_time} to {exec_time}.'
+            f'Begin get_time_box_work from {prev_exec_dt} to {exec_dt}.'
         )
         for source in self._source_directories:
             self._logger.debug(f'Looking for work in {source}')
-            self._append_work(prev_exec_time, exec_time, source)
+            self._append_work(prev_exec_dt, exec_dt, source)
         # ensure the result returned is sorted by timestamp in ascending
         # order
         for mtime in sorted(self._temp):
             for entry in self._temp[mtime]:
-                self._work.append(
-                    StateRunnerMeta(entry_name=entry, entry_ts=mtime)
-                )
+                self._work.append(StateRunnerMeta(entry_name=entry, entry_dt=mtime))
         self._temp = defaultdict(list)
         self._capture_todo()
         self._logger.debug('End get_time_box_work')
         return self._work
 
-    def _append_work(self, prev_exec_time, exec_time, entry_path):
+    def _append_work(self, prev_exec_dt, exec_dt, entry_path):
         with os.scandir(entry_path) as dir_listing:
             for entry in dir_listing:
                 # the slowest thing to do is the 'stat' call, so delay it as
                 # long as possible, and only if necessary
                 if entry.is_dir() and self._recursive:
                     entry_stats = entry.stat()
-                    if exec_time >= entry_stats.st_mtime >= prev_exec_time:
-                        self._append_work(
-                            prev_exec_time, exec_time, entry.path
-                        )
+                    entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime, tz=self._timezone)
+                    if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
+                        self._append_work(prev_exec_dt, exec_dt, entry.path)
                 else:
                     # send the dir_listing value
                     if self.default_filter(entry):
                         entry_stats = entry.stat()
-                        if (
-                            exec_time
-                            >= entry_stats.st_mtime
-                            >= prev_exec_time
-                        ):
-                            self._temp[entry_stats.st_mtime].append(
-                                entry.path
-                            )
+                        entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime, tz=self._timezone)
+                        if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
+                            self._temp[entry_st_mtime_dt].append(entry.path)
 
 
 class LocalFilesDataSource(ListDirTimeBoxDataSource):
@@ -483,15 +475,14 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         self._capture_todo()
         return self._work
 
-    def _append_work(self, prev_exec_time, exec_time, entry_path):
+    def _append_work(self, prev_exec_dt, exec_dt, entry_path):
         with os.scandir(entry_path) as dir_listing:
             for entry in dir_listing:
                 if entry.is_dir() and self._recursive:
                     entry_stats = entry.stat()
-                    if exec_time >= entry_stats.st_mtime >= prev_exec_time:
-                        self._append_work(
-                            prev_exec_time, exec_time, entry.path
-                        )
+                    entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime, tz=self._timezone)
+                    if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
+                        self._append_work(prev_exec_dt, exec_dt, entry.path)
                 else:
                     # order the stats check before the default_filter check,
                     # because CFHT likes to work with tens of thousands of
@@ -505,11 +496,9 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     if not entry.name.startswith('.'):
                         entry_stats = entry.stat()
                         entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime, tz=self._timezone)
-                        if exec_time >= entry_st_mtime_dt >= prev_exec_time:
+                        if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
                             if self.default_filter(entry):
-                                self._temp[entry_stats.st_mtime].append(
-                                    entry.path
-                                )
+                                self._temp[entry_st_mtime_dt].append(entry.path)
 
     def _is_remote_different(self, entry_path):
         """
@@ -631,8 +620,8 @@ def is_offset_aware(dt):
 class StateRunnerMeta:
     # how to refer to the item of work to be processed
     entry_name: str
-    # offset-aware timestamp associated with item of work
-    entry_ts: datetime.timestamp  # = field(default_factory=is_offset_aware)
+    # offset-aware datetime associated with item of work
+    entry_dt: datetime
 
 
 class QueryTimeBoxDataSource(DataSource):
@@ -683,7 +672,10 @@ class QueryTimeBoxDataSource(DataSource):
         self._work = deque()
         for row in rows:
             ignore_scheme, ignore_path, f_name = mc.decompose_uri(row['uri'])
-            self._work.append(StateRunnerMeta(f_name, row['lastModified']))
+            read_fmt = '%Y-%m-%dT%H:%M:%S.%f'
+            self._work.append(
+                StateRunnerMeta(f_name, datetime.strptime(row['lastModified'], read_fmt).astimezone(self._timezone))
+            )
         self._capture_todo()
         self._logger.debug(f'End get_time_box_work.')
         return self._work
@@ -713,10 +705,10 @@ class VaultDataSource(ListDirTimeBoxDataSource):
         self._logger.debug('End get_work.')
         return self._work
 
-    def _append_work(self, prev_exec_time, exec_time, entry):
+    def _append_work(self, prev_exec_dt, exec_dt, entry):
         """
-        :param prev_exec_time: datetime.timestamp
-        :param exec_time: datetime.timestamp
+        :param prev_exec_dt: datetime
+        :param exec_dt: datetime
         :param entry: Vault URI
         """
         self._logger.info(f'Begin _append_work in {entry}.')
@@ -728,14 +720,14 @@ class VaultDataSource(ListDirTimeBoxDataSource):
         for target in node.node_list:
             target_fqn = f'{node.uri}/{target}'
             target_node = self._vault_client.get_node(target_fqn)
-            target_node_mtime = mc.make_time_tz(target_node.props.get('date')).timestamp()
+            target_node_mtime = mc.make_time_tz(target_node.props.get('date'), self._timezone)
             if target_node.type == 'vos:ContainerNode' and self._recursive:
-                if exec_time >= target_node_mtime >= prev_exec_time:
+                if exec_dt >= target_node_mtime >= prev_exec_dt:
                     self._append_work(
-                        prev_exec_time, exec_time, target_node.uri
+                        prev_exec_dt, exec_dt, target_node.uri
                     )
             else:
-                if exec_time >= target_node_mtime >= prev_exec_time:
+                if exec_dt >= target_node_mtime >= prev_exec_dt:
                     if self.default_filter(target_node):
                         self._temp[target_node_mtime].append(target_node.uri)
                         self._logger.info(

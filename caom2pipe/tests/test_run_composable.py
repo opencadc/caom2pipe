@@ -1085,7 +1085,12 @@ def _mock_query(arg1, arg2, arg3):
     global call_count
     if call_count == 0:
         call_count = 1
-        temp.append(dsc.StateRunnerMeta('NEOS_SCI_2015347000000_clean.fits', '2019-10-23T16:27:19.000'))
+        temp.append(
+            dsc.StateRunnerMeta(
+                'NEOS_SCI_2015347000000_clean.fits',
+                datetime.strptime('2019-10-23T16:27:19.000', '%Y-%m-%dT%H:%M:%S.%f').astimezone(timezone.utc),
+            )
+        )
         return temp
     return temp
 
