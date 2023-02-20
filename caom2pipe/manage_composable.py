@@ -2728,6 +2728,23 @@ def convert_to_ts(value):
     return result
 
 
+def convert_to_ts_tz(value, zone):
+    """
+    Converts to seconds since the epoch. Tries to be lenient about the
+    type of the incoming value.
+    :param value:
+    :param zone: timezone
+    :return: float that represents seconds since the epoch.
+    """
+    if isinstance(value, datetime):
+        result = value.replace(tzinfo=zone).timestamp()
+    elif isinstance(value, float):
+        result = value
+    else:
+        result = make_seconds(value)
+    return result
+
+
 def sizeof(x):
     """Encapsulate returning the memory size in bytes."""
     return sys.getsizeof(x)
@@ -2916,7 +2933,7 @@ def make_time(from_str):
     return result
 
 
-def make_time_tz(from_value):
+def make_time_tz(from_value, zone=timezone.utc):
     """
     Make an offset-aware datetime value. Input parameters should be in
     datetime format, but a modest attempt is made to check for otherwise.
@@ -2927,6 +2944,7 @@ def make_time_tz(from_value):
     - make_seconds checks for time zones and adjusts there
 
     :param from_value a representation of time.
+    :param zone timezone
     :return the time as an offset-aware datetime
 
     from_value accepted types:
@@ -2940,16 +2958,16 @@ def make_time_tz(from_value):
     if isinstance(from_value, datetime):
         result = from_value
         if from_value.tzinfo is None:
-            result = from_value.replace(tzinfo=timezone.utc)
+            result = from_value.replace(tzinfo=zone)
     elif isinstance(from_value, str):
         temp = make_seconds(from_value)
         result = None
         if temp is not None:
-            result = datetime.fromtimestamp(temp, tz=timezone.utc)
+            result = datetime.fromtimestamp(temp, tz=zone)
     elif isinstance(from_value, float):
-        result = datetime.fromtimestamp(from_value, tz=timezone.utc)
+        result = datetime.fromtimestamp(from_value, tz=zone)
     else:
-        result = from_value.fromtimestamp(from_value, tz=timezone.utc)
+        result = from_value.fromtimestamp(from_value, tz=zone)
     return result
 
 
@@ -2978,22 +2996,26 @@ def increment_time(this_ts, by_interval, unit='%M'):
     return datetime.fromtimestamp(temp)
 
 
-def increment_time_tz(this_ts, by_interval, unit='%M'):
+def increment_time_tz(this_ts, by_interval, zone, unit='%M'):
     """
     Increment time by an interval. Times should be in datetime format, but
     a modest attempt is made to check for otherwise.
 
     :param this_ts: datetime
     :param by_interval: integer - e.g. 10, for a 10 minute increment
+    :param zone: timezone
     :param unit: the formatting string, default is minutes
     :return: this_ts incremented by interval amount. Offset-aware.
     """
     if isinstance(this_ts, datetime):
-        time_dt = this_ts
+        if zone == this_ts.tzinfo:
+            time_dt = this_ts
+        else:
+            time_dt = this_ts.astimezone(zone)
     elif isinstance(this_ts, str):
-        time_dt = make_time(this_ts)
+        time_dt = make_time(this_ts).astimezone(zone)
     else:
-        time_dt = datetime.fromtimestamp(this_ts, tz=timezone.utc)
+        time_dt = datetime.fromtimestamp(this_ts, tz=zone)
     if unit == '%M':
         temp = time_dt + timedelta(minutes=by_interval)
     else:

@@ -113,8 +113,9 @@ class TestListDirTimeBoxDataSource(dsc.DataSource):
         file_list = glob.glob('/caom2pipe_test/*')
         for entry in file_list:
             stats = os.stat(entry)
-            if prev_exec_time <= stats.st_mtime <= exec_time:
-                self._work.append(dsc.StateRunnerMeta(entry, stats.st_mtime))
+            entry_st_mtime_dt = datetime.fromtimestamp(stats.st_mtime, tz=self._timezone)
+            if prev_exec_time <= entry_st_mtime_dt <= exec_time:
+                self._work.append(dsc.StateRunnerMeta(entry, entry_st_mtime_dt))
         self._capture_todo()
         return self._work
 
