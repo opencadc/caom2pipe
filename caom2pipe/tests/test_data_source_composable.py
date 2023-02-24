@@ -163,9 +163,7 @@ def test_storage_time_box_query(query_mock, test_config, tmpdir):
         test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
         test_subject = dsc.QueryTimeBoxDataSource(test_config)
         test_subject.reporter = test_reporter
-        test_result = test_subject.get_time_box_work(
-            prev_exec_date.timestamp(), exec_date.timestamp()
-        )
+        test_result = test_subject.get_time_box_work(prev_exec_date, exec_date)
         assert test_result is not None, 'expect result'
         assert len(test_result) == 3, 'wrong number of results'
         assert (
@@ -230,7 +228,7 @@ def test_vault_list_dir_data_source(test_config, tmpdir):
 
 
 def test_list_dir_time_box_data_source(test_config, tmpdir):
-    test_prev_exec_time_dt = datetime.utcnow()
+    test_prev_exec_time_dt = datetime.now(tz=timezone.utc)
 
     sleep(1)
     test_sub_dir = f'{tmpdir}/sub_directory'
@@ -249,14 +247,12 @@ def test_list_dir_time_box_data_source(test_config, tmpdir):
     test_config.data_sources = [tmpdir]
     test_config.data_source_extensions = ['.fits']
     test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-    test_prev_exec_time = test_prev_exec_time_dt.timestamp()
-    test_exec_time_dt = datetime.utcnow()
-    test_exec_time = test_exec_time_dt.timestamp() + 3600.0
+    test_exec_time_dt = test_prev_exec_time_dt + timedelta(seconds=3600.0)
 
     test_subject = dsc.ListDirTimeBoxDataSource(test_config)
     assert test_subject is not None, 'ctor is broken'
     test_subject.reporter = test_reporter
-    test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
+    test_result = test_subject.get_time_box_work(test_prev_exec_time_dt, test_exec_time_dt)
     assert test_result is not None, 'expect a result'
     assert len(test_result) == 2, 'expect contents in the result'
     test_entry = test_result.popleft()
@@ -268,7 +264,7 @@ def test_list_dir_time_box_data_source(test_config, tmpdir):
     test_config.recurse_data_sources = False
     test_subject = dsc.ListDirTimeBoxDataSource(test_config)
     test_subject.reporter = test_reporter
-    test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
+    test_result = test_subject.get_time_box_work(test_prev_exec_time_dt, test_exec_time_dt)
     assert test_result is not None, 'expect a non-recursive result'
     assert len(test_result) == 1, 'expect contents in non-recursive result'
     x = [ii.entry_name for ii in test_result]
@@ -290,20 +286,20 @@ def test_list_dir_separate_data_source(test_config):
     assert test_subject is not None, 'ctor is broken'
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a result'
-    assert len(test_result) == 98, 'expect contents in the result'
+    assert len(test_result) == 99, 'expect contents in the result'
     assert '/test_files/sub_directory/abc.fits' in test_result, 'wrong entry'
-    assert test_reporter.all == 98, 'wrong report'
+    assert test_reporter.all == 99, 'wrong report'
 
     test_config.recurse_data_sources = False
     test_subject = dsc.ListDirSeparateDataSource(test_config)
     test_subject.reporter = test_reporter
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a non-recursive result'
-    assert len(test_result) == 94, 'expect contents in non-recursive result'
+    assert len(test_result) == 95, 'expect contents in non-recursive result'
     assert (
         '/test_files/sub_directory/abc.fits' not in test_result
     ), 'recursive result should not be present'
-    assert test_reporter.all == 192, 'wrong 2nd report'
+    assert test_reporter.all == 194, 'wrong 2nd report'
 
 
 def test_vault_list_dir_time_box_data_source(test_config):
@@ -316,23 +312,20 @@ def test_vault_list_dir_time_box_data_source(test_config):
     test_subject = dsc.VaultDataSource(test_vos_client, test_config)
     assert test_subject is not None, 'expect a test_subject'
     test_subject.reporter = test_reporter
-    test_prev_exec_time = datetime(
-        year=2020, month=9, day=15, hour=10, minute=0, second=0, tzinfo=timezone.utc
-    ).timestamp()
-    test_exec_time = datetime(
-        year=2020, month=9, day=16, hour=10, minute=0, second=0, tzinfo=timezone.utc
-    ).timestamp()
-    test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
+    test_prev_exec_dt = datetime(year=2020, month=9, day=15, hour=10, minute=0, second=0, tzinfo=timezone.utc)
+    test_exec_dt = datetime(year=2020, month=9, day=16, hour=10, minute=0, second=0, tzinfo=timezone.utc)
+    test_result = test_subject.get_time_box_work(test_prev_exec_dt, test_exec_dt)
     assert test_result is not None, 'expect a test result'
     assert len(test_result) == 1, 'wrong number of results'
     assert (
         'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
         == test_result[0].entry_name
     ), 'wrong name result'
-    # the timestamp from the record in the test_result, which should be between the start and stop times
-    assert 1600199703.067 == test_result[0].entry_ts, 'wrong ts result'
-    test_entry_dt = datetime.fromtimestamp(test_result[0].entry_ts)
-    assert test_entry_dt == datetime(year=2020, month=9, day=15, hour=19, minute=55, second=3, microsecond=67000)
+    # the datetime from the record in the test_result, which should be between the start and stop times
+    assert (
+        datetime(year=2020, month=9, day=15, hour=19, minute=55, second=3, microsecond=67000, tzinfo=timezone.utc)
+        == test_result[0].entry_dt
+    ), 'wrong dt result'
     assert test_reporter.all == 1, 'wrong report'
     assert test_vos_client.get_node.called, 'get_node call'
     assert test_vos_client.get_node.call_count == 3, 'get_node call count'
@@ -504,7 +497,7 @@ def test_transfer_check_fits_verify(test_config, tmpdir):
         test_config.cleanup_failure_destination = test_failure_directory.as_posix()
         test_config.store_modified_files_only = True
 
-        test(test_start_time.timestamp(), test_end_time.timestamp())
+        test(test_start_time, test_end_time)
 
 
 @patch('caom2pipe.astro_composable.check_fits')
@@ -710,18 +703,16 @@ def test_vault_clean_up_get_time_box(test_config):
         assert test_subject is not None, 'expect ctor to work'
         test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
         test_subject.reporter = test_reporter
-        test_prev_exec_time = datetime(
-            year=2020, month=9, day=15, hour=10, minute=0, second=0, tzinfo=timezone.utc
-        ).timestamp()
-        test_exec_time = datetime(
-            year=2020, month=9, day=16, hour=10, minute=0, second=0, tzinfo=timezone.utc
-        ).timestamp()
+        test_prev_exec_time = datetime(year=2020, month=9, day=15, hour=10, minute=0, second=0, tzinfo=timezone.utc)
+        test_exec_time = datetime(year=2020, month=9, day=16, hour=10, minute=0, second=0, tzinfo=timezone.utc)
         test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
 
         assert test_result is not None, 'expect a work list'
         assert len(test_result) == 1, 'wrong work list entries'
         assert test_result[0].entry_name == 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits', 'wrong work entry url'
-        assert test_result[0].entry_ts == 1600199703.067, 'wrong work entry timestamp on file modification'
+        assert (
+            test_result[0].entry_dt == datetime(2020, 9, 15, 19, 55, 3, 67000, tzinfo=timezone.utc)
+        ), 'wrong work entry timestamp on file modification'
 
         assert test_vos_client.isdir.call_count == 0, 'wrong is_dir count'
         # skip count should be 0, because the time-box should exclude 994899p_moc.fits

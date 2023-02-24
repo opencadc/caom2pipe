@@ -69,6 +69,7 @@
 import math
 import os
 import pytest
+import traceback
 
 from datetime import datetime, timedelta, timezone
 from shutil import copy
@@ -389,24 +390,24 @@ def test_make_seconds():
 def test_increment_time():
     t1 = '2017-06-26T17:07:21.527'
     t1_dt = datetime.strptime(t1, mc.ISO_8601_FORMAT)
-    result = mc.increment_time_tz(t1_dt, 10)
+    result = mc.increment_time_tz(t1_dt, 10, zone=timezone.utc)
     assert result is not None, 'expect a result'
-    assert result == datetime(2017, 6, 26, 17, 17, 21, 527000), 'wrong result'
+    assert result == datetime(2017, 6, 26, 17, 17, 21, 527000, tzinfo=timezone.utc), 'wrong result'
 
     t2 = '2017-07-26T17:07:21.527'
     t2_dt = datetime.strptime(t2, mc.ISO_8601_FORMAT)
-    result = mc.increment_time_tz(t2_dt, 5)
+    result = mc.increment_time_tz(t2_dt, 5, zone=timezone.utc)
     assert result is not None, 'expect a result'
-    assert result == datetime(2017, 7, 26, 17, 12, 21, 527000), 'wrong result'
+    assert result == datetime(2017, 7, 26, 17, 12, 21, 527000, tzinfo=timezone.utc), 'wrong result'
 
     t3 = 1571595618.0
-    result = mc.increment_time_tz(t3, 15)
+    result = mc.increment_time_tz(t3, 15, zone=timezone.utc)
     assert result == datetime(
         2019, 10, 20, 18, 35, 18, tzinfo=timezone.utc
     ), 'wrong t3 result'
 
     with pytest.raises(NotImplementedError):
-        mc.increment_time_tz(t2_dt, 23, '%f')
+        mc.increment_time_tz(t2_dt, 23, timezone.utc, '%f')
 
 
 @patch('requests.get')
@@ -806,7 +807,35 @@ def test_log_directory_construction(test_config, tmpdir):
     assert not os.path.exists(test_config.success_fqn)
     assert not os.path.exists(test_config.failure_fqn)
     assert not os.path.exists(test_config.retry_fqn)
-    ignore = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_subject = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
     assert os.path.exists(test_config.success_fqn)
     assert os.path.exists(test_config.failure_fqn)
     assert os.path.exists(test_config.retry_fqn)
+
+    try:
+        raise RuntimeError('Read timed out')
+    except Exception as e:
+        test_sname = tc.TestStorageName(obs_id='test_obs_id_2')
+        test_subject.capture_failure(test_sname, e, traceback.format_exc())
+
+    try:
+        raise RuntimeError('some other error')
+    except Exception as e2:
+        test_sname = tc.TestStorageName(obs_id='test_obs_id')
+        test_subject.capture_failure(test_sname, e2, traceback.format_exc())
+
+    test_subject.capture_success('test_obs_id', 'C121212_01234_CAL.fits.gz', datetime.utcnow().timestamp())
+    test_subject.report()
+
+    success_content = open(test_config.success_fqn).read()
+    assert 'test_obs_id C121212_01234_CAL.fits.gz' in success_content, 'wrong content'
+    retry_content = open(test_config.retry_fqn).read()
+    assert retry_content == '/tmp/test_file.fits.gz\n/tmp/test_file.fits.gz\n', f'{retry_content}'
+    failure_content = open(test_config.failure_fqn).read()
+    assert failure_content.endswith('some other error\n'), failure_content
+    assert os.path.exists(test_config.rejected_fqn), test_config.rejected_fqn
+    rejected_content = mc.read_as_yaml(test_config.rejected_fqn)
+    assert rejected_content is not None, 'expect a result'
+    test_result = rejected_content.get('bad_metadata')
+    assert test_result is not None, 'wrong result'
+    assert len(test_result) == 0, f'wrong number of entries {test_result}'

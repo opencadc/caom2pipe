@@ -145,14 +145,14 @@ class Validator:
         import pandas as pd
         newer = pd.DataFrame()
         if len(data) > 0:
-            # SG - 08-09-22 - All timestamps in the SI databases are in UT.
+            # SG - 08-09-22 - All times in the SI databases are in UTC.
             #
-            # source_temp => url, timestamp, f_name
+            # source_temp => url, dt, f_name
             # data => uri, contentLastModified
             data['f_name'] = data.uri.apply(Validator.filter_column)
-            data['ts'] = data.contentLastModified.apply(pd.to_datetime)
+            data['dt_d'] = data.contentLastModified.apply(Validator.make_utc_aware)
             merged = pd.merge(source, data, how='inner', on=['f_name'])
-            newer = merged[merged.timestamp > merged.ts]
+            newer = merged[merged.dt_d > merged.dt]
         return newer
 
     def _read_list_from_destination_data(self):
@@ -234,6 +234,6 @@ class Validator:
         return in_here[~in_here[column].isin(from_there[column])]
 
     @staticmethod
-    def make_timestamp(a):
+    def make_utc_aware(a):
         import pandas as pd
-        return pd.to_datetime(a)
+        return pd.to_datetime(a, utc=True)
