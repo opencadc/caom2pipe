@@ -106,6 +106,7 @@ __all__ = [
     'exec_footprintfinder',
     'find_plane_and_artifact',
     'Fits2caom2Visitor',
+    'get_all_artifact_keys',
     'get_obs_id_from_cadc',
     'is_composite',
     'make_plane_uri',
