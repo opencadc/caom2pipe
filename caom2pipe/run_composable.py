@@ -310,18 +310,18 @@ class StateRunner(TodoRunner):
         # make sure prev_exec_time is offset-aware type datetime.timestamp
         prev_exec_time = start_time
         incremented = mc.increment_time_tz(prev_exec_time, self._config.interval, self._data_source.timezone)
-        exec_time = min(incremented, self._end_time)
+        exec_time = min(incremented, self.end_time)
 
-        self._logger.info(f'Starting at {start_time}, ending at {self._end_time}')
+        self._logger.info(f'Starting at {start_time}, ending at {self.end_time}')
         result = 0
-        if prev_exec_time == self._end_time:
+        if prev_exec_time == self.end_time:
             self._logger.info(f'Start time is the same as end time {start_time}, stopping.')
             exec_time = prev_exec_time
         else:
             cumulative = 0
             result = 0
             self._organizer.choose()
-            while exec_time <= self._end_time:
+            while exec_time <= self.end_time:
                 self._logger.info(f'Processing from {prev_exec_time} to {exec_time}')
                 save_time = exec_time
                 self._organizer.success_count = 0
@@ -351,7 +351,7 @@ class StateRunner(TodoRunner):
                 )
                 state.save_state(self._bookmark_name, save_time)
 
-                if exec_time == self._end_time:
+                if exec_time == self.end_time:
                     # the last interval will always have the exec time
                     # equal to the end time, which will fail the while check
                     # so leave after the last interval has been processed
@@ -363,7 +363,7 @@ class StateRunner(TodoRunner):
                     break
                 prev_exec_time = exec_time
                 new_time = mc.increment_time_tz(prev_exec_time, self._config.interval, self._data_source.timezone)
-                exec_time = min(new_time, self._end_time)
+                exec_time = min(new_time, self.end_time)
 
         state.save_state(self._bookmark_name, exec_time)
         msg = f'Done for {self._bookmark_name}, saved state is {exec_time}'
@@ -372,6 +372,14 @@ class StateRunner(TodoRunner):
         self._logger.info(f'{self._reporter.success} of {self._reporter.all} records processed correctly.')
         self._logger.info('=' * len(msg))
         return result
+
+    @property
+    def end_time(self):
+        return self._end_time
+
+    @end_time.setter
+    def end_time(self, value):
+        self._end_time = value
 
 
 def set_logging(config):
