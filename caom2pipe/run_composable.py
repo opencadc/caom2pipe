@@ -94,7 +94,6 @@ from caom2pipe import transfer_composable
 
 __all__ = [
     'common_runner_init',
-    'get_utc_now',
     'get_now_tz',
     'run_by_state',
     'run_by_todo',
@@ -390,11 +389,6 @@ def set_logging(config):
         handler.setLevel(config.logging_level)
         handler.setFormatter(formatter)
     logging.getLogger('root').setLevel(config.logging_level)
-
-
-def get_utc_now():
-    """So that utcnow can be mocked."""
-    return datetime.utcnow()
 
 
 def get_now_tz(zone):

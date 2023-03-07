@@ -144,15 +144,16 @@ class Validator:
     def _find_unaligned_dates(self, source, data):
         import pandas as pd
         newer = pd.DataFrame()
-        if len(data) > 0:
+        if len(data) > 0 and len(source) > 0:
             # SG - 08-09-22 - All times in the SI databases are in UTC.
             #
             # source_temp => url, dt, f_name
             # data => uri, contentLastModified
             data['f_name'] = data.uri.apply(Validator.filter_column)
             data['dt_d'] = data.contentLastModified.apply(Validator.make_utc_aware)
+            source['dt_2'] = source.dt.apply(Validator.make_utc_aware)
             merged = pd.merge(source, data, how='inner', on=['f_name'])
-            newer = merged[merged.dt_d > merged.dt]
+            newer = merged[merged.dt_d > merged.dt_2]
         return newer
 
     def _read_list_from_destination_data(self):
@@ -173,7 +174,7 @@ class Validator:
 
     def read_from_source(self):
         """Read the entire source site listing. This function is expected to
-        return a pandas.DataFrame with at least columns timestamp, and f_name."""
+        return a pandas.DataFrame with at least columns url, dt (datetime64[ns]), and f_name."""
         raise NotImplementedError()
 
     def validate(self):
