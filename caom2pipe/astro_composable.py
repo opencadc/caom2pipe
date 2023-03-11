@@ -105,7 +105,7 @@ __all__ = [
     'check_fitsverify',
     'convert_time',
     'FilterMetadataCache',
-    'get_datetime',
+    'get_datetime_mjd',
     'get_geocentric_location',
     'get_location',
     'get_timedelta_in_s',
@@ -239,55 +239,16 @@ def convert_time(start_time, exposure):
     return None, None
 
 
-def get_datetime(from_value):
+def get_datetime_mjd(from_value):
     """
-    Ensure datetime values are in MJD. This is meant to handle any odd formats
-    that telescopes have for datetime values.
+    Ensure datetime values are in MJD.
 
-    Relies on astropy, until astropy fails.
-
-    :param from_value:
+    :param from_value: datetime
     :return: datetime instance
     """
     result = None
     if from_value is not None:
-        import numpy
-
-        # local import, in case the container is not provisioned with
-        # numpy
-        if isinstance(from_value, str):
-            try:
-                result = Time(from_value)
-            except ValueError:
-                # VLASS has a format astropy fails to understand '%H:%M:%S'
-                # CFHT 2019/11/26
-                # CFHT 'Mon Nov 27 15:58:17 HST 2006'
-                # CFHT 2003/03/29,01:34:54
-                # CFHT 2019-11-21T00:00:00
-                # Gemini 2019-11-01 00:01:34.610517+00:00
-                # DDO 12/02/95
-                if '+00:00' in from_value:
-                    # because %z doesn't expect the ':' in the timezone field
-                    from_value = from_value[:-6]
-                for fmt in [
-                    '%H:%M:%S',
-                    '%Y/%m/%d',
-                    '%Y-%m-%d %H:%M:%S.%f',
-                    '%d/%m/%y',
-                    '%d/%m/%y %H:%M:%S',
-                    '%a %b %d %H:%M:%S HST %Y',
-                    '%Y/%m/%d,%H:%M:%S',
-                    '%Y-%m-%dT%H:%M:%S',
-                ]:
-                    try:
-                        result = Time(dt_datetime.strptime(from_value, fmt))
-                        break
-                    except ValueError:
-                        pass
-        elif isinstance(from_value, numpy.int32) or isinstance(
-            from_value, float
-        ):
-            result = Time(dt_datetime.fromtimestamp(from_value))
+        result = Time(from_value)
     if result is None:
         logging.error(f'Cannot parse datetime {from_value}')
     else:

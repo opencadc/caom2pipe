@@ -72,7 +72,7 @@ import os
 
 from datetime import datetime, timedelta
 
-import dateutil.tz
+from dateutil import tz
 from unittest.mock import patch, Mock
 
 from cadcdata import FileInfo
@@ -85,7 +85,7 @@ from caom2pipe import transfer_composable
 import test_conf as tc
 
 
-class TestTransfer(transfer_composable.Transfer):
+class TTransfer(transfer_composable.Transfer):
     def __init__(self, dir_name):
         super().__init__()
         self._dir_name = dir_name
@@ -105,7 +105,7 @@ class TestTransfer(transfer_composable.Transfer):
             f.write('test content')
 
 
-class TestListDirTimeBoxDataSource(dsc.DataSource):
+class TListDirTimeBoxDataSource(dsc.DataSource):
     def __init__(self):
         super().__init__()
 
@@ -147,9 +147,9 @@ def test_run_state(client_mock, tmpdir):
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content\n')
 
-    test_data_source = TestListDirTimeBoxDataSource()
-    test_builder = nbc.GuessingBuilder(tc.TestStorageName)
-    transferrer = TestTransfer(tmpdir)
+    test_data_source = TListDirTimeBoxDataSource()
+    test_builder = nbc.GuessingBuilder(tc.TStorageName)
+    transferrer = TTransfer(tmpdir)
 
     test_result = rc.run_by_state(
         bookmark_name=caom2pipe_bookmark,
@@ -169,7 +169,7 @@ def test_run_state(client_mock, tmpdir):
     client_mock.data_client.put.assert_called_with(f'{tmpdir}/test_obs_id', 'cadc:TEST/test_file.fits')
 
     # state file checking
-    test_state = mc.State(test_config.state_fqn)
+    test_state = mc.State(test_config.state_fqn, tz.UTC)
     assert test_state is not None, 'expect state content'
     test_checkpoint = test_state.get_bookmark(caom2pipe_bookmark)
     assert test_checkpoint == test_end_time, 'wrong bookmark'
@@ -229,7 +229,7 @@ def _get_times(test_config, caom2pipe_bookmark):
 
     test_start_time = datetime.fromtimestamp(
         os.stat('/caom2pipe_test/1000003f.fits.fz').st_mtime,
-        tz=dateutil.tz.UTC,
+        tz=tz.UTC,
     ) - timedelta(minutes=5)
 
     with open(test_config.state_fqn, 'w') as f:

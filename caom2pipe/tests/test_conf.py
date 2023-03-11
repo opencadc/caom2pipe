@@ -78,7 +78,7 @@ TEST_FILES_DIR = '/test_files'
 TEST_OBS_FILE = os.path.join(TEST_DATA_DIR, 'test_obs_id.fits.xml')
 
 
-class TestStorageName(mc.StorageName):
+class TStorageName(mc.StorageName):
     def __init__(self, obs_id=None, file_name=None, source_names=[]):
         obs_id = 'test_obs_id' if obs_id is None else obs_id
         file_name = 'test_file.fits.gz' if file_name is None else file_name
@@ -98,7 +98,7 @@ class TestStorageName(mc.StorageName):
         return True
 
 
-class TestChooser(ec.OrganizeChooser):
+class TChooser(ec.OrganizeChooser):
     def __init(self):
         super().__init__()
 

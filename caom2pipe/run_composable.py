@@ -81,7 +81,7 @@ import os
 import traceback
 
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime
 from time import sleep
 
 from caom2pipe import client_composable as cc
@@ -299,10 +299,9 @@ class StateRunner(TodoRunner):
         if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
 
-        state = mc.State(self._config.state_fqn)
+        state = mc.State(self._config.state_fqn, self._data_source.timezone)
         if self._data_source.start_dt is None:
-            temp = state.get_bookmark(self._bookmark_name)
-            start_time = temp.astimezone(self._data_source.timezone)
+            start_time = state.get_bookmark(self._bookmark_name)
         else:
             start_time = self._data_source.start_dt
 

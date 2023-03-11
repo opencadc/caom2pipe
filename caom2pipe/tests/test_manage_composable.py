@@ -71,7 +71,8 @@ import os
 import pytest
 import traceback
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from dateutil import tz
 from shutil import copy
 from unittest.mock import Mock, patch
 
@@ -345,9 +346,11 @@ def test_state():
         )
 
     with pytest.raises(mc.CadcException):
-        test_subject = mc.State('nonexistent')
+        test_subject = mc.State('nonexistent', tz.UTC)
 
-    test_subject = mc.State(TEST_STATE_FILE)
+    test_subject = mc.State(TEST_STATE_FILE, tz.UTC)
+    import logging
+    logging.error(test_subject.content)
     assert test_subject is not None, 'expect result'
     test_result = test_subject.get_bookmark('gemini_timestamp')
     assert test_result is not None, 'expect content'
@@ -370,44 +373,25 @@ def test_state():
         assert '2019' in compare, 'context content not updated'
 
 
-def test_make_seconds():
-    t1 = '2017-06-26T17:07:21.527+00'
-    t1_dt = mc.make_seconds(t1)
-    assert t1_dt is not None, 'expect a result'
-    assert t1_dt == 1498496841.527, 'wrong result'
-
-    t2 = '2017-07-26T17:07:21.527'
-    t2_dt = mc.make_seconds(t2)
-    assert t2_dt is not None, 'expect a result'
-    assert t2_dt == 1501088841.527, 'wrong result'
-
-    t3 = '16-Jul-2019 09:08'
-    t3_dt = mc.make_seconds(t3)
-    assert t3_dt is not None, 'expect a result'
-    assert t3_dt == 1563268080.0, 'wrong result'
-
-
 def test_increment_time():
     t1 = '2017-06-26T17:07:21.527'
     t1_dt = datetime.strptime(t1, mc.ISO_8601_FORMAT)
-    result = mc.increment_time_tz(t1_dt, 10, zone=timezone.utc)
+    result = mc.increment_time_tz(t1_dt, 10, zone=tz.UTC)
     assert result is not None, 'expect a result'
-    assert result == datetime(2017, 6, 26, 17, 17, 21, 527000, tzinfo=timezone.utc), 'wrong result'
+    assert result == datetime(2017, 6, 26, 17, 17, 21, 527000, tzinfo=tz.UTC), 'wrong result'
 
     t2 = '2017-07-26T17:07:21.527'
     t2_dt = datetime.strptime(t2, mc.ISO_8601_FORMAT)
-    result = mc.increment_time_tz(t2_dt, 5, zone=timezone.utc)
+    result = mc.increment_time_tz(t2_dt, 5, zone=tz.UTC)
     assert result is not None, 'expect a result'
-    assert result == datetime(2017, 7, 26, 17, 12, 21, 527000, tzinfo=timezone.utc), 'wrong result'
+    assert result == datetime(2017, 7, 26, 17, 12, 21, 527000, tzinfo=tz.UTC), 'wrong result'
 
     t3 = 1571595618.0
-    result = mc.increment_time_tz(t3, 15, zone=timezone.utc)
-    assert result == datetime(
-        2019, 10, 20, 18, 35, 18, tzinfo=timezone.utc
-    ), 'wrong t3 result'
+    result = mc.increment_time_tz(t3, 15, zone=tz.UTC)
+    assert result == datetime(2019, 10, 20, 18, 35, 18, tzinfo=tz.UTC), 'wrong t3 result'
 
     with pytest.raises(NotImplementedError):
-        mc.increment_time_tz(t2_dt, 23, timezone.utc, '%f')
+        mc.increment_time_tz(t2_dt, 23, tz.UTC, '%f')
 
 
 @patch('requests.get')
@@ -526,7 +510,7 @@ def test_visit():
             )
             return 1
 
-    class VisitStorageName(tc.TestStorageName):
+    class VisitStorageName(tc.TStorageName):
         mc.StorageName.collection = 'VLASS'
 
         def __init__(self):
@@ -626,24 +610,6 @@ def test_reverse_lookup():
     assert test_result == 'c', 'wrong result'
     test_result = mc.reverse_lookup(5, test_dict)
     assert test_result is None, 'value not in dict'
-
-
-def test_make_time():
-    test_dict = {
-        '2012-12-12T12:13:15': datetime(2012, 12, 12, 12, 13, 15),
-        # %b %d %H:%M
-        'Mar 12 12:12': datetime(2023, 3, 12, 12, 12),
-        # %Y-%m-%dHST%H:%M:%S
-        '2020-12-12HST12:12:12': datetime(2020, 12, 12, 22, 12, 12),
-    }
-
-    for key, value in test_dict.items():
-        test_result = mc.make_time(key)
-        assert test_result is not None, 'expect a result'
-        assert isinstance(test_result, datetime), 'wrong result type'
-        assert (
-            test_result == value
-        ), f'wrong result {test_result} want {value}'
 
 
 def test_cache(test_config, tmpdir):
@@ -815,13 +781,13 @@ def test_log_directory_construction(test_config, tmpdir):
     try:
         raise RuntimeError('Read timed out')
     except Exception as e:
-        test_sname = tc.TestStorageName(obs_id='test_obs_id_2')
+        test_sname = tc.TStorageName(obs_id='test_obs_id_2')
         test_subject.capture_failure(test_sname, e, traceback.format_exc())
 
     try:
         raise RuntimeError('some other error')
     except Exception as e2:
-        test_sname = tc.TestStorageName(obs_id='test_obs_id')
+        test_sname = tc.TStorageName(obs_id='test_obs_id')
         test_subject.capture_failure(test_sname, e2, traceback.format_exc())
 
     test_subject.capture_success('test_obs_id', 'C121212_01234_CAL.fits.gz', datetime.utcnow().timestamp())
@@ -839,3 +805,74 @@ def test_log_directory_construction(test_config, tmpdir):
     test_result = rejected_content.get('bad_metadata')
     assert test_result is not None, 'wrong result'
     assert len(test_result) == 0, f'wrong number of entries {test_result}'
+
+
+# - want to be timezone aware -
+#   - options - use astropy.time
+#             - use dateutil parser - this is more clever and can deal with more of the random formats that have been
+#               encountered
+def test_dt():
+    # formats that have been encountered in FITS files
+    for fmt in [
+        '2023-03-23T10:08:31.123456',     # ISO_8601_FORMAT,
+        '2023-03-23T10:08:31',            # '%Y-%m-%dT%H:%M:%S',
+        '2023-03-23 10:08:31.123456',     # '%Y-%m-%d %H:%M:%S.%f',
+        '23-Mar-2023 10:08',              # '%d-%b-%Y %H:%M',
+        'Mar 23 2023',                    # '%b %d %Y',
+        'Mar 23 10:08',                   # '%b %d %H:%M',
+        '20230323-100831',                # '%Y%m%d-%H%M%S',
+        '2023-03-23',                     # '%Y-%m-%d',
+        'Fri Mar 23 10:08:31 HST 2023',   # '%a %b %d %H:%M:%S HST %Y',
+        '2023/03/23 10:08:31',            # '%Y/%m/%d %H:%M:%S',
+        'Fri, 23 Mar 2023 10:08:31 GMT',  # '%a, %d %b %Y %H:%M:%S GMT',
+        '2023-03-23T10:08',               # '%Y-%m-%dT%H:%M',
+        'Fri Mar 23 2023 10:08:31',       # '%a %b %d %Y %H:%M:%S',
+        '20230323 10:08',                 # '%Y%m%d %H:%M',
+        '23Mar2023 10:08',                # '%d%b%Y %H:%M',
+        '2023-03-23 10:08',               # '%Y-%m-%d %H:%M',
+        '23Mar23',                        # %y%b%d
+        '2023/03/23',                     # '%Y/%m/%d',
+        '23/03/23',                       # '%d/%m/%y',
+        '23/03/23 10:08:31',              # '%d/%m/%y %H:%M:%S',
+        '2023-03-23 10:08:31.123456+00:00',
+        '10:08:31',                       # '%H:%M:%S',
+        '2023/03/23,10:08:31',            # '%Y/%m/%d,%H:%M:%S',
+        '2023_03_23T10_08_31.123456',     # '%Y_%m_%dT%H_%M_%S.%f',
+        '2023-03-23HST10:08:31',          # '%Y-%m-%dHST%H:%M:%S',
+        '2023Mar23',                      # %Y%b%d
+    ]:
+        zone = tz.UTC
+        if 'HST' in fmt:
+            zone = tz.gettz('HST')
+        result = mc.make_datetime_tz(fmt, zone)
+        assert result is not None, f'expect a result {fmt}'
+        if fmt != '10:08:31':  # get today's date with that hour
+            assert (result.year == 2023 or result.year == 0), f'year {fmt}'
+            assert (result.month == 3 or result.month == 0), f'month {fmt}'
+            assert (result.day == 23 or result.day == 0), f'day {fmt} {result.day}'
+        assert (result.hour == 10 or result.hour == 0), f'hour {fmt}'
+        assert (result.minute == 8 or result.minute == 0), f'minute {fmt}'
+        assert (result.second == 31 or result.second == 0), f'second {fmt}'
+        assert (result.microsecond == 123456 or result.microsecond == 0), f'micro {fmt}'
+        if 'HST' in fmt:
+            assert result.tzname() == 'HST', f'{fmt} {result.tzname()}'
+        else:
+            assert (result.tzname() is None or result.tzname() == 'UTC'), f'tz {fmt}'
+
+
+def test_dt2():
+    zone = tz.UTC
+    for fmt in [
+        datetime(2023, 3, 23, 10, 8, 31, 123456, tzinfo=zone),
+        '2023-03-23 10:08:31.123456+00:00',
+        1679566111.123456,
+    ]:
+        result = mc.make_datetime_tz(fmt, zone)
+        assert result.year == 2023, f'year {fmt}'
+        assert result.month == 3, f'month {fmt}'
+        assert result.day == 23, f'day {fmt} {result.day}'
+        assert result.hour == 10, f'hour {fmt}'
+        assert result.minute == 8, f'minute {fmt}'
+        assert result.second == 31, f'second {fmt}'
+        assert result.microsecond == 123456, f'micro {fmt}'
+        assert result.tzname() == 'UTC', f'tz {fmt} {result.tzname()}'

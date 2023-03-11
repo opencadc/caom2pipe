@@ -138,7 +138,7 @@ def test_meta_visit_delete_create_execute(access_mock, test_config, tmpdir):
     clients._data_client = data_client_mock
     clients._metadata_client = repo_client_mock
     test_observer = Mock()
-    test_sn = tc.TestStorageName()
+    test_sn = tc.TStorageName()
     test_config.change_working_directory(tmpdir)
     os.mkdir(os.path.join(tmpdir, test_sn.obs_id))
     test_executor = ec.MetaVisitDeleteCreate(
@@ -175,7 +175,7 @@ def test_client_visit(access_mock, test_config):
             clients=clients,
         )
 
-        test_executor.execute({'storage_name': tc.TestStorageName()})
+        test_executor.execute({'storage_name': tc.TStorageName()})
         repo_client_mock.read.assert_called_with(
             'TEST', 'test_obs_id'
         ), 'read call missed'
@@ -192,7 +192,7 @@ def test_data_execute(access_mock, test_config, tmpdir):
     test_dir = os.path.join(tmpdir, test_obs_id)
     test_config.change_working_directory(tmpdir)
     os.mkdir(test_dir, mode=0o755)
-    test_fits_fqn = os.path.join(test_dir, tc.TestStorageName().file_name)
+    test_fits_fqn = os.path.join(test_dir, tc.TStorageName().file_name)
     precondition = open(test_fits_fqn, 'w')
     precondition.close()
 
@@ -218,7 +218,7 @@ def test_data_execute(access_mock, test_config, tmpdir):
         clients,
         metadata_reader=None,
     )
-    test_executor.execute({'storage_name': tc.TestStorageName()})
+    test_executor.execute({'storage_name': tc.TStorageName()})
 
     # check that things worked as expected
     assert repo_client_mock.read.called, 'read call missed'
@@ -251,7 +251,7 @@ def test_data_execute_v(access_mock, test_config, tmpdir):
     ec.CaomExecute._data_cmd_info = Mock(side_effect=_get_fname)
     repo_client_mock.read.side_effect = tc.mock_read
 
-    test_sn = tc.TestStorageName()
+    test_sn = tc.TStorageName()
     test_sn.source_names = ['ad:TEST/test_obs_id.fits.gz']
 
     # run the test
@@ -307,7 +307,7 @@ def test_data_local_execute(access_mock, test_config):
         clients=clients,
         metadata_reader=None,
     )
-    test_executor.execute({'storage_name': tc.TestStorageName(
+    test_executor.execute({'storage_name': tc.TStorageName(
         source_names=[f'{tc.TEST_DATA_DIR}/test_file.fits.gz'],
     )})
 
@@ -349,7 +349,7 @@ def test_data_store(fix_mock, access_mock, test_config, tmpdir):
             clients=clients,
             metadata_reader=mock_metadata_reader,
         )
-        test_executor.execute({'storage_name': tc.TestStorageName(
+        test_executor.execute({'storage_name': tc.TStorageName(
             source_names=[f'{tc.TEST_DATA_DIR}/test_file.fits.gz'],
         )})
 
@@ -364,7 +364,7 @@ def test_scrape(test_config, tmpdir):
     test_config.change_working_directory(tmpdir)
     test_config.logging_level = 'INFO'
     test_reader = FileMetadataReader()
-    test_sn = tc.TestStorageName(source_names=[f'{tc.TEST_FILES_DIR}/correct.fits'])
+    test_sn = tc.TStorageName(source_names=[f'{tc.TEST_FILES_DIR}/correct.fits'])
     test_executor = ec.Scrape(
         test_config,
         meta_visitors=[],
@@ -378,7 +378,7 @@ def test_data_scrape_execute(test_config, tmpdir):
     test_config.log_to_file = True
     test_data_visitors = [TestVisit]
     test_config.change_working_directory(tmpdir)
-    test_sn = tc.TestStorageName()
+    test_sn = tc.TStorageName()
     # run the test
     test_executor = ec.DataScrape(
         test_config,
@@ -396,7 +396,7 @@ def test_organize_executes_chooser(test_config, tmpdir):
     test_config.features.supports_composite = True
 
     test_config.task_types = [mc.TaskType.INGEST]
-    test_chooser = tc.TestChooser()
+    test_chooser = tc.TChooser()
     test_oe = ec.OrganizeExecutes(
         test_config,
         [],
@@ -409,7 +409,7 @@ def test_organize_executes_chooser(test_config, tmpdir):
     assert test_oe._executors is not None
     assert len(test_oe._executors) == 1
     assert isinstance(test_oe._executors[0], ec.MetaVisitDeleteCreate)
-    test_oe._executors[0].storage_name = tc.TestStorageName()
+    test_oe._executors[0].storage_name = tc.TStorageName()
     assert test_oe._executors[0].working_dir == os.path.join(tmpdir, 'test_obs_id'), 'working_dir'
     test_config.use_local_files = False
     test_config.task_types = [mc.TaskType.INGEST]
@@ -608,7 +608,7 @@ def test_organize_executes_client_do_one(test_config):
 
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.use_local_files = False
-    test_chooser = tc.TestChooser()
+    test_chooser = tc.TChooser()
     test_oe = ec.OrganizeExecutes(
         test_config,
         [],
@@ -685,7 +685,7 @@ def test_data_visit(client_mock, access_mock, test_config, tmpdir):
 def test_store(compressor_mock, access_mock, file_info_mock, test_config, tmpdir):
     access_mock.return_value = 'https://localhost:2022'
     file_info_mock.return_value = FileInfo(id='nonexistent.fits')
-    test_sn = tc.TestStorageName(
+    test_sn = tc.TStorageName(
         obs_id='test_obs_id',
         source_names=['vos:goliaths/nonexistent.fits.gz'],
     )
@@ -733,7 +733,7 @@ def test_local_store(compressor_mock, access_mock, file_info_mock, test_config):
     test_config.data_source = ['/test_files/caom2pipe']
     test_config.use_local_files = True
     test_config.store_newer_files_only = False
-    test_sn = tc.TestStorageName(
+    test_sn = tc.TStorageName(
         source_names=[f'{tc.TEST_DATA_DIR}/test_file.fits.gz'],
     )
     compressor_mock.return_value = test_sn.source_names[0].replace('.gz', '')
