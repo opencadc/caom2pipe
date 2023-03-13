@@ -99,7 +99,7 @@ def test_list_dir_data_source(test_config, tmpdir):
             f.write('test content')
 
     test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
-    test_chooser = tc.TestChooser()
+    test_chooser = tc.TChooser()
     test_subject = dsc.ListDirDataSource(test_config, test_chooser)
     test_subject.reporter = test_reporter
     test_result = test_subject.get_work()

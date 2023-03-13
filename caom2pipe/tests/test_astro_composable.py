@@ -67,6 +67,7 @@
 #
 
 import math
+import pytest
 
 from unittest.mock import patch
 import test_conf as tc
@@ -93,23 +94,23 @@ def test_convert_time():
 
 
 def test_get_datetime():
-    result = ac.get_datetime('2006-12-12T12:12:12')
+    result = ac.get_datetime_mjd('2006-12-12T12:12:12')
     assert result is not None
-    assert result == '2006-12-12 12:12:12.000'
+    assert result.value == 54081.508472222224, 'wrong value'
 
-    result = ac.get_datetime('2006-12-12 12:12:12.001')
+    result = ac.get_datetime_mjd('2006-12-12 12:12:12.001')
     assert result is not None
-    assert result == '2006-12-12 12:12:12.001'
+    assert result.value == 54081.5084722338, 'wrong value'
 
-    result = ac.get_datetime('2006-12-12')
+    result = ac.get_datetime_mjd('2006-12-12')
     assert result is not None
-    assert result == '2006-12-12 00:00:00.000'
+    assert result.value == 54081.0, 'wrong value'
 
     # a format that is not understood
-    result = ac.get_datetime('16-Dec-12T01:23:45')
-    assert result is None
+    with pytest.raises(ValueError):
+        result = ac.get_datetime_mjd('16-Dec-12T01:23:45')
 
-    result = ac.get_datetime(None)
+    result = ac.get_datetime_mjd(None)
     assert result is None
 
 
@@ -121,8 +122,8 @@ def test_get_location():
 
 
 def test_build_plane_time():
-    start = ac.get_datetime('2012-09-03T01:04:44')
-    end = ac.get_datetime('2012-09-03T03:04:44')
+    start = ac.get_datetime_mjd('2012-09-03T01:04:44')
+    end = ac.get_datetime_mjd('2012-09-03T03:04:44')
     exposure = end - start
     result = ac.build_plane_time(start, end, exposure)
     assert result is not None, 'expected a value'

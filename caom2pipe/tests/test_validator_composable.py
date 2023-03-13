@@ -73,7 +73,7 @@ from caom2pipe.validator_composable import VALIDATE_OUTPUT, Validator
 from unittest.mock import Mock, patch
 
 
-class TestValidator(Validator):
+class TValidator(Validator):
     def __init__(self, source_name, preview_suffix):
         super().__init__(source_name, preview_suffix=preview_suffix)
 
@@ -114,7 +114,7 @@ def test_validator(caps_mock, ad_mock, tap_mock, test_config, tmpdir):
         with open(test_config.proxy_fqn, 'w') as f:
             f.write('test content')
 
-        test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
+        test_subject = TValidator('TEST_SOURCE_NAME', 'png')
         test_source_missing, test_data_missing, test_data_older = test_subject.validate()
         assert test_source_missing is not None, 'expected source result'
         assert test_data_missing is not None, 'expected data dest result'
@@ -153,7 +153,7 @@ def test_validator2(caps_mock, storage_mock, test_config, tmpdir):
         with open(test_config.proxy_fqn, 'w') as f:
             f.write('test content')
 
-        test_subject = TestValidator('TEST_SOURCE_NAME', 'png')
+        test_subject = TValidator('TEST_SOURCE_NAME', 'png')
         test_destination_data = (
             test_subject._read_list_from_destination_data()
         )
