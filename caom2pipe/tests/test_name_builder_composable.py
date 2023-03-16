@@ -74,7 +74,7 @@ import test_conf as tc
 
 def test_storage_name_builder(test_config):
     test_subject = nbc.StorageNameBuilder()
-    test_storage_name = tc.TestStorageName()
+    test_storage_name = tc.TStorageName()
     assert (
         test_subject.build(test_storage_name) == test_storage_name
     ), 'build wrong result'
@@ -93,7 +93,7 @@ def test_guessing_builder(test_config):
     mc.StorageName.collection = 'TEST'
     test_subject = nbc.GuessingBuilder(mc.StorageName)
     test_result = test_subject.build('test_storage_name.fits.gz')
-    # note TestStorageName has its own hard-coded values
+    # note TStorageName has its own hard-coded values
     assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
     assert test_result.file_uri == 'cadc:TEST/test_storage_name.fits', 'uri'
     assert test_result.file_name == 'test_storage_name.fits.gz', 'wrong fname'
@@ -116,9 +116,9 @@ def test_guessing_builder_dir(test_config):
 
 def test_obs_id_builder(test_config):
     mc.StorageName.collection = 'TEST'
-    test_subject = nbc.ObsIDBuilder(tc.TestStorageName)
+    test_subject = nbc.ObsIDBuilder(tc.TStorageName)
     test_result = test_subject.build('test_obs_id_2')
-    # note TestStorageName has its own hard-coded values
+    # note TStorageName has its own hard-coded values
     assert test_result.obs_id == 'test_obs_id_2', 'wrong obs_id'
     assert test_result.file_uri == 'cadc:TEST/test_file.fits', 'collection'
     assert test_result.file_name == 'test_file.fits.gz', 'wrong fname'
@@ -130,7 +130,7 @@ def test_guessing_builder_uri(test_config):
     test_result = test_subject.build(
         'https://localhost/data/test_storage_name.fits'
     )
-    # note TestStorageName has its own hard-coded values
+    # note TStorageName has its own hard-coded values
     assert test_result.obs_id == 'test_storage_name', 'wrong obs_id'
     assert test_result.source_names == [
         'https://localhost/data/test_storage_name.fits'

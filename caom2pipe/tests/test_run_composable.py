@@ -66,13 +66,12 @@
 # ***********************************************************************
 #
 
-import pytest
 import glob
 import os
 
 from astropy.table import Table
 from collections import deque
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from dateutil import tz
 
 from unittest.mock import Mock, patch, call
@@ -143,7 +142,7 @@ def test_run_todo_list_dir_data_source_invalid_fname(clients_mock, test_config, 
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.log_to_file = False
 
-    class TestStorageName(mc.StorageName):
+    class TStorageName(mc.StorageName):
         def __init__(self, entry):
             super().__init__(obs_id=os.path.basename(entry))
             self._source_names = [entry]
@@ -151,14 +150,14 @@ def test_run_todo_list_dir_data_source_invalid_fname(clients_mock, test_config, 
         def is_valid(self):
             return False
 
-    class TestStorageNameInstanceBuilder(b.StorageNameInstanceBuilder):
+    class TStorageNameInstanceBuilder(b.StorageNameInstanceBuilder):
         def __init__(self):
             pass
 
         def build(self, entry):
-            return TestStorageName(entry)
+            return TStorageName(entry)
 
-    test_builder = TestStorageNameInstanceBuilder()
+    test_builder = TStorageNameInstanceBuilder()
     test_chooser = ec.OrganizeChooser()
     test_result = rc.run_by_todo(config=test_config, chooser=test_chooser, name_builder=test_builder)
     assert test_result is not None, 'expect a result'
@@ -222,7 +221,7 @@ def test_run_state(
     clients_mock.return_value.metadata_client.read.side_effect = _mock_read2
     tap_query_mock.side_effect = _mock_query_table2
 
-    test_end_time = datetime.fromtimestamp(1579740838, tz=timezone.utc)
+    test_end_time = datetime.fromtimestamp(1579740838, tz=tz.UTC)
     start_time = test_end_time - timedelta(seconds=900)
 
     test_config.task_types = [mc.TaskType.INGEST]
@@ -249,7 +248,7 @@ def test_run_state(
     assert test_reader.reset.called, 'expect reset call'
     assert test_reader.reset.call_count == 1, 'wrong call count'
 
-    test_state = mc.State(test_config.state_fqn)
+    test_state = mc.State(test_config.state_fqn, tz.UTC)
     test_bookmark = test_state.get_bookmark(TEST_BOOKMARK)
     assert test_bookmark == test_end_time, 'wrong time'
     assert os.path.exists(test_config.progress_fqn), 'expect progress file'
@@ -462,7 +461,7 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config, tmp
 )
 def test_run_state_retry(get_work_mock, tap_mock, do_one_mock, clients_mock, test_config, tmpdir):
     test_config.change_working_directory(tmpdir)
-    _write_state(rc.get_now_tz(timezone.utc), test_config.state_fqn)
+    _write_state(rc.get_now_tz(tz.UTC), test_config.state_fqn)
     retry_success_fqn = f'{tmpdir}/logs_0/{test_config.success_log_file_name}'
     retry_failure_fqn = f'{tmpdir}/logs_0/{test_config.failure_log_file_name}'
     retry_retry_fqn = f'{tmpdir}/logs_0/{test_config.retry_file_name}'
@@ -504,7 +503,7 @@ def test_time_box(clients_mock, test_config, tmpdir):
 
     test_config.interval = 700
 
-    for test_tz in [timezone.utc, tz.gettz('US/Mountain')]:
+    for test_tz in [tz.UTC, tz.gettz('US/Mountain')]:
         test_start_time = datetime(2019, 7, 23, 9, 51, tzinfo=test_tz)
         _write_state(test_start_time, test_config.state_fqn)
         test_end_time = datetime(2019, 7, 24, 9, 20, tzinfo=test_tz)
@@ -549,7 +548,7 @@ def test_time_box(clients_mock, test_config, tmpdir):
         assert test_work.zero_called, 'missed zero'
         assert test_work.one_called, 'missed one'
         assert test_work.two_called, 'missed two'
-        test_state = mc.State(test_config.state_fqn)
+        test_state = mc.State(test_config.state_fqn, tz.UTC)
         assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
         assert test_work.todo_call_count == 3, 'wrong todo call count'
 
@@ -560,7 +559,7 @@ def test_time_box_equal(clients_mock, test_config, tmpdir):
     test_config.change_working_directory(tmpdir)
     test_config.interval = 700
 
-    for test_timezone in [timezone.utc, tz.gettz('US/Mountain')]:
+    for test_timezone in [tz.UTC, tz.gettz('US/Mountain')]:
         test_start_time = test_end_time = datetime(2019, 7, 23, 9, 51, tzinfo=test_timezone)
         _write_state(test_start_time, test_config.state_fqn)
 
@@ -586,7 +585,7 @@ def test_time_box_equal(clients_mock, test_config, tmpdir):
             source=test_work,
         )
         assert test_result is not None, 'expect a result'
-        test_state = mc.State(test_config.state_fqn)
+        test_state = mc.State(test_config.state_fqn, tz.UTC)
         assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
         assert test_work.todo_call_count == 0, 'wrong todo call count'
 
@@ -596,7 +595,7 @@ def test_time_box_once_through(clients_mock, test_config, tmpdir):
     test_config.change_working_directory(tmpdir)
     test_config.interval = 700
 
-    for test_timezone in [timezone.utc, tz.gettz('US/Mountain')]:
+    for test_timezone in [tz.UTC, tz.gettz('US/Mountain')]:
         test_start_time = datetime(2019, 7, 23, 9, 51, tzinfo=test_timezone)
         _write_state(test_start_time, test_config.state_fqn)
         test_end_time = datetime(2019, 7, 23, 12, 20, tzinfo=test_timezone)
@@ -629,7 +628,7 @@ def test_time_box_once_through(clients_mock, test_config, tmpdir):
         )
         assert test_result is not None, 'expect a result'
 
-        test_state = mc.State(test_config.state_fqn)
+        test_state = mc.State(test_config.state_fqn, tz.UTC)
         assert test_work.zero_called, 'missed zero'
         assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
         assert test_work.todo_call_count == 1, 'wrong todo call count'
@@ -782,7 +781,7 @@ def test_run_store_get_work_failures(
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content')
 
-    test_end_time = datetime.fromtimestamp(1579740838, tz=timezone.utc)
+    test_end_time = datetime.fromtimestamp(1579740838, tz=tz.UTC)
     start_time = test_end_time - timedelta(seconds=900)
     _write_state(start_time, test_config.state_fqn)
 
@@ -1088,7 +1087,7 @@ def _mock_query(arg1, arg2, arg3):
         temp.append(
             dsc.StateRunnerMeta(
                 'NEOS_SCI_2015347000000_clean.fits',
-                datetime.strptime('2019-10-23T16:27:19.000', '%Y-%m-%dT%H:%M:%S.%f').astimezone(timezone.utc),
+                datetime.strptime('2019-10-23T16:27:19.000', '%Y-%m-%dT%H:%M:%S.%f').astimezone(tz.UTC),
             )
         )
         return temp

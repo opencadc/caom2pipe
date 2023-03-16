@@ -81,7 +81,8 @@ import traceback
 import yaml
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+from dateutil import parser, tz
 from enum import Enum
 from hashlib import md5
 from importlib_metadata import version
@@ -110,7 +111,6 @@ __all__ = [
     'Config',
     'check_param',
     'convert_to_days',
-    'convert_to_ts',
     'exec_cmd',
     'exec_cmd_info',
     'exec_cmd_redirect',
@@ -126,13 +126,10 @@ __all__ = [
     'get_file_meta',
     'get_keyword',
     'http_get',
-    'increment_time',
     'increment_time_tz',
     'ISO_8601_FORMAT',
     'load_module',
-    'make_seconds',
-    'make_time',
-    'make_time_tz',
+    'make_datetime_tz',
     'Metrics',
     'minimize_on_keyword',
     'Observable',
@@ -239,8 +236,9 @@ class State:
     timestamp, or an id. That value is up to clients of this class.
     """
 
-    def __init__(self, fqn):
+    def __init__(self, fqn, zone):
         self.fqn = fqn
+        self._zone = zone
         self.bookmarks = {}
         self.logger = logging.getLogger(self.__class__.__name__)
         result = read_as_yaml(self.fqn)
@@ -256,8 +254,8 @@ class State:
         result = None
         if key in self.bookmarks:
             result = self.bookmarks.get(key).get('last_record')
-            if result:
-                result = make_time_tz(result)
+            if result.tzinfo is None:
+                result = result.astimezone(self._zone)
         else:
             self.logger.warning(f'No record found for {key}')
         return result
@@ -290,10 +288,10 @@ class State:
             write_as_yaml(self.content, self.fqn)
 
     @staticmethod
-    def write_bookmark(state_fqn, book_mark, time_str):
+    def write_bookmark(state_fqn, book_mark, time_dt):
         bookmark = {
             'bookmarks': {
-                f'{book_mark}': {'last_record': f'{time_str}'},
+                f'{book_mark}': {'last_record': time_dt},
             }
         }
         write_as_yaml(bookmark, state_fqn)
@@ -576,7 +574,7 @@ class ExecutionSummary:
         """
         self._version = '0.0.0' if application == 'DEFAULT' else get_version(application)
         self._location = location
-        self._start_time = datetime.now(tz=timezone.utc).timestamp()
+        self._start_time = datetime.now(tz=tz.UTC).timestamp()
         self._entries_sum = 0
         self._errors_sum = 0
         self._rejected_sum = 0
@@ -620,7 +618,7 @@ class ExecutionSummary:
     def report(self):
         msg1 = f'Location: {self._location}'
         msg2 = f'Date: {datetime.isoformat(datetime.utcnow())}'
-        execution_time = datetime.now(tz=timezone.utc).timestamp() - self._start_time
+        execution_time = datetime.now(tz=tz.UTC).timestamp() - self._start_time
         msg3 = f'Execution Time: {execution_time:.2f} s'
         msg4 = f'Version: {self._version}'
         msg5 = f'    Number of Inputs: {self._entries_sum}'
@@ -2712,39 +2710,6 @@ def convert_to_days(exposure_time):
     return exposure_time / (24.0 * 3600.0)
 
 
-def convert_to_ts(value):
-    """
-    Converts to seconds since the epoch. Tries to be lenient about the
-    type of the incoming value.
-    :param value:
-    :return: float that represents seconds since the epoch.
-    """
-    if isinstance(value, datetime):
-        result = value.timestamp()
-    elif isinstance(value, float):
-        result = value
-    else:
-        result = make_seconds(value)
-    return result
-
-
-def convert_to_ts_tz(value, zone):
-    """
-    Converts to seconds since the epoch. Tries to be lenient about the
-    type of the incoming value.
-    :param value:
-    :param zone: timezone
-    :return: float that represents seconds since the epoch.
-    """
-    if isinstance(value, datetime):
-        result = value.replace(tzinfo=zone).timestamp()
-    elif isinstance(value, float):
-        result = value
-    else:
-        result = make_seconds(value)
-    return result
-
-
 def sizeof(x):
     """Encapsulate returning the memory size in bytes."""
     return sys.getsizeof(x)
@@ -2857,143 +2822,60 @@ def load_module(module, command_name):
     return result
 
 
-def make_seconds(from_time):
-    """Deal with different time formats to get the number of
-    seconds since the epoch.
-
-    Timezone information may be present as +00, strip that for returned
-    results.
-    :param from_time a string representing some time
-    :return the time as a timestamp, so seconds.microseconds
+def _parse_plus_some_formats(from_value):
     """
-    try:
-        index = from_time.index('+00')
-    except ValueError:
-        index = len(from_time)
+    Use dateutil.parser.parse to transform string values to datetime values, except in those cases that parse
+    doesn't understand.
 
-    # OMM 2019/07/16 03:15:46
-    # CADC Data Client Thu, 14 May 2020 20:29:02 GMT
-    # NGVS Wed Mar 24 2010 16:10:36
-    for fmt in [
-        ISO_8601_FORMAT,
-        '%Y-%m-%dT%H:%M:%S',
-        '%Y-%m-%d %H:%M:%S.%f',
-        '%d-%b-%Y %H:%M',
-        '%b %d %Y',
-        '%b %d %H:%M',
-        '%Y%m%d-%H%M%S',
-        '%Y-%m-%d',
-        '%Y-%m-%dHST%H:%M:%S',
-        '%a %b %d %H:%M:%S HST %Y',
-        '%Y/%m/%d %H:%M:%S',
-        '%a, %d %b %Y %H:%M:%S GMT',
-        '%Y-%m-%dT%H:%M',
-        '%a %b %d %Y %H:%M:%S',
-        '%Y%m%d %H:%M',
-    ]:
-        try:
-            seconds_since_epoch = datetime.strptime(
-                from_time[:index], fmt
-            ).timestamp()
-            if fmt == '%b %d %H:%M':
-                # the format '%b %d %H:%M' results in a timestamp based on
-                # 1900, so need to set it to 'this' year
-                year = datetime.utcnow().year
-                dt = f'{from_time[:index]} {year}'
-                dt_format = f'{fmt} %Y'
-                seconds_since_epoch = datetime.strptime(
-                    dt, dt_format
-                ).timestamp()
-            if (
-                fmt == '%Y-%m-%dHST%H:%M:%S'
-                or fmt == '%a %b %d %H:%M:%S HST %Y'
-            ):
-                # change timezone from HST to UTC - add 10 hours -
-                # accurate enough implementation for the CFHT
-                # provenance.lastExecuted value
-                seconds_since_epoch += 10 * 3600
-            break
-        except ValueError:
-            seconds_since_epoch = None
-    if seconds_since_epoch is None:
-        raise CadcException(f'Could not make seconds from {from_time}')
-    return seconds_since_epoch
-
-
-def make_time(from_str):
-    """Make a string into a datetime value.
-
-    :param from_str a string representing some time.
-    :return the time as a datetime
+    The formats that are not understood are valid values from a collection somewhere.
+    :param from_value: str
+    :return: datetime
     """
-    temp = make_seconds(from_str)
+    tzinfos = None
+    if 'HST' in from_value:
+        tzinfos = {'HST': tz.gettz('HST')}
     result = None
-    if temp is not None:
-        result = datetime.utcfromtimestamp(temp)
+    try:
+        result = parser.parse(from_value, tzinfos=tzinfos)
+    except ValueError as e1:
+        for fmt in [
+            '%H:%M:%S',
+            '%Y/%m/%d,%H:%M:%S',
+            '%Y_%m_%dT%H_%M_%S.%f',
+            '%Y-%m-%dHST%H:%M:%S',
+            '%Y%b%d',
+        ]:
+            try:
+                result = datetime.strptime(from_value, fmt)
+                break
+            except ValueError as e2:
+                pass
     return result
 
 
-def make_time_tz(from_value, zone=timezone.utc):
+def make_datetime_tz(from_value, zone):
     """
-    Make an offset-aware datetime value. Input parameters should be in
-    datetime format, but a modest attempt is made to check for otherwise.
-
-    Why is UTC ok?
-    - OS times are all UTC, because they're all running in a Docker container
-      with no timezone configured
-    - make_seconds checks for time zones and adjusts there
+    Make an offset-aware datetime value.
 
     :param from_value a representation of time.
-    :param zone timezone
-    :return the time as an offset-aware datetime
-
-    from_value accepted types:
-    - datetime, ensures timezone.utc is set
-    - str, attempts to use datetime.strptime with all the formats so far
-      encountered to convert it to a datetime, and then sets timezone.utc
-    - float, uses as if the parameter were the result of a datetime.timestamp()
-      operation, as well as setting timezone.utc
-    - datetime.date or datetime.time, sets timezone.utc
+    :param zone dateutil.tz value
+    :return an offset-aware datetime
     """
-    if isinstance(from_value, datetime):
-        result = from_value
-        if from_value.tzinfo is None:
-            result = from_value.replace(tzinfo=zone)
-    elif isinstance(from_value, str):
-        temp = make_seconds(from_value)
-        result = None
-        if temp is not None:
-            result = datetime.fromtimestamp(temp, tz=zone)
-    elif isinstance(from_value, float):
-        result = datetime.fromtimestamp(from_value, tz=zone)
+    result = None
+    if from_value is None:
+        logging.info('make_datetime_tz: input is None')
     else:
-        result = from_value.fromtimestamp(from_value, tz=zone)
+        if isinstance(from_value, datetime):
+            result = from_value
+        elif isinstance(from_value, str):
+            result = _parse_plus_some_formats(from_value)
+        elif isinstance(from_value, float):
+            result = datetime.fromtimestamp(from_value, tz=zone)
+        else:
+            logging.error(f'make_datetime_tz. Unexpected type {type(from_value)}. No conversion to datetime.')
+    if result is not None and result.tzinfo is None:
+        result = result.astimezone(tz=zone)
     return result
-
-
-def increment_time(this_ts, by_interval, unit='%M'):
-    """
-    Increment time by an interval. Times should be in datetime format, but
-    a modest attempt is made to check for otherwise.
-
-    :param this_ts: datetime
-    :param by_interval: integer - e.g. 10, for a 10 minute increment
-    :param unit: the formatting string, default is minutes
-    :return: this_ts incremented by interval amount
-    """
-    if isinstance(this_ts, datetime):
-        time_s = this_ts.timestamp()
-    elif isinstance(this_ts, str):
-        time_s = make_seconds(this_ts)
-    else:
-        time_s = this_ts
-    if unit == '%M':
-        factor = 60
-    else:
-        raise NotImplementedError(f'Unexpected unit {unit}')
-    interval = by_interval * factor
-    temp = time_s + interval
-    return datetime.fromtimestamp(temp)
 
 
 def increment_time_tz(this_ts, by_interval, zone, unit='%M'):
@@ -3003,23 +2885,17 @@ def increment_time_tz(this_ts, by_interval, zone, unit='%M'):
 
     :param this_ts: datetime
     :param by_interval: integer - e.g. 10, for a 10 minute increment
-    :param zone: timezone
+    :param zone: dateutil.tz
     :param unit: the formatting string, default is minutes
     :return: this_ts incremented by interval amount. Offset-aware.
     """
-    if isinstance(this_ts, datetime):
-        if zone == this_ts.tzinfo:
-            time_dt = this_ts
+    temp = None
+    time_dt = make_datetime_tz(this_ts, zone)
+    if time_dt is not None:
+        if unit == '%M':
+            temp = time_dt + timedelta(minutes=by_interval)
         else:
-            time_dt = this_ts.astimezone(zone)
-    elif isinstance(this_ts, str):
-        time_dt = make_time(this_ts).astimezone(zone)
-    else:
-        time_dt = datetime.fromtimestamp(this_ts, tz=zone)
-    if unit == '%M':
-        temp = time_dt + timedelta(minutes=by_interval)
-    else:
-        raise NotImplementedError(f'Unexpected unit {unit}')
+            raise NotImplementedError(f'Unexpected unit {unit}')
     return temp
 
 

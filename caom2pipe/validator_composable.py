@@ -68,7 +68,7 @@
 import logging
 import os
 
-from datetime import timezone
+from dateutil import tz
 
 from cadcutils.net import Subject
 from cadctap import CadcTapClient
@@ -110,7 +110,7 @@ class Validator:
         source_name,
         scheme='cadc',
         preview_suffix='jpg',
-        source_tz=timezone.utc,
+        source_tz=tz.UTC,
     ):
         """
         :param source_name: String value used for logging

@@ -73,7 +73,8 @@ import traceback
 
 from collections import deque, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
+from dateutil import tz
 
 from cadctap import CadcTapClient
 from cadcutils import exceptions
@@ -113,7 +114,7 @@ class DataSource:
         deque of work todo as a method implementation
     """
 
-    def __init__(self, config=None, zone=timezone.utc):
+    def __init__(self, config=None, zone=tz.UTC):
         self._config = config
         # if this value is used, it should be a timezone-aware datetime
         self._start_dt = None
@@ -323,14 +324,14 @@ class ListDirTimeBoxDataSource(DataSource):
                 # long as possible, and only if necessary
                 if entry.is_dir() and self._recursive:
                     entry_stats = entry.stat()
-                    entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime, tz=self._timezone)
+                    entry_st_mtime_dt = mc.make_datetime_tz(entry_stats.st_mtime, self._timezone)
                     if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
                         self._append_work(prev_exec_dt, exec_dt, entry.path)
                 else:
                     # send the dir_listing value
                     if self.default_filter(entry):
                         entry_stats = entry.stat()
-                        entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime, tz=self._timezone)
+                        entry_st_mtime_dt = mc.make_datetime_tz(entry_stats.st_mtime, self._timezone)
                         if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
                             self._temp[entry_st_mtime_dt].append(entry.path)
 
@@ -655,9 +656,8 @@ class QueryTimeBoxDataSource(DataSource):
         # SGo
         # Use 'lastModified', because that should be the later timestamp (avoid eventual consistency lags).
         self._logger.debug(f'Begin get_time_box_work.')
-        db_fmt = '%Y-%m-%d %H:%M:%S.%f'
-        prev_exec_dt_utc = datetime.strftime(prev_exec_dt.astimezone(timezone.utc), db_fmt)
-        exec_dt_utc = datetime.strftime(exec_dt.astimezone(timezone.utc), db_fmt)
+        prev_exec_dt_utc = mc.make_datetime_tz(prev_exec_dt, tz.UTC)
+        exec_dt_utc = mc.make_datetime_tz(exec_dt, tz.UTC)
         query = f"""
             SELECT A.uri, A.lastModified
             FROM inventory.Artifact AS A
@@ -672,10 +672,8 @@ class QueryTimeBoxDataSource(DataSource):
         self._work = deque()
         for row in rows:
             ignore_scheme, ignore_path, f_name = mc.decompose_uri(row['uri'])
-            read_fmt = '%Y-%m-%dT%H:%M:%S.%f'
-            self._work.append(
-                StateRunnerMeta(f_name, datetime.strptime(row['lastModified'], read_fmt).astimezone(self._timezone))
-            )
+            r_dt = mc.make_datetime_tz(row['lastModified'], self._timezone)
+            self._work.append(StateRunnerMeta(f_name, r_dt))
         self._capture_todo()
         self._logger.debug(f'End get_time_box_work.')
         return self._work
@@ -720,7 +718,7 @@ class VaultDataSource(ListDirTimeBoxDataSource):
         for target in node.node_list:
             target_fqn = f'{node.uri}/{target}'
             target_node = self._vault_client.get_node(target_fqn)
-            target_node_mtime = mc.make_time_tz(target_node.props.get('date'), self._timezone)
+            target_node_mtime = mc.make_datetime_tz(target_node.props.get('date'), self._timezone)
             if target_node.type == 'vos:ContainerNode' and self._recursive:
                 if exec_dt >= target_node_mtime >= prev_exec_dt:
                     self._append_work(
