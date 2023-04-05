@@ -951,6 +951,10 @@ class Config:
         self._time_zone = tz.UTC
 
     @property
+    def bookmark(self):
+        return f'{self._collection.lower()}_timestamp'
+
+    @property
     def is_connected(self):
         return TaskType.SCRAPE not in self._task_types
 
@@ -2934,7 +2938,7 @@ def make_datetime(from_value):
     """
     result = None
     if from_value is None:
-        logging.info('make_datetime_tz: input is None')
+        logging.info('make_datetime: input is None')
     else:
         if isinstance(from_value, datetime):
             result = from_value

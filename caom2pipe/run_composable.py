@@ -269,7 +269,6 @@ class StateRunner(TodoRunner):
         builder,
         data_source,
         metadata_reader,
-        bookmark_name,
         observable,
         reporter,
         end_dt,
@@ -277,7 +276,8 @@ class StateRunner(TodoRunner):
         super().__init__(
             config, organizer, builder, data_source, metadata_reader, observable, reporter
         )
-        self._bookmark_name = bookmark_name
+        # string that represents the state.yml lookup value
+        self._bookmark_name = config.bookmark
         # end dt is a datetime
         if end_dt is None:
             data_source.initialize_end_dt()
@@ -567,7 +567,6 @@ def run_by_todo(
 def run_by_state(
     config=None,
     name_builder=None,
-    bookmark_name=None,
     meta_visitors=[],
     data_visitors=[],
     end_time=None,
@@ -584,7 +583,6 @@ def run_by_state(
     :param name_builder NameBuilder extension that creates an instance of
         a StorageName extension, from an entry from a DataSourceComposable
         listing
-    :param bookmark_name string that represents the state.yml lookup value
     :param meta_visitors list of modules with visit methods, that expect
         the metadata of a work file to exist on disk
     :param data_visitors list of modules with visit methods, that expect the
@@ -633,7 +631,6 @@ def run_by_state(
         name_builder,
         source,
         metadata_reader,
-        bookmark_name,
         observable,
         reporter,
         end_time,

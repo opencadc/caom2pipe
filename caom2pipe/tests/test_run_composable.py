@@ -93,8 +93,6 @@ import test_execute_composable
 
 
 STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')
-TEST_BOOKMARK = 'test_bookmark'
-TEST_COMMAND = 'test_command'
 TEST_DIR = f'{tc.TEST_DATA_DIR}/run_composable'
 
 
@@ -223,7 +221,6 @@ def test_run_state(
     clients_mock.return_value.metadata_client.read.side_effect = _mock_read2
     tap_query_mock.side_effect = _mock_query_table2
 
-    # test_end_time = datetime.fromtimestamp(1579740838, tz=tz.UTC)
     test_end_time = datetime.fromtimestamp(1579740838)
     start_time = test_end_time - timedelta(seconds=900)
 
@@ -231,7 +228,7 @@ def test_run_state(
     test_config.interval = 10
     test_config.change_working_directory(tmpdir)
     individual_log_file = f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
-    _write_state(start_time, test_config.state_fqn)
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
 
     test_chooser = ec.OrganizeChooser()
     # use_local_files set so run_by_state chooses QueryTimeBoxDataSource
@@ -240,7 +237,6 @@ def test_run_state(
     test_result = rc.run_by_state(
         config=test_config,
         chooser=test_chooser,
-        bookmark_name=TEST_BOOKMARK,
         end_time=test_end_time,
         metadata_reader=test_reader,
     )
@@ -252,7 +248,7 @@ def test_run_state(
     assert test_reader.reset.call_count == 1, 'wrong call count'
 
     test_state = mc.State(test_config.state_fqn, test_config.time_zone)
-    test_bookmark = test_state.get_bookmark(TEST_BOOKMARK)
+    test_bookmark = test_state.get_bookmark(test_config.bookmark)
     assert test_bookmark == test_end_time, 'wrong time'
     assert os.path.exists(test_config.progress_fqn), 'expect progress file'
     assert os.path.exists(
@@ -264,14 +260,10 @@ def test_run_state(
 
     # test that runner does nothing when times haven't changed
     start_time = test_end_time
-    _write_state(start_time, test_config.state_fqn)
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
     visit_meta_mock.reset_mock()
     test_result = rc.run_by_state(
-        config=test_config,
-        chooser=test_chooser,
-        bookmark_name=TEST_BOOKMARK,
-        end_time=test_end_time,
-        metadata_reader=test_reader,
+        config=test_config, chooser=test_chooser, end_time=test_end_time, metadata_reader=test_reader,
     )
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
@@ -315,7 +307,7 @@ def test_run_state_log_to_file_true(
 
     test_end_time = datetime.fromtimestamp(1579740838)
     start_time = test_end_time - timedelta(seconds=900)
-    _write_state(start_time)
+    mc.State.write_bookmark(STATE_FILE, test_config.bookmark, start_time)
 
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.log_to_file = True
@@ -336,12 +328,7 @@ def test_run_state_log_to_file_true(
             f.write('test content\n')
 
     test_chooser = ec.OrganizeChooser()
-    test_result = rc.run_by_state(
-        config=test_config,
-        chooser=test_chooser,
-        bookmark_name=TEST_BOOKMARK,
-        end_time=test_end_time,
-    )
+    test_result = rc.run_by_state(config=test_config, chooser=test_chooser, end_time=test_end_time)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert os.path.exists(test_config.progress_fqn), 'expect progress file'
@@ -463,7 +450,7 @@ def test_run_state_retry(ds_mock, tap_mock, do_one_mock, clients_mock, test_conf
     test_config.change_working_directory(tmpdir)
     test_start_time = rc.get_now()
     test_end_time = test_start_time + timedelta(hours=1)
-    _write_state(test_start_time, test_config.state_fqn)
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
     start_time_mock = PropertyMock(return_value=None)
     type(ds_mock.return_value).start_dt = start_time_mock
     end_time_mock = PropertyMock(return_value=test_end_time)
@@ -485,7 +472,7 @@ def test_run_state_retry(ds_mock, tap_mock, do_one_mock, clients_mock, test_conf
     test_config.interval = 10
     test_config.logging_level = 'DEBUG'
 
-    test_result = rc.run_by_state(config=test_config, bookmark_name=TEST_BOOKMARK)
+    test_result = rc.run_by_state(config=test_config)
 
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect failure'
@@ -512,7 +499,7 @@ def test_time_box(clients_mock, test_config, tmpdir):
 
     for test_tz in [tz.UTC, tz.gettz('US/Mountain')]:
         test_start_time = datetime(2019, 7, 23, 9, 51)
-        _write_state(test_start_time, test_config.state_fqn)
+        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
         test_end_time = datetime(2019, 7, 24, 9, 20)
 
         class MakeTimeBoxWork(dsc.DataSource):
@@ -544,19 +531,14 @@ def test_time_box(clients_mock, test_config, tmpdir):
         test_work = MakeTimeBoxWork()
 
         test_result = rc.run_by_state(
-            test_config,
-            meta_visitors=None,
-            data_visitors=None,
-            bookmark_name=TEST_BOOKMARK,
-            end_time=test_end_time,
-            source=test_work,
+            test_config, meta_visitors=None, data_visitors=None, end_time=test_end_time, source=test_work
         )
         assert test_result is not None, 'expect a result'
         assert test_work.zero_called, 'missed zero'
         assert test_work.one_called, 'missed one'
         assert test_work.two_called, 'missed two'
         test_state = mc.State(test_config.state_fqn, test_config.time_zone)
-        assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
+        assert test_state.get_bookmark(test_config.bookmark) == test_end_time
         assert test_work.todo_call_count == 3, 'wrong todo call count'
 
 
@@ -567,7 +549,7 @@ def test_time_box_equal(clients_mock, test_config, tmpdir):
     test_config.interval = 700
 
     test_start_time = test_end_time = datetime(2019, 7, 23, 9, 51)
-    _write_state(test_start_time, test_config.state_fqn)
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
 
     class MakeWork(dsc.DataSource):
 
@@ -583,16 +565,11 @@ def test_time_box_equal(clients_mock, test_config, tmpdir):
     test_work = MakeWork()
 
     test_result = rc.run_by_state(
-        test_config,
-        meta_visitors=None,
-        data_visitors=None,
-        bookmark_name=TEST_BOOKMARK,
-        end_time=test_end_time,
-        source=test_work,
+        test_config, meta_visitors=None, data_visitors=None, end_time=test_end_time, source=test_work
     )
     assert test_result is not None, 'expect a result'
     test_state = mc.State(test_config.state_fqn, test_config.time_zone)
-    assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
+    assert test_state.get_bookmark(test_config.bookmark) == test_end_time
     assert test_work.todo_call_count == 0, 'wrong todo call count'
 
 
@@ -603,7 +580,7 @@ def test_time_box_once_through(clients_mock, test_config, tmpdir):
 
     for test_timezone in [tz.UTC, tz.gettz('US/Mountain')]:
         test_start_time = datetime(2019, 7, 23, 9, 51)
-        _write_state(test_start_time, test_config.state_fqn)
+        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
         test_end_time = datetime(2019, 7, 23, 12, 20)
 
         class MakeWork(dsc.DataSource):
@@ -625,18 +602,13 @@ def test_time_box_once_through(clients_mock, test_config, tmpdir):
         test_work = MakeWork()
 
         test_result = rc.run_by_state(
-            test_config,
-            meta_visitors=None,
-            data_visitors=None,
-            bookmark_name=TEST_BOOKMARK,
-            source=test_work,
-            end_time=test_end_time,
+            test_config, meta_visitors=None, data_visitors=None, source=test_work, end_time=test_end_time
         )
         assert test_result is not None, 'expect a result'
 
         test_state = mc.State(test_config.state_fqn, test_config.time_zone)
         assert test_work.zero_called, 'missed zero'
-        assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
+        assert test_state.get_bookmark(test_config.bookmark) == test_end_time
         assert test_work.todo_call_count == 1, 'wrong todo call count'
 
 
@@ -789,7 +761,7 @@ def test_run_store_get_work_failures(
 
     test_end_time = datetime.fromtimestamp(1579740838)
     start_time = test_end_time - timedelta(seconds=900)
-    _write_state(start_time, test_config.state_fqn)
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
 
     stat_return_value = type('', (), {})
     stat_return_value.st_mtime = 1579740835.7357888
@@ -814,11 +786,7 @@ def test_run_store_get_work_failures(
         clients_mock._data_client = data_client_mock
         clients_mock._metadata_client = repo_client_mock
         test_result = rc.run_by_state(
-            source=data_source,
-            bookmark_name=TEST_BOOKMARK,
-            end_time=test_end_time,
-            clients=clients_mock,
-            metadata_reader=file_metadata_reader,
+            source=data_source, end_time=test_end_time, clients=clients_mock, metadata_reader=file_metadata_reader
         )
 
         assert test_result is not None, 'expect result'
@@ -1045,7 +1013,7 @@ def test_time_box_time_zones(clients_mock, test_config, tmpdir):
 
     for test_tz in [tz.UTC, tz.gettz('US/Mountain')]:
         test_start_time = datetime(2019, 7, 23, 9, 51)
-        _write_state(test_start_time, test_config.state_fqn)
+        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
         test_end_time = datetime(2019, 7, 24, 9, 20)
 
         class MakeTimeBoxWork(dsc.DataSource):
@@ -1077,19 +1045,14 @@ def test_time_box_time_zones(clients_mock, test_config, tmpdir):
         test_work = MakeTimeBoxWork()
 
         test_result = rc.run_by_state(
-            test_config,
-            meta_visitors=None,
-            data_visitors=None,
-            bookmark_name=TEST_BOOKMARK,
-            end_time=test_end_time,
-            source=test_work,
+            test_config, meta_visitors=None, data_visitors=None, end_time=test_end_time, source=test_work
         )
         assert test_result is not None, 'expect a result'
         assert test_work.zero_called, 'missed zero'
         assert test_work.one_called, 'missed one'
         assert test_work.two_called, 'missed two'
         test_state = mc.State(test_config.state_fqn, test_config.time_zone)
-        assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
+        assert test_state.get_bookmark(test_config.bookmark) == test_end_time
         assert test_work.todo_call_count == 3, 'wrong todo call count'
 
 
@@ -1140,7 +1103,6 @@ class TestProcessEntry:
             reporter=self._reporter,
         )
         self._storage_name = tc.TStorageName()
-        self._bookmark = None
         self._end_dt = None
 
     def _check_logs(self, failure_should_exist, retry_should_exist, success_should_exist):
@@ -1177,7 +1139,6 @@ class TestProcessEntry:
             test_builder,
             self._data_source,
             self._reader,
-            self._bookmark,
             self._observer,
             self._reporter,
             self._end_dt,
@@ -1196,7 +1157,6 @@ class TestProcessEntry:
             test_builder,
             self._data_source,
             self._reader,
-            self._bookmark,
             self._observer,
             self._reporter,
             self._end_dt,
@@ -1216,7 +1176,6 @@ class TestProcessEntry:
                 test_builder,
                 self._data_source,
                 self._reader,
-                self._bookmark,
                 self._observer,
                 self._reporter,
                 self._end_dt,
@@ -1236,7 +1195,6 @@ class TestProcessEntry:
                 test_builder,
                 self._data_source,
                 self._reader,
-                self._bookmark,
                 self._observer,
                 self._reporter,
                 self._end_dt,
@@ -1257,7 +1215,6 @@ class TestProcessEntry:
                 test_builder,
                 self._data_source,
                 self._reader,
-                self._bookmark,
                 self._observer,
                 self._reporter,
                 self._end_dt,
@@ -1266,19 +1223,6 @@ class TestProcessEntry:
             assert test_result == -1, 'expect failure'
             # success_should_exist == False as it's only set in the do_one implementation
             self._check_logs(failure_should_exist=False, retry_should_exist=False, success_should_exist=False)
-
-
-def _write_state(start_time, fqn=STATE_FILE):
-    if os.path.exists(fqn):
-        os.unlink(fqn)
-    test_bookmark = {
-        'bookmarks': {
-            TEST_BOOKMARK: {
-                'last_record': start_time,
-            },
-        },
-    }
-    mc.write_as_yaml(test_bookmark, fqn)
 
 
 def _write_todo(test_config):

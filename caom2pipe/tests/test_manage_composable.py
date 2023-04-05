@@ -582,6 +582,7 @@ def test_config_write(tmpdir):
         test_config = mc.Config()
         test_config.working_directory = tmpdir
         test_config.logging_level = 'WARNING'
+        test_config.collection = 'collection'
         scrape_found = False
         if mc.TaskType.SCRAPE in test_config.task_types:
             test_config.task_types = [mc.TaskType.VISIT, mc.TaskType.MODIFY]
