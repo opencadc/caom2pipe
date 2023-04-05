@@ -413,7 +413,6 @@ def common_runner_init(
     meta_visitors,
     data_visitors,
     chooser,
-    application,
 ):
     """The common initialization code between TodoRunner and StateRunner uses. <collection>2caom2 implementations can
     use the defaults created here for the 'run' call, or they can provide their own specializations of the various
@@ -434,7 +433,6 @@ def common_runner_init(
     :param meta_visitors list of modules with visit methods, that expect the metadata of a work file to exist on disk
     :param data_visitors list of modules with visit methods, that expect the work file to exist on disk
     :param chooser OrganizerChooser, if there's rules that are unique to a collection about file naming.
-    :param application str representation of application name, for retrieving version
     """
     if config is None:
         config = mc.Config()
@@ -450,7 +448,7 @@ def common_runner_init(
     mc.StorageName.scheme = config.scheme
 
     observable = mc.Observable(mc.Rejected(config.rejected_fqn), mc.Metrics(config))
-    reporter = mc.ExecutionReporter(config, observable, application)
+    reporter = mc.ExecutionReporter(config, observable)
     reporter.set_log_location(config)
     if clients is None:
         clients = cc.ClientCollection(config)
@@ -509,7 +507,6 @@ def run_by_todo(
     store_transfer=None,
     clients=None,
     metadata_reader=None,
-    application='DEFAULT',
 ):
     """A default implementation for using the TodoRunner.
 
@@ -534,7 +531,6 @@ def run_by_todo(
         Don't try to guess what this one is.
     :param clients: ClientCollection instance
     :param metadata_reader: MetadataReader instance
-    :param application str Name for finding the version
     """
     (
         config,
@@ -557,7 +553,6 @@ def run_by_todo(
         meta_visitors,
         data_visitors,
         chooser,
-        application,
     )
 
     runner = TodoRunner(
@@ -582,7 +577,6 @@ def run_by_state(
     store_transfer=None,
     clients=None,
     metadata_reader=None,
-    application='DEFAULT',
 ):
     """A default implementation for using the StateRunner.
 
@@ -610,7 +604,6 @@ def run_by_state(
         Don't try to guess what this one is.
     :param clients instance of ClientsCollection, if one was required
     :param metadata_reader instance of MetadataReader
-    :param application str Name for finding the version
     """
     (
         config,
@@ -633,7 +626,6 @@ def run_by_state(
         meta_visitors,
         data_visitors,
         chooser,
-        application,
     )
     runner = StateRunner(
         config,
@@ -661,7 +653,6 @@ def run_single(
     store_transfer=None,
     modify_transfer=None,
     metadata_reader=None,
-    application='DEFAULT',
 ):
     """Process a single entry by StorageName detail.
 
@@ -680,11 +671,10 @@ def run_single(
         instance, but this allows for the case that a file is never stored
         at CADC. Try to guess what this one is.
     :param metadata_reader MetadataReader instance
-    :param application str Name for finding the version
     """
     logging.debug(f'Begin run_single {config.work_fqn}')
     observable = mc.Observable(mc.Rejected(config.rejected_fqn), mc.Metrics(config))
-    reporter = mc.ExecutionReporter(config, observable, application)
+    reporter = mc.ExecutionReporter(config, observable)
     reporter.set_log_location(config)
     clients = cc.ClientCollection(config)
     clients.metrics = observable.metrics

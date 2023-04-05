@@ -367,7 +367,7 @@ def test_run_todo_list_dir_data_source_exception(
     do_one_mock.side_effect = mc.CadcException
 
     test_chooser = ec.OrganizeChooser()
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_data_source = dsc.ListDirDataSource(test_config, test_chooser)
     test_data_source.reporter = test_reporter
     test_result = rc.run_by_todo(
@@ -805,7 +805,7 @@ def test_run_store_get_work_failures(
     dir_entry_2.is_dir = Mock(return_value=False)
 
     file_metadata_reader = FileMetadataReader()
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     with patch('os.scandir') as scandir_mock:
         scandir_mock.return_value.__enter__.return_value = [dir_entry_1, dir_entry_2]
         data_source = dsc.LocalFilesDataSource(test_config, data_client_mock, file_metadata_reader)
@@ -892,7 +892,7 @@ def test_run_ingest(
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content')
 
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_data_source = dsc.TodoFileDataSource(test_config)
     test_data_source.reporter = test_reporter
     test_result = rc.run_by_todo(source=test_data_source)
@@ -1127,7 +1127,7 @@ class TestProcessEntry:
         self._reader = Mock()
         self._rejected = mc.Rejected(test_config.rejected_fqn)
         self._observer = mc.Observable(self._rejected, Mock())
-        self._reporter = mc.ExecutionReporter(test_config, self._observer, 'DEFAULT')
+        self._reporter = mc.ExecutionReporter(test_config, self._observer)
         self._clients = Mock()
         self._data_source = Mock()
         self._organizer = ec.OrganizeExecutes(

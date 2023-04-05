@@ -955,7 +955,7 @@ class TestDoOne:
         self._reader = Mock()
         self._rejected = mc.Rejected(test_config.rejected_fqn)
         self._observer = mc.Observable(self._rejected, Mock())
-        self._reporter = mc.ExecutionReporter(test_config, self._observer, 'DEFAULT')
+        self._reporter = mc.ExecutionReporter(test_config, self._observer)
         self._clients = Mock()
         self._storage_name = tc.TStorageName()
 

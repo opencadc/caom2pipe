@@ -85,7 +85,7 @@ from datetime import datetime, timedelta
 from dateutil import parser, tz
 from enum import Enum
 from hashlib import md5
-from importlib_metadata import version
+from importlib_metadata import version, PackageNotFoundError
 from io import BytesIO
 from requests.adapters import HTTPAdapter
 from shutil import move
@@ -414,7 +414,7 @@ class ExecutionReporter:
     of a pipeline run.
     """
 
-    def __init__(self, config, observable, application):
+    def __init__(self, config, observable):
         """
         If a retry is configured, logging locations change during a pipeline run, so the file name setting is relegated
         to externally visible methods.
@@ -424,6 +424,7 @@ class ExecutionReporter:
         self._success_fqn = None
         self._report_fqn = config.report_fqn
         self._observable = observable
+        application = f'{config.collection.lower()}2caom2'
         self._summary = ExecutionSummary(os.path.basename(config.working_directory), application)
         self.set_log_location(config)
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -2553,7 +2554,12 @@ def get_file_size(fqn):
 
 def get_version(entry):
     """A common implementation to retrieve a pipeline version."""
-    return f'{entry}/{version(entry)}'
+    try:
+        v = version(entry)
+    except PackageNotFoundError as e:
+        logging.warning(f'No version found for {entry}')
+        v = '0.0.0'
+    return f'{entry}/{v}'
 
 
 def create_dir(dir_name):

@@ -178,7 +178,6 @@ def test_report_output_todo_local(test_config, tmpdir):
                         meta_visitors=[],
                         data_visitors=[],
                         chooser=None,
-                        application='DEFAULT',
                     )
                     # 0 stored already
                     # 1 fails fitsverify
@@ -322,7 +321,6 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                         meta_visitors=[],
                         data_visitors=[],
                         chooser=None,
-                        application='DEFAULT',
                     )
                     # 0 stored already
                     # 1 fails fitsverify

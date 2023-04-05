@@ -770,7 +770,7 @@ def test_log_directory_construction(test_config, tmpdir):
     assert not os.path.exists(test_config.success_fqn)
     assert not os.path.exists(test_config.failure_fqn)
     assert not os.path.exists(test_config.retry_fqn)
-    test_subject = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_subject = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     assert os.path.exists(test_config.success_fqn)
     assert os.path.exists(test_config.failure_fqn)
     assert os.path.exists(test_config.retry_fqn)
