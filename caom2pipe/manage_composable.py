@@ -85,7 +85,7 @@ from datetime import datetime, timedelta
 from dateutil import parser, tz
 from enum import Enum
 from hashlib import md5
-from importlib_metadata import version
+from importlib_metadata import version, PackageNotFoundError
 from io import BytesIO
 from requests.adapters import HTTPAdapter
 from shutil import move
@@ -126,10 +126,10 @@ __all__ = [
     'get_file_meta',
     'get_keyword',
     'http_get',
-    'increment_time_tz',
+    'increment_time',
     'ISO_8601_FORMAT',
     'load_module',
-    'make_datetime_tz',
+    'make_datetime',
     'Metrics',
     'minimize_on_keyword',
     'Observable',
@@ -254,8 +254,8 @@ class State:
         result = None
         if key in self.bookmarks:
             result = self.bookmarks.get(key).get('last_record')
-            if result.tzinfo is None:
-                result = result.astimezone(self._zone)
+            if result.tzinfo is not None:
+                result = result.astimezone(self._zone).replace(tzinfo=None)
         else:
             self.logger.warning(f'No record found for {key}')
         return result
@@ -312,6 +312,7 @@ class Rejected:
     NO_INSTRUMENT = 'no_instrument'
     NO_PREVIEW = 'no_preview'
     OLD_VERSION = 'old_version'
+    REJECTED = 'rejected'
 
     # A map to the logging message string representing acknowledged rejections
     reasons = {
@@ -324,6 +325,7 @@ class Rejected:
         NO_INSTRUMENT: 'Unknown value for instrument',
         NO_PREVIEW: 'Not Found for url: https://archive.gemini.edu/preview',
         OLD_VERSION: 'Recorded without checking',
+        REJECTED: 'Rejected',
     }
 
     def __init__(self, fqn):
@@ -412,7 +414,7 @@ class ExecutionReporter:
     of a pipeline run.
     """
 
-    def __init__(self, config, observable, application):
+    def __init__(self, config, observable):
         """
         If a retry is configured, logging locations change during a pipeline run, so the file name setting is relegated
         to externally visible methods.
@@ -422,6 +424,7 @@ class ExecutionReporter:
         self._success_fqn = None
         self._report_fqn = config.report_fqn
         self._observable = observable
+        application = f'{config.collection.lower()}2caom2'
         self._summary = ExecutionSummary(os.path.basename(config.working_directory), application)
         self.set_log_location(config)
         self._logger = logging.getLogger(self.__class__.__name__)
@@ -546,6 +549,25 @@ class ExecutionReporter:
     def capture_retry(self):
         self._summary.add_retries(self._summary.entries)
 
+    def get_file_names_from_log_file(self, log_fqn):
+        """
+        :return: a list of file names from one of the failure, retry, or success log files.
+        """
+        logging.error('enter get_file_names_from_log_file')
+        result = []
+        with open(log_fqn) as f_in:
+            for line in f_in:
+                logging.error(line)
+                bits = line.split()
+                if log_fqn == self._retry_fqn:
+                    result.append(bits[0])
+                else:
+                    if bits[3] == 'None':
+                        result.append(bits[2])
+                    else:
+                        result.append(bits[3])
+        return result
+
 
 class ExecutionSummary:
     """
@@ -652,6 +674,29 @@ class ExecutionSummary:
         # pass  TODO - not sure if this implementation is correct
         # don't know if this is the right thing to do
         self._success_sum = 0
+
+    @staticmethod
+    def read_report_file(fqn):
+        summary = ExecutionSummary(os.path.basename(fqn), 'DEFAULT')
+        with open(fqn) as f_in:
+            for line in f_in:
+                if 'Number of' in line:
+                    ct = int(line.split(':')[-1].strip())
+                    if 'Number of Inputs' in line:
+                        summary.add_entries(ct)
+                    if 'Number of Successes' in line:
+                        summary.add_successes(ct)
+                    if 'Number of Timeouts' in line:
+                        summary.add_timeouts(ct)
+                    if 'Number of Retries' in line:
+                        summary.add_retries(ct)
+                    if 'Number of Errors' in line:
+                        summary.add_errors(ct)
+                    if 'Number of Rejections' in line:
+                        summary.add_rejections(ct)
+                    if 'Number of Skipped' in line:
+                        summary.add_skipped(ct)
+        return summary
 
 
 class Metrics:
@@ -903,6 +948,11 @@ class Config:
         self._scheme = 'cadc'
         self._storage_inventory_resource_id = None
         self._storage_inventory_tap_resource_id = None
+        self._time_zone = tz.UTC
+
+    @property
+    def bookmark(self):
+        return f'{self._collection.lower()}_timestamp'
 
     @property
     def is_connected(self):
@@ -1373,6 +1423,15 @@ class Config:
         self._source_host = value
 
     @property
+    def time_zone(self):
+        """String that can be used in tz.gettz to get the timezone for a remote data source."""
+        return self._time_zone
+
+    @time_zone.setter
+    def time_zone(self, value):
+        self._time_zone = value
+
+    @property
     def use_vos(self):
         """"""
         result = False
@@ -1433,6 +1492,7 @@ class Config:
             f'  success_log_file_name:: {self.success_log_file_name}\n'
             f'  tap_id:: {self.tap_id}\n'
             f'  task_types:: {self.task_types}\n'
+            f'  time_zone:: {self.time_zone}\n'
             f'  use_local_files:: {self.use_local_files}\n'
             f'  work_fqn:: {self.work_fqn}\n'
             f'  working_directory:: {self.working_directory}'
@@ -1593,6 +1653,7 @@ class Config:
                 f'{os.path.basename(self.working_directory)}_report.txt',
             )
             self.scheme = config.get('scheme', 'cadc')
+            self.time_zone = config.get('time_zone', tz.UTC)
         except KeyError as e:
             raise CadcException(f'Error in config file {e}')
 
@@ -2075,18 +2136,26 @@ class StorageName:
         return pattern.match(self._file_name)
 
     def get_file_fqn(self, working_directory):
-        # the file name without the compression extension
-        temp = os.path.basename(self.file_uri)
+        # if the decompressed file exists, use that
+        # else, if the compressed file exists, use that
+
+        # file_uri is the file name without the compression extension
+        temp_f_name = os.path.basename(self.file_uri)
+        temp_fqn = os.path.join(working_directory, temp_f_name)
+        fqn = temp_fqn
         if (
             self._source_names is not None
             and len(self._source_names) > 0
             and os.path.exists(self._source_names[0])
             # is there an interim, uncompressed file name?
-            and self._source_names[0].endswith(temp)
+            and self._source_names[0].endswith(temp_f_name)
         ):
             fqn = self._source_names[0]
-        else:
-            fqn = os.path.join(working_directory, temp)
+        elif os.path.exists(temp_fqn):
+            fqn = temp_fqn
+        elif os.path.exists(self._source_names[0]):
+            # use the compressed file, if it can be found
+            fqn = self._source_names[0]
         return fqn
 
     def set_destination_uris(self):
@@ -2489,7 +2558,12 @@ def get_file_size(fqn):
 
 def get_version(entry):
     """A common implementation to retrieve a pipeline version."""
-    return f'{entry}/{version(entry)}'
+    try:
+        v = version(entry)
+    except PackageNotFoundError as e:
+        logging.warning(f'No version found for {entry}')
+        v = '0.0.0'
+    return f'{entry}/{v}'
 
 
 def create_dir(dir_name):
@@ -2847,50 +2921,51 @@ def _parse_plus_some_formats(from_value):
         ]:
             try:
                 result = datetime.strptime(from_value, fmt)
+                if 'HST' in fmt:
+                    # change timezone from HST to UTC - add 10 hours, accurate enough implementation for the CFHT
+                    # provenance.lastExecuted value
+                    result = result + timedelta(hours=10)
                 break
             except ValueError as e2:
                 pass
     return result
 
 
-def make_datetime_tz(from_value, zone):
+def make_datetime(from_value):
     """
-    Make an offset-aware datetime value.
-
     :param from_value a representation of time.
-    :param zone dateutil.tz value
-    :return an offset-aware datetime
+    :return a timezone-naive datetime value.
     """
     result = None
     if from_value is None:
-        logging.info('make_datetime_tz: input is None')
+        logging.info('make_datetime: input is None')
     else:
         if isinstance(from_value, datetime):
             result = from_value
         elif isinstance(from_value, str):
             result = _parse_plus_some_formats(from_value)
         elif isinstance(from_value, float):
-            result = datetime.fromtimestamp(from_value, tz=zone)
+            result = datetime.fromtimestamp(from_value)
         else:
-            logging.error(f'make_datetime_tz. Unexpected type {type(from_value)}. No conversion to datetime.')
-    if result is not None and result.tzinfo is None:
-        result = result.astimezone(tz=zone)
+            logging.error(f'make_datetime. Unexpected type {type(from_value)}. No conversion to datetime.')
+    if result is not None and result.tzinfo is not None:
+        # the astimezone fixes the offset, the replace removes the tzinfo
+        result = result.astimezone(tz=None).replace(tzinfo=None)
     return result
 
 
-def increment_time_tz(this_ts, by_interval, zone, unit='%M'):
+def increment_time(this_dt, by_interval, unit='%M'):
     """
     Increment time by an interval. Times should be in datetime format, but
     a modest attempt is made to check for otherwise.
 
-    :param this_ts: datetime
+    :param this_dt: datetime
     :param by_interval: integer - e.g. 10, for a 10 minute increment
-    :param zone: dateutil.tz
     :param unit: the formatting string, default is minutes
-    :return: this_ts incremented by interval amount. Offset-aware.
+    :return: this_ts incremented by interval amount.
     """
     temp = None
-    time_dt = make_datetime_tz(this_ts, zone)
+    time_dt = make_datetime(this_dt)
     if time_dt is not None:
         if unit == '%M':
             temp = time_dt + timedelta(minutes=by_interval)

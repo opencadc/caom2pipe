@@ -952,6 +952,7 @@ class OrganizeExecutes:
                     result = 0
                 else:
                     self._logger.info(f'No executors for {storage_name}')
+                    # TODO
                     result = -1  # cover case where file name validation fails
         except Exception as e:
             self._reporter.capture_failure(storage_name, e, traceback.format_exc())
@@ -967,10 +968,13 @@ class OrganizeExecutes:
 
 
 def decompressor_factory(config, working_directory, log_level_as, storage_name):
+    result = None
     if config.collection == 'CFHT':
-        return FitsForCADCCompressor(working_directory, log_level_as, storage_name)
+        result = FitsForCADCCompressor(working_directory, log_level_as, storage_name)
     else:
-        return FitsForCADCDecompressor(working_directory, log_level_as)
+        result = FitsForCADCDecompressor(working_directory, log_level_as)
+    logging.debug(f'Built {type(result)} Fits Compression handling class.')
+    return result
 
 
 class DecompressorNoop:

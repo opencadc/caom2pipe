@@ -80,22 +80,21 @@ specializations.
 import logging
 
 
-from datetime import datetime, timezone
+from datetime import datetime
 from os import chdir, getcwd
 
 from cadcdata import FileInfo
 from caom2pipe import data_source_composable as dsc
-from caom2pipe.manage_composable import CadcException, Config, TaskType
+from caom2pipe.manage_composable import CadcException, Config, State, TaskType
 from caom2pipe.transfer_composable import VoScienceTransfer
 from caom2pipe import run_composable as rc
 from traceback import format_exc
 
 from unittest.mock import call, Mock, patch
 from test_data_source_composable import _create_dir_listing
-from test_run_composable import TEST_BOOKMARK, _write_state
 
-TEST_START_TIME = datetime(year=2020, month=3, day=3, hour=1, minute=1, second=1, tzinfo=timezone.utc)
-TEST_END_TIME = datetime(year=2020, month=3, day=3, hour=2, minute=1, second=1, tzinfo=timezone.utc)
+TEST_START_TIME = datetime(year=2020, month=3, day=3, hour=1, minute=1, second=1)
+TEST_END_TIME = datetime(year=2020, month=3, day=3, hour=2, minute=1, second=1)
 
 
 def test_report_output_todo_local(test_config, tmpdir):
@@ -155,7 +154,7 @@ def test_report_output_todo_local(test_config, tmpdir):
                     test_config, test_clients.data_client, test_reader, recursive=True, scheme='cadc'
                 )
                 Config.write_to_file(test_config)
-                _write_state(TEST_START_TIME, test_config.state_fqn)
+                State.write_bookmark(test_config.state_fqn, test_config.bookmark, TEST_START_TIME)
                 for state in [True, False]:
                     (
                         test_config,
@@ -178,7 +177,6 @@ def test_report_output_todo_local(test_config, tmpdir):
                         meta_visitors=[],
                         data_visitors=[],
                         chooser=None,
-                        application='DEFAULT',
                     )
                     # 0 stored already
                     # 1 fails fitsverify
@@ -198,7 +196,6 @@ def test_report_output_todo_local(test_config, tmpdir):
                             test_builder,
                             test_data_source,
                             test_reader,
-                            TEST_BOOKMARK,
                             test_observable,
                             test_reporter,
                             TEST_END_TIME,
@@ -298,7 +295,7 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                     test_config, test_clients.vo_client, test_clients.data_client, test_reader
                 )
                 Config.write_to_file(test_config)
-                _write_state(TEST_START_TIME, test_config.state_fqn)
+                State.write_bookmark(test_config.state_fqn, test_config.bookmark, TEST_START_TIME)
                 # state == True is incremental operation
                 for state in [True, False]:
                     (
@@ -322,7 +319,6 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                         meta_visitors=[],
                         data_visitors=[],
                         chooser=None,
-                        application='DEFAULT',
                     )
                     # 0 stored already
                     # 1 fails fitsverify
@@ -349,7 +345,6 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                             test_builder,
                             test_data_source,
                             test_reader,
-                            TEST_BOOKMARK,
                             test_observable,
                             test_reporter,
                             TEST_END_TIME,

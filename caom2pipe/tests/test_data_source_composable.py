@@ -73,7 +73,7 @@ import shutil
 from astropy.table import Table
 from cadctap import CadcTapClient
 from cadcutils import exceptions
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from time import sleep
 from unittest.mock import Mock, patch, call
@@ -98,7 +98,7 @@ def test_list_dir_data_source(test_config, tmpdir):
         with open(f'{test_config.working_directory}/{entry}', 'w') as f:
             f.write('test content')
 
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_chooser = tc.TChooser()
     test_subject = dsc.ListDirDataSource(test_config, test_chooser)
     test_subject.reporter = test_reporter
@@ -131,7 +131,7 @@ def test_todo_file(test_config, tmpdir):
         f.write('\n')
 
     test_config.work_fqn = todo_fqn
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_subject = dsc.TodoFileDataSource(test_config)
     test_subject.reporter = test_reporter
     test_result = test_subject.get_work()
@@ -160,7 +160,7 @@ def test_storage_time_box_query(query_mock, test_config, tmpdir):
     prev_exec_date = utc_now - timedelta(seconds=3600)
     exec_date = utc_now - timedelta(seconds=1800)
     try:
-        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
         test_subject = dsc.QueryTimeBoxDataSource(test_config)
         test_subject.reporter = test_reporter
         test_result = test_subject.get_time_box_work(prev_exec_date, exec_date)
@@ -213,7 +213,7 @@ def test_vault_list_dir_data_source(test_config, tmpdir):
     test_config.change_working_directory(tmpdir)
     test_config.data_sources = ['vos:goliaths/wrong']
     test_config.data_source_extensions = ['.fits']
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_subject = dsc.VaultDataSource(test_vos_client, test_config)
     test_subject.reporter = test_reporter
     assert test_subject is not None, 'expect a test_subject'
@@ -228,7 +228,7 @@ def test_vault_list_dir_data_source(test_config, tmpdir):
 
 
 def test_list_dir_time_box_data_source(test_config, tmpdir):
-    test_prev_exec_time_dt = datetime.now(tz=timezone.utc)
+    test_prev_exec_time_dt = datetime.now()
 
     sleep(1)
     test_sub_dir = f'{tmpdir}/sub_directory'
@@ -246,7 +246,7 @@ def test_list_dir_time_box_data_source(test_config, tmpdir):
     test_config.working_directory = tc.TEST_DATA_DIR
     test_config.data_sources = [tmpdir]
     test_config.data_source_extensions = ['.fits']
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_exec_time_dt = test_prev_exec_time_dt + timedelta(seconds=3600.0)
 
     test_subject = dsc.ListDirTimeBoxDataSource(test_config)
@@ -280,7 +280,7 @@ def test_list_dir_separate_data_source(test_config):
         '.fits.fz',
         '.hdf5',
     ]
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_subject = dsc.ListDirSeparateDataSource(test_config)
     test_subject.reporter = test_reporter
     assert test_subject is not None, 'ctor is broken'
@@ -308,12 +308,12 @@ def test_vault_list_dir_time_box_data_source(test_config):
     test_vos_client.get_node.side_effect = node_listing
     test_config.data_sources = ['vos:goliaths/wrong']
     test_config.data_source_extensions = ['.fits']
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_subject = dsc.VaultDataSource(test_vos_client, test_config)
     assert test_subject is not None, 'expect a test_subject'
     test_subject.reporter = test_reporter
-    test_prev_exec_dt = datetime(year=2020, month=9, day=15, hour=10, minute=0, second=0, tzinfo=timezone.utc)
-    test_exec_dt = datetime(year=2020, month=9, day=16, hour=10, minute=0, second=0, tzinfo=timezone.utc)
+    test_prev_exec_dt = datetime(year=2020, month=9, day=15, hour=10, minute=0, second=0)
+    test_exec_dt = datetime(year=2020, month=9, day=16, hour=10, minute=0, second=0)
     test_result = test_subject.get_time_box_work(test_prev_exec_dt, test_exec_dt)
     assert test_result is not None, 'expect a test result'
     assert len(test_result) == 1, 'wrong number of results'
@@ -323,7 +323,7 @@ def test_vault_list_dir_time_box_data_source(test_config):
     ), 'wrong name result'
     # the datetime from the record in the test_result, which should be between the start and stop times
     assert (
-        datetime(year=2020, month=9, day=15, hour=19, minute=55, second=3, microsecond=67000, tzinfo=timezone.utc)
+        datetime(year=2020, month=9, day=15, hour=19, minute=55, second=3, microsecond=67000)
         == test_result[0].entry_dt
     ), 'wrong dt result'
     assert test_reporter.all == 1, 'wrong report'
@@ -342,7 +342,7 @@ def test_transfer_check_fits_verify(test_config, tmpdir):
     # how things should probably work at CFHT
     delta = timedelta(minutes=30)
     # half an hour ago
-    test_start_time = datetime.now(tz=timezone.utc) - delta
+    test_start_time = datetime.now() - delta
     # half an hour from now
     test_end_time = test_start_time + delta + delta
     test_source_directory = Path(f'{tmpdir}/cfht_source')
@@ -372,7 +372,7 @@ def test_transfer_check_fits_verify(test_config, tmpdir):
         test_config.retry_failures = False
         cadc_client_mock = Mock(autospec=True)
         cadc_client_mock.info.side_effect = mock_info
-        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
         test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader)
         test_subject.reporter = test_reporter
 
@@ -424,7 +424,7 @@ def test_transfer_check_fits_verify(test_config, tmpdir):
         test_config.cleanup_files_when_storing = False
         cadc_client_mock = Mock(autospec=True)
         cadc_client_mock.info.side_effect = mock_info
-        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
         test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader)
         test_subject.reporter = test_reporter
         assert test_subject is not None, 'expect construction to work'
@@ -462,7 +462,7 @@ def test_transfer_check_fits_verify(test_config, tmpdir):
             test_config.task_types = [mc.TaskType.STORE]
             cadc_client_mock = Mock(autospec=True)
             cadc_client_mock.info.side_effect = mock_info
-            test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+            test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
             test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader)
             test_subject.reporter = test_reporter
             with pytest.raises(mc.CadcException):
@@ -526,7 +526,7 @@ def test_transfer_fails(check_fits_mock, test_config, tmpdir):
     test_config.cleanup_success_destination = test_success_directory.as_posix()
 
     cadc_client_mock = Mock(autospec=True)
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_subject = dsc.LocalFilesDataSource(test_config, cadc_client_mock, test_reader)
     assert test_subject is not None, 'ctor failure'
     test_subject.reporter = test_reporter
@@ -574,7 +574,7 @@ def test_all_local_files_some_already_stored_some_broken(clients_mock, move_mock
     clients_mock.return_value.data_client.info.side_effect = [file_info_list[0], None, None]
     verify_mock.side_effect = [True, False, True]
 
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_subject = dsc.LocalFilesDataSource(
         test_config,
         clients_mock.return_value.data_client,
@@ -629,7 +629,7 @@ def test_vo_transfer_check_fits_verify(vault_info_mock, test_config):
 
         test_subject = dsc.VaultCleanupDataSource(test_config, test_vos_client, test_data_client, test_reader)
         assert test_subject is not None, 'expect ctor to work'
-        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
         test_subject.reporter = test_reporter
         test_result = test_subject.get_work()
 
@@ -657,7 +657,7 @@ def test_vo_transfer_check_fits_verify(vault_info_mock, test_config):
 
     second_test_subject = dsc.VaultCleanupDataSource(test_config, test_vos_client, test_data_client, test_reader)
     assert second_test_subject is not None, 'second ctor fails'
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     second_test_subject.reporter = test_reporter
     second_test_result = second_test_subject.get_work()
     assert second_test_result is not None, 'expect a second result'
@@ -701,17 +701,17 @@ def test_vault_clean_up_get_time_box(test_config):
 
         test_subject = dsc.VaultCleanupDataSource(test_config, test_vos_client, test_data_client, test_reader)
         assert test_subject is not None, 'expect ctor to work'
-        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
         test_subject.reporter = test_reporter
-        test_prev_exec_time = datetime(year=2020, month=9, day=15, hour=10, minute=0, second=0, tzinfo=timezone.utc)
-        test_exec_time = datetime(year=2020, month=9, day=16, hour=10, minute=0, second=0, tzinfo=timezone.utc)
+        test_prev_exec_time = datetime(year=2020, month=9, day=15, hour=10, minute=0, second=0)
+        test_exec_time = datetime(year=2020, month=9, day=16, hour=10, minute=0, second=0)
         test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
 
         assert test_result is not None, 'expect a work list'
         assert len(test_result) == 1, 'wrong work list entries'
         assert test_result[0].entry_name == 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits', 'wrong work entry url'
         assert (
-            test_result[0].entry_dt == datetime(2020, 9, 15, 19, 55, 3, 67000, tzinfo=timezone.utc)
+            test_result[0].entry_dt == datetime(2020, 9, 15, 19, 55, 3, 67000)
         ), 'wrong work entry timestamp on file modification'
 
         assert test_vos_client.isdir.call_count == 0, 'wrong is_dir count'
@@ -741,7 +741,7 @@ def test_data_source_exists(test_config):
     test_reader.file_info[test_uri] = FileInfo(id=test_uri, md5sum='ghi')
     test_subject = dsc.VaultCleanupDataSource(test_config, test_vos_client, test_data_client, test_reader)
     assert test_subject is not None, 'ctor failure'
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_subject.reporter = test_reporter
     test_subject._work = ['vos:test/dest_fqn.fits']
 

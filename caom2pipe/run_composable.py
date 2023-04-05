@@ -94,7 +94,7 @@ from caom2pipe import transfer_composable
 
 __all__ = [
     'common_runner_init',
-    'get_now_tz',
+    'get_now',
     'run_by_state',
     'run_by_todo',
     'set_logging',
@@ -269,17 +269,22 @@ class StateRunner(TodoRunner):
         builder,
         data_source,
         metadata_reader,
-        bookmark_name,
         observable,
         reporter,
-        max_dt=None,
+        end_dt,
     ):
         super().__init__(
             config, organizer, builder, data_source, metadata_reader, observable, reporter
         )
-        self._bookmark_name = bookmark_name
-        # end time is a datetime
-        self._end_time = (datetime.now(self._data_source.timezone) if max_dt is None else max_dt)
+        # string that represents the state.yml lookup value
+        self._bookmark_name = config.bookmark
+        # end dt is a datetime
+        if end_dt is None:
+            data_source.initialize_end_dt()
+            # self._end_time = (datetime.now(self._data_source.timezone) if max_dt is None else max_dt)
+            self._end_time = data_source.end_dt
+        else:
+            self._end_time = end_dt
 
     def _record_progress(
         self, count, cumulative_count, start_time, save_time
@@ -299,15 +304,14 @@ class StateRunner(TodoRunner):
         if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
 
-        state = mc.State(self._config.state_fqn, self._data_source.timezone)
+        state = mc.State(self._config.state_fqn, self._config.time_zone)
         if self._data_source.start_dt is None:
             start_time = state.get_bookmark(self._bookmark_name)
         else:
             start_time = self._data_source.start_dt
 
-        # make sure prev_exec_time is offset-aware type datetime.timestamp
         prev_exec_time = start_time
-        incremented = mc.increment_time_tz(prev_exec_time, self._config.interval, self._data_source.timezone)
+        incremented = mc.increment_time(prev_exec_time, self._config.interval)
         exec_time = min(incremented, self.end_time)
 
         self._logger.info(f'Starting at {start_time}, ending at {self.end_time}')
@@ -360,7 +364,7 @@ class StateRunner(TodoRunner):
                     # comparison, just because this one exists
                     break
                 prev_exec_time = exec_time
-                new_time = mc.increment_time_tz(prev_exec_time, self._config.interval, self._data_source.timezone)
+                new_time = mc.increment_time(prev_exec_time, self._config.interval)
                 exec_time = min(new_time, self.end_time)
 
         state.save_state(self._bookmark_name, exec_time)
@@ -390,14 +394,11 @@ def set_logging(config):
     logging.getLogger('root').setLevel(config.logging_level)
 
 
-def get_now_tz(zone):
-    """So that now can be mocked. And serendipitously, the guidance from
-    the dateutil maintainer is not to use this anymore:
-    https://blog.ganssle.io/articles/2019/11/utcnow.html
-    :param zone timezone
-    :return an timezone-aware datetime.datetime
+def get_now():
+    """So that now can be mocked.
+    :return timezone-naive datetime.datetime
     """
-    return datetime.now(tz=zone)
+    return datetime.now()
 
 
 def common_runner_init(
@@ -412,7 +413,6 @@ def common_runner_init(
     meta_visitors,
     data_visitors,
     chooser,
-    application,
 ):
     """The common initialization code between TodoRunner and StateRunner uses. <collection>2caom2 implementations can
     use the defaults created here for the 'run' call, or they can provide their own specializations of the various
@@ -433,7 +433,6 @@ def common_runner_init(
     :param meta_visitors list of modules with visit methods, that expect the metadata of a work file to exist on disk
     :param data_visitors list of modules with visit methods, that expect the work file to exist on disk
     :param chooser OrganizerChooser, if there's rules that are unique to a collection about file naming.
-    :param application str representation of application name, for retrieving version
     """
     if config is None:
         config = mc.Config()
@@ -449,7 +448,7 @@ def common_runner_init(
     mc.StorageName.scheme = config.scheme
 
     observable = mc.Observable(mc.Rejected(config.rejected_fqn), mc.Metrics(config))
-    reporter = mc.ExecutionReporter(config, observable, application)
+    reporter = mc.ExecutionReporter(config, observable)
     reporter.set_log_location(config)
     if clients is None:
         clients = cc.ClientCollection(config)
@@ -508,7 +507,6 @@ def run_by_todo(
     store_transfer=None,
     clients=None,
     metadata_reader=None,
-    application='DEFAULT',
 ):
     """A default implementation for using the TodoRunner.
 
@@ -533,7 +531,6 @@ def run_by_todo(
         Don't try to guess what this one is.
     :param clients: ClientCollection instance
     :param metadata_reader: MetadataReader instance
-    :param application str Name for finding the version
     """
     (
         config,
@@ -556,7 +553,6 @@ def run_by_todo(
         meta_visitors,
         data_visitors,
         chooser,
-        application,
     )
 
     runner = TodoRunner(
@@ -571,7 +567,6 @@ def run_by_todo(
 def run_by_state(
     config=None,
     name_builder=None,
-    bookmark_name=None,
     meta_visitors=[],
     data_visitors=[],
     end_time=None,
@@ -581,7 +576,6 @@ def run_by_state(
     store_transfer=None,
     clients=None,
     metadata_reader=None,
-    application='DEFAULT',
 ):
     """A default implementation for using the StateRunner.
 
@@ -589,12 +583,11 @@ def run_by_state(
     :param name_builder NameBuilder extension that creates an instance of
         a StorageName extension, from an entry from a DataSourceComposable
         listing
-    :param bookmark_name string that represents the state.yml lookup value
     :param meta_visitors list of modules with visit methods, that expect
         the metadata of a work file to exist on disk
     :param data_visitors list of modules with visit methods, that expect the
         work file to exist on disk
-    :param end_time datetime for stopping a run, should be in UTC.
+    :param end_time datetime for stopping an incremental run. Provide a value to override DataSource.end_dt behaviour
     :param chooser OrganizerChooser, if there's strange rules about file
         naming.
     :param source DataSourceComposable extension that identifies work to be
@@ -609,7 +602,6 @@ def run_by_state(
         Don't try to guess what this one is.
     :param clients instance of ClientsCollection, if one was required
     :param metadata_reader instance of MetadataReader
-    :param application str Name for finding the version
     """
     (
         config,
@@ -632,19 +624,13 @@ def run_by_state(
         meta_visitors,
         data_visitors,
         chooser,
-        application,
     )
-
-    if end_time is None:
-        end_time = get_now_tz(source.timezone)
-
     runner = StateRunner(
         config,
         organizer,
         name_builder,
         source,
         metadata_reader,
-        bookmark_name,
         observable,
         reporter,
         end_time,
@@ -664,7 +650,6 @@ def run_single(
     store_transfer=None,
     modify_transfer=None,
     metadata_reader=None,
-    application='DEFAULT',
 ):
     """Process a single entry by StorageName detail.
 
@@ -683,11 +668,10 @@ def run_single(
         instance, but this allows for the case that a file is never stored
         at CADC. Try to guess what this one is.
     :param metadata_reader MetadataReader instance
-    :param application str Name for finding the version
     """
     logging.debug(f'Begin run_single {config.work_fqn}')
     observable = mc.Observable(mc.Rejected(config.rejected_fqn), mc.Metrics(config))
-    reporter = mc.ExecutionReporter(config, observable, application)
+    reporter = mc.ExecutionReporter(config, observable)
     reporter.set_log_location(config)
     clients = cc.ClientCollection(config)
     clients.metrics = observable.metrics

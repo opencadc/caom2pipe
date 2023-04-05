@@ -105,18 +105,11 @@ class Validator:
     Metadata cross-validation with data at CADC is the provenance of various "artifact-diff" flavours.
     """
 
-    def __init__(
-        self,
-        source_name,
-        scheme='cadc',
-        preview_suffix='jpg',
-        source_tz=tz.UTC,
-    ):
+    def __init__(self, source_name, scheme='cadc', preview_suffix='jpg'):
         """
         :param source_name: String value used for logging
         :param scheme: string which encapsulates scheme as used in Artifact URIs.
         :param preview_suffix String value that is excluded from queries, usually for files that are produced at CADC.
-        :param source_tz String representation of timezone name, as understood by timezone.
         """
         self._config = Config()
         self._config.get_executors()
@@ -129,7 +122,6 @@ class Validator:
         self._source_name = source_name
         self._scheme = scheme
         self._preview_suffix = preview_suffix
-        self._source_tz = source_tz
         self._logger = logging.getLogger(self.__class__.__name__)
         if self._config.log_to_file and os.path.exists(self._config.log_file_directory):
             log_fqn = os.path.join(self._config.log_file_directory, f'{self._source_name}_validate_log.txt')

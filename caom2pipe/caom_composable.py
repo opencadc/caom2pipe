@@ -1074,12 +1074,14 @@ class TelescopeMapping:
 
     def __init__(self, storage_name, headers, clients, observable=None):
         self._storage_name = storage_name
+        application = f'{storage_name.collection.lower()}2caom2'
+        self._meta_producer = mc.get_version(application)
         self._headers = headers
         self._clients = clients
         self._observable = observable
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def accumulate_blueprint(self, bp, application=None):
+    def accumulate_blueprint(self, bp):
         """
         Configure the telescope-specific ObsBlueprint at the CAOM model
         Observation level.
@@ -1087,12 +1089,10 @@ class TelescopeMapping:
         self._logger.debug(
             f'Begin accumulate_blueprint for {self._storage_name.file_uri}'
         )
-        if application is not None:
-            meta_producer = mc.get_version(application)
-            bp.set('Observation.metaProducer', meta_producer)
-            bp.set('Plane.metaProducer', meta_producer)
-            bp.set('Artifact.metaProducer', meta_producer)
-            bp.set('Chunk.metaProducer', meta_producer)
+        bp.set('Observation.metaProducer', self._meta_producer)
+        bp.set('Plane.metaProducer', self._meta_producer)
+        bp.set('Artifact.metaProducer', self._meta_producer)
+        bp.set('Chunk.metaProducer', self._meta_producer)
 
     def _update_artifact(self, artifact):
         """

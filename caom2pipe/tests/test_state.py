@@ -113,7 +113,7 @@ class TListDirTimeBoxDataSource(dsc.DataSource):
         file_list = glob.glob('/caom2pipe_test/*')
         for entry in file_list:
             stats = os.stat(entry)
-            entry_st_mtime_dt = datetime.fromtimestamp(stats.st_mtime, tz=self._timezone)
+            entry_st_mtime_dt = datetime.fromtimestamp(stats.st_mtime)
             if prev_exec_time <= entry_st_mtime_dt <= exec_time:
                 self._work.append(dsc.StateRunnerMeta(entry, entry_st_mtime_dt))
         self._capture_todo()
@@ -129,7 +129,6 @@ def test_run_state(client_mock, tmpdir):
         md5sum='9473fdd0d880a43c21b7778d34872157',
     )
     metadata_reader_mock = Mock(autospec=True)
-    caom2pipe_bookmark = 'caom2_timestamp'
     test_config = mc.Config()
     test_config.change_working_directory(tmpdir)
     test_config.collection = 'TEST'
@@ -142,7 +141,7 @@ def test_run_state(client_mock, tmpdir):
     test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY]
     test_config.use_local_files = False
     test_config.storage_inventory_resource_id = 'ivo://cadc.nrc.ca/test'
-    test_start_time, test_end_time = _get_times(test_config, caom2pipe_bookmark)
+    test_start_time, test_end_time = _get_times(test_config)
 
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content\n')
@@ -152,7 +151,6 @@ def test_run_state(client_mock, tmpdir):
     transferrer = TTransfer(tmpdir)
 
     test_result = rc.run_by_state(
-        bookmark_name=caom2pipe_bookmark,
         config=test_config,
         end_time=test_end_time,
         name_builder=test_builder,
@@ -171,7 +169,7 @@ def test_run_state(client_mock, tmpdir):
     # state file checking
     test_state = mc.State(test_config.state_fqn, tz.UTC)
     assert test_state is not None, 'expect state content'
-    test_checkpoint = test_state.get_bookmark(caom2pipe_bookmark)
+    test_checkpoint = test_state.get_bookmark(test_config.bookmark)
     assert test_checkpoint == test_end_time, 'wrong bookmark'
 
     # success file testing
@@ -220,7 +218,7 @@ def test_run_state(client_mock, tmpdir):
     assert pass_through_test, 'found a report file and checked it'
 
 
-def _get_times(test_config, caom2pipe_bookmark):
+def _get_times(test_config):
     if not os.path.exists('/caom2pipe_test'):
         os.mkdir('/caom2pipe_test')
         from pathlib import Path
@@ -229,12 +227,8 @@ def _get_times(test_config, caom2pipe_bookmark):
 
     test_start_time = datetime.fromtimestamp(
         os.stat('/caom2pipe_test/1000003f.fits.fz').st_mtime,
-        tz=tz.UTC,
     ) - timedelta(minutes=5)
 
-    with open(test_config.state_fqn, 'w') as f:
-        f.write('bookmarks:\n')
-        f.write(f'  {caom2pipe_bookmark}:\n')
-        f.write(f'    last_record: {test_start_time}\n')
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
     test_end_time = test_start_time + timedelta(minutes=12)
     return test_start_time, test_end_time
