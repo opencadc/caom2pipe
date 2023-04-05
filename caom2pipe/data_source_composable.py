@@ -74,7 +74,6 @@ import traceback
 from collections import deque, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
-from dateutil import tz
 
 from cadctap import CadcTapClient
 from cadcutils import exceptions
@@ -86,6 +85,7 @@ from caom2pipe import name_builder_composable as nbc
 __all__ = [
     'DataSource',
     'data_source_factory',
+    'is_offset_aware',
     'ListDirDataSource',
     'ListDirSeparateDataSource',
     'ListDirTimeBoxDataSource',
@@ -112,12 +112,37 @@ class DataSource:
     - a time-boxed directory listing
     - an implementation of the work_composable.work class, which returns a
         deque of work todo as a method implementation
+
+    On "end time" for incremental execution:
+    - the general rule is it should be the maximum time of the last record to be processed
+    - it should be over-ride-able, for the cases of:
+        - local directory listing time-boxes, where additions/changes to the timestamps in the list will be reflected
+          in the known system time
+        - horizontal scaling when reading from a data source
+
+    The pipelines will follow the guidance of "naive as local" from this reference:
+    https://blog.ganssle.io/articles/2022/04/naive-local-datetimes.html. The takeaways are repeated here:
+    - the offset may change during an interpreter run
+    - use datetime.astimezone(None) to convert to an aware datetime with a fixed offset representing the current
+      local time
+    - arithmetic operations should be applied to naive datetimes when working in local time
+
+    Effects on the pipeline:
+    - wall time arithmetic will be used on the values stored to and from the state.yml file;
+      (naive_dt + timedelta(hours=offset)).astimezone()
     """
 
-    def __init__(self, config=None, zone=tz.UTC):
+    def __init__(self, config=None, start_dt=None):
+        """
+        :param config:
+        :param start_dt: datetime for when to start caring about files at the data source.
+            Advances when doing time-boxed incremental harvesting. The default values should generally for validation,
+            resulting in a complete listing.
+        """
         self._config = config
-        # if this value is used, it should be a timezone-aware datetime
-        self._start_dt = None
+        # if the start_dt and end_dt values are used, they should be naive datetimes
+        self._start_dt = start_dt
+        self._end_dt = start_dt
         self._extensions = None
         if config is not None:
             self._extensions = config.data_source_extensions
@@ -125,7 +150,6 @@ class DataSource:
         self._skipped_files = 0
         self._work = deque()
         self._reporter = None
-        self._timezone = zone
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _capture_todo(self):
@@ -152,10 +176,24 @@ class DataSource:
 
     def get_time_box_work(self, prev_exec_dt, exec_dt):
         """
-        :param prev_exec_dt: tz-aware datetime
-        :param exec_dt: tz-aware datetime
+        :param prev_exec_dt: tz-naive datetime
+        :param exec_dt: tz-naive datetime
         """
         return deque()
+
+    def initialize_end_dt(self):
+        """
+        Do what needs to be done to set end_dt for an incremental harvest.
+        """
+        pass
+
+    @property
+    def end_dt(self):
+        return self._end_dt
+
+    @end_dt.setter
+    def end_dt(self, value):
+        self._end_dt = value
 
     @property
     def reporter(self):
@@ -172,10 +210,6 @@ class DataSource:
     @start_dt.setter
     def start_dt(self, value):
         self._start_dt = value
-
-    @property
-    def timezone(self):
-        return self._timezone
 
 
 class ListDirDataSource(DataSource):
@@ -295,8 +329,8 @@ class ListDirTimeBoxDataSource(DataSource):
 
     def get_time_box_work(self, prev_exec_dt, exec_dt):
         """
-        :param prev_exec_dt tz-aware datetime start of the time-boxed chunk
-        :param exec_dt tz-aware datetime end of the time-goxed chunk
+        :param prev_exec_dt tz-naive datetime start of the time-boxed chunk
+        :param exec_dt tz-naive datetime end of the time-goxed chunk
         :return: a deque of StateRunnerMeta instances, with
             prev_exec_time <= os.stat.mtime <= exec_time, and sorted by
             os.stat.mtime
@@ -324,16 +358,17 @@ class ListDirTimeBoxDataSource(DataSource):
                 # long as possible, and only if necessary
                 if entry.is_dir() and self._recursive:
                     entry_stats = entry.stat()
-                    entry_st_mtime_dt = mc.make_datetime_tz(entry_stats.st_mtime, self._timezone)
+                    entry_st_mtime_dt = mc.make_datetime(entry_stats.st_mtime)
                     if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
                         self._append_work(prev_exec_dt, exec_dt, entry.path)
                 else:
                     # send the dir_listing value
                     if self.default_filter(entry):
                         entry_stats = entry.stat()
-                        entry_st_mtime_dt = mc.make_datetime_tz(entry_stats.st_mtime, self._timezone)
+                        entry_st_mtime_dt = mc.make_datetime(entry_stats.st_mtime)
                         if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
                             self._temp[entry_st_mtime_dt].append(entry.path)
+                            self._logger.debug(f'Adding {entry.path}')
 
 
 class LocalFilesDataSource(ListDirTimeBoxDataSource):
@@ -481,7 +516,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             for entry in dir_listing:
                 if entry.is_dir() and self._recursive:
                     entry_stats = entry.stat()
-                    entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime, tz=self._timezone)
+                    entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime)
                     if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
                         self._append_work(prev_exec_dt, exec_dt, entry.path)
                 else:
@@ -496,7 +531,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     # otherwise the entry.stat() call will sometimes fail.
                     if not entry.name.startswith('.'):
                         entry_stats = entry.stat()
-                        entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime, tz=self._timezone)
+                        entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime)
                         if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
                             if self.default_filter(entry):
                                 self._temp[entry_st_mtime_dt].append(entry.path)
@@ -608,13 +643,9 @@ class TodoFileDataSource(DataSource):
 
 def is_offset_aware(dt):
     """
-    Raises CadcException if tzinfo is not set
-    :param dt:
-    :return: a datetime.timestamp with tzinfo set
+    :return: return True if tzinfo is set
     """
-    if dt.tzinfo is None:
-        raise mc.CadcException(f'Expect tzinfo to be set for {dt}')
-    return dt
+    return False if dt.tzinfo is None else True
 
 
 @dataclass
@@ -646,8 +677,8 @@ class QueryTimeBoxDataSource(DataSource):
         Get a set of file names from a collection. Limit the entries by
         time-boxing on lastModified, and don't include previews.
 
-        :param prev_exec_dt tz-aware datetime start of the time-boxed chunk
-        :param exec_dt tz-aware datetime end of the time-boxed chunk
+        :param prev_exec_dt tz-naive datetime start of the time-boxed chunk
+        :param exec_dt tz-naive datetime end of the time-boxed chunk
         :return: a list of StateRunnerMeta instances in the CADC storage system
         """
         # SG 8-09-22
@@ -656,14 +687,14 @@ class QueryTimeBoxDataSource(DataSource):
         # SGo
         # Use 'lastModified', because that should be the later timestamp (avoid eventual consistency lags).
         self._logger.debug(f'Begin get_time_box_work.')
-        prev_exec_dt_utc = mc.make_datetime_tz(prev_exec_dt, tz.UTC)
-        exec_dt_utc = mc.make_datetime_tz(exec_dt, tz.UTC)
+        prev_exec_dt = mc.make_datetime(prev_exec_dt)
+        exec_dt = mc.make_datetime(exec_dt)
         query = f"""
             SELECT A.uri, A.lastModified
             FROM inventory.Artifact AS A
             WHERE A.uri NOT LIKE '%{self._preview_suffix}'
-            AND A.lastModified > '{prev_exec_dt_utc}'
-            AND A.lastModified <= '{exec_dt_utc}'
+            AND A.lastModified > '{prev_exec_dt}'
+            AND A.lastModified <= '{exec_dt}'
             AND split_part( split_part( A.uri, '/', 1 ), ':', 2 ) = '{self._config.collection}'
             ORDER BY A.lastModified ASC
         """
@@ -672,11 +703,25 @@ class QueryTimeBoxDataSource(DataSource):
         self._work = deque()
         for row in rows:
             ignore_scheme, ignore_path, f_name = mc.decompose_uri(row['uri'])
-            r_dt = mc.make_datetime_tz(row['lastModified'], self._timezone)
+            r_dt = mc.make_datetime(row['lastModified'])
             self._work.append(StateRunnerMeta(f_name, r_dt))
         self._capture_todo()
         self._logger.debug(f'End get_time_box_work.')
         return self._work
+
+    def initialize_end_dt(self):
+        query = f"""
+            SELECT max(A.lastModified) AS m
+            FROM inventory.Artifact AS A
+            WHERE A.uri NOT LIKE '%{self._preview_suffix}'
+            AND split_part( split_part( A.uri, '/', 1 ), ':', 2 ) = '{self._config.collection}'
+        """
+        self._logger.debug(query)
+        rows = clc.query_tap_client(query, self._client)
+        for row in rows:
+            self._end_dt = row['m']
+            self._logger.info(f'Setting end time to {self._end_dt}')
+            break
 
 
 class VaultDataSource(ListDirTimeBoxDataSource):
@@ -718,7 +763,7 @@ class VaultDataSource(ListDirTimeBoxDataSource):
         for target in node.node_list:
             target_fqn = f'{node.uri}/{target}'
             target_node = self._vault_client.get_node(target_fqn)
-            target_node_mtime = mc.make_datetime_tz(target_node.props.get('date'), self._timezone)
+            target_node_mtime = mc.make_datetime(target_node.props.get('date'))
             if target_node.type == 'vos:ContainerNode' and self._recursive:
                 if exec_dt >= target_node_mtime >= prev_exec_dt:
                     self._append_work(

@@ -73,7 +73,7 @@ import shutil
 from astropy.table import Table
 from cadctap import CadcTapClient
 from cadcutils import exceptions
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 from time import sleep
 from unittest.mock import Mock, patch, call
@@ -228,7 +228,7 @@ def test_vault_list_dir_data_source(test_config, tmpdir):
 
 
 def test_list_dir_time_box_data_source(test_config, tmpdir):
-    test_prev_exec_time_dt = datetime.now(tz=timezone.utc)
+    test_prev_exec_time_dt = datetime.now()
 
     sleep(1)
     test_sub_dir = f'{tmpdir}/sub_directory'
@@ -312,8 +312,8 @@ def test_vault_list_dir_time_box_data_source(test_config):
     test_subject = dsc.VaultDataSource(test_vos_client, test_config)
     assert test_subject is not None, 'expect a test_subject'
     test_subject.reporter = test_reporter
-    test_prev_exec_dt = datetime(year=2020, month=9, day=15, hour=10, minute=0, second=0, tzinfo=timezone.utc)
-    test_exec_dt = datetime(year=2020, month=9, day=16, hour=10, minute=0, second=0, tzinfo=timezone.utc)
+    test_prev_exec_dt = datetime(year=2020, month=9, day=15, hour=10, minute=0, second=0)
+    test_exec_dt = datetime(year=2020, month=9, day=16, hour=10, minute=0, second=0)
     test_result = test_subject.get_time_box_work(test_prev_exec_dt, test_exec_dt)
     assert test_result is not None, 'expect a test result'
     assert len(test_result) == 1, 'wrong number of results'
@@ -323,7 +323,7 @@ def test_vault_list_dir_time_box_data_source(test_config):
     ), 'wrong name result'
     # the datetime from the record in the test_result, which should be between the start and stop times
     assert (
-        datetime(year=2020, month=9, day=15, hour=19, minute=55, second=3, microsecond=67000, tzinfo=timezone.utc)
+        datetime(year=2020, month=9, day=15, hour=19, minute=55, second=3, microsecond=67000)
         == test_result[0].entry_dt
     ), 'wrong dt result'
     assert test_reporter.all == 1, 'wrong report'
@@ -342,7 +342,7 @@ def test_transfer_check_fits_verify(test_config, tmpdir):
     # how things should probably work at CFHT
     delta = timedelta(minutes=30)
     # half an hour ago
-    test_start_time = datetime.now(tz=timezone.utc) - delta
+    test_start_time = datetime.now() - delta
     # half an hour from now
     test_end_time = test_start_time + delta + delta
     test_source_directory = Path(f'{tmpdir}/cfht_source')
@@ -703,15 +703,15 @@ def test_vault_clean_up_get_time_box(test_config):
         assert test_subject is not None, 'expect ctor to work'
         test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True), application='DEFAULT')
         test_subject.reporter = test_reporter
-        test_prev_exec_time = datetime(year=2020, month=9, day=15, hour=10, minute=0, second=0, tzinfo=timezone.utc)
-        test_exec_time = datetime(year=2020, month=9, day=16, hour=10, minute=0, second=0, tzinfo=timezone.utc)
+        test_prev_exec_time = datetime(year=2020, month=9, day=15, hour=10, minute=0, second=0)
+        test_exec_time = datetime(year=2020, month=9, day=16, hour=10, minute=0, second=0)
         test_result = test_subject.get_time_box_work(test_prev_exec_time, test_exec_time)
 
         assert test_result is not None, 'expect a work list'
         assert len(test_result) == 1, 'wrong work list entries'
         assert test_result[0].entry_name == 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits', 'wrong work entry url'
         assert (
-            test_result[0].entry_dt == datetime(2020, 9, 15, 19, 55, 3, 67000, tzinfo=timezone.utc)
+            test_result[0].entry_dt == datetime(2020, 9, 15, 19, 55, 3, 67000)
         ), 'wrong work entry timestamp on file modification'
 
         assert test_vos_client.isdir.call_count == 0, 'wrong is_dir count'

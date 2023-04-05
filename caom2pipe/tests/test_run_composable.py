@@ -74,7 +74,7 @@ from collections import deque
 from datetime import datetime, timedelta
 from dateutil import tz
 
-from unittest.mock import Mock, patch, call
+from unittest.mock import call, Mock, patch, PropertyMock
 import test_conf as tc
 
 from cadcdata import FileInfo
@@ -88,6 +88,8 @@ from caom2pipe import name_builder_composable as nbc
 from caom2pipe.reader_composable import FileMetadataReader
 from caom2pipe import run_composable as rc
 from caom2pipe import name_builder_composable as b
+
+import test_execute_composable
 
 
 STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')
@@ -221,7 +223,8 @@ def test_run_state(
     clients_mock.return_value.metadata_client.read.side_effect = _mock_read2
     tap_query_mock.side_effect = _mock_query_table2
 
-    test_end_time = datetime.fromtimestamp(1579740838, tz=tz.UTC)
+    # test_end_time = datetime.fromtimestamp(1579740838, tz=tz.UTC)
+    test_end_time = datetime.fromtimestamp(1579740838)
     start_time = test_end_time - timedelta(seconds=900)
 
     test_config.task_types = [mc.TaskType.INGEST]
@@ -248,7 +251,7 @@ def test_run_state(
     assert test_reader.reset.called, 'expect reset call'
     assert test_reader.reset.call_count == 1, 'wrong call count'
 
-    test_state = mc.State(test_config.state_fqn, tz.UTC)
+    test_state = mc.State(test_config.state_fqn, test_config.time_zone)
     test_bookmark = test_state.get_bookmark(TEST_BOOKMARK)
     assert test_bookmark == test_end_time, 'wrong time'
     assert os.path.exists(test_config.progress_fqn), 'expect progress file'
@@ -310,7 +313,7 @@ def test_run_state_log_to_file_true(
     visit_meta_mock.side_effect = _mock_visit
     tap_mock.side_effect = _mock_query_table2
 
-    test_end_time = datetime.fromtimestamp(1579740838, tz=tz.UTC)
+    test_end_time = datetime.fromtimestamp(1579740838)
     start_time = test_end_time - timedelta(seconds=900)
     _write_state(start_time)
 
@@ -455,21 +458,25 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config, tmp
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 @patch('caom2pipe.data_source_composable.CadcTapClient', autospec=True)
-@patch(
-    'caom2pipe.data_source_composable.QueryTimeBoxDataSource.'
-    'get_time_box_work'
-)
-def test_run_state_retry(get_work_mock, tap_mock, do_one_mock, clients_mock, test_config, tmpdir):
+@patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource')
+def test_run_state_retry(ds_mock, tap_mock, do_one_mock, clients_mock, test_config, tmpdir):
     test_config.change_working_directory(tmpdir)
-    _write_state(rc.get_now_tz(tz.UTC), test_config.state_fqn)
+    test_start_time = rc.get_now()
+    test_end_time = test_start_time + timedelta(hours=1)
+    _write_state(test_start_time, test_config.state_fqn)
+    start_time_mock = PropertyMock(return_value=None)
+    type(ds_mock.return_value).start_dt = start_time_mock
+    end_time_mock = PropertyMock(return_value=test_end_time)
+    type(ds_mock.return_value).end_dt = end_time_mock
+
     retry_success_fqn = f'{tmpdir}/logs_0/{test_config.success_log_file_name}'
     retry_failure_fqn = f'{tmpdir}/logs_0/{test_config.failure_log_file_name}'
     retry_retry_fqn = f'{tmpdir}/logs_0/{test_config.retry_file_name}'
 
     global call_count
     call_count = 0
-    get_work_mock.side_effect = _mock_get_work
-    do_one_mock.side_effect = _mock_do_one
+    ds_mock.return_value.get_time_box_work.side_effect = _mock_get_work
+    do_one_mock.side_effect = [mc.CadcException, _mock_do_one]
 
     test_config.log_to_file = True
     test_config.retry_failures = True
@@ -504,14 +511,14 @@ def test_time_box(clients_mock, test_config, tmpdir):
     test_config.interval = 700
 
     for test_tz in [tz.UTC, tz.gettz('US/Mountain')]:
-        test_start_time = datetime(2019, 7, 23, 9, 51, tzinfo=test_tz)
+        test_start_time = datetime(2019, 7, 23, 9, 51)
         _write_state(test_start_time, test_config.state_fqn)
-        test_end_time = datetime(2019, 7, 24, 9, 20, tzinfo=test_tz)
+        test_end_time = datetime(2019, 7, 24, 9, 20)
 
         class MakeTimeBoxWork(dsc.DataSource):
 
             def __init__(self):
-                super().__init__(test_config, test_tz)
+                super().__init__(test_config)
                 self.todo_call_count = 0
                 self.zero_called = False
                 self.one_called = False
@@ -519,15 +526,15 @@ def test_time_box(clients_mock, test_config, tmpdir):
 
             def get_time_box_work(self, prev_exec_dt, exec_dt):
                 if self.todo_call_count == 0:
-                    assert prev_exec_dt == datetime(2019, 7, 23, 9, 51, tzinfo=test_tz), f'prev 0 {test_tz}'
-                    assert exec_dt == datetime(2019, 7, 23, 21, 31, tzinfo=test_tz), 'wrong exec 0'
+                    assert prev_exec_dt == datetime(2019, 7, 23, 9, 51), f'prev 0 {test_tz}'
+                    assert exec_dt == datetime(2019, 7, 23, 21, 31), 'wrong exec 0'
                     self.zero_called = True
                 elif self.todo_call_count == 1:
-                    assert prev_exec_dt == datetime(2019, 7, 23, 21, 31, tzinfo=test_tz), 'wrong prev 1'
-                    assert exec_dt == datetime(2019, 7, 24, 9, 11, tzinfo=test_tz), 'wrong exec 1'
+                    assert prev_exec_dt == datetime(2019, 7, 23, 21, 31), 'wrong prev 1'
+                    assert exec_dt == datetime(2019, 7, 24, 9, 11), 'wrong exec 1'
                     self.one_called = True
                 elif self.todo_call_count == 2:
-                    assert prev_exec_dt == datetime(2019, 7, 24, 9, 11, tzinfo=test_tz), 'wrong exec 2'
+                    assert prev_exec_dt == datetime(2019, 7, 24, 9, 11), 'wrong exec 2'
                     assert exec_dt == test_end_time, f'wrong exec 2 {test_tz}'
                     self.two_called = True
                 self.todo_call_count += 1
@@ -548,7 +555,7 @@ def test_time_box(clients_mock, test_config, tmpdir):
         assert test_work.zero_called, 'missed zero'
         assert test_work.one_called, 'missed one'
         assert test_work.two_called, 'missed two'
-        test_state = mc.State(test_config.state_fqn, tz.UTC)
+        test_state = mc.State(test_config.state_fqn, test_config.time_zone)
         assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
         assert test_work.todo_call_count == 3, 'wrong todo call count'
 
@@ -559,35 +566,34 @@ def test_time_box_equal(clients_mock, test_config, tmpdir):
     test_config.change_working_directory(tmpdir)
     test_config.interval = 700
 
-    for test_timezone in [tz.UTC, tz.gettz('US/Mountain')]:
-        test_start_time = test_end_time = datetime(2019, 7, 23, 9, 51, tzinfo=test_timezone)
-        _write_state(test_start_time, test_config.state_fqn)
+    test_start_time = test_end_time = datetime(2019, 7, 23, 9, 51)
+    _write_state(test_start_time, test_config.state_fqn)
 
-        class MakeWork(dsc.DataSource):
+    class MakeWork(dsc.DataSource):
 
-            def __init__(self):
-                super().__init__(test_config, test_timezone)
-                self.todo_call_count = 0
+        def __init__(self):
+            super().__init__(test_config)
+            self.todo_call_count = 0
 
-            def get_time_box_work(self, prev_exec_dt, exec_dt):
-                self.todo_call_count += 1
-                assert self.todo_call_count <= 4, 'loop is written wrong'
-                return deque()
+        def get_time_box_work(self, prev_exec_dt, exec_dt):
+            self.todo_call_count += 1
+            assert self.todo_call_count <= 4, 'loop is written wrong'
+            return deque()
 
-        test_work = MakeWork()
+    test_work = MakeWork()
 
-        test_result = rc.run_by_state(
-            test_config,
-            meta_visitors=None,
-            data_visitors=None,
-            bookmark_name=TEST_BOOKMARK,
-            end_time=test_end_time,
-            source=test_work,
-        )
-        assert test_result is not None, 'expect a result'
-        test_state = mc.State(test_config.state_fqn, tz.UTC)
-        assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
-        assert test_work.todo_call_count == 0, 'wrong todo call count'
+    test_result = rc.run_by_state(
+        test_config,
+        meta_visitors=None,
+        data_visitors=None,
+        bookmark_name=TEST_BOOKMARK,
+        end_time=test_end_time,
+        source=test_work,
+    )
+    assert test_result is not None, 'expect a result'
+    test_state = mc.State(test_config.state_fqn, test_config.time_zone)
+    assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
+    assert test_work.todo_call_count == 0, 'wrong todo call count'
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
@@ -596,21 +602,21 @@ def test_time_box_once_through(clients_mock, test_config, tmpdir):
     test_config.interval = 700
 
     for test_timezone in [tz.UTC, tz.gettz('US/Mountain')]:
-        test_start_time = datetime(2019, 7, 23, 9, 51, tzinfo=test_timezone)
+        test_start_time = datetime(2019, 7, 23, 9, 51)
         _write_state(test_start_time, test_config.state_fqn)
-        test_end_time = datetime(2019, 7, 23, 12, 20, tzinfo=test_timezone)
+        test_end_time = datetime(2019, 7, 23, 12, 20)
 
         class MakeWork(dsc.DataSource):
 
             def __init__(self):
-                super().__init__(test_config, test_timezone)
+                super().__init__(test_config)
                 self.todo_call_count = 0
                 self.zero_called = False
 
             def get_time_box_work(self, prev_exec_dt, exec_dt):
                 if self.todo_call_count == 0:
-                    assert prev_exec_dt == datetime(2019, 7, 23, 9, 51, tzinfo=test_timezone), 'prev'
-                    assert exec_dt == datetime(2019, 7, 23, 12, 20, tzinfo=test_timezone), 'wrong exec'
+                    assert prev_exec_dt == datetime(2019, 7, 23, 9, 51), 'prev'
+                    assert exec_dt == datetime(2019, 7, 23, 12, 20), 'wrong exec'
                     self.zero_called = True
                 self.todo_call_count += 1
                 assert self.todo_call_count <= 4, 'loop is written wrong'
@@ -628,7 +634,7 @@ def test_time_box_once_through(clients_mock, test_config, tmpdir):
         )
         assert test_result is not None, 'expect a result'
 
-        test_state = mc.State(test_config.state_fqn, tz.UTC)
+        test_state = mc.State(test_config.state_fqn, test_config.time_zone)
         assert test_work.zero_called, 'missed zero'
         assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
         assert test_work.todo_call_count == 1, 'wrong todo call count'
@@ -781,7 +787,7 @@ def test_run_store_get_work_failures(
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content')
 
-    test_end_time = datetime.fromtimestamp(1579740838, tz=tz.UTC)
+    test_end_time = datetime.fromtimestamp(1579740838)
     start_time = test_end_time - timedelta(seconds=900)
     _write_state(start_time, test_config.state_fqn)
 
@@ -1027,6 +1033,241 @@ def _check_log_files(
     assert os.path.exists(retry_retry_fqn), 'expect retry file'
 
 
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+def test_time_box_time_zones(clients_mock, test_config, tmpdir):
+    # test that the time boxes increment as expected, to a maximum value
+    # time-boxing is handled by DataSource specializations, and is in the time zone of the data source
+    # end timestamp is handled by StateRunner
+
+    test_config.change_working_directory(tmpdir)
+
+    test_config.interval = 700
+
+    for test_tz in [tz.UTC, tz.gettz('US/Mountain')]:
+        test_start_time = datetime(2019, 7, 23, 9, 51)
+        _write_state(test_start_time, test_config.state_fqn)
+        test_end_time = datetime(2019, 7, 24, 9, 20)
+
+        class MakeTimeBoxWork(dsc.DataSource):
+
+            def __init__(self):
+                super().__init__(test_config)
+                self.todo_call_count = 0
+                self.zero_called = False
+                self.one_called = False
+                self.two_called = False
+
+            def get_time_box_work(self, prev_exec_dt, exec_dt):
+                if self.todo_call_count == 0:
+                    assert prev_exec_dt == datetime(2019, 7, 23, 9, 51), f'prev 0 {test_tz}'
+                    assert exec_dt == datetime(2019, 7, 23, 21, 31), 'wrong exec 0'
+                    self.zero_called = True
+                elif self.todo_call_count == 1:
+                    assert prev_exec_dt == datetime(2019, 7, 23, 21, 31), 'wrong prev 1'
+                    assert exec_dt == datetime(2019, 7, 24, 9, 11), 'wrong exec 1'
+                    self.one_called = True
+                elif self.todo_call_count == 2:
+                    assert prev_exec_dt == datetime(2019, 7, 24, 9, 11), 'wrong exec 2'
+                    assert exec_dt == test_end_time, f'wrong exec 2 {test_tz}'
+                    self.two_called = True
+                self.todo_call_count += 1
+                assert self.todo_call_count <= 4, 'loop is written wrong'
+                return deque()
+
+        test_work = MakeTimeBoxWork()
+
+        test_result = rc.run_by_state(
+            test_config,
+            meta_visitors=None,
+            data_visitors=None,
+            bookmark_name=TEST_BOOKMARK,
+            end_time=test_end_time,
+            source=test_work,
+        )
+        assert test_result is not None, 'expect a result'
+        assert test_work.zero_called, 'missed zero'
+        assert test_work.one_called, 'missed one'
+        assert test_work.two_called, 'missed two'
+        test_state = mc.State(test_config.state_fqn, test_config.time_zone)
+        assert test_state.get_bookmark(TEST_BOOKMARK) == test_end_time
+        assert test_work.todo_call_count == 3, 'wrong todo call count'
+
+
+class IsValidFails(tc.TStorageName):
+
+    def is_valid(self):
+        return False
+
+
+class BuilderWithException(nbc.StorageNameBuilder):
+
+    def build(self, entry):
+        raise mc.CadcException('builder fails')
+
+
+class BuilderWithIsValidFails(nbc.StorageNameBuilder):
+
+    def build(self, entry):
+        return IsValidFails()
+
+
+class BuilderWithNoException(nbc.StorageNameBuilder):
+
+    def build(self, entry):
+        return tc.TStorageName()
+
+
+class TestProcessEntry:
+    # TodoRunner._process_entry execution paths
+
+    def _ini(self, test_config, tmp_path):
+        test_config.change_working_directory(tmp_path)
+        test_config.task_types = [mc.TaskType.INGEST]
+        test_meta = [test_execute_composable.VisitNoException()]
+        self._reader = Mock()
+        self._rejected = mc.Rejected(test_config.rejected_fqn)
+        self._observer = mc.Observable(self._rejected, Mock())
+        self._reporter = mc.ExecutionReporter(test_config, self._observer, 'DEFAULT')
+        self._clients = Mock()
+        self._data_source = Mock()
+        self._organizer = ec.OrganizeExecutes(
+            test_config,
+            test_meta,
+            [],
+            metadata_reader=self._reader,
+            observable=self._observer,
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        self._storage_name = tc.TStorageName()
+        self._bookmark = None
+        self._end_dt = None
+
+    def _check_logs(self, failure_should_exist, retry_should_exist, success_should_exist):
+        failure_files = self._reporter.get_file_names_from_log_file(self._reporter._failure_fqn)
+        retry_files = self._reporter.get_file_names_from_log_file(self._reporter._retry_fqn)
+        success_files = self._reporter.get_file_names_from_log_file(self._reporter._success_fqn)
+        if failure_should_exist:
+            assert self._storage_name.file_name in failure_files, 'should be failure logging'
+        else:
+            assert self._storage_name.file_name not in failure_files, 'should not be failure logging'
+        if retry_should_exist:
+            assert (
+                self._storage_name.source_names[0] in retry_files
+                or self._storage_name.file_name in retry_files
+            ), 'should be retry logging'
+        else:
+            assert not (
+                self._storage_name.source_names[0] in retry_files
+                and self._storage_name.file_name in retry_files
+            ), 'should not be retry logging'
+        if success_should_exist:
+            assert self._storage_name.file_name in success_files, 'should be success logging'
+        else:
+            assert self._storage_name.file_name not in success_files, 'should not be success logging'
+
+    def test_build_raises_exception(self, test_config, tmp_path):
+        # NameBuilder.build call raises an Exception
+        # retry exists because there could be a service call in the naming code
+        self._ini(test_config, tmp_path)
+        test_builder = BuilderWithException()
+        test_subject = rc.StateRunner(
+            test_config,
+            self._organizer,
+            test_builder,
+            self._data_source,
+            self._reader,
+            self._bookmark,
+            self._observer,
+            self._reporter,
+            self._end_dt,
+        )
+        test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
+        assert test_result == -1, 'expect failure'
+        self._check_logs(failure_should_exist=True, retry_should_exist=True, success_should_exist=False)
+
+    def test_is_valid_fails(self, test_config, tmp_path):
+        # storage_name.is_valid == False
+        self._ini(test_config, tmp_path)
+        test_builder = BuilderWithIsValidFails()
+        test_subject = rc.StateRunner(
+            test_config,
+            self._organizer,
+            test_builder,
+            self._data_source,
+            self._reader,
+            self._bookmark,
+            self._observer,
+            self._reporter,
+            self._end_dt,
+        )
+        test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
+        assert test_result == -1, 'expect failure'
+        self._check_logs(failure_should_exist=True, retry_should_exist=False, success_should_exist=False)
+
+    def test_do_one_raises_exception(self, test_config, tmp_path):
+        # storage_name.is_valid == True, do_one raises an exception
+        self._ini(test_config, tmp_path)
+        test_builder = BuilderWithNoException()
+        with patch('caom2pipe.execute_composable.OrganizeExecutes.do_one', side_effect=mc.CadcException):
+            test_subject = rc.StateRunner(
+                test_config,
+                self._organizer,
+                test_builder,
+                self._data_source,
+                self._reader,
+                self._bookmark,
+                self._observer,
+                self._reporter,
+                self._end_dt,
+            )
+            test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
+            assert test_result == -1, 'expect failure'
+            self._check_logs(failure_should_exist=True, retry_should_exist=True, success_should_exist=False)
+
+    def test_do_one_succeeds(self, test_config, tmp_path):
+        # storage_name.is_valid == True, do_one succeeds
+        self._ini(test_config, tmp_path)
+        test_builder = BuilderWithNoException()
+        with patch('caom2pipe.execute_composable.OrganizeExecutes.do_one', return_value=0):
+            test_subject = rc.StateRunner(
+                test_config,
+                self._organizer,
+                test_builder,
+                self._data_source,
+                self._reader,
+                self._bookmark,
+                self._observer,
+                self._reporter,
+                self._end_dt,
+            )
+            test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
+            assert test_result == 0, 'expect success'
+            # success_should_exist == False as it's only set in the do_one implementation
+            self._check_logs(failure_should_exist=False, retry_should_exist=False, success_should_exist=False)
+
+    def test_do_one_non_zero_return(self, test_config, tmp_path):
+        # storage_name.is_valid == True, do_one fails
+        self._ini(test_config, tmp_path)
+        test_builder = BuilderWithNoException()
+        with patch('caom2pipe.execute_composable.OrganizeExecutes.do_one', return_value=-1):
+            test_subject = rc.StateRunner(
+                test_config,
+                self._organizer,
+                test_builder,
+                self._data_source,
+                self._reader,
+                self._bookmark,
+                self._observer,
+                self._reporter,
+                self._end_dt,
+            )
+            test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
+            assert test_result == -1, 'expect failure'
+            # success_should_exist == False as it's only set in the do_one implementation
+            self._check_logs(failure_should_exist=False, retry_should_exist=False, success_should_exist=False)
+
+
 def _write_state(start_time, fqn=STATE_FILE):
     if os.path.exists(fqn):
         os.unlink(fqn)
@@ -1087,7 +1328,7 @@ def _mock_query(arg1, arg2, arg3):
         temp.append(
             dsc.StateRunnerMeta(
                 'NEOS_SCI_2015347000000_clean.fits',
-                datetime.strptime('2019-10-23T16:27:19.000', '%Y-%m-%dT%H:%M:%S.%f').astimezone(tz.UTC),
+                datetime.strptime('2019-10-23T16:27:19.000', '%Y-%m-%dT%H:%M:%S.%f'),
             )
         )
         return temp
@@ -1102,8 +1343,12 @@ def _mock_do_one(arg1):
             f.write(f'ghi.fits.gz')
     elif arg1.obs_id == 'ghi':
         assert arg1.file_name == 'ghi.fits', 'wrong file name'
+    elif arg1.obs_id == 'NEOS_SCI_2015347000000_clean':
+        # TODO - why is this required now?
+        pass
     else:
         assert False, f'unexpected obs id {arg1.obs_id}'
+    # mock execution failure
     return -1
 
 

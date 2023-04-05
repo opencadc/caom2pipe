@@ -113,7 +113,7 @@ class TListDirTimeBoxDataSource(dsc.DataSource):
         file_list = glob.glob('/caom2pipe_test/*')
         for entry in file_list:
             stats = os.stat(entry)
-            entry_st_mtime_dt = datetime.fromtimestamp(stats.st_mtime, tz=self._timezone)
+            entry_st_mtime_dt = datetime.fromtimestamp(stats.st_mtime)
             if prev_exec_time <= entry_st_mtime_dt <= exec_time:
                 self._work.append(dsc.StateRunnerMeta(entry, entry_st_mtime_dt))
         self._capture_todo()
@@ -229,7 +229,6 @@ def _get_times(test_config, caom2pipe_bookmark):
 
     test_start_time = datetime.fromtimestamp(
         os.stat('/caom2pipe_test/1000003f.fits.fz').st_mtime,
-        tz=tz.UTC,
     ) - timedelta(minutes=5)
 
     with open(test_config.state_fqn, 'w') as f:

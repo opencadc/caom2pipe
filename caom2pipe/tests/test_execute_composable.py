@@ -928,6 +928,150 @@ def test_decompress():
                 os.unlink(test_result)
 
 
+class VisitNoException:
+
+    def visit(self, obs, **kwargs):
+        # create an Observation instance
+        return _read_obs(None)
+
+
+class VisitWithException:
+
+    def visit(self, obs, **kwargs):
+        raise mc.CadcException('Cannot build an observation')
+
+
+class VisitWithTimeoutException:
+
+    def visit(self, obs, **kwargs):
+        raise mc.CadcException('Read timed out')
+
+
+class TestDoOne:
+
+    def _ini(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.INGEST]
+        test_config.change_working_directory(tmp_path)
+        self._reader = Mock()
+        self._rejected = mc.Rejected(test_config.rejected_fqn)
+        self._observer = mc.Observable(self._rejected, Mock())
+        self._reporter = mc.ExecutionReporter(test_config, self._observer, 'DEFAULT')
+        self._clients = Mock()
+        self._storage_name = tc.TStorageName()
+
+    def _check_logs(self, failure_should_exist, retry_should_exist, success_should_exist):
+        failure_files = self._reporter.get_file_names_from_log_file(self._reporter._failure_fqn)
+        retry_files = self._reporter.get_file_names_from_log_file(self._reporter._retry_fqn)
+        success_files = self._reporter.get_file_names_from_log_file(self._reporter._success_fqn)
+        if failure_should_exist:
+            assert self._storage_name.file_name in failure_files, 'should be failure logging'
+        else:
+            assert self._storage_name.file_name not in failure_files, 'should not be failure logging'
+        if retry_should_exist:
+            assert self._storage_name.source_names[0] in retry_files, 'should be retry logging'
+        else:
+            assert self._storage_name.source_names[0] not in retry_files, 'should not be retry logging'
+        if success_should_exist:
+            assert self._storage_name.file_name in success_files, 'should be success logging'
+        else:
+            assert self._storage_name.file_name not in success_files, 'should not be success logging'
+
+    def test_do_one_execute_success(self, test_config, tmp_path):
+        self._ini(test_config, tmp_path)
+        # check that failure/retry files have the correct content if do_one succeeds
+        test_meta = [VisitNoException()]
+        test_subject = ec.OrganizeExecutes(
+            test_config,
+            test_meta,
+            [],
+            metadata_reader=self._reader,
+            observable=self._observer,
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        test_subject.choose()
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+        self._check_logs(failure_should_exist=False, retry_should_exist=False, success_should_exist=True)
+
+    def test_do_one_execute_raises_exception(self, test_config, tmp_path):
+        self._ini(test_config, tmp_path)
+        # check that failure/retry files have the correct content if is_rejected returns False, the
+        # number of executors > 0, execute raises an exception without timeout in the message text
+        test_meta = [VisitWithException()]
+        test_subject = ec.OrganizeExecutes(
+            test_config,
+            test_meta,
+            [],
+            metadata_reader=self._reader,
+            observable=self._observer,
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        test_subject.choose()
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == -1, 'expect failure for the general exception case'
+        self._check_logs(failure_should_exist=True, retry_should_exist=False, success_should_exist=False)
+
+    def test_do_one_is_rejected_true(self, test_config, tmp_path):
+        self._ini(test_config, tmp_path)
+        # check that failure/retry files have the correct content if is_rejected returns True
+        test_meta = [VisitNoException()]
+        self._rejected.record('bad_metadata', 'test_file.fits.gz')
+        test_subject = ec.OrganizeExecutes(
+            test_config,
+            test_meta,
+            [],
+            metadata_reader=self._reader,
+            observable=self._observer,
+            reporter=self._reporter,
+        )
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success for the bad metadata case'
+        self._check_logs(failure_should_exist=True, retry_should_exist=False, success_should_exist=False)
+
+    def test_do_one_is_rejected_false_executors_len_zero(self, test_config, tmp_path):
+        self._ini(test_config, tmp_path)
+        # check that failure/retry files have the correct content if is_rejected returns False, but the
+        # number of executors == 0
+        test_subject = ec.OrganizeExecutes(
+            test_config,
+            [],
+            [],
+            metadata_reader=self._reader,
+            observable=self._observer,
+            reporter=self._reporter,
+        )
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == -1, 'expect failure for the len(executors) == 0 case'
+        # no logging for this test case at the moment
+        self._check_logs(failure_should_exist=False, retry_should_exist=False, success_should_exist=False)
+
+    def test_do_one_execute_raises_timeout_exception(self, test_config, tmp_path):
+        self._ini(test_config, tmp_path)
+        # check that failure/retry files have the correct content if is_rejected returns False, the
+        # number of executors > 0, execute raises an exception with timeout in the message text
+        test_meta = [VisitWithTimeoutException()]
+        test_subject = ec.OrganizeExecutes(
+            test_config,
+            test_meta,
+            [],
+            metadata_reader=self._reader,
+            observable=self._observer,
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        test_subject.choose()
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == -1, 'expect failure for the timeout exception case'
+        self._check_logs(failure_should_exist=True, retry_should_exist=True, success_should_exist=False)
+
+
 def _transfer_get_mock(entry, fqn):
     assert entry == 'vos:goliaths/nonexistent.fits.gz', 'wrong entry'
     with open(fqn, 'w') as f:
