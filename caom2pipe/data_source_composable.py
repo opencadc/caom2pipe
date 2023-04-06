@@ -115,10 +115,17 @@ class DataSource:
 
     On "end time" for incremental execution:
     - the general rule is it should be the maximum time of the last record to be processed
+        - this rule should be used for reading from remote data sources, since there will be no knowledge or control
+          over the local time on that source
     - it should be over-ride-able, for the cases of:
-        - local directory listing time-boxes, where additions/changes to the timestamps in the list will be reflected
+        - local directory listing time-boxes, where additions/changes to the timestamps in the list can be reflected
           in the known system time
-        - horizontal scaling when reading from a data source
+        - horizontal scaling when reading from a remote data source
+    - if start_dt == end_dt for an incremental run, the initialize_end_dt may find candidates for processing, but the
+      run method in run_composable.StateRunner will skip doing those candidates again, as the condition
+      start_dt == end_dt exits without doing any work.
+    - for a data source, setting the default start_dt to the initial time for data from the source will result in a
+      a complete harvest, such as is required for validation.
 
     The pipelines will follow the guidance of "naive as local" from this reference:
     https://blog.ganssle.io/articles/2022/04/naive-local-datetimes.html. The takeaways are repeated here:
@@ -184,6 +191,9 @@ class DataSource:
     def initialize_end_dt(self):
         """
         Do what needs to be done to set end_dt for an incremental harvest.
+
+        Use the method initialize_end_dt if it's necessary to know the "end time" for an incremental harvest,
+        before incremental execution starts
         """
         pass
 
