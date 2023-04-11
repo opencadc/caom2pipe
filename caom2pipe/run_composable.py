@@ -94,7 +94,6 @@ from caom2pipe import transfer_composable
 
 __all__ = [
     'common_runner_init',
-    'get_now',
     'run_by_state',
     'run_by_todo',
     'set_logging',
@@ -281,7 +280,6 @@ class StateRunner(TodoRunner):
         # end dt is a datetime
         if end_dt is None:
             data_source.initialize_end_dt()
-            # self._end_time = (datetime.now(self._data_source.timezone) if max_dt is None else max_dt)
             self._end_time = data_source.end_dt
         else:
             self._end_time = end_dt
@@ -300,7 +298,7 @@ class StateRunner(TodoRunner):
 
         :return: 0 for success, -1 for failure
         """
-        self._logger.debug(f'Begin run state for {self._bookmark_name}')
+        self._logger.error(f'Begin run state for {self._bookmark_name}, finish at {self.end_time}')
         if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
 
@@ -392,13 +390,6 @@ def set_logging(config):
         handler.setLevel(config.logging_level)
         handler.setFormatter(formatter)
     logging.getLogger('root').setLevel(config.logging_level)
-
-
-def get_now():
-    """So that now can be mocked.
-    :return timezone-naive datetime.datetime
-    """
-    return datetime.now()
 
 
 def common_runner_init(

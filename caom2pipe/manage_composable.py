@@ -125,6 +125,8 @@ __all__ = [
     'get_endpoint_session',
     'get_file_meta',
     'get_keyword',
+    'get_now',
+    'get_version',
     'http_get',
     'increment_time',
     'ISO_8601_FORMAT',
@@ -1429,7 +1431,7 @@ class Config:
 
     @time_zone.setter
     def time_zone(self, value):
-        self._time_zone = value
+        self._time_zone = tz.gettz(value)
 
     @property
     def use_vos(self):
@@ -1653,7 +1655,7 @@ class Config:
                 f'{os.path.basename(self.working_directory)}_report.txt',
             )
             self.scheme = config.get('scheme', 'cadc')
-            self.time_zone = config.get('time_zone', tz.UTC)
+            self.time_zone = config.get('time_zone', 'UTC')
         except KeyError as e:
             raise CadcException(f'Error in config file {e}')
 
@@ -2554,6 +2556,13 @@ def get_file_size(fqn):
     """
     s = os.stat(fqn)
     return s.st_size
+
+
+def get_now():
+    """So that now can be mocked.
+    :return timezone-naive datetime.datetime
+    """
+    return datetime.now()
 
 
 def get_version(entry):
