@@ -90,7 +90,7 @@ from caom2pipe.transfer_composable import VoScienceTransfer
 from caom2pipe import run_composable as rc
 from traceback import format_exc
 
-from unittest.mock import call, Mock, patch
+from unittest.mock import call, Mock, patch, PropertyMock
 from test_data_source_composable import _create_dir_listing
 
 TEST_START_TIME = datetime(year=2020, month=3, day=3, hour=1, minute=1, second=1)
@@ -153,6 +153,7 @@ def test_report_output_todo_local(test_config, tmpdir):
                 test_data_source = dsc.LocalFilesDataSource(
                     test_config, test_clients.data_client, test_reader, recursive=True, scheme='cadc'
                 )
+                type(test_data_source).end_dt = PropertyMock(return_value=TEST_END_TIME)
                 Config.write_to_file(test_config)
                 State.write_bookmark(test_config.state_fqn, test_config.bookmark, TEST_START_TIME)
                 for state in [True, False]:
@@ -198,7 +199,6 @@ def test_report_output_todo_local(test_config, tmpdir):
                             test_reader,
                             test_observable,
                             test_reporter,
-                            TEST_END_TIME,
                         )
                     else:
                         test_subject = rc.TodoRunner(
@@ -294,6 +294,7 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                 test_data_source = dsc.VaultCleanupDataSource(
                     test_config, test_clients.vo_client, test_clients.data_client, test_reader
                 )
+                type(test_data_source).end_dt = PropertyMock(return_value=TEST_END_TIME)
                 Config.write_to_file(test_config)
                 State.write_bookmark(test_config.state_fqn, test_config.bookmark, TEST_START_TIME)
                 # state == True is incremental operation
@@ -347,7 +348,6 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                             test_reader,
                             test_observable,
                             test_reporter,
-                            TEST_END_TIME,
                         )
                     else:
                         test_subject = rc.TodoRunner(

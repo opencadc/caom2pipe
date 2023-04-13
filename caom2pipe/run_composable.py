@@ -270,19 +270,12 @@ class StateRunner(TodoRunner):
         metadata_reader,
         observable,
         reporter,
-        end_dt,
     ):
         super().__init__(
             config, organizer, builder, data_source, metadata_reader, observable, reporter
         )
         # string that represents the state.yml lookup value
         self._bookmark_name = config.bookmark
-        # end dt is a datetime
-        if end_dt is None:
-            data_source.initialize_end_dt()
-            self._end_time = data_source.end_dt
-        else:
-            self._end_time = end_dt
 
     def _record_progress(
         self, count, cumulative_count, start_time, save_time
@@ -298,30 +291,25 @@ class StateRunner(TodoRunner):
 
         :return: 0 for success, -1 for failure
         """
-        self._logger.error(f'Begin run state for {self._bookmark_name}, finish at {self.end_time}')
         if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
 
-        state = mc.State(self._config.state_fqn, self._config.time_zone)
-        if self._data_source.start_dt is None:
-            start_time = state.get_bookmark(self._bookmark_name)
-        else:
-            start_time = self._data_source.start_dt
-
-        prev_exec_time = start_time
+        self._data_source.initialize_start_dt()
+        self._data_source.initialize_end_dt()
+        prev_exec_time = self._data_source.start_dt
         incremented = mc.increment_time(prev_exec_time, self._config.interval)
-        exec_time = min(incremented, self.end_time)
+        exec_time = min(incremented, self._data_source.end_dt)
 
-        self._logger.info(f'Starting at {start_time}, ending at {self.end_time}')
+        self._logger.info(f'Starting at {prev_exec_time}, ending at {self._data_source.end_dt}')
         result = 0
-        if prev_exec_time == self.end_time:
-            self._logger.info(f'Start time is the same as end time {start_time}, stopping.')
+        if prev_exec_time == self._data_source.end_dt:
+            self._logger.info(f'Start time is the same as end time {prev_exec_time}, stopping.')
             exec_time = prev_exec_time
         else:
             cumulative = 0
             result = 0
             self._organizer.choose()
-            while exec_time <= self.end_time:
+            while exec_time <= self._data_source.end_dt:
                 self._logger.info(f'Processing from {prev_exec_time} to {exec_time}')
                 save_time = exec_time
                 self._organizer.success_count = 0
@@ -346,12 +334,10 @@ class StateRunner(TodoRunner):
                     self._metadata_reader.reset()
                     self._finish_run()
 
-                self._record_progress(
-                    num_entries, cumulative, start_time, save_time
-                )
-                state.save_state(self._bookmark_name, save_time)
+                self._record_progress(num_entries, cumulative, prev_exec_time, save_time)
+                self._data_source.save_start_dt(save_time)
 
-                if exec_time == self.end_time:
+                if exec_time == self._data_source.end_dt:
                     # the last interval will always have the exec time
                     # equal to the end time, which will fail the while check
                     # so leave after the last interval has been processed
@@ -363,23 +349,15 @@ class StateRunner(TodoRunner):
                     break
                 prev_exec_time = exec_time
                 new_time = mc.increment_time(prev_exec_time, self._config.interval)
-                exec_time = min(new_time, self.end_time)
+                exec_time = min(new_time, self._data_source.end_dt)
 
-        state.save_state(self._bookmark_name, exec_time)
+        self._data_source.save_start_dt(exec_time)
         msg = f'Done for {self._bookmark_name}, saved state is {exec_time}'
         self._logger.info('=' * len(msg))
         self._logger.info(msg)
         self._logger.info(f'{self._reporter.success} of {self._reporter.all} records processed correctly.')
         self._logger.info('=' * len(msg))
         return result
-
-    @property
-    def end_time(self):
-        return self._end_time
-
-    @end_time.setter
-    def end_time(self, value):
-        self._end_time = value
 
 
 def set_logging(config):
@@ -560,7 +538,6 @@ def run_by_state(
     name_builder=None,
     meta_visitors=[],
     data_visitors=[],
-    end_time=None,
     chooser=None,
     source=None,
     modify_transfer=None,
@@ -578,7 +555,6 @@ def run_by_state(
         the metadata of a work file to exist on disk
     :param data_visitors list of modules with visit methods, that expect the
         work file to exist on disk
-    :param end_time datetime for stopping an incremental run. Provide a value to override DataSource.end_dt behaviour
     :param chooser OrganizerChooser, if there's strange rules about file
         naming.
     :param source DataSourceComposable extension that identifies work to be
@@ -624,7 +600,6 @@ def run_by_state(
         metadata_reader,
         observable,
         reporter,
-        end_time,
     )
     result = runner.run()
     result |= runner.run_retry()

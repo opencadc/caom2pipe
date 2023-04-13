@@ -85,6 +85,8 @@ from caom2pipe import name_builder_composable as nbc
 __all__ = [
     'DataSource',
     'data_source_factory',
+    'HttpDataSource',
+    'IncrementalDataSource',
     'is_offset_aware',
     'ListDirDataSource',
     'ListDirSeparateDataSource',
@@ -112,9 +114,58 @@ class DataSource:
     - a time-boxed directory listing
     - an implementation of the work_composable.work class, which returns a
         deque of work todo as a method implementation
+    """
+
+    def __init__(self, config):
+        """
+        :param config:
+        """
+        self._config = config
+        self._extensions = config.data_source_extensions
+        self._rejected_files = 0
+        self._skipped_files = 0
+        self._work = deque()
+        self._reporter = None
+        self._logger = logging.getLogger(self.__class__.__name__)
+
+    @property
+    def reporter(self):
+        return self._reporter
+
+    @reporter.setter
+    def reporter(self, value):
+        self._reporter = value
+
+    def clean_up(self, entry, execution_result, current_count):
+        """Clean up files locally after there has been a storage attempt."""
+        pass
+
+    def default_filter(self, entry):
+        """
+        :param entry: os.DirEntry
+        """
+        for extension in self._extensions:
+            if entry.name.endswith(extension):
+                return True
+        return False
+
+    def get_work(self):
+        return self._work
+
+    def _capture_todo(self):
+        self._reporter.capture_todo(len(self._work), self._rejected_files, self._skipped_files)
+        # do not need the record of the rejected or skipped files any longer
+        self._rejected_files = 0
+        self._skipped_files = 0
+
+
+class IncrementalDataSource(DataSource):
+    """
+    Support incremental harvesting.
 
     On "end time" for incremental execution:
-    - the general rule is it should be the maximum time of the last record to be processed
+    - the general rule is it should be the maximum time of the last record to be processed, as obtained from the data
+      source
     - it should be over-ride-able, for the cases of:
         - local directory listing time-boxes, where additions/changes to the timestamps in the list will be reflected
           in the known system time
@@ -132,47 +183,35 @@ class DataSource:
       (naive_dt + timedelta(hours=offset)).astimezone()
     """
 
-    def __init__(self, config=None, start_dt=None):
+    def __init__(self, config, start_key):
         """
-        :param config:
-        :param start_dt: datetime for when to start caring about files at the data source.
-            Advances when doing time-boxed incremental harvesting. The default values should generally for validation,
-            resulting in a complete listing.
+        :param config: manage_composable.Config instance
+        :param start_key: key for looking up bookmarks in state.yml
         """
-        self._config = config
-        # if the start_dt and end_dt values are used, they should be naive datetimes
-        self._start_dt = start_dt
-        self._end_dt = start_dt
-        self._extensions = None
-        if config is not None:
-            self._extensions = config.data_source_extensions
-        self._rejected_files = 0
-        self._skipped_files = 0
-        self._work = deque()
-        self._reporter = None
-        self._logger = logging.getLogger(self.__class__.__name__)
+        super().__init__(config)
+        self._start_key = start_key
+        # do not initialize this here, so that a DataSource may also be used in a TodoRunner circumstance, without
+        # the need for a state.yml file on disk
+        self._state = None
+        # start_dt and end_dt values should be naive datetimes
+        self._start_dt = None
+        self._end_dt = None
 
-    def _capture_todo(self):
-        self._reporter.capture_todo(len(self._work), self._rejected_files, self._skipped_files)
-        # do not need the record of the rejected or skipped files any longer
-        self._rejected_files = 0
-        self._skipped_files = 0
+    @property
+    def end_dt(self):
+        return self._end_dt
 
-    def clean_up(self, entry, execution_result, current_count):
-        """Clean up files locally after there has been a storage attempt."""
-        pass
+    @end_dt.setter
+    def end_dt(self, value):
+        self._end_dt = value
 
-    def default_filter(self, entry):
-        """
-        :param entry: os.DirEntry
-        """
-        for extension in self._extensions:
-            if entry.name.endswith(extension):
-                return True
-        return False
+    @property
+    def start_dt(self):
+        return self._start_dt
 
-    def get_work(self):
-        return deque()
+    @start_dt.setter
+    def start_dt(self, value):
+        self._start_dt = value
 
     def get_time_box_work(self, prev_exec_dt, exec_dt):
         """
@@ -185,31 +224,118 @@ class DataSource:
         """
         Do what needs to be done to set end_dt for an incremental harvest.
         """
-        pass
+        end_timestamp = self._state.bookmarks.get(self._start_key).get('end_timestamp')
+        if end_timestamp is None:
+            self._initialize_end_dt()
+        else:
+            self._end_dt = mc.make_datetime(end_timestamp)
 
-    @property
-    def end_dt(self):
-        return self._end_dt
+    def initialize_start_dt(self):
+        self._state = mc.State(self._config.state_fqn, self._config.time_zone)
+        self._start_dt = self._state.get_bookmark(self._start_key)
 
-    @end_dt.setter
-    def end_dt(self, value):
-        self._end_dt = value
+    def _initialize_end_dt(self):
+        raise NotImplementedError
 
-    @property
-    def reporter(self):
-        return self._reporter
+    def save_start_dt(self, start_value):
+        self._state.save_state(self._start_key, start_value)
 
-    @reporter.setter
-    def reporter(self, value):
-        self._reporter = value
 
-    @property
-    def start_dt(self):
-        return self._start_dt
+class HttpDataSource(IncrementalDataSource):
+    """
+    Support incremental harvesting from hierarchical HTML pages that list URLs with timestamps.
+    """
 
-    @start_dt.setter
-    def start_dt(self, value):
-        self._start_dt = value
+    def __init__(self, config, start_key, filter_functions, session):
+        """
+        :param config: manage_composable.Config instance
+        :param filter_functions: list of function pointers to filter an html string for additional href values.
+        :param session: requests.Session instance
+        :param start_key: str, the key to use for looking up the bookmarked start time in a state.yml file.
+        """
+        super().__init__(config, start_key)
+        self._filter_functions = filter_functions
+        self._session = session
+        # the keys are URLs, the values are datetimes
+        # the keys are URLs because the file names they represent are expected to be unique, while the datetimes are
+        # not necessarily unique.
+        # self._todo_list is the list of work obtained from the data source, self._work is the list of work organized
+        # for execution by the run_composable classes.
+        self._todo_list = dict()
+
+    def _descend_html_hierarchy(self, url_list, filter_function, filter_function_index):
+        """
+        This works for pages with links that have timestamps. Eventually, the pages are expected to list files, also
+        with timestamps.
+
+        This will not work for other page layouts or hierarchies.
+
+        :param url_list: list of urls to visit
+        :param filter_function: function apply to the URL to see if it is of interest
+        :param filter_function_index: int which function to apply next
+        :return: a dict, keys are URLs, values are timestamps.
+        """
+        self._logger.debug('Begin _descend_html_hierarchy')
+        for url in url_list:
+            response = None
+            try:
+                self._logger.info(f'Querying {url} for time-stamped entries.')
+                response = mc.query_endpoint_session(url, self._session)
+                response.raise_for_status()
+                if response is None:
+                    self._logger.warning(f'No response from {url}.')
+                else:
+                    result = self._parse_html_string(url, response.text, filter_function)
+                    if filter_function_index == (len(self._filter_functions) - 1):
+                        self._todo_list = dict(self._todo_list, **result)
+                    else:
+                        return self._descend_html_hierarchy(
+                            result, self._filter_functions[filter_function_index], filter_function_index + 1
+                        )
+            finally:
+                if response is not None:
+                    response.close()
+        self._logger.debug('End _descend_html_hierarchy')
+
+    def _initialize_end_dt(self):
+        self._logger.debug('Begin _initialize_end_dt')
+        self._descend_html_hierarchy(self._config.data_sources, self._filter_functions[0], 0)
+        # sort the work to be done by timestamp
+        sorted_todo_list = sorted(self._todo_list.items(), key=lambda x: x[1])
+        for url, dt in sorted_todo_list:
+            entry = StateRunnerMeta(url, dt)
+            self._work.append(entry)
+        self._end_dt = max(self._todo_list.values())
+        # only need the sorted copy
+        self._todo_list = dict()
+        self._logger.debug('End _initialize_end_dt')
+
+    def _parse_html_string(self, url, html_string, filter_function):
+        """
+        :return: dict, keys are datetimes, values are lists of URLs, so the dict can be sorted
+        """
+        self._logger.debug('Begin _parse_html_string')
+        from bs4 import BeautifulSoup
+        result = {}
+        soup = BeautifulSoup(html_string, features='lxml')
+        hrefs = soup.find_all('a')
+        for href in hrefs:
+            href_name = href.get('href')
+            if filter_function(href_name):
+                dt_str = href.next_element.next_element.string.replace('-', '').strip()
+                dt = mc.make_datetime(dt_str)
+                if dt is None:
+                    self._logger.debug(f'Skip html date parsing for {dt_str}.')
+                    continue
+                if dt >= self._start_dt:
+                    if url.endswith('/'):
+                        temp = f'{url}{href_name}'
+                    else:
+                        temp = f'{url}/{href_name}'
+                    self._logger.debug(f'Found url: {temp}')
+                    result[temp] = dt
+        self._logger.debug('End _parse_html_string')
+        return result
 
 
 class ListDirDataSource(DataSource):
@@ -307,7 +433,7 @@ class ListDirSeparateDataSource(DataSource):
                             break
 
 
-class ListDirTimeBoxDataSource(DataSource):
+class ListDirTimeBoxDataSource(IncrementalDataSource):
     """
     A time-boxed directory listing of all .fits* and .hdf5 files. The time-box
     is based on os.stat.st_mtime for a file.
@@ -322,10 +448,13 @@ class ListDirTimeBoxDataSource(DataSource):
     """
 
     def __init__(self, config):
-        super().__init__(config)
+        super().__init__(config, config.bookmark)
         self._source_directories = config.data_sources
         self._recursive = config.recurse_data_sources
         self._temp = defaultdict(list)
+
+    def _initialize_end_dt(self):
+        self._end_dt = mc.get_now()
 
     def get_time_box_work(self, prev_exec_dt, exec_dt):
         """
@@ -656,7 +785,7 @@ class StateRunnerMeta:
     entry_dt: datetime
 
 
-class QueryTimeBoxDataSource(DataSource):
+class QueryTimeBoxDataSource(IncrementalDataSource):
     """
     Implements the identification of the work to be done, by querying a
     TAP service, in time-boxed chunks. The time values are timestamps
@@ -667,7 +796,7 @@ class QueryTimeBoxDataSource(DataSource):
     """
 
     def __init__(self, config, preview_suffix='jpg'):
-        super().__init__(config)
+        super().__init__(config, config.bookmark)
         self._preview_suffix = preview_suffix
         subject = clc.define_subject(config)
         self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
@@ -709,7 +838,7 @@ class QueryTimeBoxDataSource(DataSource):
         self._logger.debug(f'End get_time_box_work.')
         return self._work
 
-    def initialize_end_dt(self):
+    def _initialize_end_dt(self):
         query = f"""
             SELECT max(A.lastModified) AS m
             FROM inventory.Artifact AS A
@@ -719,7 +848,7 @@ class QueryTimeBoxDataSource(DataSource):
         self._logger.debug(query)
         rows = clc.query_tap_client(query, self._client)
         for row in rows:
-            self._end_dt = row['m']
+            self._end_dt = mc.make_datetime(row['m'])
             self._logger.info(f'Setting end time to {self._end_dt}')
             break
 

@@ -105,9 +105,13 @@ class TTransfer(transfer_composable.Transfer):
             f.write('test content')
 
 
-class TListDirTimeBoxDataSource(dsc.DataSource):
-    def __init__(self):
-        super().__init__()
+class TListDirTimeBoxDataSource(dsc.IncrementalDataSource):
+    def __init__(self, test_config, end_time):
+        super().__init__(test_config, test_config.bookmark)
+        self._test_end_time = end_time
+
+    def _initialize_end_dt(self):
+        self._end_dt = self._test_end_time
 
     def get_time_box_work(self, prev_exec_time, exec_time):
         file_list = glob.glob('/caom2pipe_test/*')
@@ -146,13 +150,12 @@ def test_run_state(client_mock, tmpdir):
     with open(test_config.proxy_fqn, 'w') as f:
         f.write('test content\n')
 
-    test_data_source = TListDirTimeBoxDataSource()
+    test_data_source = TListDirTimeBoxDataSource(test_config, test_end_time)
     test_builder = nbc.GuessingBuilder(tc.TStorageName)
     transferrer = TTransfer(tmpdir)
 
     test_result = rc.run_by_state(
         config=test_config,
-        end_time=test_end_time,
         name_builder=test_builder,
         source=test_data_source,
         modify_transfer=transferrer,

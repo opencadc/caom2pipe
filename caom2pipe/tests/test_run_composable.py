@@ -204,72 +204,70 @@ def test_run_todo_file_data_source(clients_mock, test_config, tmpdir):
     clients_mock.return_value.metadata_client.read.assert_called_with('OMM', 'def'), 'wrong e args'
 
 
+@patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource')
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.data_source_composable.CadcTapClient')
-@patch('caom2pipe.client_composable.query_tap_client')
 @patch('caom2pipe.execute_composable.MetaVisit._visit_meta')
 def test_run_state(
     visit_meta_mock,
-    tap_query_mock,
     tap_mock,
     clients_mock,
+    data_source_mock,
     test_config,
     tmpdir,
 ):
     # tap_mock is used by the data_source_composable class
     visit_meta_mock.side_effect = _mock_visit
     clients_mock.return_value.metadata_client.read.side_effect = _mock_read2
-    tap_query_mock.side_effect = _mock_query_table2
 
-    test_end_time = datetime.fromtimestamp(1579740838)
-    start_time = test_end_time - timedelta(seconds=900)
+    state_test_end_time = datetime.fromtimestamp(1579740838)
+    state_test_start_time = state_test_end_time - timedelta(seconds=900)
+    start_time_mock = PropertyMock(return_value=state_test_start_time)
+    type(data_source_mock.return_value).start_dt = start_time_mock
+    end_time_mock = PropertyMock(return_value=state_test_end_time)
+    type(data_source_mock.return_value).end_dt = end_time_mock
+    data_source_mock.return_value.get_time_box_work.side_effect = _mock_query2
 
-    test_config.task_types = [mc.TaskType.INGEST]
-    test_config.interval = 10
-    test_config.change_working_directory(tmpdir)
-    individual_log_file = f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
-    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
+    orig_getcwd = os.getcwd()
+    try:
+        os.chdir(tmpdir)
+        test_config.change_working_directory(tmpdir)
+        test_config.task_types = [mc.TaskType.INGEST]
+        test_config.interval = 10
+        # use_local_files set so run_by_state chooses QueryTimeBoxDataSource
+        test_config.use_local_files = False
+        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, state_test_start_time)
+        individual_log_file = f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
+        test_chooser = ec.OrganizeChooser()
+        test_reader = Mock()
+        test_result = rc.run_by_state(config=test_config, chooser=test_chooser, metadata_reader=test_reader)
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+        assert visit_meta_mock.called, 'expect visit meta call'
+        visit_meta_mock.assert_called_once_with()
+        assert test_reader.reset.called, 'expect reset call'
+        assert test_reader.reset.call_count == 1, 'wrong call count'
 
-    test_chooser = ec.OrganizeChooser()
-    # use_local_files set so run_by_state chooses QueryTimeBoxDataSource
-    test_config.use_local_files = False
-    test_reader = Mock()
-    test_result = rc.run_by_state(
-        config=test_config,
-        chooser=test_chooser,
-        end_time=test_end_time,
-        metadata_reader=test_reader,
-    )
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert visit_meta_mock.called, 'expect visit meta call'
-    visit_meta_mock.assert_called_once_with()
-    assert test_reader.reset.called, 'expect reset call'
-    assert test_reader.reset.call_count == 1, 'wrong call count'
+        assert data_source_mock.return_value.save_start_dt.called, 'save_start_dt should be called'
+        data_source_mock.return_value.save_start_dt.assert_called_with(state_test_end_time), 'wrong time'
+        assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+        assert os.path.exists(test_config.success_fqn), 'log_to_file set to false, no success file'
+        assert not os.path.exists(individual_log_file), f'log_to_file is False, no entry log'
 
-    test_state = mc.State(test_config.state_fqn, test_config.time_zone)
-    test_bookmark = test_state.get_bookmark(test_config.bookmark)
-    assert test_bookmark == test_end_time, 'wrong time'
-    assert os.path.exists(test_config.progress_fqn), 'expect progress file'
-    assert os.path.exists(
-        test_config.success_fqn
-    ), 'log_to_file set to false, no success file'
-    assert not os.path.exists(
-        individual_log_file
-    ), f'log_to_file is False, no entry log'
-
-    # test that runner does nothing when times haven't changed
-    start_time = test_end_time
-    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
-    visit_meta_mock.reset_mock()
-    test_result = rc.run_by_state(
-        config=test_config, chooser=test_chooser, end_time=test_end_time, metadata_reader=test_reader,
-    )
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert not visit_meta_mock.called, 'expect no visit_meta call'
-    assert test_reader.reset.called, 'expect reset call'
-    assert test_reader.reset.call_count == 1, 'wrong call count'
+        # test that runner does nothing when times haven't changed
+        start_time = state_test_end_time
+        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
+        visit_meta_mock.reset_mock()
+        test_result = rc.run_by_state(config=test_config, chooser=test_chooser, metadata_reader=test_reader)
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+        assert not visit_meta_mock.called, 'expect no visit_meta call'
+        assert test_reader.reset.called, 'expect reset call'
+        assert test_reader.reset.call_count == 1, 'wrong call count'
+        assert data_source_mock.return_value.save_start_dt.called, 'save_start_dt should be called'
+        data_source_mock.return_value.save_start_dt.assert_called_with(state_test_end_time), 'wrong time'
+    finally:
+        os.chdir(orig_getcwd)
 
 
 @patch('caom2pipe.data_source_composable.CadcTapClient')
@@ -328,7 +326,7 @@ def test_run_state_log_to_file_true(
             f.write('test content\n')
 
     test_chooser = ec.OrganizeChooser()
-    test_result = rc.run_by_state(config=test_config, chooser=test_chooser, end_time=test_end_time)
+    test_result = rc.run_by_state(config=test_config, chooser=test_chooser)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert os.path.exists(test_config.progress_fqn), 'expect progress file'
@@ -448,13 +446,11 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config, tmp
 @patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource')
 def test_run_state_retry(ds_mock, tap_mock, do_one_mock, clients_mock, test_config, tmpdir):
     test_config.change_working_directory(tmpdir)
-    test_start_time = rc.get_now()
+    test_start_time = mc.get_now()
     test_end_time = test_start_time + timedelta(hours=1)
     mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
-    start_time_mock = PropertyMock(return_value=None)
-    type(ds_mock.return_value).start_dt = start_time_mock
-    end_time_mock = PropertyMock(return_value=test_end_time)
-    type(ds_mock.return_value).end_dt = end_time_mock
+    type(ds_mock.return_value).start_dt = PropertyMock(return_value=test_start_time)
+    type(ds_mock.return_value).end_dt = PropertyMock(return_value=test_end_time)
 
     retry_success_fqn = f'{tmpdir}/logs_0/{test_config.success_log_file_name}'
     retry_failure_fqn = f'{tmpdir}/logs_0/{test_config.failure_log_file_name}'
@@ -502,14 +498,17 @@ def test_time_box(clients_mock, test_config, tmpdir):
         mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
         test_end_time = datetime(2019, 7, 24, 9, 20)
 
-        class MakeTimeBoxWork(dsc.DataSource):
+        class MakeTimeBoxWork(dsc.IncrementalDataSource):
 
             def __init__(self):
-                super().__init__(test_config)
+                super().__init__(test_config, test_config.bookmark)
                 self.todo_call_count = 0
                 self.zero_called = False
                 self.one_called = False
                 self.two_called = False
+
+            def _initialize_end_dt(self):
+                self._end_dt = test_end_time
 
             def get_time_box_work(self, prev_exec_dt, exec_dt):
                 if self.todo_call_count == 0:
@@ -530,9 +529,7 @@ def test_time_box(clients_mock, test_config, tmpdir):
 
         test_work = MakeTimeBoxWork()
 
-        test_result = rc.run_by_state(
-            test_config, meta_visitors=None, data_visitors=None, end_time=test_end_time, source=test_work
-        )
+        test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, source=test_work)
         assert test_result is not None, 'expect a result'
         assert test_work.zero_called, 'missed zero'
         assert test_work.one_called, 'missed one'
@@ -551,11 +548,14 @@ def test_time_box_equal(clients_mock, test_config, tmpdir):
     test_start_time = test_end_time = datetime(2019, 7, 23, 9, 51)
     mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
 
-    class MakeWork(dsc.DataSource):
+    class MakeWork(dsc.IncrementalDataSource):
 
         def __init__(self):
-            super().__init__(test_config)
+            super().__init__(test_config, test_config.bookmark)
             self.todo_call_count = 0
+
+        def _initialize_end_dt(self):
+            self._end_dt = test_start_time
 
         def get_time_box_work(self, prev_exec_dt, exec_dt):
             self.todo_call_count += 1
@@ -563,10 +563,7 @@ def test_time_box_equal(clients_mock, test_config, tmpdir):
             return deque()
 
     test_work = MakeWork()
-
-    test_result = rc.run_by_state(
-        test_config, meta_visitors=None, data_visitors=None, end_time=test_end_time, source=test_work
-    )
+    test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, source=test_work)
     assert test_result is not None, 'expect a result'
     test_state = mc.State(test_config.state_fqn, test_config.time_zone)
     assert test_state.get_bookmark(test_config.bookmark) == test_end_time
@@ -583,12 +580,15 @@ def test_time_box_once_through(clients_mock, test_config, tmpdir):
         mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
         test_end_time = datetime(2019, 7, 23, 12, 20)
 
-        class MakeWork(dsc.DataSource):
+        class MakeWork(dsc.IncrementalDataSource):
 
             def __init__(self):
-                super().__init__(test_config)
+                super().__init__(test_config, test_config.bookmark)
                 self.todo_call_count = 0
                 self.zero_called = False
+
+            def _initialize_end_dt(self):
+                self._end_dt = test_end_time
 
             def get_time_box_work(self, prev_exec_dt, exec_dt):
                 if self.todo_call_count == 0:
@@ -600,10 +600,7 @@ def test_time_box_once_through(clients_mock, test_config, tmpdir):
                 return deque()
 
         test_work = MakeWork()
-
-        test_result = rc.run_by_state(
-            test_config, meta_visitors=None, data_visitors=None, source=test_work, end_time=test_end_time
-        )
+        test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, source=test_work)
         assert test_result is not None, 'expect a result'
 
         test_state = mc.State(test_config.state_fqn, test_config.time_zone)
@@ -716,11 +713,13 @@ def test_run_store_ingest_failure(
 @patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.data_source_composable.LocalFilesDataSource._move_action')
+@patch('caom2pipe.data_source_composable.LocalFilesDataSource._initialize_end_dt')
 @patch('caom2pipe.client_composable.CAOM2RepoClient')
 @patch('caom2pipe.client_composable.StorageClientWrapper')
 def test_run_store_get_work_failures(
     data_client_mock,
     repo_client_mock,
+    end_dt_mock,
     cleanup_mock,
     access_mock,
     visit_meta_mock,
@@ -760,6 +759,7 @@ def test_run_store_get_work_failures(
         f.write('test content')
 
     test_end_time = datetime.fromtimestamp(1579740838)
+
     start_time = test_end_time - timedelta(seconds=900)
     mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
 
@@ -782,12 +782,11 @@ def test_run_store_get_work_failures(
         scandir_mock.return_value.__enter__.return_value = [dir_entry_1, dir_entry_2]
         data_source = dsc.LocalFilesDataSource(test_config, data_client_mock, file_metadata_reader)
         data_source.reporter = test_reporter
+        data_source.end_dt = test_end_time
         clients_mock = ClientCollection(test_config)
         clients_mock._data_client = data_client_mock
         clients_mock._metadata_client = repo_client_mock
-        test_result = rc.run_by_state(
-            source=data_source, end_time=test_end_time, clients=clients_mock, metadata_reader=file_metadata_reader
-        )
+        test_result = rc.run_by_state(source=data_source, clients=clients_mock, metadata_reader=file_metadata_reader)
 
         assert test_result is not None, 'expect result'
         assert test_result == 0, 'expect successful execution'
@@ -1016,14 +1015,17 @@ def test_time_box_time_zones(clients_mock, test_config, tmpdir):
         mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
         test_end_time = datetime(2019, 7, 24, 9, 20)
 
-        class MakeTimeBoxWork(dsc.DataSource):
+        class MakeTimeBoxWork(dsc.IncrementalDataSource):
 
             def __init__(self):
-                super().__init__(test_config)
+                super().__init__(test_config, test_config.bookmark)
                 self.todo_call_count = 0
                 self.zero_called = False
                 self.one_called = False
                 self.two_called = False
+
+            def _initialize_end_dt(self):
+                self._end_dt = test_end_time
 
             def get_time_box_work(self, prev_exec_dt, exec_dt):
                 if self.todo_call_count == 0:
@@ -1044,9 +1046,7 @@ def test_time_box_time_zones(clients_mock, test_config, tmpdir):
 
         test_work = MakeTimeBoxWork()
 
-        test_result = rc.run_by_state(
-            test_config, meta_visitors=None, data_visitors=None, end_time=test_end_time, source=test_work
-        )
+        test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, source=test_work)
         assert test_result is not None, 'expect a result'
         assert test_work.zero_called, 'missed zero'
         assert test_work.one_called, 'missed one'
@@ -1103,7 +1103,6 @@ class TestProcessEntry:
             reporter=self._reporter,
         )
         self._storage_name = tc.TStorageName()
-        self._end_dt = None
 
     def _check_logs(self, failure_should_exist, retry_should_exist, success_should_exist):
         failure_files = self._reporter.get_file_names_from_log_file(self._reporter._failure_fqn)
@@ -1141,7 +1140,6 @@ class TestProcessEntry:
             self._reader,
             self._observer,
             self._reporter,
-            self._end_dt,
         )
         test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
         assert test_result == -1, 'expect failure'
@@ -1159,7 +1157,6 @@ class TestProcessEntry:
             self._reader,
             self._observer,
             self._reporter,
-            self._end_dt,
         )
         test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
         assert test_result == -1, 'expect failure'
@@ -1178,7 +1175,6 @@ class TestProcessEntry:
                 self._reader,
                 self._observer,
                 self._reporter,
-                self._end_dt,
             )
             test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
             assert test_result == -1, 'expect failure'
@@ -1197,7 +1193,6 @@ class TestProcessEntry:
                 self._reader,
                 self._observer,
                 self._reporter,
-                self._end_dt,
             )
             test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
             assert test_result == 0, 'expect success'
@@ -1217,7 +1212,6 @@ class TestProcessEntry:
                 self._reader,
                 self._observer,
                 self._reporter,
-                self._end_dt,
             )
             test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
             assert test_result == -1, 'expect failure'
@@ -1247,21 +1241,24 @@ def _mock_get_work(arg1, arg2):
 
 
 def _mock_query_table2(arg1, arg2):
-    return _mock_query_table(None, None, None)
+    return _mock_query_table(arg1, None, None)
 
 
 def _mock_query_table(arg1, arg2, arg3):
     global call_count
-    if call_count == 0:
-        call_count = 1
-        return Table.read(
-            'uri,lastModified\n'
-            'cadc:NEOSSAT/NEOS_SCI_2015347000000_clean.fits,'
-            '2019-10-23T16:27:19.000\n'.split('\n'),
-            format='csv',
-        )
+    if 'max(' in arg1:
+        return Table.read('m\n2020-01-23T00:53:58.000\n'.split('\n'), format='csv')
     else:
-        return Table.read('fileName,ingestDate\n'.split('\n'), format='csv')
+        if call_count == 0:
+            call_count = 1
+            return Table.read(
+                'uri,lastModified\n'
+                'cadc:NEOSSAT/NEOS_SCI_2015347000000_clean.fits,'
+                '2019-10-23T16:27:19.000\n'.split('\n'),
+                format='csv',
+            )
+        else:
+            return Table.read('fileName,ingestDate\n'.split('\n'), format='csv')
 
 
 def _mock_query(arg1, arg2, arg3):
@@ -1277,6 +1274,10 @@ def _mock_query(arg1, arg2, arg3):
         )
         return temp
     return temp
+
+
+def _mock_query2(arg1, arg2):
+    return _mock_query(None, None, None)
 
 
 def _mock_do_one(arg1):
