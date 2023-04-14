@@ -215,10 +215,25 @@ class IncrementalDataSource(DataSource):
 
     def get_time_box_work(self, prev_exec_dt, exec_dt):
         """
-        :param prev_exec_dt: tz-naive datetime
-        :param exec_dt: tz-naive datetime
+        Time-boxing the file url list returned from the site scrape.
+
+        :param prev_exec_dt tz-naive datetime start of the time-box chunk
+        :param exec_dt tz-naive datetime end of the time-box chunk
+        :return: a deque of StateRunnerMeta instances, for file names with
+            time they were modified
         """
-        return deque()
+        self._logger.debug(f'Begin get_time_box_work from {prev_exec_dt} to {exec_dt}')
+        self._logger.debug(self)
+
+        temp = deque()
+        for entry in self._work:
+            if prev_exec_dt < entry.entry_dt <= exec_dt:
+                temp.append(entry)
+        self._reporter.capture_todo(len(temp), self._rejected_files, self._skipped_files)
+        self._rejected_files = 0
+        self._skipped_files = 0
+        self._logger.debug(f'End get_time_box_work with {len(temp)} entries.')
+        return temp
 
     def initialize_end_dt(self):
         """
@@ -234,11 +249,11 @@ class IncrementalDataSource(DataSource):
         self._state = mc.State(self._config.state_fqn, self._config.time_zone)
         self._start_dt = self._state.get_bookmark(self._start_key)
 
-    def _initialize_end_dt(self):
-        raise NotImplementedError
-
     def save_start_dt(self, start_value):
         self._state.save_state(self._start_key, start_value)
+
+    def _initialize_end_dt(self):
+        raise NotImplementedError
 
 
 class HttpDataSource(IncrementalDataSource):
@@ -262,11 +277,12 @@ class HttpDataSource(IncrementalDataSource):
         # self._todo_list is the list of work obtained from the data source, self._work is the list of work organized
         # for execution by the run_composable classes.
         self._todo_list = dict()
+        self._data_sources = config.data_sources
 
     def _descend_html_hierarchy(self, url_list, filter_function, filter_function_index):
         """
-        This works for pages with links that have timestamps. Eventually, the pages are expected to list files, also
-        with timestamps.
+        This works for html pages with links that have timestamps. Eventually, the pages are expected to list files,
+        also with timestamps.
 
         This will not work for other page layouts or hierarchies.
 
@@ -275,7 +291,7 @@ class HttpDataSource(IncrementalDataSource):
         :param filter_function_index: int which function to apply next
         :return: a dict, keys are URLs, values are timestamps.
         """
-        self._logger.debug('Begin _descend_html_hierarchy')
+        self._logger.debug(f'Begin _descend_html_hierarchy with {filter_function.__name__} for {len(url_list)} URLs')
         for url in url_list:
             response = None
             try:
@@ -289,23 +305,30 @@ class HttpDataSource(IncrementalDataSource):
                     if filter_function_index == (len(self._filter_functions) - 1):
                         self._todo_list = dict(self._todo_list, **result)
                     else:
-                        return self._descend_html_hierarchy(
-                            result, self._filter_functions[filter_function_index], filter_function_index + 1
+                        self._descend_html_hierarchy(
+                            result, self._filter_functions[filter_function_index + 1], filter_function_index + 1
                         )
             finally:
                 if response is not None:
                     response.close()
-        self._logger.debug('End _descend_html_hierarchy')
+        self._logger.debug(f'End _descend_html_hierarchy with {filter_function.__name__}')
 
     def _initialize_end_dt(self):
         self._logger.debug('Begin _initialize_end_dt')
-        self._descend_html_hierarchy(self._config.data_sources, self._filter_functions[0], 0)
+        self._descend_html_hierarchy(self._data_sources, self._filter_functions[0], 0)
         # sort the work to be done by timestamp
         sorted_todo_list = sorted(self._todo_list.items(), key=lambda x: x[1])
         for url, dt in sorted_todo_list:
             entry = StateRunnerMeta(url, dt)
             self._work.append(entry)
-        self._end_dt = max(self._todo_list.values())
+        if len(self._todo_list) > 0:
+            self._logger.info(f'Found {len(self._work)} total records.')
+            self._end_dt = max(self._todo_list.values())
+        else:
+            # the default implementation assumes a remote data source, so the time-box end-point only advances if
+            # the remote data source advances
+            self._logger.warning(f'Found no records. Setting end date to {self._start_dt}.')
+            self._end_dt = self._start_dt
         # only need the sorted copy
         self._todo_list = dict()
         self._logger.debug('End _initialize_end_dt')
@@ -314,7 +337,7 @@ class HttpDataSource(IncrementalDataSource):
         """
         :return: dict, keys are datetimes, values are lists of URLs, so the dict can be sorted
         """
-        self._logger.debug('Begin _parse_html_string')
+        self._logger.debug(f'Begin _parse_html_string from {url} with {filter_function.__name__}')
         from bs4 import BeautifulSoup
         result = {}
         soup = BeautifulSoup(html_string, features='lxml')
@@ -322,19 +345,25 @@ class HttpDataSource(IncrementalDataSource):
         for href in hrefs:
             href_name = href.get('href')
             if filter_function(href_name):
-                dt_str = href.next_element.next_element.string.replace('-', '').strip()
-                dt = mc.make_datetime(dt_str)
-                if dt is None:
-                    self._logger.debug(f'Skip html date parsing for {dt_str}.')
-                    continue
-                if dt >= self._start_dt:
-                    if url.endswith('/'):
-                        temp = f'{url}{href_name}'
-                    else:
-                        temp = f'{url}/{href_name}'
-                    self._logger.debug(f'Found url: {temp}')
-                    result[temp] = dt
-        self._logger.debug('End _parse_html_string')
+                dt_str_bits = href.next_element.next_element.string.split()
+                if len(dt_str_bits) >= 2:
+                    dt = mc.make_datetime(f'{dt_str_bits[0]} {dt_str_bits[1]}')
+                    if dt is None:
+                        self._logger.debug(f'Skip html date parsing for {dt_str_bits}.')
+                        continue
+                    if dt >= self._start_dt:
+                        if href_name.startswith('http'):
+                            temp = href_name
+                        else:
+                            if url.endswith('/'):
+                                temp = f'{url}{href_name}'
+                            else:
+                                temp = f'{url}/{href_name}'
+                            self._logger.debug(f'Found url: {temp}')
+                        result[temp] = dt
+                else:
+                    self._logger.debug(f'skipping {dt_str_bits}')
+        self._logger.debug(f'End _parse_html_string from {url} with {filter_function.__name__}')
         return result
 
 

@@ -838,7 +838,7 @@ def test_http(query_mock, test_config, tmp_path):
 
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a result'
-    assert len(test_result) == 60, 'wrong number of results'
+    assert len(test_result) == 120, 'wrong number of results'
 
     first_result = test_result.popleft()
     assert (
@@ -851,7 +851,7 @@ def test_http(query_mock, test_config, tmp_path):
     last_result = test_result.pop()
     assert (
         last_result.entry_name ==
-        'https://data.asc-csa.gc.ca/users/OpenData_DonneesOuvertes/pub/NEOSSAT/ASTRO/2021/313/'
+        'https://data.asc-csa.gc.ca/users/OpenData_DonneesOuvertes/pub/NEOSSAT/ASTRO/2022/313/'
         'NEOS_SCI_2022001081159.fits'
     ), 'wrong last url'
     assert last_result.entry_dt == datetime(2022, 8, 22, 15, 30), 'wrong last time'
