@@ -157,7 +157,7 @@ def test_run_state(client_mock, tmpdir):
     test_result = rc.run_by_state(
         config=test_config,
         name_builder=test_builder,
-        source=test_data_source,
+        sources=[test_data_source],
         modify_transfer=transferrer,
         store_transfer=transferrer,
         clients=client_mock,

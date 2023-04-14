@@ -358,7 +358,7 @@ def test_run_todo_list_dir_data_source_exception(
     test_result = rc.run_by_todo(
         config=test_config,
         chooser=test_chooser,
-        source=test_data_source,
+        sources=[test_data_source],
     )
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect failure'
@@ -529,7 +529,7 @@ def test_time_box(clients_mock, test_config, tmpdir):
 
         test_work = MakeTimeBoxWork()
 
-        test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, source=test_work)
+        test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, sources=[test_work])
         assert test_result is not None, 'expect a result'
         assert test_work.zero_called, 'missed zero'
         assert test_work.one_called, 'missed one'
@@ -563,7 +563,7 @@ def test_time_box_equal(clients_mock, test_config, tmpdir):
             return deque()
 
     test_work = MakeWork()
-    test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, source=test_work)
+    test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, sources=[test_work])
     assert test_result is not None, 'expect a result'
     test_state = mc.State(test_config.state_fqn, test_config.time_zone)
     assert test_state.get_bookmark(test_config.bookmark) == test_end_time
@@ -600,7 +600,7 @@ def test_time_box_once_through(clients_mock, test_config, tmpdir):
                 return deque()
 
         test_work = MakeWork()
-        test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, source=test_work)
+        test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, sources=[test_work])
         assert test_result is not None, 'expect a result'
 
         test_state = mc.State(test_config.state_fqn, test_config.time_zone)
@@ -676,7 +676,7 @@ def test_run_store_ingest_failure(
         data_client_mock,
         Mock(),
     )
-    test_result = rc.run_by_todo(source=data_source)
+    test_result = rc.run_by_todo(sources=[data_source])
     assert test_result is not None, 'expect result'
     assert test_result == -1, 'expect failure'
     # execution stops before this call should be made
@@ -786,7 +786,9 @@ def test_run_store_get_work_failures(
         clients_mock = ClientCollection(test_config)
         clients_mock._data_client = data_client_mock
         clients_mock._metadata_client = repo_client_mock
-        test_result = rc.run_by_state(source=data_source, clients=clients_mock, metadata_reader=file_metadata_reader)
+        test_result = rc.run_by_state(
+            sources=[data_source], clients=clients_mock, metadata_reader=file_metadata_reader
+        )
 
         assert test_result is not None, 'expect result'
         assert test_result == 0, 'expect successful execution'
@@ -862,7 +864,7 @@ def test_run_ingest(
     test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
     test_data_source = dsc.TodoFileDataSource(test_config)
     test_data_source.reporter = test_reporter
-    test_result = rc.run_by_todo(source=test_data_source)
+    test_result = rc.run_by_todo(sources=[test_data_source])
     assert test_result is not None, 'expect result'
     assert test_result == 0, 'expect success'
     assert repo_client_mock.return_value.read.called, 'read called'
@@ -1046,7 +1048,7 @@ def test_time_box_time_zones(clients_mock, test_config, tmpdir):
 
         test_work = MakeTimeBoxWork()
 
-        test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, source=test_work)
+        test_result = rc.run_by_state(test_config, meta_visitors=None, data_visitors=None, sources=[test_work])
         assert test_result is not None, 'expect a result'
         assert test_work.zero_called, 'missed zero'
         assert test_work.one_called, 'missed one'
@@ -1141,7 +1143,7 @@ class TestProcessEntry:
             self._observer,
             self._reporter,
         )
-        test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
+        test_result = test_subject._process_entry(self._data_source, self._storage_name.file_name, current_count=0)
         assert test_result == -1, 'expect failure'
         self._check_logs(failure_should_exist=True, retry_should_exist=True, success_should_exist=False)
 
@@ -1158,7 +1160,7 @@ class TestProcessEntry:
             self._observer,
             self._reporter,
         )
-        test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
+        test_result = test_subject._process_entry(self._data_source, self._storage_name.file_name, current_count=0)
         assert test_result == -1, 'expect failure'
         self._check_logs(failure_should_exist=True, retry_should_exist=False, success_should_exist=False)
 
@@ -1176,7 +1178,7 @@ class TestProcessEntry:
                 self._observer,
                 self._reporter,
             )
-            test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
+            test_result = test_subject._process_entry(self._data_source, self._storage_name.file_name, current_count=0)
             assert test_result == -1, 'expect failure'
             self._check_logs(failure_should_exist=True, retry_should_exist=True, success_should_exist=False)
 
@@ -1194,7 +1196,7 @@ class TestProcessEntry:
                 self._observer,
                 self._reporter,
             )
-            test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
+            test_result = test_subject._process_entry(self._data_source, self._storage_name.file_name, current_count=0)
             assert test_result == 0, 'expect success'
             # success_should_exist == False as it's only set in the do_one implementation
             self._check_logs(failure_should_exist=False, retry_should_exist=False, success_should_exist=False)
@@ -1213,7 +1215,7 @@ class TestProcessEntry:
                 self._observer,
                 self._reporter,
             )
-            test_result = test_subject._process_entry(self._storage_name.file_name, current_count=0)
+            test_result = test_subject._process_entry(self._data_source, self._storage_name.file_name, current_count=0)
             assert test_result == -1, 'expect failure'
             # success_should_exist == False as it's only set in the do_one implementation
             self._check_logs(failure_should_exist=False, retry_should_exist=False, success_should_exist=False)
