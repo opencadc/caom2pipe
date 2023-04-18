@@ -74,6 +74,7 @@ import traceback
 from collections import deque, defaultdict
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Callable
 
 from cadctap import CadcTapClient
 from cadcutils import exceptions
@@ -85,6 +86,7 @@ from caom2pipe import name_builder_composable as nbc
 __all__ = [
     'DataSource',
     'data_source_factory',
+    'HtmlFilters',
     'HttpDataSource',
     'IncrementalDataSource',
     'is_offset_aware',
@@ -213,6 +215,10 @@ class IncrementalDataSource(DataSource):
     def start_dt(self, value):
         self._start_dt = value
 
+    @property
+    def start_key(self):
+        return self._start_key
+
     def get_time_box_work(self, prev_exec_dt, exec_dt):
         """
         Time-boxing the file url list returned from the site scrape.
@@ -256,20 +262,34 @@ class IncrementalDataSource(DataSource):
         raise NotImplementedError
 
 
+@dataclass
+class HtmlFilters:
+    """
+    The HttpsDataSource scrapes hierarchical HTML pages for links to files to be able to harvest them incrementally.
+    Some timestamps on the pages with links to be followed do not get updated in concert with pages lower in the
+    hierarchy. Use the ignore_datetime flag to identify hierarchy levels where all links found should be followed.
+    """
+    # the filter function to be called
+    fn: Callable
+    # if True, ignore the effect of the datetime check for time-boxing purposes
+    ignore_datetime: bool
+
+
 class HttpDataSource(IncrementalDataSource):
     """
     Support incremental harvesting from hierarchical HTML pages that list URLs with timestamps.
     """
 
-    def __init__(self, config, start_key, filter_functions, session):
+    def __init__(self, config, start_key, html_filters, session):
         """
         :param config: manage_composable.Config instance
-        :param filter_functions: list of function pointers to filter an html string for additional href values.
+        :param html_filters: list of HtmlFilter instances to filter an html string for additional time-boxed
+          href values.
         :param session: requests.Session instance
         :param start_key: str, the key to use for looking up the bookmarked start time in a state.yml file.
         """
         super().__init__(config, start_key)
-        self._filter_functions = filter_functions
+        self._html_filters = html_filters
         self._session = session
         # the keys are URLs, the values are datetimes
         # the keys are URLs because the file names they represent are expected to be unique, while the datetimes are
@@ -279,7 +299,7 @@ class HttpDataSource(IncrementalDataSource):
         self._todo_list = dict()
         self._data_sources = config.data_sources
 
-    def _descend_html_hierarchy(self, url_list, filter_function, filter_function_index):
+    def _descend_html_hierarchy(self, url_list, html_filter, filter_index):
         """
         This works for html pages with links that have timestamps. Eventually, the pages are expected to list files,
         also with timestamps.
@@ -287,11 +307,11 @@ class HttpDataSource(IncrementalDataSource):
         This will not work for other page layouts or hierarchies.
 
         :param url_list: list of urls to visit
-        :param filter_function: function apply to the URL to see if it is of interest
-        :param filter_function_index: int which function to apply next
+        :param html_filter: HtmlFilter with function to apply to the URL to see if it is of interest
+        :param filter_index: int which function to apply next
         :return: a dict, keys are URLs, values are timestamps.
         """
-        self._logger.debug(f'Begin _descend_html_hierarchy with {filter_function.__name__} for {len(url_list)} URLs')
+        self._logger.debug(f'Begin _descend_html_hierarchy with {html_filter.fn.__name__} for {len(url_list)} URLs')
         for url in url_list:
             response = None
             try:
@@ -301,21 +321,19 @@ class HttpDataSource(IncrementalDataSource):
                 if response is None:
                     self._logger.warning(f'No response from {url}.')
                 else:
-                    result = self._parse_html_string(url, response.text, filter_function)
-                    if filter_function_index == (len(self._filter_functions) - 1):
+                    result = self._parse_html_string(url, response.text, html_filter)
+                    if filter_index == (len(self._html_filters) - 1):
                         self._todo_list = dict(self._todo_list, **result)
                     else:
-                        self._descend_html_hierarchy(
-                            result, self._filter_functions[filter_function_index + 1], filter_function_index + 1
-                        )
+                        self._descend_html_hierarchy(result, self._html_filters[filter_index + 1], filter_index + 1)
             finally:
                 if response is not None:
                     response.close()
-        self._logger.debug(f'End _descend_html_hierarchy with {filter_function.__name__}')
+        self._logger.debug(f'End _descend_html_hierarchy with {html_filter.fn.__name__}')
 
     def _initialize_end_dt(self):
         self._logger.debug('Begin _initialize_end_dt')
-        self._descend_html_hierarchy(self._data_sources, self._filter_functions[0], 0)
+        self._descend_html_hierarchy(self._data_sources, self._html_filters[0], 0)
         # sort the work to be done by timestamp
         sorted_todo_list = sorted(self._todo_list.items(), key=lambda x: x[1])
         for url, dt in sorted_todo_list:
@@ -333,25 +351,25 @@ class HttpDataSource(IncrementalDataSource):
         self._todo_list = dict()
         self._logger.debug('End _initialize_end_dt')
 
-    def _parse_html_string(self, url, html_string, filter_function):
+    def _parse_html_string(self, url, html_string, html_filter):
         """
-        :return: dict, keys are datetimes, values are lists of URLs, so the dict can be sorted
+        :return: dict, keys are datetimes, values are lists of URLs, the dict will be sorted for time-boxed execution
         """
-        self._logger.debug(f'Begin _parse_html_string from {url} with {filter_function.__name__}')
+        self._logger.debug(f'Begin _parse_html_string from {url} with {html_filter.fn.__name__}')
         from bs4 import BeautifulSoup
         result = {}
         soup = BeautifulSoup(html_string, features='lxml')
         hrefs = soup.find_all('a')
         for href in hrefs:
             href_name = href.get('href')
-            if filter_function(href_name):
+            if html_filter.fn(href_name):
                 dt_str_bits = href.next_element.next_element.string.split()
                 if len(dt_str_bits) >= 2:
                     dt = mc.make_datetime(f'{dt_str_bits[0]} {dt_str_bits[1]}')
                     if dt is None:
                         self._logger.debug(f'Skip html date parsing for {dt_str_bits}.')
                         continue
-                    if dt >= self._start_dt:
+                    if dt >= self._start_dt or html_filter.ignore_datetime:
                         if href_name.startswith('http'):
                             temp = href_name
                         else:
@@ -363,7 +381,7 @@ class HttpDataSource(IncrementalDataSource):
                         result[temp] = dt
                 else:
                     self._logger.debug(f'skipping {dt_str_bits}')
-        self._logger.debug(f'End _parse_html_string from {url} with {filter_function.__name__}')
+        self._logger.debug(f'End _parse_html_string from {url} with {html_filter.fn.__name__}')
         return result
 
 

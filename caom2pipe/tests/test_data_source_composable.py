@@ -824,7 +824,8 @@ def test_http(query_mock, test_config, tmp_path):
     def filter_return_true(ignore):
         return True
 
-    test_filter_functions = [filter_return_true, filter_return_true, filter_return_true]
+    test_html_filter = dsc.HtmlFilters(filter_return_true, False)
+    test_filter_functions = [test_html_filter, test_html_filter, test_html_filter]
     session_mock = Mock()
 
     test_subject = dsc.HttpDataSource(test_config, test_start_key, test_filter_functions, session_mock)
