@@ -196,6 +196,11 @@ class IncrementalDataSource(DataSource):
         self._start_dt = None
         self._end_dt = None
 
+    def __str__(self):
+        return f'\nstart: {self._start_dt}' \
+               f'\n  end: {self._end_dt}' \
+               f'\n  key: {self._start_key}'
+
     @property
     def end_dt(self):
         return self._end_dt
@@ -225,8 +230,7 @@ class IncrementalDataSource(DataSource):
         :return: a deque of StateRunnerMeta instances, for file names with
             time they were modified
         """
-        self._logger.debug(f'Begin get_time_box_work from {prev_exec_dt} to {exec_dt}')
-        self._logger.debug(self)
+        self._logger.debug(f'Begin get_time_box_work from {prev_exec_dt} to {exec_dt} for {self._start_key}')
 
         temp = deque()
         for entry in self._work:
@@ -252,8 +256,8 @@ class IncrementalDataSource(DataSource):
         self._state = mc.State(self._config.state_fqn, self._config.time_zone)
         self._start_dt = self._state.get_bookmark(self._start_key)
 
-    def save_start_dt(self, start_value):
-        self._state.save_state(self._start_key, start_value)
+    def save_start_dt(self, value):
+        self._state.save_state(self._start_key, value)
 
     def _initialize_end_dt(self):
         raise NotImplementedError

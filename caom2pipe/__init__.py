@@ -3,6 +3,7 @@ from .caom_composable import *  # noqa
 from .client_composable import *  # noqa
 from .data_source_composable import *  # noqa
 from .execute_composable import *  # noqa
+from .html_data_source import *  # noqa
 from .manage_composable import *  # noqa
 from .name_builder_composable import *  # noqa
 from .run_composable import *  # noqa

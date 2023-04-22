@@ -130,7 +130,15 @@ def test_http(query_mock, test_config, tmp_path):
         if url.endswith('ASTRO/'):
             with open(top_page) as f_in:
                 result.text = f_in.read()
-        elif url.endswith('2021/') or url.endswith('2022/'):
+        elif (
+            url.endswith('2021/')
+            or url.endswith('2022/')
+            or url.endswith('2017/')
+            or url.endswith('2018/')
+            or url.endswith('2019/')
+            or url.endswith('2020/')
+            or url.endswith('NESS/')
+        ):
             with open(year_page) as f_in:
                 result.text = f_in.read()
         elif (
@@ -166,25 +174,17 @@ def test_http(query_mock, test_config, tmp_path):
         def add_children(self, to_node, in_tree, new_entries):
             # which template_filter gets added
             if in_tree.parent(to_node.identifier).is_root():
-                template_filter = self._template.get_node('top_page').data
+                template_filter = self._always_true_filter
             elif in_tree.parent(to_node.identifier).is_leaf():
-                template_filter = self._template.get_node('listing_page').data
+                template_filter = self._always_true_filter
             else:
-                template_filter = self._template.get_node('year_page').data
+                template_filter = self._file_filter
 
             for url in new_entries:
                 in_tree.create_node(url, parent=to_node.identifier, data=template_filter)
 
-        def _complete_template(self):
-            self._template.create_node(
-                tag='TOP_PAGE', identifier='top_page', parent='root', data=self._always_true_filter
-            )
-            self._template.create_node(
-                tag='YEAR_PAGE', identifier='year_page', parent='top_page', data=self._always_true_filter
-            )
-            self._template.create_node(
-                tag='DAY_PAGE', identifier='listing_page', parent='year_page', data=self._file_filter
-            )
+        def is_leaf(self, url_tree, url_node):
+            return url_tree.depth(url_node) == 3
 
     test_html_filters = NeossatPagesTemplate(test_config)
     test_subject = html_data_source.HttpDataSource(test_config, test_start_key, test_html_filters, session_mock)
@@ -198,12 +198,12 @@ def test_http(query_mock, test_config, tmp_path):
 
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a result'
-    assert len(test_result) == 120, 'wrong number of results'
+    assert len(test_result) == 420, 'wrong number of results'
 
     first_result = test_result.popleft()
     assert (
         first_result.entry_name ==
-        'https://data.asc-csa.gc.ca/users/OpenData_DonneesOuvertes/pub/NEOSSAT/ASTRO/2021'
+        'https://data.asc-csa.gc.ca/users/OpenData_DonneesOuvertes/pub/NEOSSAT/ASTRO/2017'
         '/001/NEOS_SCI_2022001030508.fits'
     ), 'wrong first url'
     assert first_result.entry_dt == datetime(2022, 3, 1, 13, 56), 'wrong first time'
@@ -211,7 +211,7 @@ def test_http(query_mock, test_config, tmp_path):
     last_result = test_result.pop()
     assert (
         last_result.entry_name ==
-        'https://data.asc-csa.gc.ca/users/OpenData_DonneesOuvertes/pub/NEOSSAT/ASTRO/2022/313/'
+        'https://data.asc-csa.gc.ca/users/OpenData_DonneesOuvertes/pub/NEOSSAT/ASTRO/NESS/313/'
         'NEOS_SCI_2022001081159.fits'
     ), 'wrong last url'
     assert last_result.entry_dt == datetime(2022, 8, 22, 15, 30), 'wrong last time'

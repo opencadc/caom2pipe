@@ -234,11 +234,11 @@ class TodoRunner:
     def run_retry(self):
         self._logger.debug('Begin retry run.')
         result = 0
-        for data_source in self._data_sources:
+        for index, data_source in enumerate(self._data_sources):
             if self._config.need_to_retry():
                 for count in range(0, self._config.retry_count):
                     self._logger.warning(
-                        f'Beginning retry {count + 1} in {os.getcwd()}'
+                        f'Beginning retry {count + 1} in {os.getcwd()} for data source {index}'
                     )
                     self._reset_for_retry(data_source, count)
                     # make another file list
@@ -250,9 +250,9 @@ class TodoRunner:
                     result |= self._run_todo_list(data_source, current_count=count + 1)
                     if not self._config.need_to_retry():
                         break
-                self._logger.warning(f'Done retry attempts with result {result}.')
+                self._logger.warning(f'Done retry attempts with result {result} for data source {index}.')
             else:
-                self._logger.info('No failures to be retried.')
+                self._logger.info(f'No failures to be retried for data source {index}.')
         self._logger.debug('End retry run.')
         return result
 
@@ -277,8 +277,6 @@ class StateRunner(TodoRunner):
         super().__init__(
             config, organizer, builder, data_sources, metadata_reader, observable, reporter
         )
-        # string that represents the state.yml lookup value
-        self._bookmark_name = config.bookmark
 
     def _record_progress(
         self, count, cumulative_count, start_time, save_time
@@ -327,7 +325,7 @@ class StateRunner(TodoRunner):
             result = 0
             self._organizer.choose()
             while exec_time <= data_source.end_dt:
-                self._logger.info(f'Processing from {prev_exec_time} to {exec_time}')
+                self._logger.info(f'Processing {data_source.start_key} from {prev_exec_time} to {exec_time}')
                 save_time = exec_time
                 self._organizer.success_count = 0
                 self._reporter.set_log_location(self._config)
@@ -369,7 +367,7 @@ class StateRunner(TodoRunner):
                 exec_time = min(new_time, data_source.end_dt)
 
         data_source.save_start_dt(exec_time)
-        msg = f'Done for {self._bookmark_name}, saved state is {exec_time}'
+        msg = f'Done for {data_source.start_key}, saved state is {exec_time}'
         self._logger.info('=' * len(msg))
         self._logger.info(msg)
         self._logger.info(f'{self._reporter.success} of {self._reporter.all} records processed correctly.')

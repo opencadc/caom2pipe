@@ -116,35 +116,24 @@ class HtmlFilteredPagesTemplate:
             return re.search(temp, href)
 
         # two filters that might be useful elsewhere
-        self._always_true_filter = HtmlFilter(HtmlFilteredPagesTemplate.filter_never, False)  # False - always check
-        self._file_filter = HtmlFilter(filter_by_extensions, True)  # True - all new files
-
-        # the ROOT of this Tree structure supports the recursive site scraping of HttpDataSource
-        self._template = Tree()
-        self._template.create_node(tag='ROOT', identifier='root')
-        self._complete_template()
+        self._always_true_filter = HtmlFilter(HtmlFilteredPagesTemplate.filter_never, True)  # True - least restrictive
+        self._file_filter = HtmlFilter(filter_by_extensions, False)  # False - only new files
 
     def add_children(self, to_node, in_tree, new_entries):
         """Use the template Tree to figure out which filter function applies to which URL and the HTML page content."""
         if in_tree.parent(to_node.identifier).is_root():
-            template_filter = self._template.get_node('top_page').data
+            template_filter = self._always_true_filter
         else:
-            template_filter = self._template.get_node('listing_page').data
+            template_filter = self._file_filter
         for url in new_entries:
             in_tree.create_node(url, parent=to_node.identifier, data=template_filter)
 
     def first_filter(self):
         """"""
-        return self._template.children('root')[0].data
+        return self._always_true_filter
 
     def is_leaf(self, url_tree, url_node):
-        return url_tree.depth(url_node) == self._template.depth()
-
-    def _complete_template(self):
-        self._template.create_node(tag='TOP_PAGE', identifier='top_page', parent='root', data=self._always_true_filter)
-        self._template.create_node(
-            tag='LISTING_PAGE', identifier='listing_page', parent='top_page', data=self._file_filter
-        )
+        return url_tree.depth(url_node) == 2
 
 
 class HttpDataSource(IncrementalDataSource):
@@ -242,14 +231,21 @@ class HttpDataSource(IncrementalDataSource):
         """
         # local import to limit the number of Docker images that need to pip install bs4
         from bs4 import BeautifulSoup
-        self._logger.debug(f'Begin _parse_html_string from {node.tag} with {node.data.fn.__name__}')
+        if node.data.ignore_datetime:
+            msg = ', will ignore timestamps.'
+        else:
+            msg = f', will return links later than {self._start_dt}.'
+        self._logger.debug(f'Begin _parse_html_string from {node.tag} with {node.data.fn.__name__}{msg}')
         result = {}
         soup = BeautifulSoup(html_string, features='lxml')
         hrefs = soup.find_all('a')
         for href in hrefs:
             href_name = href.get('href')
             if node.data.fn(href_name):
-                dt_str_bits = href.next_element.next_element.string.split()
+                dt_str = href.next_element.next_element.string
+                if dt_str is None:
+                    continue
+                dt_str_bits = dt_str.split()
                 if len(dt_str_bits) >= 2:
                     dt = make_datetime(f'{dt_str_bits[0]} {dt_str_bits[1]}')
                     if dt is None:
