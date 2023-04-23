@@ -130,6 +130,8 @@ class TodoRunner:
         self._todo_list = []
         self._observable = observable
         self._reporter = reporter
+        # the type of data source for retry is the TodoFileDataSource, which might be different from the originals
+        self._retry_data_source = None
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def _build_todo_list(self, data_source):
@@ -209,13 +211,10 @@ class TodoRunner:
         self._config.update_for_retry(count)
         # the log location changes for each retry
         self._reporter.set_log_location(self._config)
-        # self._reporter.reset_for_retry()
-        # change the data source handling for the retry, but preserve the original
-        # clean_up behaviour
-        original_data_source_cleanup = data_source.clean_up
-        data_source = data_source_composable.TodoFileDataSource(self._config)
-        data_source.reporter = self._reporter
-        data_source.clean_up = original_data_source_cleanup
+        # change the data source handling for the retry, but preserve the original clean_up behaviour
+        self._retry_data_source = data_source_composable.TodoFileDataSource(self._config)
+        self._retry_data_source.reporter = self._reporter
+        self._retry_data_source.clean_up = data_source.clean_up
 
     def report(self):
         self._reporter.report()
@@ -234,25 +233,25 @@ class TodoRunner:
     def run_retry(self):
         self._logger.debug('Begin retry run.')
         result = 0
-        for index, data_source in enumerate(self._data_sources):
-            if self._config.need_to_retry():
-                for count in range(0, self._config.retry_count):
-                    self._logger.warning(
-                        f'Beginning retry {count + 1} in {os.getcwd()} for data source {index}'
-                    )
-                    self._reset_for_retry(data_source, count)
-                    # make another file list
-                    self._build_todo_list(data_source)
-                    self._reporter.capture_retry()
-                    decay_interval = self._config.retry_decay * (count + 1) * 60
-                    self._logger.warning(f'Retry {self._reporter.all} entries at {decay_interval} seconds from now.')
-                    sleep(decay_interval)
-                    result |= self._run_todo_list(data_source, current_count=count + 1)
-                    if not self._config.need_to_retry():
-                        break
-                self._logger.warning(f'Done retry attempts with result {result} for data source {index}.')
-            else:
-                self._logger.info(f'No failures to be retried for data source {index}.')
+        if self._config.need_to_retry():
+            for count in range(0, self._config.retry_count):
+                self._logger.warning(
+                    f'Beginning retry {count + 1} in {os.getcwd()} for data source {0}'
+                )
+                # to preserve the clean_up behaviour from one of the original data sources
+                self._reset_for_retry(self._data_sources[0], count)
+                # make another file list
+                self._build_todo_list(self._retry_data_source)
+                self._reporter.capture_retry()
+                decay_interval = self._config.retry_decay * (count + 1) * 60
+                self._logger.warning(f'Retry {self._reporter.all} entries at {decay_interval} seconds from now.')
+                sleep(decay_interval)
+                result |= self._run_todo_list(self._retry_data_source, current_count=count + 1)
+                if not self._config.need_to_retry():
+                    break
+            self._logger.warning(f'Done retry attempts with result {result}.')
+        else:
+            self._logger.info(f'No failures to be retried.')
         self._logger.debug('End retry run.')
         return result
 
@@ -262,6 +261,9 @@ class StateRunner(TodoRunner):
     This class brings together the mechanisms for identifying the time-boxed lists of work to be done
     (DataSource specializations), and the mechanisms for translating a list of work into a collection-specific name
     (StorageNameBuilder specializations).
+
+    For retries, accumulate the retry-able entries in a single file for each time-box interval, for each data source.
+    After all the incremental execution, attempt the retries.
     """
 
     def __init__(
@@ -278,14 +280,6 @@ class StateRunner(TodoRunner):
             config, organizer, builder, data_sources, metadata_reader, observable, reporter
         )
 
-    def _record_progress(
-        self, count, cumulative_count, start_time, save_time
-    ):
-        with open(self._config.progress_fqn, 'a') as progress:
-            progress.write(
-                f'{datetime.now()} current:: {save_time} {count} since:: {start_time}:: {cumulative_count}\n'
-            )
-
     def run(self):
         """
         Uses an iterable with an instance of StateRunnerMeta.
@@ -294,11 +288,18 @@ class StateRunner(TodoRunner):
         """
         if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
+        self._reset_retries()
 
         result = 0
         for data_source in self._data_sources:
             result |= self._process_data_source(data_source)
+
+        self._set_retries()
         return result
+
+    def _finish_run(self):
+        super()._finish_run()
+        self._record_retries()
 
     def _process_data_source(self, data_source):
         """
@@ -306,9 +307,6 @@ class StateRunner(TodoRunner):
 
         :return: 0 for success, -1 for failure
         """
-        if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
-            os.makedirs(os.path.dirname(self._config.progress_fqn))
-
         data_source.initialize_start_dt()
         data_source.initialize_end_dt()
         prev_exec_time = data_source.start_dt
@@ -373,6 +371,33 @@ class StateRunner(TodoRunner):
         self._logger.info(f'{self._reporter.success} of {self._reporter.all} records processed correctly.')
         self._logger.info('=' * len(msg))
         return result
+
+    def _record_progress(self, count, cumulative_count, start_time, save_time):
+        with open(self._config.progress_fqn, 'a') as progress:
+            progress.write(
+                f'{datetime.now()} current:: {save_time} {count} since:: {start_time}:: {cumulative_count}\n'
+            )
+
+    def _record_retries(self):
+        """Accumulate the retry entries into a single location, for execution after all the data sources across all
+        the time boxed intervals."""
+        with open(self._config.total_retry_fqn, 'a') as f_out:
+            with open(self._config.retry_fqn) as f_in:
+                for line in f_in:
+                    f_out.write(line)
+
+    def _reset_retries(self):
+        """Truncate the cumulative retry file left from a previous run."""
+        open(self._config.total_retry_fqn, 'w')
+
+    def _set_retries(self):
+        """Put the contents of the retry file where the retry mechanism expects to find them."""
+        self._logger.error(f'retry {self._config.retry_fqn}')
+        with open(self._config.retry_fqn, 'w') as f_out:
+            with open(self._config.total_retry_fqn) as f_in:
+                for line in f_in:
+                    self._logger.error(f'line {line}')
+                    f_out.write(line)
 
 
 def set_logging(config):

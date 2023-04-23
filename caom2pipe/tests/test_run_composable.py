@@ -442,9 +442,8 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config, tmp
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
-@patch('caom2pipe.data_source_composable.CadcTapClient', autospec=True)
 @patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource')
-def test_run_state_retry(ds_mock, tap_mock, do_one_mock, clients_mock, test_config, tmpdir):
+def test_run_state_retry(ds_mock, do_one_mock, clients_mock, test_config, tmpdir):
     test_config.change_working_directory(tmpdir)
     test_start_time = mc.get_now()
     test_end_time = test_start_time + timedelta(hours=1)
@@ -459,7 +458,8 @@ def test_run_state_retry(ds_mock, tap_mock, do_one_mock, clients_mock, test_conf
     global call_count
     call_count = 0
     ds_mock.return_value.get_time_box_work.side_effect = _mock_get_work
-    do_one_mock.side_effect = [mc.CadcException, _mock_do_one]
+    # a failure part-way through an incremental run, followed by a successful execution
+    do_one_mock.side_effect = [mc.CadcException, 0]
 
     test_config.log_to_file = True
     test_config.retry_failures = True
@@ -468,19 +468,24 @@ def test_run_state_retry(ds_mock, tap_mock, do_one_mock, clients_mock, test_conf
     test_config.interval = 10
     test_config.logging_level = 'DEBUG'
 
-    test_result = rc.run_by_state(config=test_config)
+    orig_cwd = os.getcwd()
+    try:
+        os.chdir(tmpdir)
+        mc.Config.write_to_file(test_config)
+        test_result = rc.run_by_state(config=test_config)
 
-    assert test_result is not None, 'expect a result'
-    assert test_result == -1, 'expect failure'
-    _check_log_files(
-        test_config,
-        retry_success_fqn,
-        retry_failure_fqn,
-        retry_retry_fqn,
-    )
-    assert do_one_mock.called, 'expect do_one call'
-    assert do_one_mock.call_count == 2, 'wrong number of calls'
-    assert tap_mock.called, 'init should be called'
+        assert test_result is not None, 'expect a result'
+        assert test_result == -1, 'expect failure'
+        _check_log_files(
+            test_config,
+            retry_success_fqn,
+            retry_failure_fqn,
+            retry_retry_fqn,
+        )
+        assert do_one_mock.called, 'expect do_one call'
+        assert do_one_mock.call_count == 2, 'wrong number of calls'
+    finally:
+        os.chdir(orig_cwd)
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
@@ -753,70 +758,75 @@ def test_run_store_get_work_failures(
     test_config.logging_level = 'INFO'
     test_config.proxy_file_name = 'cadcproxy.pem'
     test_config.recurse_data_sources = False
-    test_config.write_to_file(test_config)
 
-    with open(test_config.proxy_fqn, 'w') as f:
-        f.write('test content')
+    orig_cwd = os.getcwd()
+    try:
+        os.chdir(tmpdir)
+        test_config.write_to_file(test_config)
 
-    test_end_time = datetime.fromtimestamp(1579740838)
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
 
-    start_time = test_end_time - timedelta(seconds=900)
-    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
+        test_end_time = datetime.fromtimestamp(1579740838)
+        start_time = test_end_time - timedelta(seconds=900)
+        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
 
-    stat_return_value = type('', (), {})
-    stat_return_value.st_mtime = 1579740835.7357888
-    dir_entry_1 = type('', (), {})
-    dir_entry_1.name = 'a2020_06_17_07_00_01.fits'
-    dir_entry_1.path = '/test_files/a2020_06_17_07_00_01.fits'
-    dir_entry_1.stat = Mock(return_value=stat_return_value)
-    dir_entry_1.is_dir = Mock(return_value=False)
-    dir_entry_2 = type('', (), {})
-    dir_entry_2.name = 'a2022_07_26_05_50_01.fits'
-    dir_entry_2.path = '/test_files/a2022_07_26_05_50_01.fits'
-    dir_entry_2.stat = Mock(return_value=stat_return_value)
-    dir_entry_2.is_dir = Mock(return_value=False)
+        stat_return_value = type('', (), {})
+        stat_return_value.st_mtime = 1579740835.7357888
+        dir_entry_1 = type('', (), {})
+        dir_entry_1.name = 'a2020_06_17_07_00_01.fits'
+        dir_entry_1.path = '/test_files/a2020_06_17_07_00_01.fits'
+        dir_entry_1.stat = Mock(return_value=stat_return_value)
+        dir_entry_1.is_dir = Mock(return_value=False)
+        dir_entry_2 = type('', (), {})
+        dir_entry_2.name = 'a2022_07_26_05_50_01.fits'
+        dir_entry_2.path = '/test_files/a2022_07_26_05_50_01.fits'
+        dir_entry_2.stat = Mock(return_value=stat_return_value)
+        dir_entry_2.is_dir = Mock(return_value=False)
 
-    file_metadata_reader = FileMetadataReader()
-    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
-    with patch('os.scandir') as scandir_mock:
-        scandir_mock.return_value.__enter__.return_value = [dir_entry_1, dir_entry_2]
-        data_source = dsc.LocalFilesDataSource(test_config, data_client_mock, file_metadata_reader)
-        data_source.reporter = test_reporter
-        data_source.end_dt = test_end_time
-        clients_mock = ClientCollection(test_config)
-        clients_mock._data_client = data_client_mock
-        clients_mock._metadata_client = repo_client_mock
-        test_result = rc.run_by_state(
-            sources=[data_source], clients=clients_mock, metadata_reader=file_metadata_reader
-        )
+        file_metadata_reader = FileMetadataReader()
+        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
+        with patch('os.scandir') as scandir_mock:
+            scandir_mock.return_value.__enter__.return_value = [dir_entry_1, dir_entry_2]
+            data_source = dsc.LocalFilesDataSource(test_config, data_client_mock, file_metadata_reader)
+            data_source.reporter = test_reporter
+            type(data_source).end_dt = PropertyMock(return_value=test_end_time)
+            clients_mock = ClientCollection(test_config)
+            clients_mock._data_client = data_client_mock
+            clients_mock._metadata_client = repo_client_mock
+            test_result = rc.run_by_state(
+                sources=[data_source], clients=clients_mock, metadata_reader=file_metadata_reader
+            )
 
-        assert test_result is not None, 'expect result'
-        assert test_result == 0, 'expect successful execution'
-        # execution stops before this call should be made
-        assert not repo_client_mock.return_value.read.called, 'no read'
-        # make sure data is not really being written to CADC storage :)
-        assert not data_client_mock.put.called, 'put should not be called'
-        assert cleanup_mock.called, 'cleanup'
-        cleanup_calls = [
-            call('/test_files/a2020_06_17_07_00_01.fits', '/data/success'),
-            call('/test_files/a2022_07_26_05_50_01.fits', '/data/failure'),
-        ]
-        cleanup_mock.assert_has_calls(cleanup_calls), 'wrong cleanup args'
-        assert not visit_meta_mock.called, 'no _visit_meta call'
-        assert not caom2_store_mock.called, 'no _caom2_store call'
-        assert os.path.exists(test_config.failure_fqn), f'failure log {test_config.failure_fqn} should exist'
-        with open(test_config.failure_fqn, 'r') as f:
-            content = f.readlines()
-            assert len(content) == 1, 'expect 1 failure'
-            assert 'a2022_07_26_05_50_01' in content[0], 'expect verify in failure log'
-            assert 'a2020_06_17_07_00_01' not in content[0], 'expect md5sum in success log'
+            assert test_result is not None, 'expect result'
+            assert test_result == 0, 'expect successful execution'
+            # execution stops before this call should be made
+            assert not repo_client_mock.return_value.read.called, 'no read'
+            # make sure data is not really being written to CADC storage :)
+            assert not data_client_mock.put.called, 'put should not be called'
+            assert cleanup_mock.called, 'cleanup'
+            cleanup_calls = [
+                call('/test_files/a2020_06_17_07_00_01.fits', '/data/success'),
+                call('/test_files/a2022_07_26_05_50_01.fits', '/data/failure'),
+            ]
+            cleanup_mock.assert_has_calls(cleanup_calls), 'wrong cleanup args'
+            assert not visit_meta_mock.called, 'no _visit_meta call'
+            assert not caom2_store_mock.called, 'no _caom2_store call'
+            assert os.path.exists(test_config.failure_fqn), f'failure log {test_config.failure_fqn} should exist'
+            with open(test_config.failure_fqn, 'r') as f:
+                content = f.readlines()
+                assert len(content) == 1, 'expect 1 failure'
+                assert 'a2022_07_26_05_50_01' in content[0], 'expect verify in failure log'
+                assert 'a2020_06_17_07_00_01' not in content[0], 'expect md5sum in success log'
 
-        assert os.path.exists(test_config.success_fqn), f'failure log {test_config.success_fqn} should exist'
-        with open(test_config.success_fqn, 'r') as f:
-            content = f.readlines()
-            assert len(content) == 1, 'expect 1 success'
-            assert 'a2020_06_17_07_00_01' in content[0], 'expect md5sum in success log'
-            assert 'a2022_07_26_05_50_01' not in content[0], 'expect verify in failure log'
+            assert os.path.exists(test_config.success_fqn), f'failure log {test_config.success_fqn} should exist'
+            with open(test_config.success_fqn, 'r') as f:
+                content = f.readlines()
+                assert len(content) == 1, 'expect 1 success'
+                assert 'a2020_06_17_07_00_01' in content[0], 'expect md5sum in success log'
+                assert 'a2022_07_26_05_50_01' not in content[0], 'expect verify in failure log'
+    finally:
+        os.chdir(orig_cwd)
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')

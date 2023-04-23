@@ -951,6 +951,7 @@ class Config:
         self._storage_inventory_resource_id = None
         self._storage_inventory_tap_resource_id = None
         self._time_zone = tz.UTC
+        self._total_retry_fqn = None
 
     @property
     def bookmark(self):
@@ -1193,9 +1194,8 @@ class Config:
     def retry_file_name(self, value):
         self._retry_file_name = value
         if self._log_file_directory is not None:
-            self.retry_fqn = os.path.join(
-                self._log_file_directory, self._retry_file_name
-            )
+            self.retry_fqn = os.path.join(self._log_file_directory, self._retry_file_name)
+            self._total_retry_fqn = os.path.join(self._log_file_directory, f'total_{value}')
 
     @property
     def retry_failures(self):
@@ -1434,6 +1434,10 @@ class Config:
         self._time_zone = tz.gettz(value)
 
     @property
+    def total_retry_fqn(self):
+        return self._total_retry_fqn
+
+    @property
     def use_vos(self):
         """"""
         result = False
@@ -1495,6 +1499,7 @@ class Config:
             f'  tap_id:: {self.tap_id}\n'
             f'  task_types:: {self.task_types}\n'
             f'  time_zone:: {self.time_zone}\n'
+            f'  total_retry_fqn:: {self.total_retry_fqn}\n'
             f'  use_local_files:: {self.use_local_files}\n'
             f'  work_fqn:: {self.work_fqn}\n'
             f'  working_directory:: {self.working_directory}'
