@@ -40,4 +40,5 @@ def test_config():
     ]:
         if os.path.exists(f_name):
             os.unlink(f_name)
+    test_config.time_zone = 'UTC'
     return test_config
