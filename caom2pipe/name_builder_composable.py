@@ -96,7 +96,7 @@ class StorageNameBuilder:
     """
 
     def __init__(self):
-        pass
+        self._logger = logging.getLogger(self.__class__.__name__)
 
     def build(self, entry):
         """

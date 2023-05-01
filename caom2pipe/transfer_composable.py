@@ -328,13 +328,34 @@ class VoScienceCleanupTransfer(VoScienceTransfer):
 
 def modify_transfer_factory(config, clients):
     modify_transfer = None
-    if not config.use_local_files:
+    if config.use_local_files:
+        # need a noop action for the NoFhead implementations
+        modify_transfer = Transfer()
+    else:
         modify_transfer = CadcTransfer(clients.data_client)
+    logging.debug(f'Returning {modify_transfer.__class__.__name__} from modify_transfer_factory')
     return modify_transfer
 
 
 def store_transfer_factory(config, clients):
     store_transfer = None
     if mc.TaskType.STORE in config.task_types:
-        store_transfer = CadcTransfer(clients.data_client)
+        if config.use_local_files:
+            # noop
+            store_transfer = Transfer()
+        else:
+            for entry in config.data_sources:
+                if entry.startswith('http'):
+                    store_transfer = HttpTransfer()
+                    break
+                if entry.startswith('vos:'):
+                    if config.clean_up_files_when_storing:
+                        store_transfer = VoScienceCleanupTransfer(clients.vo_client, config)
+                    else:
+                        store_transfer = VoScienceTransfer(clients.vo_client)
+                    break
+                if entry.startswith('ftp://'):
+                    store_transfer = FtpTransfer(entry)
+                    break
+    logging.debug(f'Returning {store_transfer.__class__.__name__} from store_transfer_factory')
     return store_transfer

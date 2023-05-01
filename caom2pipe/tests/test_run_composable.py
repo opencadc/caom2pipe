@@ -708,10 +708,8 @@ def test_run_store_ingest_failure(
     cleanup_mock.assert_has_calls(cleanup_calls), 'wrong cleanup args'
     assert not visit_meta_mock.called, 'no _visit_meta call'
     assert not caom2_store_mock.called, 'no _caom2_store call'
-    assert reader_file_info_mock.called, 'info'
-    reader_file_info_mock.assert_called_with('cadc:OMM/dao_c122_2021_005157.fits', '/data/dao_c122_2021_005157.fits'), 'info args'
-    assert reader_headers_mock.called, 'get_head should be called'
-    reader_headers_mock.assert_called_with('cadc:OMM/dao_c122_2021_005157.fits', '/data/dao_c122_2021_005157.fits'), 'headers mock call'
+    assert not reader_file_info_mock.called, 'info'
+    assert not reader_headers_mock.called, 'get_head should be called'
 
 
 @patch('caom2pipe.execute_composable.CaomExecute._caom2_store')
@@ -961,40 +959,6 @@ def test_vo_with_cleanup(
     ), 'move args'
     assert clients_mock.data_client.put.called, 'put call'
     clients_mock.data_client.put.assert_called_with(tmpdir, 'cadc:DAO/sky_cam_image.fits')
-
-
-@patch('caom2pipe.data_source_composable.TodoFileDataSource.get_work')
-@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_store_from_to_cadc(clients_mock, get_work_mock, test_config):
-    # mimic a decompression event
-    test_f_name = 'abc.fits'
-    test_config.task_types = [mc.TaskType.STORE]
-    test_config.logging_level = 'DEBUG'
-    test_return_value = deque()
-    test_return_value.append(
-        f'cadc:{test_config.collection}/{test_f_name}.gz',
-    )
-    get_work_mock.return_value = test_return_value
-    clients_mock.return_value.data_client.get.side_effect = (
-        _mock_get_compressed_file
-    )
-    test_builder = nbc.GuessingBuilder(mc.StorageName)
-    test_result = rc.run_by_todo(
-        test_config,
-        test_builder,
-    )
-
-    assert test_result == 0, 'expect success'
-    assert clients_mock.return_value.data_client.get.called, 'get call'
-    assert clients_mock.return_value.data_client.put.called, 'put call'
-    clients_mock.return_value.data_client.get.assert_called_with(
-        '/usr/src/app/caom2pipe/caom2pipe/tests/abc',
-        f'cadc:{test_config.collection}/{test_f_name}.gz',
-    ), 'wrong get params'
-    clients_mock.return_value.data_client.put.assert_called_with(
-        '/usr/src/app/caom2pipe/caom2pipe/tests/abc',
-        f'cadc:{test_config.collection}/{test_f_name}',
-    ), 'wrong put params'
 
 
 def _check_log_files(
