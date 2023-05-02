@@ -124,7 +124,7 @@ from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
 
-__all__ = ['CaomExecute', 'OrganizeExecutes', 'OrganizeChooser']
+__all__ = ['CaomExecute', 'can_use_single_visit', 'OrganizeExecutes', 'OrganizeChooser']
 
 
 class CaomExecute:
@@ -176,7 +176,8 @@ class CaomExecute:
         self.meta_visitors = meta_visitors
         self.observable = observable
         self.log_file_directory = None
-        self.data_visitors = []
+        self._data_visitors = []
+        self._store_transferrer = None
         self._metadata_reader = metadata_reader
         self._observation = None
         # track whether the caom2repo call will be a create or an update
@@ -276,6 +277,38 @@ class CaomExecute:
             False if self._observation is None else True
         )
 
+    def _store_data(self):
+        for index, entry in enumerate(self._storage_name.source_names):
+            if self._config.use_local_files:
+               local_fqn = entry
+            else:
+                temp = urlparse(entry)
+                local_fqn = os.path.join(self._working_dir, temp.path.split('/')[-1])
+                self._logger.error(f'Retrieve {entry} to {local_fqn}')
+                self._store_transferrer.get(entry, local_fqn)
+
+            self._logger.debug(f'store the input file {local_fqn} to {self._storage_name.destination_uris[index]}')
+            self._cadc_put(local_fqn, self._storage_name.destination_uris[index])
+            self._store_transferrer.post_store_check(entry, self._storage_name.destination_uris[index])
+
+    def _visit_data(self):
+        """Execute the visitors that require access to the full data content of a file."""
+        kwargs = {
+            'working_directory': self._working_dir,
+            'storage_name': self._storage_name,
+            # 'log_file_directory': self._log_file_directory,
+            'log_file_directory': self._config.log_file_directory,
+            'clients': self._clients,
+            'observable': self.observable,
+            'metadata_reader': self._metadata_reader,
+        }
+        for visitor in self._data_visitors:
+            try:
+                self._logger.debug(f'Visit for {visitor.__class__.__name__}')
+                self._observation = visitor.visit(self._observation, **kwargs)
+            except Exception as e:
+                raise mc.CadcException(e)
+
     def _visit_meta(self):
         """Execute metadata-only visitors on an Observation in
         memory."""
@@ -289,19 +322,11 @@ class CaomExecute:
             }
             for visitor in self.meta_visitors:
                 try:
-                    self._logger.debug(f'Visit for {visitor}')
-                    self._observation = visitor.visit(
-                        self._observation, **kwargs
-                    )
+                    self._logger.debug(f'Visit for {visitor.__class__.__name__}')
+                    self._observation = visitor.visit(self._observation, **kwargs)
                     if self._observation is None:
-                        msg = (
-                            f'Observation construction failed for '
-                            f'{self._storage_name.file_uri}'
-                        )
-                        self._logger.error(
-                            f'Stopping _visit_meta in {visitor.__name__} '
-                            f'with {msg}'
-                        )
+                        msg = f'Observation construction failed for {self._storage_name.file_uri}'
+                        self._logger.error(f'Stopping _visit_meta in {visitor.__class__.__name__} with {msg}')
                         raise mc.CadcException(msg)
                 except Exception as e:
                     raise mc.CadcException(e)
@@ -316,6 +341,7 @@ class CaomExecute:
         self._logger.debug('Begin execute')
         self._logger.debug('the steps:')
         self.storage_name = context.get('storage_name')
+        self._metadata_reader.set(self.storage_name)
 
     @staticmethod
     def _specify_logging_level_param(logging_level):
@@ -441,7 +467,6 @@ class DataVisit(CaomExecute):
             clients=clients,
         )
         self._data_visitors = data_visitors
-        self._log_file_directory = config.log_file_directory
         self._transferrer = transferrer
 
     def execute(self, context):
@@ -467,24 +492,6 @@ class DataVisit(CaomExecute):
         self._caom2_store()
 
         self._logger.debug('End execute.')
-
-    def _visit_data(self):
-        """Execute the visitors that require access to the full data content
-        of a file."""
-        kwargs = {
-            'working_directory': self._working_dir,
-            'storage_name': self._storage_name,
-            'log_file_directory': self._log_file_directory,
-            'clients': self._clients,
-            'observable': self.observable,
-            'metadata_reader': self._metadata_reader,
-        }
-        for visitor in self._data_visitors:
-            try:
-                self._logger.debug(f'Visit for {visitor.__class__.__name__}')
-                self._observation = visitor.visit(self._observation, **kwargs)
-            except Exception as e:
-                raise mc.CadcException(e)
 
 
 class LocalDataVisit(DataVisit):
@@ -581,9 +588,9 @@ class Store(CaomExecute):
         self,
         config,
         observable,
-        transferrer,
         clients,
         metadata_reader,
+        transferrer,
     ):
         super().__init__(
             config,
@@ -592,7 +599,7 @@ class Store(CaomExecute):
             metadata_reader=metadata_reader,
             clients=clients,
         )
-        self._transferrer = transferrer
+        self._store_transferrer = transferrer
 
     def execute(self, context):
         super().execute(context)
@@ -600,65 +607,122 @@ class Store(CaomExecute):
         self._logger.debug(
             f'Store {len(self._storage_name.source_names)} files to CADC.'
         )
-        for index, entry in enumerate(self._storage_name.source_names):
-            temp = urlparse(entry)
-            local_fqn = os.path.join(
-                self._working_dir, temp.path.split('/')[-1]
-            )
-            self._logger.debug(f'Retrieve {entry} to {local_fqn}')
-            self._transferrer.get(entry, local_fqn)
-
-            self._logger.debug(
-                f'store the input file {local_fqn} to '
-                f'{self._storage_name.destination_uris[index]}'
-            )
-            self._cadc_put(
-                local_fqn, self._storage_name.destination_uris[index]
-            )
-            self._transferrer.post_store_check(
-                entry, self._storage_name.destination_uris[index]
-            )
-
+        self._store_data()
         self._logger.debug('End execute')
 
 
-class LocalStore(Store):
-    """Defines the pipeline step for Collection storage of a file. This
-    requires access to the file on disk. The file originates from local
-    disk.
+class NoFheadVisit(CaomExecute):
+    """Defines a pipeline step for all the operations that require access to the file on disk for metdata and data
+    operations. This is to support HDF5 operations, since at the time of writing, there is no --fhead metadata
+    retrieval option for HDF5 files.
 
-    Need the metadata_reader instance in case decompression occurs, resulting
-    in a change to the FileInfo.
     """
 
     def __init__(
         self,
         config,
-        observable,
         clients,
+        modify_transferrer,
+        meta_visitors,
+        data_visitors,
         metadata_reader,
+        observable,
     ):
         super().__init__(
-            config,
-            observable,
-            transferrer=None,
+            config=config,
             clients=clients,
+            meta_visitors=meta_visitors,
             metadata_reader=metadata_reader,
+            observable=observable,
         )
+        self._modify_transferrer = modify_transferrer
+        self._data_visitors = data_visitors
 
     def execute(self, context):
-        self._logger.debug('Begin execute')
-        self._logger.debug('the steps:')
+        self._logger.debug('Begin execute with the steps:')
         self.storage_name = context.get('storage_name')
 
-        self._logger.debug(
-            f'Store {len(self._storage_name.source_names)} files to CADC.'
-        )
-        for index, entry in enumerate(self._storage_name.source_names):
-            self._logger.debug(f'store the input file {entry}')
-            self._cadc_put(entry, self._storage_name.destination_uris[index])
+        self._logger.debug('get the input files')
+        for entry in self._storage_name.destination_uris:
+            local_fqn = os.path.join(self._working_dir, os.path.basename(entry))
+            self._modify_transferrer.get(entry, local_fqn)
 
-        self._logger.debug('End execute')
+        self._logger.debug('initialize the metadata')
+        self._metadata_reader.working_directory = self._working_dir
+        self._metadata_reader.set(self._storage_name)
+
+        self._logger.debug('get the observation for the existing model')
+        self._caom2_read()
+
+        self._logger.debug('execute the meta visitors')
+        self._visit_meta()
+
+        self._logger.debug('execute the data visitors')
+        self._visit_data()
+
+        self._logger.debug('write the observation to disk for debugging')
+        self._write_model()
+
+        self._logger.debug('store the updated xml')
+        self._caom2_store()
+
+        self._logger.debug('End execute.')
+
+
+class NoFheadStoreVisit(CaomExecute):
+    """Defines a pipeline step for all the operations that require access to the file on disk for metadata and data
+    operations that includes STORE.
+
+    At the time of writing, there is no --fhead metadata retrieval option for HDF5 files.
+    """
+
+    def __init__(
+        self,
+        config,
+        clients,
+        store_transferrer,
+        meta_visitors,
+        data_visitors,
+        metadata_reader,
+        observable,
+    ):
+        super().__init__(
+            config=config,
+            clients=clients,
+            meta_visitors=meta_visitors,
+            metadata_reader=metadata_reader,
+            observable=observable,
+        )
+        self._store_transferrer = store_transferrer
+        self._data_visitors = data_visitors
+
+    def execute(self, context):
+        self._logger.debug('Begin execute with the steps:')
+        self.storage_name = context.get('storage_name')
+
+        self._logger.debug('store the input files')
+        self._store_data()
+
+        self._logger.debug('initialize the metadata')
+        self._metadata_reader.working_directory = self._working_dir
+        self._metadata_reader.set(self._storage_name)
+
+        self._logger.debug('get the observation for the existing model')
+        self._caom2_read()
+
+        self._logger.debug('execute the meta visitors')
+        self._visit_meta()
+
+        self._logger.debug('execute the data visitors')
+        self._visit_data()
+
+        self._logger.debug('write the observation to disk for debugging')
+        self._write_model()
+
+        self._logger.debug('store the updated xml')
+        self._caom2_store()
+
+        self._logger.debug('End execute.')
 
 
 class Scrape(CaomExecute):
@@ -677,6 +741,44 @@ class Scrape(CaomExecute):
 
         self._logger.debug('the metadata visitors')
         self._visit_meta()
+
+        self._logger.debug('write the updated xml to disk for debugging')
+        self._write_model()
+
+        self._logger.debug(f'End execute')
+
+
+class NoFheadScrape(CaomExecute):
+    """Defines the pipeline step for Defines a pipeline step for all the operations that require access to the file
+    on disk for metadata and data operations without internet access. The file is located on disk.
+    No record is written to a web service."""
+
+    def __init__(self, config, meta_visitors, data_visitors, metadata_reader, observable):
+        super().__init__(
+            config,
+            meta_visitors=meta_visitors,
+            metadata_reader=metadata_reader,
+            clients=None,
+            observable=observable,
+        )
+        self._data_visitors = data_visitors
+
+    def execute(self, context):
+        self._logger.debug('Begin execute with the steps:')
+        self.storage_name = context.get('storage_name')
+
+        self._logger.debug('initialize the metadata')
+        self._metadata_reader.working_directory = self._working_dir
+        self._metadata_reader.set(self._storage_name)
+
+        self._logger.debug('get observation for the existing model from disk')
+        self._read_model()
+
+        self._logger.debug('the metadata visitors')
+        self._visit_meta()
+
+        self._logger.debug('the data visitors')
+        self._visit_data()
 
         self._logger.debug('write the updated xml to disk for debugging')
         self._write_model()
@@ -823,48 +925,120 @@ class OrganizeExecutes:
         :destination_name StorageName extension that handles the naming rules
             for a file.
         """
-        for task_type in self.task_types:
-            if task_type == mc.TaskType.SCRAPE:
-                if self.config.use_local_files:
-                    self._logger.debug(
-                        f'Choosing executor Scrape for {task_type}.'
+        if can_use_single_visit(self.task_types):
+            if mc.TaskType.SCRAPE in self.task_types:
+                self._logger.debug(f'Choosing executor NoFheadSScrape for tasks {self.task_types}.')
+                self._executors.append(
+                    NoFheadScrape(
+                        self.config,
+                        self._meta_visitors,
+                        self._data_visitors,
+                        self._metadata_reader,
+                        self._observable,
                     )
-                    self._executors.append(Scrape(self.config,  self._meta_visitors, self._metadata_reader))
+                )
+            elif mc.TaskType.STORE in self.task_types:
+                self._logger.debug(f'Choosing executor NoFheadStoreVisit for tasks {self.task_types}.')
+                self._executors.append(
+                    NoFheadStoreVisit(
+                        self.config,
+                        self._clients,
+                        self._store_transfer,
+                        self._meta_visitors,
+                        self._data_visitors,
+                        self._metadata_reader,
+                        self._observable,
+                    )
+                )
+            else:
+                self._logger.debug(f'Choosing executor NoFheadVisit for tasks {self.task_types}.')
+                self._executors.append(
+                    NoFheadVisit(
+                        self.config,
+                        self._clients,
+                        self._modify_transfer,
+                        self._meta_visitors,
+                        self._data_visitors,
+                        self._metadata_reader,
+                        self._observable,
+                    )
+                )
+        else:
+            for task_type in self.task_types:
+                if task_type == mc.TaskType.SCRAPE:
+                    if self.config.use_local_files:
+                        self._logger.debug(
+                            f'Choosing executor Scrape for {task_type}.'
+                        )
+                        self._executors.append(Scrape(self.config,  self._meta_visitors, self._metadata_reader))
 
-                else:
-                    raise mc.CadcException(
-                        'use_local_files must be True with Task Type '
-                        '"SCRAPE"'
-                    )
-            elif task_type == mc.TaskType.STORE:
-                if self.config.use_local_files:
-                    self._logger.debug(
-                        f'Choosing executor LocalStore for {task_type}.'
-                    )
-                    self._executors.append(
-                        LocalStore(self.config, self._observable, self._clients, self._metadata_reader)
-                    )
-                else:
-                    self._logger.debug(
-                        f'Choosing executor Store for {task_type}.'
-                    )
-                    self._executors.append(
-                        Store(
-                            self.config, self._observable, self._store_transfer, self._clients, self._metadata_reader
+                    else:
+                        raise mc.CadcException(
+                            'use_local_files must be True with Task Type '
+                            '"SCRAPE"'
                         )
-                    )
-            elif task_type == mc.TaskType.INGEST:
-                if self.chooser is not None and self.chooser.needs_delete():
-                    self._logger.debug(
-                        f'Choosing executor MetaVisitDeleteCreate for '
-                        f'{task_type}.'
-                    )
+                elif task_type == mc.TaskType.STORE:
+                    self._logger.debug(f'Choosing executor Store for {task_type}.')
                     self._executors.append(
-                        MetaVisitDeleteCreate(
-                            self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
-                        )
+                        Store(self.config, self._observable, self._clients, self._metadata_reader, self._store_transfer)
                     )
-                else:
+                elif task_type == mc.TaskType.INGEST:
+                    if self.chooser is not None and self.chooser.needs_delete():
+                        self._logger.debug(
+                            f'Choosing executor MetaVisitDeleteCreate for '
+                            f'{task_type}.'
+                        )
+                        self._executors.append(
+                            MetaVisitDeleteCreate(
+                                self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
+                            )
+                        )
+                    else:
+                        self._logger.debug(
+                            f'Choosing executor MetaVisit for {task_type}.'
+                        )
+                        self._executors.append(
+                            MetaVisit(
+                                self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
+                            )
+                        )
+                elif task_type == mc.TaskType.MODIFY:
+                    if self.config.use_local_files:
+                        if len(self._executors) > 0 and isinstance(self._executors[0], Scrape):
+                            self._logger.debug(
+                                f'Choosing executor DataScrape for '
+                                f'{task_type}.'
+                            )
+                            self._executors.append(DataScrape(self.config, self._data_visitors, self._metadata_reader))
+                        else:
+                            self._logger.debug(
+                                f'Choosing executor LocalDataVisit for '
+                                f'{task_type}.'
+                            )
+                            self._executors.append(
+                                LocalDataVisit(
+                                    self.config,
+                                    self._data_visitors,
+                                    self._observable,
+                                    self._clients,
+                                    self._metadata_reader,
+                                )
+                            )
+                    else:
+                        self._logger.debug(
+                            f'Choosing executor DataVisit for {task_type}.'
+                        )
+                        self._executors.append(
+                            DataVisit(
+                                self.config,
+                                self._data_visitors,
+                                self._observable,
+                                self._modify_transfer,
+                                self._clients,
+                                self._metadata_reader,
+                            )
+                        )
+                elif task_type == mc.TaskType.VISIT:
                     self._logger.debug(
                         f'Choosing executor MetaVisit for {task_type}.'
                     )
@@ -873,57 +1047,12 @@ class OrganizeExecutes:
                             self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
                         )
                     )
-            elif task_type == mc.TaskType.MODIFY:
-                if self.config.use_local_files:
-                    if len(self._executors) > 0 and isinstance(self._executors[0], Scrape):
-                        self._logger.debug(
-                            f'Choosing executor DataScrape for '
-                            f'{task_type}.'
-                        )
-                        self._executors.append(DataScrape(self.config, self._data_visitors, self._metadata_reader))
-                    else:
-                        self._logger.debug(
-                            f'Choosing executor LocalDataVisit for '
-                            f'{task_type}.'
-                        )
-                        self._executors.append(
-                            LocalDataVisit(
-                                self.config,
-                                self._data_visitors,
-                                self._observable,
-                                self._clients,
-                                self._metadata_reader,
-                            )
-                        )
+                elif task_type == mc.TaskType.DEFAULT:
+                    pass
                 else:
-                    self._logger.debug(
-                        f'Choosing executor DataVisit for {task_type}.'
+                    raise mc.CadcException(
+                        f'Do not understand task type {task_type}'
                     )
-                    self._executors.append(
-                        DataVisit(
-                            self.config,
-                            self._data_visitors,
-                            self._observable,
-                            self._modify_transfer,
-                            self._clients,
-                            self._metadata_reader,
-                        )
-                    )
-            elif task_type == mc.TaskType.VISIT:
-                self._logger.debug(
-                    f'Choosing executor MetaVisit for {task_type}.'
-                )
-                self._executors.append(
-                    MetaVisit(
-                        self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
-                    )
-                )
-            elif task_type == mc.TaskType.DEFAULT:
-                pass
-            else:
-                raise mc.CadcException(
-                    f'Do not understand task type {task_type}'
-                )
 
     def do_one(self, storage_name):
         """Process one entry.
@@ -941,7 +1070,6 @@ class OrganizeExecutes:
                 self._create_workspace(storage_name.obs_id)
                 context = {'storage_name': storage_name}
                 for executor in self._executors:
-                    self._metadata_reader.set(storage_name)
                     self._logger.info(
                         f'Task with {executor.__class__.__name__} for '
                         f'{storage_name.obs_id}'
@@ -973,7 +1101,7 @@ def decompressor_factory(config, working_directory, log_level_as, storage_name):
         result = FitsForCADCCompressor(working_directory, log_level_as, storage_name)
     else:
         result = FitsForCADCDecompressor(working_directory, log_level_as)
-    logging.debug(f'Built {type(result)} Fits Compression handling class.')
+    logging.debug(f'Built {result.__class__.__name__} Fits Compression handling class.')
     return result
 
 
@@ -1083,3 +1211,14 @@ class FitsForCADCCompressor(FitsForCADCDecompressor):
                 returned_fqn = super().fix_compression(fqn)
                 # log message in the super
         return returned_fqn
+
+
+def can_use_single_visit(task_types):
+    return (
+        len(task_types) > 1
+        and (
+            (mc.TaskType.STORE in task_types and mc.TaskType.INGEST in task_types)
+            or (mc.TaskType.INGEST in task_types and mc.TaskType.MODIFY in task_types)
+            or (mc.TaskType.SCRAPE in task_types and mc.TaskType.MODIFY in task_types)
+        )
+    )

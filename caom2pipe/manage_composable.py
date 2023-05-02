@@ -1848,8 +1848,8 @@ class PreviewVisitor:
 
     def __str__(self):
         return (
-            f'working directory: {self._working_dir}\n'
-            f'science file: {self._storage_name.file_name}\n'
+            f'\nworking directory: {self._working_dir}\n'
+            f'science file: {self._storage_name.file_name}'
         )
 
     def visit(self, observation):
@@ -2149,6 +2149,7 @@ class StorageName:
         # file_uri is the file name without the compression extension
         temp_f_name = os.path.basename(self.file_uri)
         temp_fqn = os.path.join(working_directory, temp_f_name)
+        temp_obs_fqn = os.path.join(os.path.join(working_directory, self._obs_id), temp_f_name)
         fqn = temp_fqn
         if (
             self._source_names is not None
@@ -2160,6 +2161,8 @@ class StorageName:
             fqn = self._source_names[0]
         elif os.path.exists(temp_fqn):
             fqn = temp_fqn
+        elif os.path.exists(temp_obs_fqn):
+            fqn = temp_obs_fqn
         elif os.path.exists(self._source_names[0]):
             # use the compressed file, if it can be found
             fqn = self._source_names[0]

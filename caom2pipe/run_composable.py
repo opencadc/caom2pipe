@@ -189,7 +189,7 @@ class TodoRunner:
             self._logger.info(f'Cleanup failed for {entry} with {e}')
             self._logger.debug(traceback.format_exc())
             result = -1
-        self._logger.debug(f'End _process_entry.')
+        self._logger.debug(f'End _process_entry with result {result}.')
         return result
 
     def _run_todo_list(self, data_source, current_count):
@@ -252,7 +252,7 @@ class TodoRunner:
             self._logger.warning(f'Done retry attempts with result {result}.')
         else:
             self._logger.info(f'No failures to be retried.')
-        self._logger.debug('End retry run.')
+        self._logger.debug(f'End retry run with result {result}.')
         return result
 
 
@@ -370,6 +370,7 @@ class StateRunner(TodoRunner):
         self._logger.info(msg)
         self._logger.info(f'{self._reporter.success} of {self._reporter.all} records processed correctly.')
         self._logger.info('=' * len(msg))
+        self._logger.debug(f'End _process_data_source with result {result}')
         return result
 
     def _record_progress(self, count, cumulative_count, start_time, save_time):
@@ -381,10 +382,13 @@ class StateRunner(TodoRunner):
     def _record_retries(self):
         """Accumulate the retry entries into a single location, for execution after all the data sources across all
         the time boxed intervals."""
-        with open(self._config.total_retry_fqn, 'a') as f_out:
-            with open(self._config.retry_fqn) as f_in:
-                for line in f_in:
-                    f_out.write(line)
+        if os.path.exists(self._config.retry_fqn):
+            with open(self._config.total_retry_fqn, 'a') as f_out:
+                with open(self._config.retry_fqn) as f_in:
+                    for line in f_in:
+                        f_out.write(line)
+        else:
+            self._logger.warning(f'No existing retry file {self._config.retry_fqn}')
 
     def _reset_retries(self):
         """Truncate the cumulative retry file left from a previous run."""
@@ -392,12 +396,13 @@ class StateRunner(TodoRunner):
 
     def _set_retries(self):
         """Put the contents of the retry file where the retry mechanism expects to find them."""
-        self._logger.error(f'retry {self._config.retry_fqn}')
-        with open(self._config.retry_fqn, 'w') as f_out:
-            with open(self._config.total_retry_fqn) as f_in:
-                for line in f_in:
-                    self._logger.error(f'line {line}')
-                    f_out.write(line)
+        if os.path.exists(self._config.total_retry_fqn):
+            with open(self._config.retry_fqn, 'w') as f_out:
+                with open(self._config.total_retry_fqn) as f_in:
+                    for line in f_in:
+                        f_out.write(line)
+        else:
+            self._logger.warning(f'No existing total retry file {self._config.total_retry_fqn}')
 
 
 def set_logging(config):

@@ -443,6 +443,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         self._collection = config.collection
         self._recursive = recursive
         self._metadata_reader = metadata_reader
+        self._metadata_reader.working_directory = config.working_directory
         self._is_connected = config.is_connected
         self._scheme = scheme
         if not self._is_connected:
