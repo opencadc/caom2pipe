@@ -400,7 +400,6 @@ class StateRunner(TodoRunner):
             with open(self._config.retry_fqn, 'w') as f_out:
                 with open(self._config.total_retry_fqn) as f_in:
                     for line in f_in:
-                        # self._logger.error(f'line {line}')
                         f_out.write(line)
         else:
             self._logger.warning(f'No existing total retry file {self._config.total_retry_fqn}')
