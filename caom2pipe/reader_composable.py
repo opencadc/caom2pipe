@@ -80,6 +80,7 @@ from caom2pipe import manage_composable as mc
 __all__ = [
     'DelayedClientReader',
     'FileMetadataReader',
+    'Hdf5FileMetadataReader',
     'MetadataReader',
     'reader_factory',
     'StorageClientReader',
@@ -181,6 +182,76 @@ class FileMetadataReader(MetadataReader):
             self._headers[key] = data_util.get_local_headers_from_fits(source_name)
 
 
+class Hdf5FileMetadataReader(FileMetadataReader):
+
+    def __init__(self):
+        super().__init__()
+        self._descriptors = {}
+        self._working_directory = None
+
+    @property
+    def descriptors(self):
+        return self._descriptors
+
+    @property
+    def working_directory(self):
+        return self._working_directory
+
+    @working_directory.setter
+    def working_directory(self, value):
+        self._working_directory = value
+
+    def set_file_info(self, storage_name):
+        """Retrieves FileInfo information to memory."""
+        self._logger.debug(f'Begin set_file_info for {storage_name.file_name}')
+        for index, entry in enumerate(storage_name.destination_uris):
+            if entry not in self._file_info:
+                self._logger.debug(
+                    f'Retrieve FileInfo for {entry} {storage_name.get_file_fqn(self._working_directory)}'
+                )
+                self._retrieve_file_info(entry, storage_name.get_file_fqn(self._working_directory))
+        self._logger.debug('End set_file_info')
+
+    def set_headers(self, storage_name):
+        """Retrieves the Header information to memory."""
+        self._logger.debug(f'Begin set_headers for {storage_name.file_name}')
+        for index, entry in enumerate(storage_name.destination_uris):
+            if entry not in self._headers:
+                if storage_name.hdf5:
+                    self._logger.debug(f'Retrieve hdf5 headers for {entry}')
+                    self._retrieve_headers(entry, storage_name.get_file_fqn(self._working_directory))
+                elif '.fits' in entry:
+                    self._logger.debug(f'Retrieve fits headers for {entry}')
+                    super()._retrieve_headers(entry, storage_name.get_file_fqn(self._working_directory))
+                else:
+                    self._headers[entry] = []
+        self._logger.debug('End set_headers')
+
+    def _retrieve_headers(self, key, fqn):
+        self._logger.debug(f'Retrieve "attrs" for {fqn}')
+        if key not in self._descriptors:
+            # local import to limit exposure in Docker builds
+            import h5py
+            f_in = h5py.File(fqn)
+            self._descriptors[key] = f_in
+            # Laurie Rosseau-Nepton - 26-04-23
+            # The standard_spectrum is related to flux calibration used on the data. The other one is for the science
+            # data and is the one that should be used.
+            if len(f_in.attrs) > 6:
+                # 6 happened to be the length of the attrs in the first file I looked at, and it's a poor test
+                self._logger.debug(f'Found attrs for {fqn}')
+                self._headers[key] = [f_in.attrs]
+            else:
+                self._logger.warning(f'No attrs for {fqn}.')
+                self._headers[key] = []
+
+    def reset(self):
+        super().reset()
+        for descriptor in self._descriptors.values():
+            descriptor.close()
+        self._descriptors = {}
+
+
 class StorageClientReader(MetadataReader):
     """Use case: CADC storage.
 
@@ -260,7 +331,6 @@ class VaultReader(MetadataReader):
         """
         super().__init__()
         self._client = client
-        self._logger = logging.getLogger(self.__class__.__name__)
 
     def _retrieve_file_info(self, key, source_name):
         self._file_info[key] = clc.vault_info(self._client, source_name)

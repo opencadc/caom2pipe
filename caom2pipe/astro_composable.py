@@ -617,10 +617,8 @@ def is_good_date(value, start_date, check_end_date=True, end_date=Time(dt_dateti
     elif isinstance(value, dt_datetime) or isinstance(value, Time):
         if start_date > value or (check_end_date and value > end_date):
             result = False
-    elif isinstance(value, str):
-        temp = get_datetime(value)
-        if start_date > temp or (check_end_date and temp > end_date):
-            result = False
+    else:
+        result = False
     return result
 
 
