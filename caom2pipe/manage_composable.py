@@ -125,6 +125,8 @@ __all__ = [
     'get_endpoint_session',
     'get_file_meta',
     'get_keyword',
+    'get_now',
+    'get_version',
     'http_get',
     'increment_time',
     'ISO_8601_FORMAT',
@@ -949,6 +951,7 @@ class Config:
         self._storage_inventory_resource_id = None
         self._storage_inventory_tap_resource_id = None
         self._time_zone = tz.UTC
+        self._total_retry_fqn = None
 
     @property
     def bookmark(self):
@@ -1191,9 +1194,8 @@ class Config:
     def retry_file_name(self, value):
         self._retry_file_name = value
         if self._log_file_directory is not None:
-            self.retry_fqn = os.path.join(
-                self._log_file_directory, self._retry_file_name
-            )
+            self.retry_fqn = os.path.join(self._log_file_directory, self._retry_file_name)
+            self._total_retry_fqn = os.path.join(self._log_file_directory, f'total_{value}')
 
     @property
     def retry_failures(self):
@@ -1429,7 +1431,11 @@ class Config:
 
     @time_zone.setter
     def time_zone(self, value):
-        self._time_zone = value
+        self._time_zone = tz.gettz(value)
+
+    @property
+    def total_retry_fqn(self):
+        return self._total_retry_fqn
 
     @property
     def use_vos(self):
@@ -1493,6 +1499,7 @@ class Config:
             f'  tap_id:: {self.tap_id}\n'
             f'  task_types:: {self.task_types}\n'
             f'  time_zone:: {self.time_zone}\n'
+            f'  total_retry_fqn:: {self.total_retry_fqn}\n'
             f'  use_local_files:: {self.use_local_files}\n'
             f'  work_fqn:: {self.work_fqn}\n'
             f'  working_directory:: {self.working_directory}'
@@ -1653,7 +1660,7 @@ class Config:
                 f'{os.path.basename(self.working_directory)}_report.txt',
             )
             self.scheme = config.get('scheme', 'cadc')
-            self.time_zone = config.get('time_zone', tz.UTC)
+            self.time_zone = config.get('time_zone', 'UTC')
         except KeyError as e:
             raise CadcException(f'Error in config file {e}')
 
@@ -1841,8 +1848,8 @@ class PreviewVisitor:
 
     def __str__(self):
         return (
-            f'working directory: {self._working_dir}\n'
-            f'science file: {self._storage_name.file_name}\n'
+            f'\nworking directory: {self._working_dir}\n'
+            f'science file: {self._storage_name.file_name}'
         )
 
     def visit(self, observation):
@@ -2142,6 +2149,7 @@ class StorageName:
         # file_uri is the file name without the compression extension
         temp_f_name = os.path.basename(self.file_uri)
         temp_fqn = os.path.join(working_directory, temp_f_name)
+        temp_obs_fqn = os.path.join(os.path.join(working_directory, self._obs_id), temp_f_name)
         fqn = temp_fqn
         if (
             self._source_names is not None
@@ -2153,6 +2161,8 @@ class StorageName:
             fqn = self._source_names[0]
         elif os.path.exists(temp_fqn):
             fqn = temp_fqn
+        elif os.path.exists(temp_obs_fqn):
+            fqn = temp_obs_fqn
         elif os.path.exists(self._source_names[0]):
             # use the compressed file, if it can be found
             fqn = self._source_names[0]
@@ -2554,6 +2564,13 @@ def get_file_size(fqn):
     """
     s = os.stat(fqn)
     return s.st_size
+
+
+def get_now():
+    """So that now can be mocked.
+    :return timezone-naive datetime.datetime
+    """
+    return datetime.now()
 
 
 def get_version(entry):

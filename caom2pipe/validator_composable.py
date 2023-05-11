@@ -145,7 +145,7 @@ class Validator:
             data['dt_d'] = data.contentLastModified.apply(Validator.make_utc_aware)
             source['dt_2'] = source.dt.apply(Validator.make_utc_aware)
             merged = pd.merge(source, data, how='inner', on=['f_name'])
-            newer = merged[merged.dt_d > merged.dt_2]
+            newer = merged[merged.dt_d < merged.dt_2]
         return newer
 
     def _read_list_from_destination_data(self):

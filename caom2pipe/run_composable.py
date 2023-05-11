@@ -94,7 +94,6 @@ from caom2pipe import transfer_composable
 
 __all__ = [
     'common_runner_init',
-    'get_now',
     'run_by_state',
     'run_by_todo',
     'set_logging',
@@ -116,13 +115,13 @@ class TodoRunner:
         config,
         organizer,
         builder,
-        data_source,
+        data_sources,
         metadata_reader,
         observable,
         reporter,
     ):
         self._builder = builder
-        self._data_source = data_source
+        self._data_sources = data_sources
         self._metadata_reader = metadata_reader
         self._config = config
         self._organizer = organizer
@@ -131,11 +130,13 @@ class TodoRunner:
         self._todo_list = []
         self._observable = observable
         self._reporter = reporter
+        # the type of data source for retry is the TodoFileDataSource, which might be different from the originals
+        self._retry_data_source = None
         self._logger = logging.getLogger(self.__class__.__name__)
 
-    def _build_todo_list(self):
+    def _build_todo_list(self, data_source):
         self._logger.debug(f'Begin _build_todo_list.')
-        self._todo_list = self._data_source.get_work()
+        self._todo_list = data_source.get_work()
         self._logger.info(f'Processing {self._reporter.all} records.')
         self._logger.debug('End _build_todo_list.')
 
@@ -148,7 +149,7 @@ class TodoRunner:
         self._logger.info(msg)
         self._logger.info('-' * len(msg))
 
-    def _process_entry(self, entry, current_count):
+    def _process_entry(self, data_source, entry, current_count):
         self._logger.debug(f'Begin _process_entry for {entry}.')
         storage_name = None
         try:
@@ -183,15 +184,15 @@ class TodoRunner:
             # this or any other exception at this point
             result = -1
         try:
-            self._data_source.clean_up(entry, result, current_count)
+            data_source.clean_up(entry, result, current_count)
         except Exception as e:
             self._logger.info(f'Cleanup failed for {entry} with {e}')
             self._logger.debug(traceback.format_exc())
             result = -1
-        self._logger.debug(f'End _process_entry.')
+        self._logger.debug(f'End _process_entry with result {result}.')
         return result
 
-    def _run_todo_list(self, current_count):
+    def _run_todo_list(self, data_source, current_count):
         """
         :param current_count: int - current retry count - needs to be passed
             to _process_entry.
@@ -200,33 +201,32 @@ class TodoRunner:
         result = 0
         while len(self._todo_list) > 0:
             entry = self._todo_list.popleft()
-            result |= self._process_entry(entry, current_count)
+            result |= self._process_entry(data_source, entry, current_count)
             self._metadata_reader.reset()
         self._finish_run()
         self._logger.debug('End _run_todo_list.')
         return result
 
-    def _reset_for_retry(self, count):
+    def _reset_for_retry(self, data_source, count):
         self._config.update_for_retry(count)
         # the log location changes for each retry
         self._reporter.set_log_location(self._config)
-        # self._reporter.reset_for_retry()
-        # change the data source handling for the retry, but preserve the original
-        # clean_up behaviour
-        original_data_source_cleanup = self._data_source.clean_up
-        self._data_source = data_source_composable.TodoFileDataSource(self._config)
-        self._data_source.reporter = self._reporter
-        self._data_source.clean_up = original_data_source_cleanup
+        # change the data source handling for the retry, but preserve the original clean_up behaviour
+        self._retry_data_source = data_source_composable.TodoFileDataSource(self._config)
+        self._retry_data_source.reporter = self._reporter
+        self._retry_data_source.clean_up = data_source.clean_up
 
     def report(self):
         self._reporter.report()
 
     def run(self):
         self._logger.debug('Begin run.')
-        self._build_todo_list()
-        # have the choose call here, so that retries don't change the set of tasks to be executed
-        self._organizer.choose()
-        result = self._run_todo_list(current_count=0)
+        result = 0
+        for data_source in self._data_sources:
+            self._build_todo_list(data_source)
+            # have the choose call here, so that retries don't change the set of tasks to be executed
+            self._organizer.choose()
+            result |= self._run_todo_list(data_source, current_count=0)
         self._logger.debug('End run.')
         return result
 
@@ -236,22 +236,23 @@ class TodoRunner:
         if self._config.need_to_retry():
             for count in range(0, self._config.retry_count):
                 self._logger.warning(
-                    f'Beginning retry {count + 1} in {os.getcwd()}'
+                    f'Beginning retry {count + 1} in {os.getcwd()} for data source {0}'
                 )
-                self._reset_for_retry(count)
+                # to preserve the clean_up behaviour from one of the original data sources
+                self._reset_for_retry(self._data_sources[0], count)
                 # make another file list
-                self._build_todo_list()
+                self._build_todo_list(self._retry_data_source)
                 self._reporter.capture_retry()
                 decay_interval = self._config.retry_decay * (count + 1) * 60
                 self._logger.warning(f'Retry {self._reporter.all} entries at {decay_interval} seconds from now.')
                 sleep(decay_interval)
-                result |= self._run_todo_list(current_count=count + 1)
+                result |= self._run_todo_list(self._retry_data_source, current_count=count + 1)
                 if not self._config.need_to_retry():
                     break
             self._logger.warning(f'Done retry attempts with result {result}.')
         else:
-            self._logger.info('No failures to be retried.')
-        self._logger.debug('End retry run.')
+            self._logger.info(f'No failures to be retried.')
+        self._logger.debug(f'End retry run with result {result}.')
         return result
 
 
@@ -260,6 +261,9 @@ class StateRunner(TodoRunner):
     This class brings together the mechanisms for identifying the time-boxed lists of work to be done
     (DataSource specializations), and the mechanisms for translating a list of work into a collection-specific name
     (StorageNameBuilder specializations).
+
+    For retries, accumulate the retry-able entries in a single file for each time-box interval, for each data source.
+    After all the incremental execution, attempt the retries.
     """
 
     def __init__(
@@ -267,32 +271,14 @@ class StateRunner(TodoRunner):
         config,
         organizer,
         builder,
-        data_source,
+        data_sources,
         metadata_reader,
         observable,
         reporter,
-        end_dt,
     ):
         super().__init__(
-            config, organizer, builder, data_source, metadata_reader, observable, reporter
+            config, organizer, builder, data_sources, metadata_reader, observable, reporter
         )
-        # string that represents the state.yml lookup value
-        self._bookmark_name = config.bookmark
-        # end dt is a datetime
-        if end_dt is None:
-            data_source.initialize_end_dt()
-            # self._end_time = (datetime.now(self._data_source.timezone) if max_dt is None else max_dt)
-            self._end_time = data_source.end_dt
-        else:
-            self._end_time = end_dt
-
-    def _record_progress(
-        self, count, cumulative_count, start_time, save_time
-    ):
-        with open(self._config.progress_fqn, 'a') as progress:
-            progress.write(
-                f'{datetime.now()} current:: {save_time} {count} since:: {start_time}:: {cumulative_count}\n'
-            )
 
     def run(self):
         """
@@ -300,35 +286,48 @@ class StateRunner(TodoRunner):
 
         :return: 0 for success, -1 for failure
         """
-        self._logger.debug(f'Begin run state for {self._bookmark_name}')
         if not os.path.exists(os.path.dirname(self._config.progress_fqn)):
             os.makedirs(os.path.dirname(self._config.progress_fqn))
+        self._reset_retries()
 
-        state = mc.State(self._config.state_fqn, self._config.time_zone)
-        if self._data_source.start_dt is None:
-            start_time = state.get_bookmark(self._bookmark_name)
-        else:
-            start_time = self._data_source.start_dt
-
-        prev_exec_time = start_time
-        incremented = mc.increment_time(prev_exec_time, self._config.interval)
-        exec_time = min(incremented, self.end_time)
-
-        self._logger.info(f'Starting at {start_time}, ending at {self.end_time}')
         result = 0
-        if prev_exec_time == self.end_time:
-            self._logger.info(f'Start time is the same as end time {start_time}, stopping.')
+        for data_source in self._data_sources:
+            result |= self._process_data_source(data_source)
+
+        self._set_retries()
+        return result
+
+    def _finish_run(self):
+        super()._finish_run()
+        self._record_retries()
+
+    def _process_data_source(self, data_source):
+        """
+        Uses an iterable with an instance of StateRunnerMeta.
+
+        :return: 0 for success, -1 for failure
+        """
+        data_source.initialize_start_dt()
+        data_source.initialize_end_dt()
+        prev_exec_time = data_source.start_dt
+        incremented = mc.increment_time(prev_exec_time, self._config.interval)
+        exec_time = min(incremented, data_source.end_dt)
+
+        self._logger.info(f'Starting at {prev_exec_time}, ending at {data_source.end_dt}')
+        result = 0
+        if prev_exec_time == data_source.end_dt:
+            self._logger.info(f'Start time is the same as end time {prev_exec_time}, stopping.')
             exec_time = prev_exec_time
         else:
             cumulative = 0
             result = 0
             self._organizer.choose()
-            while exec_time <= self.end_time:
-                self._logger.info(f'Processing from {prev_exec_time} to {exec_time}')
+            while exec_time <= data_source.end_dt:
+                self._logger.info(f'Processing {data_source.start_key} from {prev_exec_time} to {exec_time}')
                 save_time = exec_time
                 self._organizer.success_count = 0
                 self._reporter.set_log_location(self._config)
-                entries = self._data_source.get_time_box_work(prev_exec_time, exec_time)
+                entries = data_source.get_time_box_work(prev_exec_time, exec_time)
                 num_entries = len(entries)
 
                 if num_entries > 0:
@@ -338,7 +337,7 @@ class StateRunner(TodoRunner):
                         pop_action = entries.popleft
                     while len(entries) > 0:
                         entry = pop_action()
-                        result |= self._process_entry(entry.entry_name, 0)
+                        result |= self._process_entry(data_source, entry.entry_name, 0)
                         save_time = min(entry.entry_dt, exec_time)
                     # this reset call is outside the while process_entry loop
                     # for GEMINI which gets all the metadata for an interval in
@@ -348,12 +347,10 @@ class StateRunner(TodoRunner):
                     self._metadata_reader.reset()
                     self._finish_run()
 
-                self._record_progress(
-                    num_entries, cumulative, start_time, save_time
-                )
-                state.save_state(self._bookmark_name, save_time)
+                self._record_progress(num_entries, cumulative, prev_exec_time, save_time)
+                data_source.save_start_dt(save_time)
 
-                if exec_time == self.end_time:
+                if exec_time == data_source.end_dt:
                     # the last interval will always have the exec time
                     # equal to the end time, which will fail the while check
                     # so leave after the last interval has been processed
@@ -365,23 +362,47 @@ class StateRunner(TodoRunner):
                     break
                 prev_exec_time = exec_time
                 new_time = mc.increment_time(prev_exec_time, self._config.interval)
-                exec_time = min(new_time, self.end_time)
+                exec_time = min(new_time, data_source.end_dt)
 
-        state.save_state(self._bookmark_name, exec_time)
-        msg = f'Done for {self._bookmark_name}, saved state is {exec_time}'
+        data_source.save_start_dt(exec_time)
+        msg = f'Done for {data_source.start_key}, saved state is {exec_time}'
         self._logger.info('=' * len(msg))
         self._logger.info(msg)
         self._logger.info(f'{self._reporter.success} of {self._reporter.all} records processed correctly.')
         self._logger.info('=' * len(msg))
+        self._logger.debug(f'End _process_data_source with result {result}')
         return result
 
-    @property
-    def end_time(self):
-        return self._end_time
+    def _record_progress(self, count, cumulative_count, start_time, save_time):
+        with open(self._config.progress_fqn, 'a') as progress:
+            progress.write(
+                f'{datetime.now()} current:: {save_time} {count} since:: {start_time}:: {cumulative_count}\n'
+            )
 
-    @end_time.setter
-    def end_time(self, value):
-        self._end_time = value
+    def _record_retries(self):
+        """Accumulate the retry entries into a single location, for execution after all the data sources across all
+        the time boxed intervals."""
+        if os.path.exists(self._config.retry_fqn):
+            with open(self._config.total_retry_fqn, 'a') as f_out:
+                with open(self._config.retry_fqn) as f_in:
+                    for line in f_in:
+                        f_out.write(line)
+        else:
+            self._logger.warning(f'No existing retry file {self._config.retry_fqn}')
+
+    def _reset_retries(self):
+        """Truncate the cumulative retry file left from a previous run."""
+        open(self._config.total_retry_fqn, 'w')
+
+    def _set_retries(self):
+        """Put the contents of the retry file where the retry mechanism expects to find them."""
+        if os.path.exists(self._config.total_retry_fqn):
+            with open(self._config.retry_fqn, 'w') as f_out:
+                with open(self._config.total_retry_fqn) as f_in:
+                    for line in f_in:
+                        f_out.write(line)
+        else:
+            self._logger.warning(f'No existing total retry file {self._config.total_retry_fqn}')
 
 
 def set_logging(config):
@@ -394,18 +415,11 @@ def set_logging(config):
     logging.getLogger('root').setLevel(config.logging_level)
 
 
-def get_now():
-    """So that now can be mocked.
-    :return timezone-naive datetime.datetime
-    """
-    return datetime.now()
-
-
 def common_runner_init(
     config,
     clients,
     name_builder,
-    source,
+    sources,
     modify_transfer,
     metadata_reader,
     state,
@@ -422,7 +436,7 @@ def common_runner_init(
     :param clients: ClientCollection instance
     :param name_builder NameBuilder extension that creates an instance of a StorageName extension, from an entry from
         a DataSourceComposable listing
-    :param source DataSource implementation, if there's a special data source
+    :param sources list of DataSource implementations, if there are specializations
     :param modify_transfer Transfer extension that identifies how to retrieve data from a source for modification of
         CAOM2 metadata. By this time, files are usually stored at CADC, so it's probably a CadcTransfer instance, but
         this allows for the case that a file is never stored at CADC. Try to guess what this one is.
@@ -457,10 +471,12 @@ def common_runner_init(
         name_builder = name_builder_composable.builder_factory(config)
     if metadata_reader is None:
         metadata_reader = reader_composable.reader_factory(config, clients)
-    if source is None:
-        source = data_source_composable.data_source_factory(config, clients, state, metadata_reader, reporter)
+    if sources is None or len(sources) == 0:
+        sources = list()
+        sources.append(data_source_composable.data_source_factory(config, clients, state, metadata_reader, reporter))
     else:
-        source.reporter = reporter
+        for source in sources:
+            source.reporter = reporter
     if modify_transfer is None:
         modify_transfer = transfer_composable.modify_transfer_factory(
             config, clients
@@ -488,7 +504,7 @@ def common_runner_init(
         config,
         clients,
         name_builder,
-        source,
+        sources,
         metadata_reader,
         organizer,
         observable,
@@ -500,9 +516,9 @@ def run_by_todo(
     config=None,
     name_builder=None,
     chooser=None,
-    source=None,
-    meta_visitors=[],
-    data_visitors=[],
+    sources=None,
+    meta_visitors=None,
+    data_visitors=None,
     modify_transfer=None,
     store_transfer=None,
     clients=None,
@@ -514,7 +530,7 @@ def run_by_todo(
     :param name_builder NameBuilder extension that creates an instance of
         a StorageName extension, from an entry from a DataSourceComposable
         listing
-    :param source DataSource implementation, if there's a special data source
+    :param sources list of DataSource implementations, if there are specializations
     :param meta_visitors list of modules with visit methods, that expect
         the metadata of a work file to exist on disk
     :param data_visitors list of modules with visit methods, that expect the
@@ -532,11 +548,14 @@ def run_by_todo(
     :param clients: ClientCollection instance
     :param metadata_reader: MetadataReader instance
     """
+    meta_visitors = [] if meta_visitors is None else meta_visitors
+    data_visitors = [] if data_visitors is None else data_visitors
+    sources = [] if sources is None else sources
     (
         config,
         clients,
         name_builder,
-        source,
+        sources,
         metadata_reader,
         organizer,
         observable,
@@ -545,7 +564,7 @@ def run_by_todo(
         config,
         clients,
         name_builder,
-        source,
+        sources,
         modify_transfer,
         metadata_reader,
         False,
@@ -556,7 +575,7 @@ def run_by_todo(
     )
 
     runner = TodoRunner(
-        config, organizer, name_builder, source, metadata_reader, observable, reporter
+        config, organizer, name_builder, sources, metadata_reader, observable, reporter
     )
     result = runner.run()
     result |= runner.run_retry()
@@ -567,11 +586,10 @@ def run_by_todo(
 def run_by_state(
     config=None,
     name_builder=None,
-    meta_visitors=[],
-    data_visitors=[],
-    end_time=None,
+    meta_visitors=None,
+    data_visitors=None,
     chooser=None,
-    source=None,
+    sources=None,
     modify_transfer=None,
     store_transfer=None,
     clients=None,
@@ -580,34 +598,35 @@ def run_by_state(
     """A default implementation for using the StateRunner.
 
     :param config: Config instance
-    :param name_builder NameBuilder extension that creates an instance of
+    :param name_builder: NameBuilder extension that creates an instance of
         a StorageName extension, from an entry from a DataSourceComposable
         listing
-    :param meta_visitors list of modules with visit methods, that expect
+    :param meta_visitors: list of modules with visit methods, that expect
         the metadata of a work file to exist on disk
-    :param data_visitors list of modules with visit methods, that expect the
+    :param data_visitors: list of modules with visit methods, that expect the
         work file to exist on disk
-    :param end_time datetime for stopping an incremental run. Provide a value to override DataSource.end_dt behaviour
-    :param chooser OrganizerChooser, if there's strange rules about file
+    :param chooser: OrganizerChooser, if there's strange rules about file
         naming.
-    :param source DataSourceComposable extension that identifies work to be
-        done.
-    :param modify_transfer Transfer extension that identifies how to retrieve
+    :param sources: list of DataSource implementations, if there are specializations to identify the work to be done
+    :param modify_transfer: Transfer extension that identifies how to retrieve
         data from a source for modification of CAOM2 metadata. By this time,
         files are usually stored at CADC, so it's probably a CadcTransfer
         instance, but this allows for the case that a file is never stored
         at CADC. Try to guess what this one is.
-    :param store_transfer Transfer extension that identifies how to retrieve
+    :param store_transfer: Transfer extension that identifies how to retrieve
         data from a source for storage at CADC, probably an HTTP or FTP site.
         Don't try to guess what this one is.
-    :param clients instance of ClientsCollection, if one was required
-    :param metadata_reader instance of MetadataReader
+    :param clients: instance of ClientsCollection, if one was required
+    :param metadata_reader: instance of MetadataReader
     """
+    meta_visitors = [] if meta_visitors is None else meta_visitors
+    data_visitors = [] if data_visitors is None else data_visitors
+    sources = [] if sources is None else sources
     (
         config,
         clients,
         name_builder,
-        source,
+        sources,
         metadata_reader,
         organizer,
         observable,
@@ -616,7 +635,7 @@ def run_by_state(
         config,
         clients,
         name_builder,
-        source,
+        sources,
         modify_transfer,
         metadata_reader,
         True,
@@ -629,11 +648,10 @@ def run_by_state(
         config,
         organizer,
         name_builder,
-        source,
+        sources,
         metadata_reader,
         observable,
         reporter,
-        end_time,
     )
     result = runner.run()
     result |= runner.run_retry()

@@ -90,7 +90,7 @@ from caom2pipe.transfer_composable import VoScienceTransfer
 from caom2pipe import run_composable as rc
 from traceback import format_exc
 
-from unittest.mock import call, Mock, patch
+from unittest.mock import call, Mock, patch, PropertyMock
 from test_data_source_composable import _create_dir_listing
 
 TEST_START_TIME = datetime(year=2020, month=3, day=3, hour=1, minute=1, second=1)
@@ -108,7 +108,7 @@ def test_report_output_todo_local(test_config, tmpdir):
     orig_cwd = getcwd()
     try:
         chdir(tmpdir)
-        test_config.logging_level = 'INFO'
+        test_config.logging_level = 'ERROR'
         test_config.task_types = [TaskType.STORE]
         test_config.interval = 100
         test_config.use_local_files = True
@@ -153,6 +153,7 @@ def test_report_output_todo_local(test_config, tmpdir):
                 test_data_source = dsc.LocalFilesDataSource(
                     test_config, test_clients.data_client, test_reader, recursive=True, scheme='cadc'
                 )
+                type(test_data_source).end_dt = PropertyMock(return_value=TEST_END_TIME)
                 Config.write_to_file(test_config)
                 State.write_bookmark(test_config.state_fqn, test_config.bookmark, TEST_START_TIME)
                 for state in [True, False]:
@@ -160,7 +161,7 @@ def test_report_output_todo_local(test_config, tmpdir):
                         test_config,
                         test_clients,
                         test_builder,
-                        test_data_source,
+                        test_data_sources,
                         test_reader,
                         test_organizer,
                         test_observable,
@@ -169,7 +170,7 @@ def test_report_output_todo_local(test_config, tmpdir):
                         config=test_config,
                         clients=test_clients,
                         name_builder=None,
-                        source=test_data_source,
+                        sources=[test_data_source],
                         modify_transfer=None,
                         metadata_reader=test_reader,
                         state=state,
@@ -194,18 +195,17 @@ def test_report_output_todo_local(test_config, tmpdir):
                             test_config,
                             test_organizer,
                             test_builder,
-                            test_data_source,
+                            test_data_sources,
                             test_reader,
                             test_observable,
                             test_reporter,
-                            TEST_END_TIME,
                         )
                     else:
                         test_subject = rc.TodoRunner(
                             test_config,
                             test_organizer,
                             test_builder,
-                            test_data_source,
+                            test_data_sources,
                             test_reader,
                             test_observable,
                             test_reporter,
@@ -215,7 +215,7 @@ def test_report_output_todo_local(test_config, tmpdir):
                     with patch('os.scandir') as scandir_mock:
                         scandir_mock.return_value.__enter__.return_value = pre_success_listing
                         move_mock = Mock()
-                        test_subject._data_source._move_action = move_mock
+                        test_subject._data_sources[0]._move_action = move_mock
                         try:
                             test_result = test_subject.run()
                         except Exception as e:
@@ -230,7 +230,7 @@ def test_report_output_todo_local(test_config, tmpdir):
                             move_mock.assert_has_calls(move_calls)
                         else:
                             assert not move_mock.called, f'move should not be called {diagnostic}'
-                        test_report = test_subject._data_source._reporter._summary
+                        test_report = test_subject._data_sources[0]._reporter._summary
                         assert test_report._entries_sum == 4, f'entries {diagnostic} {test_report.report()}'
                         assert test_report._success_sum == 2, f'success {diagnostic} {test_report.report()}'
                         assert test_report._timeouts_sum == 0, f'timeouts {diagnostic} {test_report.report()}'
@@ -257,7 +257,7 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
         test_config.task_types = [TaskType.STORE]
         test_config.interval = 100
         test_config.change_working_directory(tmpdir)
-        test_config.logging_level = 'INFO'
+        test_config.logging_level = 'ERROR'
         test_config.use_local_files = False
         test_config.data_sources = ['vos://cadc.nrc.ca!vault/goliaths/test']
         test_config.cleanup_failure_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/failure'
@@ -294,6 +294,7 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                 test_data_source = dsc.VaultCleanupDataSource(
                     test_config, test_clients.vo_client, test_clients.data_client, test_reader
                 )
+                type(test_data_source).end_dt = PropertyMock(return_value=TEST_END_TIME)
                 Config.write_to_file(test_config)
                 State.write_bookmark(test_config.state_fqn, test_config.bookmark, TEST_START_TIME)
                 # state == True is incremental operation
@@ -302,7 +303,7 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                         test_config,
                         test_clients,
                         test_builder,
-                        test_data_source,
+                        test_data_sources,
                         test_reader,
                         test_organizer,
                         test_observable,
@@ -311,7 +312,7 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                         config=test_config,
                         clients=test_clients,
                         name_builder=None,
-                        source=test_data_source,
+                        sources=[test_data_source],
                         modify_transfer=None,
                         metadata_reader=test_reader,
                         state=state,
@@ -343,18 +344,17 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                             test_config,
                             test_organizer,
                             test_builder,
-                            test_data_source,
+                            test_data_sources,
                             test_reader,
                             test_observable,
                             test_reporter,
-                            TEST_END_TIME,
                         )
                     else:
                         test_subject = rc.TodoRunner(
                             test_config,
                             test_organizer,
                             test_builder,
-                            test_data_source,
+                            test_data_sources,
                             test_reader,
                             test_observable,
                             test_reporter,
@@ -362,7 +362,7 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
 
                     diagnostic = f'clean up {clean_up} store modified {store_modified} subject {type(test_subject)}'
                     ds_move_mock = Mock()
-                    test_subject._data_source._move_action = ds_move_mock
+                    test_subject._data_sources[0]._move_action = ds_move_mock
                     transfer_move_mock = Mock()
                     store_transfer._move_action = transfer_move_mock
                     try:
@@ -405,7 +405,7 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
                             )
                         else:
                             assert not ds_move_mock.called, 'ds move mock not called'
-                    test_report = test_subject._data_source._reporter._summary
+                    test_report = test_subject._data_sources[0]._reporter._summary
                     assert test_report._entries_sum == 4, f'entries {diagnostic} {test_report.report()}'
                     assert test_report._success_sum == 2, f'success {diagnostic} {test_report.report()}'
                     assert test_report._timeouts_sum == 0, f'timeouts {diagnostic} {test_report.report()}'

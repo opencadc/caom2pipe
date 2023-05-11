@@ -83,7 +83,7 @@ from caom2 import SimpleObservation, Algorithm
 from caom2pipe.client_composable import ClientCollection
 from caom2pipe import execute_composable as ec
 from caom2pipe import manage_composable as mc
-from caom2pipe.reader_composable import FileMetadataReader
+from caom2pipe.reader_composable import FileMetadataReader, Hdf5FileMetadataReader
 from caom2pipe import transfer_composable
 import test_conf as tc
 
@@ -216,7 +216,7 @@ def test_data_execute(access_mock, test_config, tmpdir):
         test_observer,
         test_transferrer,
         clients,
-        metadata_reader=None,
+        metadata_reader=Mock(autospec=True),
     )
     test_executor.execute({'storage_name': tc.TStorageName()})
 
@@ -261,7 +261,7 @@ def test_data_execute_v(access_mock, test_config, tmpdir):
         test_observer,
         test_transferrer,
         clients,
-        metadata_reader=None,
+        metadata_reader=Mock(autospec=True),
     )
     test_executor.execute({'storage_name': test_sn})
 
@@ -338,7 +338,7 @@ def test_data_store(fix_mock, access_mock, test_config, tmpdir):
     path_orig = os.path.exists
     os.path.exists = Mock(return_value=False)
     test_config.features.supports_multiple_files = False
-    mock_metadata_reader = Mock()
+    mock_metadata_reader = Mock(autospec=True)
     mock_metadata_reader.file_info = {}
     try:
         test_config.change_working_directory(tmpdir)
@@ -553,10 +553,8 @@ def test_organize_executes_client_do_one(test_config):
     )
     test_oe.choose()
     assert test_oe._executors is not None
-    assert len(test_oe._executors) == 3
-    assert (isinstance(test_oe._executors[0], ec.Store), type(test_oe._executors[0]))
-    assert isinstance(test_oe._executors[1], ec.MetaVisit)
-    assert isinstance(test_oe._executors[2], ec.LocalDataVisit)
+    assert len(test_oe._executors) == 1
+    assert isinstance(test_oe._executors[0], ec.NoFheadStoreVisit), type(test_oe._executors[0])
 
     test_config.use_local_files = False
     test_config.task_types = [mc.TaskType.INGEST, mc.TaskType.MODIFY]
@@ -570,9 +568,8 @@ def test_organize_executes_client_do_one(test_config):
     )
     test_oe.choose()
     assert test_oe._executors is not None
-    assert len(test_oe._executors) == 2
-    assert isinstance(test_oe._executors[0], ec.MetaVisit)
-    assert isinstance(test_oe._executors[1], ec.DataVisit)
+    assert len(test_oe._executors) == 1
+    assert isinstance(test_oe._executors[0], ec.NoFheadVisit)
 
     test_config.use_local_files = True
     test_config.task_types = [mc.TaskType.INGEST, mc.TaskType.MODIFY]
@@ -586,9 +583,8 @@ def test_organize_executes_client_do_one(test_config):
     )
     test_oe.choose()
     assert test_oe._executors is not None
-    assert len(test_oe._executors) == 2
-    assert isinstance(test_oe._executors[0], ec.MetaVisit)
-    assert isinstance(test_oe._executors[1], ec.LocalDataVisit)
+    assert len(test_oe._executors) == 1
+    assert isinstance(test_oe._executors[0], ec.NoFheadVisit)
 
     test_config.task_types = [mc.TaskType.SCRAPE, mc.TaskType.MODIFY]
     test_config.use_local_files = True
@@ -602,9 +598,8 @@ def test_organize_executes_client_do_one(test_config):
     )
     test_oe.choose()
     assert test_oe._executors is not None
-    assert len(test_oe._executors) == 2
-    assert isinstance(test_oe._executors[0], ec.Scrape)
-    assert isinstance(test_oe._executors[1], ec.DataScrape)
+    assert len(test_oe._executors) == 1
+    assert isinstance(test_oe._executors[0], ec.NoFheadScrape), f'{type(test_oe._executors[0])}'
 
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.use_local_files = False
@@ -659,7 +654,7 @@ def test_data_visit(client_mock, access_mock, test_config, tmpdir):
         test_observable,
         test_transferrer,
         clients,
-        metadata_reader=None,
+        metadata_reader=Mock(autospec=True),
     )
     os.mkdir(os.path.join(tmpdir, test_sn.obs_id))
     test_subject.execute({'storage_name': test_sn})
@@ -695,7 +690,7 @@ def test_store(compressor_mock, access_mock, file_info_mock, test_config, tmpdir
     test_observable = Mock(autospec=True)
     test_transferrer = Mock(autospec=True)
     test_transferrer.get.side_effect = _transfer_get_mock
-    test_metadata_reader = Mock()
+    test_metadata_reader = Mock(autospec=True)
     test_metadata_reader.file_info = {}
     test_config.change_working_directory(tmpdir)
     compressor_mock.return_value = (
@@ -704,9 +699,9 @@ def test_store(compressor_mock, access_mock, file_info_mock, test_config, tmpdir
     test_subject = ec.Store(
         test_config,
         test_observable,
-        test_transferrer,
         clients,
         metadata_reader=test_metadata_reader,
+        transferrer=test_transferrer,
     )
     assert test_subject is not None, 'expect construction'
     os.mkdir(os.path.join(tmpdir, test_sn.obs_id))
@@ -746,14 +741,14 @@ def test_local_store(compressor_mock, access_mock, file_info_mock, test_config):
     clients = ClientCollection(test_config)
     clients._data_client = test_data_client
     test_observable = Mock(autospec=True)
-    test_metadata_reader = Mock()
+    test_metadata_reader = Mock(autospec=True)
     test_metadata_reader.file_info = {}
-    test_subject = ec.LocalStore(
+    test_subject = ec.Store(
         test_config,
-        # test_sn,
         test_observable,
         clients,
         metadata_reader=test_metadata_reader,
+        transferrer=transfer_composable.Transfer(),  # noop for a use_local_files=True store action
     )
     assert test_subject is not None, 'expect construction'
     test_subject.execute({'storage_name': test_sn})
@@ -813,12 +808,12 @@ def test_store_newer_files_only_flag_client(
     clients = ClientCollection(test_config)
     clients._data_client = client_mock
 
-    test_subject = ec.LocalStore(
+    test_subject = ec.Store(
         test_config,
-        # test_sn,
         observable_mock,
         clients,
-        metadata_reader=Mock(),
+        metadata_reader=Mock(autospec=True),
+        transferrer=transfer_composable.Transfer(),
     )
     test_subject.execute({'storage_name': test_sn})
     assert client_mock.put.called, 'expect copy call'
@@ -873,7 +868,7 @@ def test_data_visit_params(access_mock, client_mock, test_config, tmpdir):
         test_observable,
         test_transferrer,
         clients,
-        metadata_reader=None,
+        metadata_reader=Mock(autospec=True),
     )
     assert test_subject is not None, 'broken ctor'
     test_subject.execute({'storage_name': storage_name})
@@ -885,7 +880,7 @@ def test_data_visit_params(access_mock, client_mock, test_config, tmpdir):
         log_file_directory=f'{tmpdir}/logs',
         observable=ANY,
         clients=ANY,
-        metadata_reader=None,
+        metadata_reader=ANY,
     )
     data_visitor.visit.reset_mock()
 
@@ -1072,10 +1067,152 @@ class TestDoOne:
         self._check_logs(failure_should_exist=True, retry_should_exist=True, success_should_exist=False)
 
 
+class TestFhead:
+
+    def _ini(self):
+        self._clients_patch = patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+        self._clients_mock = self._clients_patch.start()
+        # self._clients_mock = patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+        self._clients_mock.return_value.metadata_client.read.side_effect = tc.mock_read
+        data_visit_mock = Mock(autospec=True)
+        data_visit_mock.visit.side_effect = _read_obs_visit
+        self._test_data_visitors = [data_visit_mock]
+        meta_visit_mock = Mock(autospec=True)
+        meta_visit_mock.visit.side_effect = _read_obs_visit
+        self._test_meta_visitors = [meta_visit_mock]
+        self._test_storage_name = None
+        self._test_observable = Mock(autospec=True)
+        self._test_metadata_reader = Hdf5FileMetadataReader()
+
+    def _post(self, tmpdir):
+        self._clients_mock.metadata_client.read.assert_called_with('OMM', 'testz'), 'wrong read args'
+        assert self._clients_mock.metadata_client.update.called, 'expect an execution'
+
+        for visitor in [self._test_data_visitors[0].visit, self._test_meta_visitors[0].visit]:
+            args, kwargs = visitor.call_args
+            assert kwargs.get('working_directory') == f'{tmpdir}/testz'
+            assert kwargs.get('storage_name') == self._test_storage_name, 'storage name'
+
+        test_meta = self._test_metadata_reader.headers.get(self._test_storage_name.destination_uris[0])
+        assert test_meta is not None, 'should be initialized'
+        assert len(test_meta) == 1, 'did not find hdf5 metadata record'
+        assert len(test_meta[0].keys()) == 103, 'did not find hdf5 metadata'
+
+    def test_fhead_visit(self, test_config, tmpdir):
+        try:
+            self._ini()
+            self._clients_mock.data_client.get.side_effect = _transfer_hdf5_get_mock
+            test_modify_transferrer = transfer_composable.CadcTransfer(self._clients_mock.data_client)
+            self._test_storage_name = mc.StorageName(
+                obs_id='testz',
+                file_name='testz.hdf5',
+                source_names=[f'{test_config.scheme}:{test_config.collection}/testz.hdf5'],
+            )
+            test_config.change_working_directory(tmpdir)
+            os.mkdir(os.path.join(tmpdir, self._test_storage_name.obs_id))
+            test_subject = ec.NoFheadVisit(
+                test_config,
+                self._clients_mock,
+                test_modify_transferrer,
+                self._test_meta_visitors,
+                self._test_data_visitors,
+                self._test_metadata_reader,
+                self._test_observable,
+            )
+            test_subject.execute({'storage_name': self._test_storage_name})
+            assert self._clients_mock.data_client.get.called, 'should be called'
+            self._clients_mock.data_client.get.assert_called_with(
+                f'{tmpdir}/testz', self._test_storage_name.destination_uris[0]
+            ), 'wrong get args'
+            self._post(tmpdir)
+        finally:
+            self._clients_patch.stop()
+            self._test_metadata_reader.reset()
+
+    def test_fhead_local_store_visit(self, test_config, tmpdir):
+        try:
+            test_config.change_working_directory(tmpdir)
+            test_config.data_sources = [tc.TEST_DATA_DIR]
+            test_config.data_source_extensions = ['.hdf5']
+            test_config.use_local_files = True
+            self._ini()
+            # noop, because use_local_files = True
+            test_store_transferrer = transfer_composable.Transfer()
+            self._test_storage_name = mc.StorageName(
+                obs_id='testz',
+                file_name='testz.hdf5',
+                source_names=[f'{tc.TEST_DATA_DIR}/testz.hdf5'],
+            )
+            os.mkdir(os.path.join(tmpdir, self._test_storage_name.obs_id))
+            test_subject = ec.NoFheadStoreVisit(
+                test_config,
+                self._clients_mock,
+                test_store_transferrer,
+                self._test_meta_visitors,
+                self._test_data_visitors,
+                self._test_metadata_reader,
+                self._test_observable,
+            )
+            test_subject.execute({'storage_name': self._test_storage_name})
+            assert not self._clients_mock.data_client.get.called, 'should not be called'
+            assert self._clients_mock.data_client.put.called, 'put call'
+            self._clients_mock.data_client.put.assert_called_with(
+                f'{tc.TEST_DATA_DIR}', self._test_storage_name.destination_uris[0]
+            ), 'put args'
+            self._post(tmpdir)
+        finally:
+            self._clients_patch.stop()
+            self._test_metadata_reader.reset()
+
+    def test_fhead_store_visit(self, test_config, tmpdir):
+        try:
+            test_config.change_working_directory(tmpdir)
+            test_config.data_sources = [tc.TEST_DATA_DIR]
+            test_config.data_source_extensions = ['.hdf5']
+            test_config.use_local_files = False
+            self._ini()
+            test_store_transferrer = Mock(autospec=True)
+            test_store_transferrer.get.side_effect = _transfer_hdf5_external_mock
+            self._test_storage_name = mc.StorageName(
+                obs_id='testz',
+                file_name='testz.hdf5',
+                source_names=[f'https://localhost:8052/testz.hdf5'],
+            )
+            os.mkdir(os.path.join(tmpdir, self._test_storage_name.obs_id))
+            test_subject = ec.NoFheadStoreVisit(
+                test_config,
+                self._clients_mock,
+                test_store_transferrer,
+                self._test_meta_visitors,
+                self._test_data_visitors,
+                self._test_metadata_reader,
+                self._test_observable,
+            )
+            test_subject.execute({'storage_name': self._test_storage_name})
+            assert not self._clients_mock.data_client.get.called, 'should not be called'
+            assert test_store_transferrer.get.called, 'transfer get should be called'
+            assert self._clients_mock.data_client.put.called, 'put call'
+            self._clients_mock.data_client.put.assert_called_with(
+                f'{tmpdir}/testz', self._test_storage_name.destination_uris[0]
+            ), 'put args'
+            self._post(tmpdir)
+        finally:
+            self._clients_patch.stop()
+            self._test_metadata_reader.reset()
+
+
 def _transfer_get_mock(entry, fqn):
     assert entry == 'vos:goliaths/nonexistent.fits.gz', 'wrong entry'
     with open(fqn, 'w') as f:
         f.write('test content')
+
+
+def _transfer_hdf5_external_mock(entry, fqn):
+    _transfer_hdf5_get_mock(fqn, entry)
+
+
+def _transfer_hdf5_get_mock(fqn, entry):
+    copy(f'{tc.TEST_DATA_DIR}/testz.hdf5', fqn)
 
 
 def _communicate():
@@ -1118,6 +1255,10 @@ def _read_obs(arg1):
 
 
 def _read_obs2(arg1, arg2):
+    return _read_obs(None)
+
+
+def _read_obs_visit(arg1, **kwargs):
     return _read_obs(None)
 
 
