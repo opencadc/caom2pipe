@@ -984,10 +984,9 @@ def update_observation_members(observation):
             and plane.provenance.inputs is not None
         ):
             for inpt in plane.provenance.inputs:
-                members_inputs.add(inpt.get_observation_uri())
-                logging.debug(
-                    f'Adding Observation URI {inpt.get_observation_uri()}'
-                )
+                if inpt.get_observation_uri() != observation.get_uri():
+                    members_inputs.add(inpt.get_observation_uri())
+                    logging.debug(f'Adding Observation URI {inpt.get_observation_uri()}')
     mc.update_typed_set(observation.members, members_inputs)
 
 
