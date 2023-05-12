@@ -92,6 +92,7 @@ __all__ = [
     'ListDirTimeBoxDataSource',
     'LocalFilesDataSource',
     'QueryTimeBoxDataSource',
+    'RetryTodoFileDataSource',
     'StateRunnerMeta',
     'TodoFileDataSource',
     'VaultCleanupDataSource',
@@ -704,6 +705,18 @@ class TodoFileDataSource(DataSource):
         self._capture_todo()
         self._logger.debug(f'End get_work.')
         return self._work
+
+
+class RetryTodoFileDataSource(TodoFileDataSource):
+    """
+    Extends the TodoFileDataSource to not update the "Number of Inputs" report line when retrying ingestion.
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def _capture_todo(self):
+        pass
 
 
 def is_offset_aware(dt):
