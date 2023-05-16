@@ -137,7 +137,7 @@ class TodoRunner:
     def _build_todo_list(self, data_source):
         self._logger.debug(f'Begin _build_todo_list.')
         self._todo_list = data_source.get_work()
-        self._logger.info(f'Processing {self._reporter.all} records.')
+        self._logger.info(f'Processing {len(self._todo_list)} records.')
         self._logger.debug('End _build_todo_list.')
 
     def _finish_run(self):
@@ -212,7 +212,7 @@ class TodoRunner:
         # the log location changes for each retry
         self._reporter.set_log_location(self._config)
         # change the data source handling for the retry, but preserve the original clean_up behaviour
-        self._retry_data_source = data_source_composable.TodoFileDataSource(self._config)
+        self._retry_data_source = data_source_composable.RetryTodoFileDataSource(self._config)
         self._retry_data_source.reporter = self._reporter
         self._retry_data_source.clean_up = data_source.clean_up
 
@@ -242,9 +242,9 @@ class TodoRunner:
                 self._reset_for_retry(self._data_sources[0], count)
                 # make another file list
                 self._build_todo_list(self._retry_data_source)
-                self._reporter.capture_retry()
+                self._reporter.capture_retry(len(self._todo_list))
                 decay_interval = self._config.retry_decay * (count + 1) * 60
-                self._logger.warning(f'Retry {self._reporter.all} entries at {decay_interval} seconds from now.')
+                self._logger.warning(f'Retry {len(self._todo_list)} entries at {decay_interval} seconds from now.')
                 sleep(decay_interval)
                 result |= self._run_todo_list(self._retry_data_source, current_count=count + 1)
                 if not self._config.need_to_retry():

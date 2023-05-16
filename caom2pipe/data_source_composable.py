@@ -92,6 +92,7 @@ __all__ = [
     'ListDirTimeBoxDataSource',
     'LocalFilesDataSource',
     'QueryTimeBoxDataSource',
+    'RetryTodoFileDataSource',
     'StateRunnerMeta',
     'TodoFileDataSource',
     'VaultCleanupDataSource',
@@ -169,6 +170,11 @@ class IncrementalDataSource(DataSource):
         - local directory listing time-boxes, where additions/changes to the timestamps in the list will be reflected
           in the known system time
         - horizontal scaling when reading from a data source
+    - if start_dt == end_dt for an incremental run, the initialize_end_dt may find candidates for processing, but the
+      run method in run_composable.StateRunner will skip doing those candidates again, as the condition
+      start_dt == end_dt exits without doing any work.
+    - for a data source, setting the default start_dt to the initial time for data from the source will result in a
+      a complete harvest, such as is required for validation.
 
     The pipelines will follow the guidance of "naive as local" from this reference:
     https://blog.ganssle.io/articles/2022/04/naive-local-datetimes.html. The takeaways are repeated here:
@@ -184,6 +190,11 @@ class IncrementalDataSource(DataSource):
 
     def __init__(self, config, start_key):
         """
+        Do what needs to be done to set end_dt for an incremental harvest.
+
+        Use the method initialize_end_dt if it's necessary to know the "end time" for an incremental harvest,
+        before incremental execution starts
+
         :param config: manage_composable.Config instance
         :param start_key: key for looking up bookmarks in state.yml
         """
@@ -694,6 +705,18 @@ class TodoFileDataSource(DataSource):
         self._capture_todo()
         self._logger.debug(f'End get_work.')
         return self._work
+
+
+class RetryTodoFileDataSource(TodoFileDataSource):
+    """
+    Extends the TodoFileDataSource to not update the "Number of Inputs" report line when retrying ingestion.
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def _capture_todo(self):
+        pass
 
 
 def is_offset_aware(dt):

@@ -69,8 +69,9 @@
 import glob
 import os
 
+from astropy.io import fits
 from astropy.table import Table
-from collections import deque
+from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from dateutil import tz
 
@@ -83,14 +84,15 @@ from caom2 import SimpleObservation, Algorithm
 from caom2pipe.client_composable import ClientCollection
 from caom2pipe import data_source_composable as dsc
 from caom2pipe import execute_composable as ec
+from caom2pipe.html_data_source import HttpDataSource, HtmlFilteredPagesTemplate
 from caom2pipe import manage_composable as mc
 from caom2pipe import name_builder_composable as nbc
-from caom2pipe.reader_composable import FileMetadataReader
+from caom2pipe.reader_composable import DelayedClientReader, FileMetadataReader, Hdf5FileMetadataReader
 from caom2pipe import run_composable as rc
 from caom2pipe import name_builder_composable as b
 
 import test_execute_composable
-
+import visit_mock
 
 STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')
 TEST_DIR = f'{tc.TEST_DATA_DIR}/run_composable'
@@ -1193,6 +1195,218 @@ class TestProcessEntry:
             assert test_result == -1, 'expect failure'
             # success_should_exist == False as it's only set in the do_one implementation
             self._check_logs(failure_should_exist=False, retry_should_exist=False, success_should_exist=False)
+
+
+@patch('caom2pipe.html_data_source.query_endpoint_session')
+@patch('caom2pipe.html_data_source.HttpDataSource.initialize_end_dt', autospec=True)
+@patch(
+    'caom2pipe.html_data_source.HttpDataSource.end_dt', new_callable=PropertyMock(return_value=datetime(2019, 5, 2))
+)
+@patch('caom2pipe.transfer_composable.HttpTransfer')
+@patch('caom2pipe.client_composable.ClientCollection')
+def test_run_state_store_ingest_http_retry(
+    client_mock, transferrer_mock, end_dt_mock, endpoint_mock, m2, test_config, tmp_path
+):
+    # Test store + ingest + modify, DelayedReader, NoFheadStore Executor, HttpDataSource (VLASS)
+    # 1 success
+    # 2 fails the first time with timeout
+    # 3 fails both times
+
+    # minimal header for testing
+    h = fits.Header()
+    h['SIMPLE'] = 'T'
+    h['BITPIX'] = -32
+    h['NAXIS'] = 2
+    h['NAXIS1'] = 2048
+    h['NAXIS2'] = 2048
+    h['DATATYPE'] = 'REDUC'
+    h['TYPE'] = 'image '
+    test_headers = [h]
+
+    def _transferrer_get(ignore, local_fqn):
+        with open(local_fqn, 'w') as f:
+            f.write('test content')
+
+    transferrer_mock.return_value.get.side_effect = _transferrer_get
+    client_mock.data_client.get_head.return_value = test_headers
+    client_mock.metadata_client.create.side_effect = [
+        None,              # success
+        mc.CadcException,  # first failure
+        mc.CadcException,  # fails first + retry 1 + retry 2 times, the first time
+        None,              # succeeds the second time
+        mc.CadcException,  # fails first + retry 1 + retry 2 times, the second time
+        mc.CadcException,  # fails first + retry 1 + retry 2 times, the third time
+    ]
+    test_uri_1 = 'nrao:VLASS/VLASS1.1.ql.T01t01.J000228-363000.10.2048.v1.I.iter1.image.pbcor.tt0.subim.fits'
+    test_uri_2 = 'nrao:VLASS/VLASS1.1.ql.T01t01.J000228-363000.10.2048.v1.I.iter1.image.pbcor.tt0.rms.subim.fits'
+    test_uri_3 = 'nrao:VLASS/VLASS1.1.ql.T27t32.J000228-363000.10.2048.v1.I.iter1.image.pbcor.tt0.rms.subim.fits'
+    client_mock.data_client.info.side_effect = lambda x: FileInfo(id=x, md5sum='abc')
+    test_config.change_working_directory(tmp_path)
+    test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
+    test_url = 'https://localhost:12345'
+    test_config.data_sources = [test_url]
+    test_config.interval = 1200
+    test_config.retry_failures = True
+    test_config.retry_decay = 0
+    test_config.retry_count = 2
+    mc.State.write_bookmark(test_config.state_fqn, test_url, datetime(2019, 4, 29, 12, 34))
+    client_mock.metadata_client.read.return_value = None
+    orig_getcwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        mc.Config.write_to_file(test_config)
+        test_metadata_reader = DelayedClientReader(client_mock.data_client)
+        session_mock = Mock()
+        test_source = HttpDataSource(test_config, test_url, HtmlFilteredPagesTemplate(test_config), session_mock)
+        test_source._work = deque(
+            [
+                dsc.StateRunnerMeta(f'{test_url}T01t01/{os.path.basename(test_uri_1)}', datetime(2019, 4, 30, 1, 1, 1)),
+                dsc.StateRunnerMeta(f'{test_url}T01t01/{os.path.basename(test_uri_2)}', datetime(2019, 4, 30, 2, 2, 2)),
+                dsc.StateRunnerMeta(f'{test_url}T27t32/{os.path.basename(test_uri_3)}', datetime(2019, 5, 2)),
+            ]
+        )
+        test_source.initialize_end_dt = Mock(autospec=True)
+        test_sources = [test_source]
+        test_name_builder = nbc.GuessingBuilder(mc.StorageName)
+        test_result = rc.run_by_state(
+            config=test_config,
+            meta_visitors=[visit_mock],
+            sources=test_sources,
+            store_transfer=transferrer_mock,
+            metadata_reader=test_metadata_reader,
+            clients=client_mock,
+            name_builder=test_name_builder,
+        )
+        assert test_result is not None, 'expect result'
+        assert test_result == -1, 'expect failures because of the retries'
+        test_reporter = test_sources[0].reporter
+        assert client_mock.metadata_client.read.called, 'read called'
+        # 6 = 1 success + 2 failures + 1 retry success + 1 retry failure + 1 second retry failure
+        assert client_mock.metadata_client.read.call_count == 6, 'read call count'
+        assert client_mock.metadata_client.create.called, 'create called'
+        assert client_mock.metadata_client.create.call_count == 6, 'create call count'
+        assert client_mock.data_client.put.called, 'put should be called'
+        assert client_mock.data_client.put.call_count == 6, 'wrong number of puts'
+        client_mock.data_client.put.assert_called_with(
+            f'{tmp_path}/{os.path.basename(test_uri_3).replace(".fits", "")}',
+            f'{test_config.scheme}:{test_config.collection}/{os.path.basename(test_uri_3)}'
+        )
+        assert client_mock.data_client.get_head.called, 'get_head called'
+        assert client_mock.data_client.get_head.call_count == 6, 'get_head call count'
+        assert client_mock.data_client.info.called, 'info called'
+        assert client_mock.data_client.info.call_count == 6, 'info call count'
+        assert test_reporter._summary.entries == 3, 'all'
+        assert test_reporter._summary._errors_sum == 4, 'errors'
+        assert test_reporter._summary._retry_sum == 3, 'retry'
+        assert test_reporter._summary.success == 2, 'success'
+        assert test_reporter._summary._timeouts_sum == 0, 'timeouts'
+        assert test_reporter._summary._rejected_sum == 0, 'rejected'
+        assert test_reporter._summary._skipped_sum == 0, 'skipped'
+    finally:
+        os.chdir(orig_getcwd)
+
+
+@patch('caom2utils.data_util.get_local_headers_from_fits')
+@patch('caom2pipe.reader_composable.Hdf5FileMetadataReader._retrieve_file_info')
+@patch('caom2pipe.data_source_composable.LocalFilesDataSource._append_work')
+@patch(
+    'caom2pipe.data_source_composable.LocalFilesDataSource.end_dt',
+    new_callable=PropertyMock(return_value=datetime(2019, 5, 2)),
+)
+@patch('caom2pipe.client_composable.ClientCollection')
+def test_run_state_store_ingest_local_retry(
+    client_mock, end_dt_mock, time_box_mock, file_info_mock, header_mock, test_config, tmp_path
+):
+    # Test store + ingest + modify, Hdf5FileMetadataReader, NoFheadStore Executor, LocalFilesDataSource (CFHT-like/DAO)
+    # 1 success
+    # 2 fails the first time with timeout
+    # 3 fails both times
+    # 4 rejected
+    # 5 skipped
+
+    # minimal header for testing
+    h = fits.Header()
+    h['SIMPLE'] = 'T'
+    h['BITPIX'] = -32
+    h['NAXIS'] = 2
+    h['NAXIS1'] = 2048
+    h['NAXIS2'] = 2048
+    h['DATATYPE'] = 'REDUC'
+    h['TYPE'] = 'image '
+    test_headers = [h]
+    header_mock.return_value = test_headers
+
+    client_mock.metadata_client.create.side_effect = [
+        None,              # success
+        mc.CadcException,  # first failure
+        mc.CadcException,  # fails first + retry 1 + retry 2 times, the first time
+        None,              # succeeds the second time
+        mc.CadcException,  # fails first + retry 1 + retry 2 times, the second time
+        mc.CadcException,  # fails first + retry 1 + retry 2 times, the third time
+    ]
+    test_f_1 = '123456o.fits'
+    test_f_2 = '2345678p.fits'
+    test_f_3 = 'scatsmth.flat.V.00.01.fits'
+    client_mock.data_client.info.side_effect = lambda x: FileInfo(id=x, md5sum='abc')
+    test_config.change_working_directory(tmp_path)
+    # test_config.logging_level = 'DEBUG'
+    test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
+    test_config.use_local_files = True
+    test_data_source = '/data/imaginary'
+    test_config.data_sources = [test_data_source]
+    test_config.interval = 1200
+    test_config.retry_failures = True
+    test_config.retry_decay = 0
+    test_config.retry_count = 2
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, datetime(2019, 4, 29, 12, 34))
+    client_mock.metadata_client.read.return_value = None
+    orig_getcwd = os.getcwd()
+    try:
+        os.chdir(tmp_path)
+        mc.Config.write_to_file(test_config)
+        test_metadata_reader = Hdf5FileMetadataReader()
+        test_source = dsc.LocalFilesDataSource(test_config, client_mock.data_client, test_metadata_reader)
+        # mock _append_work because want to test the _capture_todo call in get_time_box_work
+        test_source._temp = defaultdict(list)
+        test_source._temp[datetime(2019, 4, 30, 1, 1, 1)].append(f'{test_data_source}/{test_f_1}')
+        test_source._temp[datetime(2019, 4, 30, 2, 2, 2)].append(f'{test_data_source}/{test_f_2}')
+        test_source._temp[datetime(2019, 5, 2)].append(f'{test_data_source}/{test_f_3}')
+        test_source._rejected_files = 1
+        test_source._skipped_files = 1
+        test_sources = [test_source]
+        test_name_builder = nbc.GuessingBuilder(mc.StorageName)
+        test_result = rc.run_by_state(
+            config=test_config,
+            meta_visitors=[visit_mock],
+            sources=test_sources,
+            metadata_reader=test_metadata_reader,
+            clients=client_mock,
+            name_builder=test_name_builder,
+        )
+        assert test_result is not None, 'expect result'
+        assert test_result == -1, 'expect failures because of the retries'
+        assert client_mock.metadata_client.read.called, 'read called'
+        # 6 = 1 success + 2 failures + 1 retry success + 1 retry failure + 1 second retry failure
+        assert client_mock.metadata_client.read.call_count == 6, 'read call count'
+        assert client_mock.metadata_client.create.called, 'create called'
+        assert client_mock.metadata_client.create.call_count == 6, 'create call count'
+        assert client_mock.data_client.put.called, 'put should be called'
+        assert client_mock.data_client.put.call_count == 6, 'wrong number of puts'
+        client_mock.data_client.put.assert_called_with(
+            test_data_source, f'{test_config.scheme}:{test_config.collection}/{test_f_3}'
+        )
+        assert not client_mock.data_client.get_head.called, 'get_head not called, not a DelayedClientReader'
+        assert not client_mock.data_client.info.called, 'info called, not a DelayedClientReader'
+        test_reporter = test_sources[0].reporter
+        assert test_reporter._summary.entries == 5, 'all'
+        assert test_reporter._summary._errors_sum == 4, 'errors'
+        assert test_reporter._summary._retry_sum == 3, 'retry'
+        assert test_reporter._summary.success == 2, 'success'
+        assert test_reporter._summary._timeouts_sum == 0, 'timeouts'
+        assert test_reporter._summary._rejected_sum == 1, 'rejected'
+        assert test_reporter._summary._skipped_sum == 1, 'skipped'
+    finally:
+        os.chdir(orig_getcwd)
 
 
 def _write_todo(test_config):

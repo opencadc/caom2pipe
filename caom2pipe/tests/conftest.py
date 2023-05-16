@@ -42,3 +42,14 @@ def test_config():
             os.unlink(f_name)
     test_config.time_zone = 'UTC'
     return test_config
+
+
+@pytest.fixture(scope='function')
+def test_data_dir():
+    this_dir = os.path.dirname(os.path.realpath(__file__))
+    return os.path.join(this_dir, 'data')
+
+
+@pytest.fixture(scope='function')
+def test_files_dir():
+    return '/test_files'
