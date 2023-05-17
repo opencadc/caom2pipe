@@ -958,18 +958,13 @@ class TestDoOne:
         failure_files = self._reporter.get_file_names_from_log_file(self._reporter._failure_fqn)
         retry_files = self._reporter.get_file_names_from_log_file(self._reporter._retry_fqn)
         success_files = self._reporter.get_file_names_from_log_file(self._reporter._success_fqn)
-        if failure_should_exist:
-            assert self._storage_name.file_name in failure_files, 'should be failure logging'
-        else:
-            assert self._storage_name.file_name not in failure_files, 'should not be failure logging'
-        if retry_should_exist:
-            assert self._storage_name.source_names[0] in retry_files, 'should be retry logging'
-        else:
-            assert self._storage_name.source_names[0] not in retry_files, 'should not be retry logging'
-        if success_should_exist:
-            assert self._storage_name.file_name in success_files, 'should be success logging'
-        else:
-            assert self._storage_name.file_name not in success_files, 'should not be success logging'
+        assert (
+            (self._storage_name.file_name in failure_files) == failure_should_exist
+        ), f'failure {failure_should_exist}'
+        assert (self._storage_name.source_names[0] in retry_files) == retry_should_exist, f'retry {retry_should_exist}'
+        assert (
+            (self._storage_name.file_name in success_files) == success_should_exist
+        ), f'success {success_should_exist}'
 
     def test_do_one_execute_success(self, test_config, tmp_path):
         self._ini(test_config, tmp_path)
@@ -1069,10 +1064,9 @@ class TestDoOne:
 
 class TestFhead:
 
-    def _ini(self):
+    def setup_method(self):
         self._clients_patch = patch('caom2pipe.client_composable.ClientCollection', autospec=True)
         self._clients_mock = self._clients_patch.start()
-        # self._clients_mock = patch('caom2pipe.client_composable.ClientCollection', autospec=True)
         self._clients_mock.return_value.metadata_client.read.side_effect = tc.mock_read
         data_visit_mock = Mock(autospec=True)
         data_visit_mock.visit.side_effect = _read_obs_visit
@@ -1100,7 +1094,6 @@ class TestFhead:
 
     def test_fhead_visit(self, test_config, tmpdir):
         try:
-            self._ini()
             self._clients_mock.data_client.get.side_effect = _transfer_hdf5_get_mock
             test_modify_transferrer = transfer_composable.CadcTransfer(self._clients_mock.data_client)
             self._test_storage_name = mc.StorageName(
@@ -1135,7 +1128,6 @@ class TestFhead:
             test_config.data_sources = [tc.TEST_DATA_DIR]
             test_config.data_source_extensions = ['.hdf5']
             test_config.use_local_files = True
-            self._ini()
             # noop, because use_local_files = True
             test_store_transferrer = transfer_composable.Transfer()
             self._test_storage_name = mc.StorageName(
@@ -1170,7 +1162,6 @@ class TestFhead:
             test_config.data_sources = [tc.TEST_DATA_DIR]
             test_config.data_source_extensions = ['.hdf5']
             test_config.use_local_files = False
-            self._ini()
             test_store_transferrer = Mock(autospec=True)
             test_store_transferrer.get.side_effect = _transfer_hdf5_external_mock
             self._test_storage_name = mc.StorageName(

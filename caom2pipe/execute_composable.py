@@ -284,7 +284,7 @@ class CaomExecute:
             else:
                 temp = urlparse(entry)
                 local_fqn = os.path.join(self._working_dir, temp.path.split('/')[-1])
-                self._logger.error(f'Retrieve {entry} to {local_fqn}')
+                self._logger.debug(f'Retrieve {entry} to {local_fqn}')
                 self._store_transferrer.get(entry, local_fqn)
 
             self._logger.debug(f'store the input file {local_fqn} to {self._storage_name.destination_uris[index]}')

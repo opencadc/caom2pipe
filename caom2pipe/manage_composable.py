@@ -548,8 +548,8 @@ class ExecutionReporter:
         self._logger.info(msg)
         write_to_file(self._report_fqn, msg)
 
-    def capture_retry(self):
-        self._summary.add_retries(self._summary.entries)
+    def capture_retry(self, retry_count):
+        self._summary.add_retries(retry_count)
 
     def get_file_names_from_log_file(self, log_fqn):
         """
