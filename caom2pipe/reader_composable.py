@@ -237,7 +237,7 @@ class Hdf5FileMetadataReader(FileMetadataReader):
             # Laurie Rosseau-Nepton - 26-04-23
             # The standard_spectrum is related to flux calibration used on the data. The other one is for the science
             # data and is the one that should be used.
-            if len(f_in.attrs) > 6:
+            if len(f_in.attrs) > 50:
                 # 6 happened to be the length of the attrs in the first file I looked at, and it's a poor test
                 self._logger.debug(f'Found attrs for {fqn}')
                 self._headers[key] = [f_in.attrs]
@@ -295,10 +295,12 @@ class StorageClientReader(MetadataReader):
 class DelayedClientReader(StorageClientReader):
     """Use case: TaskType.STORE, with use_local_files set to False.
 
-    The objective is to be able to delay the retrieval of the FileInfo and header information until the file is retrieved
-    from the data provider, and stored at CADC. If the files are retrieved from a remote location, for example by http
-    or ftp, the STORE task needs to be executable without the MetadataReader causing an execution failure.
+    The objective is to be able to delay the retrieval of the FileInfo and header information until the file is
+    retrieved from the data provider, and stored at CADC. If the files are retrieved from a remote location, for
+    example by http or ftp, the STORE task needs to be executable without the MetadataReader causing an execution
+    failure.
     """
+
     def _retrieve_file_info(self, key, source_name):
         """Retrieves FileInfo information to memory. Ignore retrieval failures, as the file may not yet be at CADC.
         """
@@ -316,7 +318,7 @@ class DelayedClientReader(StorageClientReader):
                 self._headers[key] = self._client.get_head(source_name)
             except exceptions.UnexpectedException as e:
                 # the record was not found, this is expected, keep going
-                self._logger.debug(f'Ignore UnexpectedException for {source_name}')
+                self._logger.debug(f'Ignore UnexpectedException for {source_name} {e}')
                 pass
         else:
             self._headers[key] = []
