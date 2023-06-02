@@ -315,6 +315,7 @@ class StateRunner(TodoRunner):
 
         self._logger.info(f'Starting at {prev_exec_time}, ending at {data_source.end_dt}')
         result = 0
+        num_entries = 0
         if prev_exec_time == data_source.end_dt:
             self._logger.info(f'Start time is the same as end time {prev_exec_time}, stopping.')
             exec_time = prev_exec_time
@@ -331,7 +332,7 @@ class StateRunner(TodoRunner):
                 num_entries = len(entries)
 
                 if num_entries > 0:
-                    self._logger.info(f'Processing {self._reporter.all} entries.')
+                    self._logger.info(f'Processing {num_entries} entries.')
                     pop_action = entries.pop
                     if isinstance(entries, deque):
                         pop_action = entries.popleft
