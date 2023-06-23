@@ -315,7 +315,6 @@ class StateRunner(TodoRunner):
 
         self._logger.info(f'Starting at {prev_exec_time}, ending at {data_source.end_dt}')
         result = 0
-        num_entries = 0
         if prev_exec_time == data_source.end_dt:
             self._logger.info(f'Start time is the same as end time {prev_exec_time}, stopping.')
             exec_time = prev_exec_time

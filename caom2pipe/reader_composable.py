@@ -238,7 +238,6 @@ class Hdf5FileMetadataReader(FileMetadataReader):
             # The standard_spectrum is related to flux calibration used on the data. The other one is for the science
             # data and is the one that should be used.
             if len(f_in.attrs) > 50:
-                # 6 happened to be the length of the attrs in the first file I looked at, and it's a poor test
                 self._logger.debug(f'Found attrs for {fqn}')
                 self._headers[key] = [f_in.attrs]
             else:
