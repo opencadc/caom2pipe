@@ -160,16 +160,10 @@ class GuessingBuilder(StorageNameBuilder):
     def __init__(self, storage_name):
         super().__init__()
         self._storage_name = storage_name
-        self._logger = logging.getLogger(self.__class__.__name__)
 
     def build(self, entry):
-        self._logger.debug(
-            f'Build a {self._storage_name.__name__} instance with {entry}.'
-        )
-        return self._storage_name(
-            file_name=(basename(entry)),
-            source_names=[entry],
-        )
+        self._logger.debug(f'Build a {self._storage_name.__name__} instance with {entry}.')
+        return self._storage_name(file_name=(basename(entry)), source_names=[entry])
 
 
 def builder_factory(config):
