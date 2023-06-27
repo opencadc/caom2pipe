@@ -894,7 +894,7 @@ class VaultCleanupDataSource(VaultDataSource):
     This implementation will clean up a vos: data source.
     """
 
-    def __init__(self, config, vault_client, cadc_client, metadata_reader):
+    def __init__(self, config, vault_client, cadc_client, metadata_reader, storage_name_ctor=mc.StorageName):
         super().__init__(vault_client, config)
         self._cleanup_when_storing = config.cleanup_files_when_storing
         self._cleanup_failure_directory = config.cleanup_failure_destination
@@ -911,6 +911,7 @@ class VaultCleanupDataSource(VaultDataSource):
             # do not clean up files unless the STORE task is configured
             self._cleanup_when_storing = False
             self._logger.info('Not STORE\'ing data - ignore config.yml cleanup_files_when_storing setting.')
+        self._storage_name_ctor = storage_name_ctor
 
     def get_collection(self, f_name):
         return self._collection
@@ -930,7 +931,7 @@ class VaultCleanupDataSource(VaultDataSource):
                 fqn = entry
             else:
                 fqn = entry.entry_name
-            storage_name = nbc.GuessingBuilder(mc.StorageName).build(fqn)
+            storage_name = nbc.GuessingBuilder(self._storage_name_ctor).build(fqn)
             self._logger.debug(f'Clean up {fqn}')
             if storage_name.destination_uris[0] in self._metadata_reader.file_info:
                 if self._is_remote_different(storage_name.destination_uris[0]):
@@ -958,7 +959,7 @@ class VaultCleanupDataSource(VaultDataSource):
                     # skip dot files
                     copy_file = False
                 else:
-                    storage_name = nbc.GuessingBuilder(mc.StorageName).build(dir_entry_fqn)
+                    storage_name = nbc.GuessingBuilder(self._storage_name_ctor).build(dir_entry_fqn)
                     self._metadata_reader.set_file_info(storage_name)
                     if self._metadata_reader.file_info[storage_name.destination_uris[0]].size == 0:
                         self._logger.info(f'Skipping 0-length {dir_entry_fqn}')
@@ -1017,7 +1018,9 @@ class VaultCleanupDataSource(VaultDataSource):
         :return:
         """
         # if move when storing is enabled, move to an after-action location
+        self._logger.debug(f'Begin _move_action for {fqn}')
         if self._cleanup_when_storing:
+            self._logger.debug(f'Carry out _move_action for {fqn}')
             try:
                 f_name = os.path.basename(fqn)
                 dest_fqn = os.path.join(destination, f_name)
@@ -1037,7 +1040,8 @@ class VaultCleanupDataSource(VaultDataSource):
                 self._logger.debug(traceback.format_exc())
                 self._logger.error(f'Failed to move {fqn} to {destination}')
                 raise mc.CadcException(e)
-
+        self._logger.debug('End _move_action')
+    
 
 def data_source_factory(config, clients, state, reader, reporter):
     """
