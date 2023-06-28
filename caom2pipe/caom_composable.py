@@ -1070,11 +1070,9 @@ class TelescopeMapping:
     map for a file, and then doing any n:n (FITS keywords:CAOM2 keywords)
     mapping, using the 'update' method.
     """
-
     def __init__(self, storage_name, headers, clients, observable=None):
         self._storage_name = storage_name
-        application = f'{storage_name.collection.lower()}2caom2'
-        self._meta_producer = mc.get_version(application)
+        self._meta_producer = observable.meta_producer if observable is not None else None
         self._headers = headers
         self._clients = clients
         self._observable = observable

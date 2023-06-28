@@ -516,9 +516,11 @@ def test_visit():
             self.set_destination_uris()
             self._product_id = test_product_id
 
-    test_rejected = mc.Rejected(f'{tc.TEST_DATA_DIR}/rejected.yml')
     test_config = mc.Config()
-    test_observable = mc.Observable(test_rejected, mc.Metrics(test_config))
+    test_config.collection = 'TEST'
+    test_config.rejected_file_name = 'rejected.yml'
+    test_config.rejected_directory = tc.TEST_DATA_DIR
+    test_observable = mc.Observable(test_config)
     cadc_client_mock = Mock()
     clients_mock = Mock()
     clients_mock.data_client = cadc_client_mock

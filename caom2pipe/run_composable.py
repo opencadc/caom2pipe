@@ -461,7 +461,7 @@ def common_runner_init(
     mc.StorageName.preview_scheme = config.preview_scheme
     mc.StorageName.scheme = config.scheme
 
-    observable = mc.Observable(mc.Rejected(config.rejected_fqn), mc.Metrics(config))
+    observable = mc.Observable(config)
     reporter = mc.ExecutionReporter(config, observable)
     reporter.set_log_location(config)
     if clients is None:
