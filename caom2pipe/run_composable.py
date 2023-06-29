@@ -331,7 +331,7 @@ class StateRunner(TodoRunner):
                 num_entries = len(entries)
 
                 if num_entries > 0:
-                    self._logger.info(f'Processing {self._reporter.all} entries.')
+                    self._logger.info(f'Processing {num_entries} entries.')
                     pop_action = entries.pop
                     if isinstance(entries, deque):
                         pop_action = entries.popleft
