@@ -760,17 +760,22 @@ def minimize_on_keyword(x, candidate):
 
 class Observable:
     """
-    A class to contain all the classes that maintain information between
-    pipeline execution instances.
+    A class to contain all the classes that maintain information between pipeline execution instances, and
+    any information to assist in debugging.
     """
 
-    def __init__(self, rejected, metrics):
-        self._rejected = rejected
-        self._metrics = metrics
+    def __init__(self, config):
+        self._rejected = Rejected(config.rejected_fqn)
+        self._metrics = Metrics(config)
+        self._meta_producer = get_version(config.collection)
 
     @property
     def rejected(self):
         return self._rejected
+    
+    @property
+    def meta_producer(self):
+        return self._meta_producer
 
     @property
     def metrics(self):
@@ -2573,14 +2578,20 @@ def get_now():
     return datetime.now()
 
 
-def get_version(entry):
+def get_version(collection):
     """A common implementation to retrieve a pipeline version."""
     try:
-        v = version(entry)
+        application = f'{collection.lower()}2caom2'
+        v = version(application)
     except PackageNotFoundError as e:
-        logging.warning(f'No version found for {entry}')
-        v = '0.0.0'
-    return f'{entry}/{v}'
+        # for BRITE-Constellation
+        application = f'{collection.split("-")[0].lower()}2caom2'
+        try:
+            v = version(application)
+        except PackageNotFoundError as e2:
+            logging.warning(f'No version found for {collection}')
+            v = '0.0.0'
+    return f'{application}/{v}'
 
 
 def create_dir(dir_name):
