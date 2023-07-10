@@ -3213,16 +3213,16 @@ class ValueRepairCache(Cache):
 
     def _recurse(self, entity, entity_name, bits):
         attribute_name = bits[0]
-        if hasattr(entity, attribute_name):
+        if entity is None:
+            self._logger.debug(f'Entity {entity_name} is None, so not looking for repairs.')
+        elif hasattr(entity, attribute_name):
             if len(bits) == 1:
                 self._repair_attribute(entity, attribute_name)
             else:
                 new_entity = getattr(entity, attribute_name)
                 self._recurse(new_entity, attribute_name, bits[1:])
         else:
-            logging.warning(
-                f'No attribute {entity_name}.{attribute_name} found to repair.'
-            )
+            self._logger.warning(f'No attribute {entity_name}.{attribute_name} found to repair.')
 
     def _repair_attribute(self, entity, attribute_name):
         try:
