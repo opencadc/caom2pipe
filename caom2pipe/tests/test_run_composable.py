@@ -1066,8 +1066,7 @@ class TestProcessEntry:
         test_config.task_types = [mc.TaskType.INGEST]
         test_meta = [test_execute_composable.VisitNoException()]
         self._reader = Mock()
-        self._rejected = mc.Rejected(test_config.rejected_fqn)
-        self._observer = mc.Observable(self._rejected, Mock())
+        self._observer = mc.Observable(test_config)
         self._reporter = mc.ExecutionReporter(test_config, self._observer)
         self._clients = Mock()
         self._data_source = Mock()

@@ -85,10 +85,8 @@ def test_cadc_transfer(client_mock, caps_mock):
     assert test_subject is not None, 'expect a result'
     test_config = mc.Config()
     test_config.rejected_fqn = '/tmp/rejected.yml'
-    test_observable = mc.Observable(
-        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)
-    )
-    test_subject.observable = test_observable
+    test_config.collection = 'TEST'
+    test_subject.observable = mc.Observable(test_config)
     test_source = 'ad:TEST/test_file.fits'
     test_destination = '/tmp/test_file.fits'
     test_subject.get(test_source, test_destination)
@@ -143,14 +141,12 @@ def test_http_transfer(get_mock):
             f.write('test content')
     get_mock.side_effect = Mock(autospec=True)
     test_config = mc.Config()
+    test_config.collection = 'TEST'
     test_config.working_directory = test_conf.TEST_DATA_DIR
     test_config.rejected_fqn = '/tmp/rejected.yml'
-    test_observable = mc.Observable(
-        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)
-    )
     test_subject = tc.HttpTransfer()
     assert test_subject is not None, 'expect a result'
-    test_subject.observable = test_observable
+    test_subject.observable = mc.Observable(test_config)
     with pytest.raises(mc.CadcException):
         test_subject.get(test_source, test_destination)
         assert get_mock.called, 'should have been called'
@@ -168,14 +164,12 @@ def test_ftp_transfer(data_get_mock):
             f.write('test content')
     data_get_mock.side_effect = Mock(autospec=True)
     test_config = mc.Config()
+    test_config.collection = 'TEST'
     test_config.working_directory = test_conf.TEST_DATA_DIR
     test_config.rejected_fqn = '/tmp/rejected.yml'
-    test_observable = mc.Observable(
-        mc.Rejected(test_config.rejected_fqn), mc.Metrics(test_config)
-    )
     test_subject = tc.FtpTransfer('localhost')
     assert test_subject is not None, 'expect a result'
-    test_subject.observable = test_observable
+    test_subject.observable = mc.Observable(test_config)
     with pytest.raises(mc.CadcException):
         test_subject.get(test_source, test_destination)
         assert data_get_mock.called, 'should have been called'
