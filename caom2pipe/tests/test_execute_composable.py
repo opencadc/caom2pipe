@@ -948,8 +948,7 @@ class TestDoOne:
         test_config.task_types = [mc.TaskType.INGEST]
         test_config.change_working_directory(tmp_path)
         self._reader = Mock()
-        self._rejected = mc.Rejected(test_config.rejected_fqn)
-        self._observer = mc.Observable(self._rejected, Mock())
+        self._observer = mc.Observable(test_config)
         self._reporter = mc.ExecutionReporter(test_config, self._observer)
         self._clients = Mock()
         self._storage_name = tc.TStorageName()
@@ -1009,7 +1008,7 @@ class TestDoOne:
         self._ini(test_config, tmp_path)
         # check that failure/retry files have the correct content if is_rejected returns True
         test_meta = [VisitNoException()]
-        self._rejected.record('bad_metadata', 'test_file.fits.gz')
+        self._observer._rejected.record('bad_metadata', 'test_file.fits.gz')
         test_subject = ec.OrganizeExecutes(
             test_config,
             test_meta,

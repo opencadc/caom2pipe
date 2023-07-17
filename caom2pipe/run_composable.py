@@ -202,7 +202,7 @@ class TodoRunner:
         while len(self._todo_list) > 0:
             entry = self._todo_list.popleft()
             result |= self._process_entry(data_source, entry, current_count)
-            self._metadata_reader.reset()
+        self._metadata_reader.reset()
         self._finish_run()
         self._logger.debug('End _run_todo_list.')
         return result
@@ -331,7 +331,7 @@ class StateRunner(TodoRunner):
                 num_entries = len(entries)
 
                 if num_entries > 0:
-                    self._logger.info(f'Processing {self._reporter.all} entries.')
+                    self._logger.info(f'Processing {num_entries} entries.')
                     pop_action = entries.pop
                     if isinstance(entries, deque):
                         pop_action = entries.popleft
@@ -461,7 +461,7 @@ def common_runner_init(
     mc.StorageName.preview_scheme = config.preview_scheme
     mc.StorageName.scheme = config.scheme
 
-    observable = mc.Observable(mc.Rejected(config.rejected_fqn), mc.Metrics(config))
+    observable = mc.Observable(config)
     reporter = mc.ExecutionReporter(config, observable)
     reporter.set_log_location(config)
     if clients is None:

@@ -1070,14 +1070,13 @@ class TelescopeMapping:
     map for a file, and then doing any n:n (FITS keywords:CAOM2 keywords)
     mapping, using the 'update' method.
     """
-
-    def __init__(self, storage_name, headers, clients, observable=None):
+    def __init__(self, storage_name, headers, clients, observable=None, observation=None):
         self._storage_name = storage_name
-        application = f'{storage_name.collection.lower()}2caom2'
-        self._meta_producer = mc.get_version(application)
+        self._meta_producer = observable.meta_producer if observable is not None else None
         self._headers = headers
         self._clients = clients
         self._observable = observable
+        self._observation = observation
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def accumulate_blueprint(self, bp):
@@ -1100,7 +1099,7 @@ class TelescopeMapping:
         """
         return
 
-    def update(self, observation, file_info):
+    def update(self, file_info):
         """
         Update the Artifact file-based metadata. Override if it's necessary
         to carry out more/different updates.
@@ -1109,8 +1108,8 @@ class TelescopeMapping:
         :param file_info: FileInfo instance
         :return:
         """
-        self._logger.debug(f'Begin update for {observation.observation_id}')
-        for plane in observation.planes.values():
+        self._logger.debug(f'Begin update for {self._observation.observation_id}')
+        for plane in self._observation.planes.values():
             if plane.product_id != self._storage_name.product_id:
                 self._logger.debug(
                     f'Product ID is {plane.product_id} but working on {self._storage_name.product_id}. Continuing.'
@@ -1127,7 +1126,7 @@ class TelescopeMapping:
                 self._update_artifact(artifact)
 
         self._logger.debug('End update')
-        return observation
+        return self._observation
 
 
 class Fits2caom2Visitor:
@@ -1163,7 +1162,7 @@ class Fits2caom2Visitor:
         return parser
 
     def _get_mapping(self, headers):
-        return TelescopeMapping(self._storage_name, headers, self._clients, self._observable)
+        return TelescopeMapping(self._storage_name, headers, self._clients, self._observable, self._observation)
 
     def visit(self):
         self._logger.debug('Begin visit')
@@ -1196,6 +1195,7 @@ class Fits2caom2Visitor:
                             observation_id=self._storage_name.obs_id,
                             algorithm=Algorithm('composite'),
                         )
+                    telescope_data.observation = self._observation
 
                 parser.augment_observation(
                     observation=self._observation,
@@ -1204,7 +1204,7 @@ class Fits2caom2Visitor:
                 )
 
                 file_info = self._metadata_reader.file_info.get(uri)
-                self._observation = telescope_data.update(self._observation, file_info)
+                self._observation = telescope_data.update(file_info)
         except Caom2Exception as e:
             self._logger.debug(traceback.format_exc())
             self._logger.warning(

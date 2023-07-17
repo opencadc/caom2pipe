@@ -90,6 +90,7 @@ from caom2pipe import name_builder_composable as nbc
 from caom2pipe.reader_composable import DelayedClientReader, FileMetadataReader, Hdf5FileMetadataReader
 from caom2pipe import run_composable as rc
 from caom2pipe import name_builder_composable as b
+from caom2pipe.transfer_composable import CadcTransfer
 
 import test_execute_composable
 import visit_mock
@@ -1066,8 +1067,7 @@ class TestProcessEntry:
         test_config.task_types = [mc.TaskType.INGEST]
         test_meta = [test_execute_composable.VisitNoException()]
         self._reader = Mock()
-        self._rejected = mc.Rejected(test_config.rejected_fqn)
-        self._observer = mc.Observable(self._rejected, Mock())
+        self._observer = mc.Observable(test_config)
         self._reporter = mc.ExecutionReporter(test_config, self._observer)
         self._clients = Mock()
         self._data_source = Mock()
@@ -1195,6 +1195,152 @@ class TestProcessEntry:
             assert test_result == -1, 'expect failure'
             # success_should_exist == False as it's only set in the do_one implementation
             self._check_logs(failure_should_exist=False, retry_should_exist=False, success_should_exist=False)
+
+
+class TestRetry:
+    """Test retry for each of the following CaomExecutes specializations, because they each call _caom2_store in a "create the record"
+    scenario. The specific failure scenario here is the AlreadyExistsException.
+    - MetaVisit
+    - NoFheadVisit
+    - NoFheadStoreVisit
+    """
+
+    meta_visit_config = mc.Config()
+    meta_visit_config.task_types = [mc.TaskType.INGEST]
+    meta_visit_config.use_local_files = True
+    meta_visit_config.cleanup_files_when_storing = False
+    meta_visit_config.data_sources = ['/tmp']
+
+    nofhead_visit_config = mc.Config()
+    nofhead_visit_config.task_types = [mc.TaskType.INGEST, mc.TaskType.MODIFY]
+    nofhead_visit_config.use_local_files = True
+    nofhead_visit_config.data_sources = ['/tmp']
+
+    nofheadstore_visit_config = mc.Config()
+    nofheadstore_visit_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY]
+    nofheadstore_visit_config.use_local_files = True
+    nofheadstore_visit_config.cleanup_files_when_storing = True
+    nofheadstore_visit_config.data_sources = ['/tmp']
+
+    def _ini(self, test_config, test_meta, test_data, tmp_path):
+        now_dt = datetime.now()
+        end_time = now_dt + timedelta(minutes=5)
+        start_time = end_time - timedelta(minutes=10)
+        test_config.change_working_directory(tmp_path)
+        test_config.collection = 'TEST'
+        test_config.logging_level = 'DEBUG'
+        test_config.proxy_file_name = 'testproxy.pem'
+        test_config.tap_id = 'ivo://cadc.nrc.ca/sc2tap'
+        test_config.interval = 10
+        test_config.retry_failures = True
+        test_config.retry_decay = 0
+        test_config.retry_count = 1
+        orig_dir = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            mc.Config.write_to_file(test_config)
+            mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
+            with open(test_config.proxy_fqn, 'w') as f:
+                f.write('test content')
+
+            test_data_source = dsc.QueryTimeBoxDataSource(test_config)
+            time_box_work = deque()
+            time_box_work.append(dsc.StateRunnerMeta('abc.fits', now_dt))
+            test_data_source.get_time_box_work = Mock(return_value = time_box_work)
+            test_data_source.initialize_end_dt = Mock()
+            type(test_data_source).end_dt = PropertyMock(return_value=end_time)
+            test_sources = [test_data_source]
+            self._reader = Mock()
+            self._observer = mc.Observable(test_config)
+            self._reporter = mc.ExecutionReporter(test_config, self._observer)
+            self._clients = Mock()
+            self._name_builder = BuilderWithNoException()
+            self._modify_transfer = CadcTransfer(self._clients.data_client)
+            self._store_transfer = Mock()
+            self._organizer = ec.OrganizeExecutes(
+                config=test_config,
+                meta_visitors=test_meta,
+                data_visitors=test_data,
+                metadata_reader=self._reader,
+                observable=self._observer,
+                clients=self._clients,
+                reporter=self._reporter,
+                store_transfer=self._store_transfer,
+                modify_transfer=self._modify_transfer,
+            )
+            self._runner = rc.StateRunner(
+                test_config,
+                self._organizer,
+                self._name_builder,
+                test_sources,
+                self._reader,
+                self._observer,
+                self._reporter,
+            )
+        finally:
+            os.chdir(orig_dir)
+
+    def _post(self):
+        assert self._reporter._summary.success == 1, 'success'
+        assert self._reporter._summary._errors_sum == 1, 'errors'
+        assert self._reporter._summary._rejected_sum == 0, 'rejected'
+        assert self._reporter._summary._retry_sum == 1, 'retry'
+        assert self._reporter._summary._skipped_sum == 0, 'skipped'
+        assert self._reporter._summary._timeouts_sum == 0, 'timeout'
+
+    @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
+    def test_meta_visit(self, caom2_store_mock, tmp_path):
+        test_config = TestRetry.meta_visit_config
+        test_meta = [test_execute_composable.VisitNoException()]
+        test_data = []
+        self._ini(test_config, test_meta, test_data, tmp_path)
+        test_result = self._runner.run()
+        assert test_result == -1, 'expect failure'
+        test_result_retry = self._runner.run_retry()
+        assert test_result_retry == 0, 'success on retry'
+        assert caom2_store_mock.called, 'create'
+        assert caom2_store_mock.call_count == 2, 'create call count'
+        assert self._clients.metadata_client.read.called, 'read'
+        assert self._clients.metadata_client.read.call_count == 2, 'read calls'
+        self._post()
+
+    @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
+    def test_nofhead_visit(self, caom2_store_mock, tmp_path):
+        test_config = TestRetry.nofhead_visit_config
+        test_meta = [test_execute_composable.VisitNoException()]
+        test_data = [test_execute_composable.VisitNoException()]
+        self._ini(test_config, test_meta, test_data, tmp_path)
+        test_result = self._runner.run()
+        assert test_result == -1, 'expect failure'
+        test_result_retry = self._runner.run_retry()
+        assert test_result_retry == 0, 'success on retry'
+        assert caom2_store_mock.called, 'create'
+        assert caom2_store_mock.call_count == 2, 'create call count'
+        assert self._clients.metadata_client.read.called, 'read'
+        assert self._clients.metadata_client.read.call_count == 2, 'read calls'
+        assert self._clients.data_client.get.called, 'get'
+        assert self._clients.data_client.get.call_count == 2, 'get calls'
+        self._post()
+
+    @patch('caom2pipe.execute_composable.CaomExecute._cadc_put')
+    @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
+    def test_nofheadstore_visit(self, cadc_put_mock, caom2_store_mock, tmp_path):
+        test_config = TestRetry.nofheadstore_visit_config
+        test_meta = [test_execute_composable.VisitNoException()]
+        test_data = [test_execute_composable.VisitNoException()]
+        self._ini(test_config, test_meta, test_data, tmp_path)
+        test_result = self._runner.run()
+        assert test_result == -1, 'expect failure'
+        test_result_retry = self._runner.run_retry()
+        assert test_result_retry == 0, 'success on retry'
+        assert caom2_store_mock.called, 'create'
+        assert caom2_store_mock.call_count == 2, 'create call count'
+        assert self._clients.metadata_client.read.called, 'read'
+        assert self._clients.metadata_client.read.call_count == 2, 'read calls'
+        assert not self._clients.data_client.get.called, 'get'
+        assert cadc_put_mock.called, 'put'
+        assert cadc_put_mock.call_count == 2, 'put calls'
+        self._post()
 
 
 @patch('caom2pipe.html_data_source.query_endpoint_session')
