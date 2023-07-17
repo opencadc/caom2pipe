@@ -1845,6 +1845,8 @@ class PreviewVisitor:
         # and the 1th entry is the artifact type
         self._previews = {}
         self._report = None
+        self._hdu_list = None
+        self._ext = None
         self._logger.debug(self)
 
     @property
@@ -1923,6 +1925,10 @@ class PreviewVisitor:
 
     def _do_prev(self, plane, obs_id):
         self.generate_plots(obs_id)
+        if self._hdu_list is not None:
+            self._hdu_list.close()
+            del self._hdu_list[self._ext].data
+            del self._hdu_list
         self._store_smalls()
         return len(self._previews)
 
