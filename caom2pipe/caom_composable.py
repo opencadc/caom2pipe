@@ -1079,6 +1079,14 @@ class TelescopeMapping:
         self._observation = observation
         self._logger = logging.getLogger(self.__class__.__name__)
 
+    @property
+    def observation(self):
+        return self._observation
+    
+    @observation.setter
+    def observation(self, value):
+        self._observation = value
+
     def accumulate_blueprint(self, bp):
         """
         Configure the telescope-specific ObsBlueprint at the CAOM model
