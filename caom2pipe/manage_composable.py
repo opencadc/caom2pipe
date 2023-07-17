@@ -2064,7 +2064,9 @@ class StorageName:
     @property
     def file_uri(self):
         """The CADC Storage URI for the file."""
-        return self._get_uri(self._file_name.replace('.gz', '').replace('.bz2', ''), StorageName.scheme)
+        return self._get_uri(
+            self._file_name.replace('.gz', '').replace('.bz2', '').replace('.header', ''), StorageName.scheme
+        )
 
     @property
     def file_name(self):
