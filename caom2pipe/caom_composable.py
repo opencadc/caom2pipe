@@ -1221,5 +1221,5 @@ class Fits2caom2Visitor:
             )
             self._observation = None
 
-        self._logger.debug(f'End visit')
+        self._logger.debug('End visit')
         return self._observation
