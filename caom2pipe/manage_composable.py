@@ -446,14 +446,13 @@ class ExecutionReporter:
                 result = f.readlines()
         return len(result)
 
-    def _count_timeouts(self, e):
-        if e is not None and (
+    def _is_timeout(self, e):
+        return e is not None and (
             'Read timed out' in e
             or 'reset by peer' in e
             or 'ConnectTimeoutError' in e
             or 'Broken pipe' in e
-        ):
-            self._summary.add_timeouts(1)
+        )
 
     def _set_log_files(self, config):
         """Support changing log file locations during a retry."""
@@ -496,7 +495,8 @@ class ExecutionReporter:
         """
         self._logger.debug('Begin capture_failure')
         self._summary.add_errors(1)
-        self._count_timeouts(stack_trace)
+        if self._is_timeout(stack_trace):
+            self._summary.add_timeouts(1)
         with open(self._failure_fqn, 'a') as failure:
             if e.args is not None and len(e.args) > 1:
                 min_error = e.args[0]
@@ -506,7 +506,7 @@ class ExecutionReporter:
 
         # only retry entries that are not permanently marked as rejected
         reason = Rejected.known_failure(stack_trace)
-        if reason == Rejected.NO_REASON:
+        if reason == Rejected.NO_REASON or self._is_timeout(stack_trace):
             with open(self._retry_fqn, 'a') as retry:
                 for entry in storage_name.source_names:
                     retry.write(f'{entry}\n')
@@ -1926,6 +1926,7 @@ class PreviewVisitor:
     def _do_prev(self, plane, obs_id):
         self.generate_plots(obs_id)
         if self._hdu_list is not None:
+            # astropy says https://docs.astropy.org/en/stable/io/fits/index.html#working-with-large-files
             self._hdu_list.close()
             del self._hdu_list[self._ext].data
             del self._hdu_list
