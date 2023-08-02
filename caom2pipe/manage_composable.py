@@ -945,6 +945,8 @@ class Config:
         self._cache_file_name = None
         # the fully qualified name for the file
         self.cache_fqn = None
+        self._data_read_groups = []
+        self._meta_read_groups = []
         self._data_sources = []
         self._data_source_extensions = ['.fits']
         self._recurse_data_sources = True
@@ -988,6 +990,22 @@ class Config:
             self.work_fqn = os.path.join(
                 self._working_directory, self._work_file
             )
+
+    @property
+    def data_read_groups(self):
+        return self._data_read_groups
+
+    @data_read_groups.setter
+    def data_read_groups(self, value):
+        self._data_read_groups = value
+
+    @property
+    def meta_read_groups(self):
+        return self._meta_read_groups
+
+    @meta_read_groups.setter
+    def meta_read_groups(self, value):
+        self._meta_read_groups = value
 
     @property
     def data_sources(self):
@@ -1463,6 +1481,7 @@ class Config:
             f'  cleanup_success_destination:: '
             f'{self.cleanup_success_destination}\n'
             f'  collection:: {self.collection}\n'
+            f'  data_read_groups:: {self.data_read_groups}\n'
             f'  data_sources:: {self.data_sources}\n'
             f'  data_source_extensions:: {self.data_source_extensions}\n'
             f'  failure_fqn:: {self.failure_fqn}\n'
@@ -1472,6 +1491,7 @@ class Config:
             f'  log_file_directory:: {self.log_file_directory}\n'
             f'  log_to_file:: {self.log_to_file}\n'
             f'  logging_level:: {self.logging_level}\n'
+            f'  meta_read_groups:: {self.meta_read_groups}\n'
             f'  observable_directory:: {self.observable_directory}\n'
             f'  observe_execution:: {self.observe_execution}\n'
             f'  preview_scheme:: {self.preview_scheme}\n'
@@ -1606,11 +1626,13 @@ class Config:
             self.cleanup_success_destination = config.get(
                 'cleanup_success_destination', None
             )
+            self.data_read_groups = config.get('data_read_groups', [])
             self.logging_level = config.get('logging_level', 'DEBUG')
             self.log_to_file = config.get('log_to_file', False)
             self.log_file_directory = config.get(
                 'log_file_directory', self.working_directory
             )
+            self.meta_read_groups = config.get('meta_read_groups', [])
             self.task_types = Config._obtain_task_types(config, [])
             self.collection = config.get('collection', 'TEST')
             self.success_log_file_name = config.get(
