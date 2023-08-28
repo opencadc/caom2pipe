@@ -1114,6 +1114,7 @@ class TelescopeMapping:
         :return:
         """
         self._logger.debug(f'Begin update for {self._observation.observation_id}')
+        self._update_groups(self._observation.meta_read_groups, self._meta_read_groups)
         for plane in self._observation.planes.values():
             if plane.product_id != self._storage_name.product_id:
                 self._logger.debug(
@@ -1135,12 +1136,10 @@ class TelescopeMapping:
         return self._observation
 
     def _init_read_groups(self, config):
-        if len(config.data_read_groups) > 0:
-            for entry in config.data_read_groups:
-                self._data_read_groups.add(entry)
-        if len(config.meta_read_groups) > 0:
-            for entry in config.meta_read_groups:
-                self._meta_read_groups.add(entry)
+        for entry in config.data_read_groups:
+            self._data_read_groups.add(entry)
+        for entry in config.meta_read_groups:
+            self._meta_read_groups.add(entry)
 
     def _update_artifact(self, artifact):
         """
@@ -1150,8 +1149,17 @@ class TelescopeMapping:
         return
 
     def _update_plane(self, plane):
-        plane.data_read_groups = self._data_read_groups
-        plane.meta_read_groups = self._meta_read_groups
+        self._update_groups(plane.data_read_groups, self._data_read_groups)
+        self._update_groups(plane.meta_read_groups, self._meta_read_groups)
+
+    @staticmethod
+    def _update_groups(replace_these, with_these):
+        if len(with_these) > 0:
+            while len(replace_these) > 0:
+                replace_these.pop()
+            for entry in with_these:
+                replace_these.add(entry)
+
 
 
 class Fits2caom2Visitor:
