@@ -78,6 +78,7 @@ from caom2 import ValueCoord2D, Algorithm, Artifact, Part, TemporalWCS
 from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
 from caom2 import CoordFunction1D, DerivedObservation, Provenance
 from caom2 import CoordBounds1D, TypedList, ProductType
+from caom2.caom_util import URISet
 from caom2.diff import get_differences
 from caom2utils import ObsBlueprint, BlueprintParser, FitsParser
 from caom2utils import update_artifact_meta, Caom2Exception
@@ -1077,7 +1078,6 @@ class TelescopeMapping:
         self._clients = clients
         self._observable = observable
         self._observation = observation
-        from caom2.caom_util import URISet
         self._meta_read_groups = URISet()
         self._data_read_groups = URISet()
         self._init_read_groups(config)
