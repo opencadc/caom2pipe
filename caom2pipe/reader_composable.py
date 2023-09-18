@@ -115,8 +115,8 @@ class MetadataReader:
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def __str__(self):
-        file_info_keys = ''.join(ii for ii in self._file_info.keys())
-        header_keys = ''.join(ii for ii in self._headers.keys())
+        file_info_keys = '\n'.join(ii for ii in self._file_info.keys())
+        header_keys = '\n'.join(ii for ii in self._headers.keys())
         return f'\nheaders:\n{header_keys}\nfile_info:\n{file_info_keys}'
     
     @property
