@@ -115,8 +115,8 @@ class MetadataReader:
         self._logger = logging.getLogger(self.__class__.__name__)
 
     def __str__(self):
-        file_info_keys = ''.join(ii for ii in self._file_info.keys())
-        header_keys = ''.join(ii for ii in self._headers.keys())
+        file_info_keys = '\n'.join(ii for ii in self._file_info.keys())
+        header_keys = '\n'.join(ii for ii in self._headers.keys())
         return f'\nheaders:\n{header_keys}\nfile_info:\n{file_info_keys}'
     
     @property
@@ -170,6 +170,15 @@ class MetadataReader:
         self._headers = {}
         self._file_info = {}
         self._logger.debug('End reset')
+
+    def unset(self, storage_name):
+        """Remove an entry from the collections. Keeps memory usage down over long runs."""
+        for entry in storage_name.destination_uris:
+            if entry in self._headers:
+                del self._headers[entry]
+            if entry in self._file_info:
+                del self._file_info[entry]
+            self._logger.debug(f'Unset the metadata for {entry}')
 
 
 class FileMetadataReader(MetadataReader):
@@ -254,6 +263,14 @@ class Hdf5FileMetadataReader(FileMetadataReader):
         for descriptor in self._descriptors.values():
             descriptor.close()
         self._descriptors = {}
+
+    def unset(self, storage_name):
+        super().unset(storage_name)
+        for entry in storage_name.destination_uris:
+            if entry in self._descriptors:
+                self._descriptors[entry].close()
+                del self._descriptors[entry]
+                self._logger.debug(f'Unsetting descriptors for {entry}')
 
 
 class StorageClientReader(MetadataReader):
