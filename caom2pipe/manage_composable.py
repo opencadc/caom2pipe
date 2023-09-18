@@ -446,14 +446,13 @@ class ExecutionReporter:
                 result = f.readlines()
         return len(result)
 
-    def _count_timeouts(self, e):
-        if e is not None and (
+    def _is_timeout(self, e):
+        return e is not None and (
             'Read timed out' in e
             or 'reset by peer' in e
             or 'ConnectTimeoutError' in e
             or 'Broken pipe' in e
-        ):
-            self._summary.add_timeouts(1)
+        )
 
     def _set_log_files(self, config):
         """Support changing log file locations during a retry."""
@@ -496,7 +495,8 @@ class ExecutionReporter:
         """
         self._logger.debug('Begin capture_failure')
         self._summary.add_errors(1)
-        self._count_timeouts(stack_trace)
+        if self._is_timeout(stack_trace):
+            self._summary.add_timeouts(1)
         with open(self._failure_fqn, 'a') as failure:
             if e.args is not None and len(e.args) > 1:
                 min_error = e.args[0]
@@ -506,7 +506,7 @@ class ExecutionReporter:
 
         # only retry entries that are not permanently marked as rejected
         reason = Rejected.known_failure(stack_trace)
-        if reason == Rejected.NO_REASON:
+        if reason == Rejected.NO_REASON or self._is_timeout(stack_trace):
             with open(self._retry_fqn, 'a') as retry:
                 for entry in storage_name.source_names:
                     retry.write(f'{entry}\n')
@@ -593,7 +593,7 @@ class ExecutionSummary:
         - Number of rejections: the number of entries that are rejected due to well-known processing failures. These
              rejections include those caused by fitsverify or hd5check failures.
         - Number of skipped: the number of entries with a checksum that is the same at the data source as it is in
-             CADC storage. If the checksum is the same, the pipeline can make no changes to either the data or metdata,
+             CADC storage. If the checksum is the same, the pipeline can make no changes to either the data or metadata,
              so it doesn't try.
         """
         self._version = '0.0.0' if application == 'DEFAULT' else get_version(application)
@@ -1845,6 +1845,8 @@ class PreviewVisitor:
         # and the 1th entry is the artifact type
         self._previews = {}
         self._report = None
+        self._hdu_list = None
+        self._ext = None
         self._logger.debug(self)
 
     @property
@@ -1923,6 +1925,11 @@ class PreviewVisitor:
 
     def _do_prev(self, plane, obs_id):
         self.generate_plots(obs_id)
+        if self._hdu_list is not None:
+            # astropy says https://docs.astropy.org/en/stable/io/fits/index.html#working-with-large-files
+            self._hdu_list.close()
+            del self._hdu_list[self._ext].data
+            del self._hdu_list
         self._store_smalls()
         return len(self._previews)
 
@@ -2064,7 +2071,9 @@ class StorageName:
     @property
     def file_uri(self):
         """The CADC Storage URI for the file."""
-        return self._get_uri(self._file_name.replace('.gz', '').replace('.bz2', ''), StorageName.scheme)
+        return self._get_uri(
+            self._file_name.replace('.gz', '').replace('.bz2', '').replace('.header', ''), StorageName.scheme
+        )
 
     @property
     def file_name(self):
