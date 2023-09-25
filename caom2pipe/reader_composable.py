@@ -359,15 +359,18 @@ class VaultReader(MetadataReader):
         self._file_info[key] = clc.vault_info(self._client, source_name)
 
     def _retrieve_headers(self, key, source_name):
-        try:
-            tmp_file = tempfile.NamedTemporaryFile()
-            self._client.copy(source_name, tmp_file.name, head=True)
-            temp_header = data_util.get_local_file_headers(tmp_file.name)
-            tmp_file.close()
-            self._headers[key] = temp_header
-        except Exception as e:
-            self._logger.debug(traceback.format_exc())
-            raise mc.CadcException(f'Did not retrieve {source_name} header because {e}')
+        if '.fits' in source_name:
+            try:
+                tmp_file = tempfile.NamedTemporaryFile()
+                self._client.copy(source_name, tmp_file.name, head=True)
+                temp_header = data_util.get_local_file_headers(tmp_file.name)
+                tmp_file.close()
+                self._headers[key] = temp_header
+            except Exception as e:
+                self._logger.debug(traceback.format_exc())
+                raise mc.CadcException(f'Did not retrieve {source_name} header because {e}')
+        else:
+            self._headers[key] = []
 
 
 def reader_factory(config, clients):

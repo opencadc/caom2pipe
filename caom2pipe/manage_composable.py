@@ -678,7 +678,7 @@ class ExecutionSummary:
 
     @staticmethod
     def read_report_file(fqn):
-        summary = ExecutionSummary(os.path.basename(fqn), 'DEFAULT')
+        summary = ExecutionSummary(os.path.basename(fqn), 'TEST')
         with open(fqn) as f_in:
             for line in f_in:
                 if 'Number of' in line:
