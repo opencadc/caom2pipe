@@ -426,8 +426,7 @@ class ExecutionReporter:
         self._success_fqn = None
         self._report_fqn = config.report_fqn
         self._observable = observable
-        application = f'{config.collection.lower()}2caom2'
-        self._summary = ExecutionSummary(os.path.basename(config.working_directory), application)
+        self._summary = ExecutionSummary(os.path.basename(config.working_directory), config.collection)
         self.set_log_location(config)
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -576,7 +575,7 @@ class ExecutionSummary:
     This class generates summary reports of the successes and failures that occur during a pipeline run.
     """
 
-    def __init__(self, location, application):
+    def __init__(self, location, collection):
         """
         - Execution time: the time from initiating the pipeline to completion of execution.
         - Number of inputs: the number of entries originally counted. Depending on the content of config.yml, this
@@ -596,7 +595,7 @@ class ExecutionSummary:
              CADC storage. If the checksum is the same, the pipeline can make no changes to either the data or metadata,
              so it doesn't try.
         """
-        self._version = '0.0.0' if application == 'DEFAULT' else get_version(application)
+        self._version = '0.0.0' if collection == 'TEST' else get_version(collection)
         self._location = location
         self._start_time = datetime.now(tz=tz.UTC).timestamp()
         self._entries_sum = 0
