@@ -426,8 +426,7 @@ class ExecutionReporter:
         self._success_fqn = None
         self._report_fqn = config.report_fqn
         self._observable = observable
-        application = f'{config.collection.lower()}2caom2'
-        self._summary = ExecutionSummary(os.path.basename(config.working_directory), application)
+        self._summary = ExecutionSummary(os.path.basename(config.working_directory), config.collection)
         self.set_log_location(config)
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -576,7 +575,7 @@ class ExecutionSummary:
     This class generates summary reports of the successes and failures that occur during a pipeline run.
     """
 
-    def __init__(self, location, application):
+    def __init__(self, location, collection):
         """
         - Execution time: the time from initiating the pipeline to completion of execution.
         - Number of inputs: the number of entries originally counted. Depending on the content of config.yml, this
@@ -596,7 +595,7 @@ class ExecutionSummary:
              CADC storage. If the checksum is the same, the pipeline can make no changes to either the data or metadata,
              so it doesn't try.
         """
-        self._version = '0.0.0' if application == 'DEFAULT' else get_version(application)
+        self._version = '0.0.0' if collection == 'TEST' else get_version(collection)
         self._location = location
         self._start_time = datetime.now(tz=tz.UTC).timestamp()
         self._entries_sum = 0
@@ -679,7 +678,7 @@ class ExecutionSummary:
 
     @staticmethod
     def read_report_file(fqn):
-        summary = ExecutionSummary(os.path.basename(fqn), 'DEFAULT')
+        summary = ExecutionSummary(os.path.basename(fqn), 'TEST')
         with open(fqn) as f_in:
             for line in f_in:
                 if 'Number of' in line:
@@ -945,6 +944,8 @@ class Config:
         self._cache_file_name = None
         # the fully qualified name for the file
         self.cache_fqn = None
+        self._data_read_groups = []
+        self._meta_read_groups = []
         self._data_sources = []
         self._data_source_extensions = ['.fits']
         self._recurse_data_sources = True
@@ -988,6 +989,22 @@ class Config:
             self.work_fqn = os.path.join(
                 self._working_directory, self._work_file
             )
+
+    @property
+    def data_read_groups(self):
+        return self._data_read_groups
+
+    @data_read_groups.setter
+    def data_read_groups(self, value):
+        self._data_read_groups = value
+
+    @property
+    def meta_read_groups(self):
+        return self._meta_read_groups
+
+    @meta_read_groups.setter
+    def meta_read_groups(self, value):
+        self._meta_read_groups = value
 
     @property
     def data_sources(self):
@@ -1463,6 +1480,7 @@ class Config:
             f'  cleanup_success_destination:: '
             f'{self.cleanup_success_destination}\n'
             f'  collection:: {self.collection}\n'
+            f'  data_read_groups:: {self.data_read_groups}\n'
             f'  data_sources:: {self.data_sources}\n'
             f'  data_source_extensions:: {self.data_source_extensions}\n'
             f'  failure_fqn:: {self.failure_fqn}\n'
@@ -1472,6 +1490,7 @@ class Config:
             f'  log_file_directory:: {self.log_file_directory}\n'
             f'  log_to_file:: {self.log_to_file}\n'
             f'  logging_level:: {self.logging_level}\n'
+            f'  meta_read_groups:: {self.meta_read_groups}\n'
             f'  observable_directory:: {self.observable_directory}\n'
             f'  observe_execution:: {self.observe_execution}\n'
             f'  preview_scheme:: {self.preview_scheme}\n'
@@ -1606,11 +1625,13 @@ class Config:
             self.cleanup_success_destination = config.get(
                 'cleanup_success_destination', None
             )
+            self.data_read_groups = config.get('data_read_groups', [])
             self.logging_level = config.get('logging_level', 'DEBUG')
             self.log_to_file = config.get('log_to_file', False)
             self.log_file_directory = config.get(
                 'log_file_directory', self.working_directory
             )
+            self.meta_read_groups = config.get('meta_read_groups', [])
             self.task_types = Config._obtain_task_types(config, [])
             self.collection = config.get('collection', 'TEST')
             self.success_log_file_name = config.get(

@@ -315,6 +315,7 @@ class CaomExecute:
         if self.meta_visitors is not None and len(self.meta_visitors) > 0:
             kwargs = {
                 'working_directory': self._working_dir,
+                'config': self._config,
                 'clients': self._clients,
                 'storage_name': self._storage_name,
                 'metadata_reader': self._metadata_reader,

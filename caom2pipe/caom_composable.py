@@ -78,6 +78,7 @@ from caom2 import ValueCoord2D, Algorithm, Artifact, Part, TemporalWCS
 from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
 from caom2 import CoordFunction1D, DerivedObservation, Provenance
 from caom2 import CoordBounds1D, TypedList, ProductType
+from caom2.caom_util import URISet
 from caom2.diff import get_differences
 from caom2utils import ObsBlueprint, BlueprintParser, FitsParser
 from caom2utils import update_artifact_meta, Caom2Exception
@@ -1070,13 +1071,16 @@ class TelescopeMapping:
     map for a file, and then doing any n:n (FITS keywords:CAOM2 keywords)
     mapping, using the 'update' method.
     """
-    def __init__(self, storage_name, headers, clients, observable=None, observation=None):
+    def __init__(self, storage_name, headers, clients, observable=None, observation=None, config=None):
         self._storage_name = storage_name
         self._meta_producer = observable.meta_producer if observable is not None else None
         self._headers = headers
         self._clients = clients
         self._observable = observable
         self._observation = observation
+        self._meta_read_groups = URISet()
+        self._data_read_groups = URISet()
+        self._init_read_groups(config)
         self._logger = logging.getLogger(self.__class__.__name__)
 
     @property
@@ -1100,13 +1104,6 @@ class TelescopeMapping:
         bp.set('Artifact.metaProducer', self._meta_producer)
         bp.set('Chunk.metaProducer', self._meta_producer)
 
-    def _update_artifact(self, artifact):
-        """
-        :param artifact: Artifact instance
-        :return:
-        """
-        return
-
     def update(self, file_info):
         """
         Update the Artifact file-based metadata. Override if it's necessary
@@ -1117,12 +1114,14 @@ class TelescopeMapping:
         :return:
         """
         self._logger.debug(f'Begin update for {self._observation.observation_id}')
+        self._update_groups(self._observation.meta_read_groups, self._meta_read_groups)
         for plane in self._observation.planes.values():
             if plane.product_id != self._storage_name.product_id:
                 self._logger.debug(
                     f'Product ID is {plane.product_id} but working on {self._storage_name.product_id}. Continuing.'
                 )
                 continue
+            self._update_plane(plane)
             for artifact in plane.artifacts.values():
                 if artifact.uri != self._storage_name.file_uri:
                     self._logger.debug(
@@ -1135,6 +1134,32 @@ class TelescopeMapping:
 
         self._logger.debug('End update')
         return self._observation
+
+    def _init_read_groups(self, config):
+        for entry in config.data_read_groups:
+            self._data_read_groups.add(entry)
+        for entry in config.meta_read_groups:
+            self._meta_read_groups.add(entry)
+
+    def _update_artifact(self, artifact):
+        """
+        :param artifact: Artifact instance
+        :return:
+        """
+        raise NotImplementedError
+
+    def _update_plane(self, plane):
+        self._update_groups(plane.data_read_groups, self._data_read_groups)
+        self._update_groups(plane.meta_read_groups, self._meta_read_groups)
+
+    @staticmethod
+    def _update_groups(replace_these, with_these):
+        if len(with_these) > 0:
+            while len(replace_these) > 0:
+                replace_these.pop()
+            for entry in with_these:
+                replace_these.add(entry)
+
 
 
 class Fits2caom2Visitor:
@@ -1149,6 +1174,7 @@ class Fits2caom2Visitor:
         self._metadata_reader = kwargs.get('metadata_reader')
         self._clients = kwargs.get('clients')
         self._observable = kwargs.get('observable')
+        self._config = kwargs.get('config')
         self._dump_config = False
         self._logger = logging.getLogger(self.__class__.__name__)
 
@@ -1170,7 +1196,9 @@ class Fits2caom2Visitor:
         return parser
 
     def _get_mapping(self, headers):
-        return TelescopeMapping(self._storage_name, headers, self._clients, self._observable, self._observation)
+        return TelescopeMapping(
+            self._storage_name, headers, self._clients, self._observable, self._observation, self._config
+        )
 
     def visit(self):
         self._logger.debug('Begin visit')
