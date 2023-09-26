@@ -301,6 +301,9 @@ class State:
             bookmark['bookmarks'][book_mark]['last_record'] = last_record['last_record']
         write_as_yaml(bookmark, state_fqn)
 
+    def write_content(self, state_fqn):
+        write_as_yaml(self.content, state_fqn)
+
     @staticmethod
     def write_bookmark(state_fqn, book_mark, time_dt):
         bookmark = {
