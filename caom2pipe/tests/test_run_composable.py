@@ -1288,9 +1288,8 @@ class TestRetry:
         assert self._reporter._summary._skipped_sum == 0, 'skipped'
         assert self._reporter._summary._timeouts_sum == 0, 'timeout'
 
-    @patch('caom2pipe.data_source_composable.CadcTapClient')
     @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
-    def test_meta_visit(self, caom2_store_mock, tap_client_mock, tmp_path):
+    def test_meta_visit(self, caom2_store_mock, tmp_path):
         test_config = TestRetry.meta_visit_config
         test_meta = [test_execute_composable.VisitNoException()]
         test_data = []
@@ -1305,9 +1304,8 @@ class TestRetry:
         assert self._clients.metadata_client.read.call_count == 2, 'read calls'
         self._post()
 
-    @patch('caom2pipe.data_source_composable.CadcTapClient')
     @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
-    def test_nofhead_visit(self, caom2_store_mock, tap_client_mock, tmp_path):
+    def test_nofhead_visit(self, caom2_store_mock, tmp_path):
         test_config = TestRetry.nofhead_visit_config
         test_meta = [test_execute_composable.VisitNoException()]
         test_data = [test_execute_composable.VisitNoException()]
@@ -1324,10 +1322,9 @@ class TestRetry:
         assert self._clients.data_client.get.call_count == 2, 'get calls'
         self._post()
 
-    @patch('caom2pipe.data_source_composable.CadcTapClient')
     @patch('caom2pipe.execute_composable.CaomExecute._cadc_put')
     @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
-    def test_nofheadstore_visit(self, cadc_put_mock, caom2_store_mock, tap_client_mock, tmp_path):
+    def test_nofheadstore_visit(self, cadc_put_mock, caom2_store_mock, tmp_path):
         test_config = TestRetry.nofheadstore_visit_config
         test_meta = [test_execute_composable.VisitNoException()]
         test_data = [test_execute_composable.VisitNoException()]

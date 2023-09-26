@@ -1146,7 +1146,7 @@ class TelescopeMapping:
         :param artifact: Artifact instance
         :return:
         """
-        return
+        raise NotImplementedError
 
     def _update_plane(self, plane):
         self._update_groups(plane.data_read_groups, self._data_read_groups)
