@@ -251,6 +251,11 @@ class State:
             self.context = result.get('context', {})
             self.content = result
 
+    def add_bookmark(self, key, value):
+        if key not in self.bookmarks:
+            self.bookmarks[key] = {}
+        self.bookmarks[key]['last_record'] = value
+
     def get_bookmark(self, key):
         """Lookup for last_record key. Treat like an offset-aware datetime."""
         result = None
@@ -288,6 +293,16 @@ class State:
             self.bookmarks[key]['last_record'] = value
             self.logger.debug(f'Saving bookmarked last record {value} {self.fqn}')
             write_as_yaml(self.content, self.fqn)
+
+    def write_bookmarks(self, state_fqn):
+        bookmark = { 'bookmarks': {}}
+        for book_mark, last_record in self.bookmarks.items():
+            bookmark['bookmarks'][book_mark] = {}
+            bookmark['bookmarks'][book_mark]['last_record'] = last_record['last_record']
+        write_as_yaml(bookmark, state_fqn)
+
+    def write_content(self, state_fqn):
+        write_as_yaml(self.content, state_fqn)
 
     @staticmethod
     def write_bookmark(state_fqn, book_mark, time_dt):
