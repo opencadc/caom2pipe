@@ -1212,9 +1212,8 @@ class Fits2caom2Visitor:
                 blueprint = self._get_blueprint(telescope_data)
                 telescope_data.accumulate_blueprint(blueprint)
                 if self._config.dump_blueprint and self._config.log_to_file:
-                    # print(f'Blueprint for {uri}: {blueprint}')
                     with open(f'{self._config.log_file_directory}/{os.path.basename(uri)}.bp', 'w') as f:
-                        f.write(blueprint)
+                        f.write(blueprint.__str__())
                 parser = self._get_parser(headers, blueprint, uri)
 
                 if self._observation is None:
