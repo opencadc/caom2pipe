@@ -2646,7 +2646,7 @@ def get_version(collection):
         try:
             v = version(application)
         except PackageNotFoundError as e2:
-            logging.warning(f'No version found for {collection}')
+            logging.warning(f'No version found for {application}')
             v = '0.0.0'
     return f'{application}/{v}'
 
