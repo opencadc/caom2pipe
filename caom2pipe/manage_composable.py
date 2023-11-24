@@ -2225,7 +2225,7 @@ class StorageName:
             fqn = temp_fqn
         elif os.path.exists(temp_obs_fqn):
             fqn = temp_obs_fqn
-        elif os.path.exists(self._source_names[0]):
+        elif len(self._source_names) > 0 and os.path.exists(self._source_names[0]):
             # use the compressed file, if it can be found
             fqn = self._source_names[0]
         return fqn
