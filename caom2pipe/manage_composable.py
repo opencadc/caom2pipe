@@ -106,6 +106,7 @@ __all__ = [
     'build_uri',
     'Cache',
     'CadcException',
+
     'CaomName',
     'compare_observations',
     'Config',
@@ -786,7 +787,7 @@ class Observable:
     @property
     def rejected(self):
         return self._rejected
-    
+
     @property
     def meta_producer(self):
         return self._meta_producer
@@ -915,6 +916,7 @@ class Config:
         # the fully qualified name for the work file
         self.work_fqn = None
         self._collection = None
+        self._dump_blueprint = False
         self._use_local_files = False
         self._resource_id = None
         self._tap_id = None
@@ -1047,6 +1049,14 @@ class Config:
     @collection.setter
     def collection(self, value):
         self._collection = value
+
+    @property
+    def dump_blueprint(self):
+        return self._dump_blueprint
+
+    @dump_blueprint.setter
+    def dump_blueprint(self, value):
+        self._dump_blueprint = value
 
     @property
     def use_local_files(self):
@@ -1498,6 +1508,7 @@ class Config:
             f'  data_read_groups:: {self.data_read_groups}\n'
             f'  data_sources:: {self.data_sources}\n'
             f'  data_source_extensions:: {self.data_source_extensions}\n'
+            f'  dump_blueprint:: {self.dump_blueprint}\n'
             f'  failure_fqn:: {self.failure_fqn}\n'
             f'  failure_log_file_name:: {self.failure_log_file_name}\n'
             f'  features:: {self.features}\n'
@@ -1641,6 +1652,7 @@ class Config:
                 'cleanup_success_destination', None
             )
             self.data_read_groups = config.get('data_read_groups', [])
+            self.dump_blueprint = config.get('dump_blueprint', False)
             self.logging_level = config.get('logging_level', 'DEBUG')
             self.log_to_file = config.get('log_to_file', False)
             self.log_file_directory = config.get(
@@ -2213,7 +2225,7 @@ class StorageName:
             fqn = temp_fqn
         elif os.path.exists(temp_obs_fqn):
             fqn = temp_obs_fqn
-        elif os.path.exists(self._source_names[0]):
+        elif len(self._source_names) > 0 and os.path.exists(self._source_names[0]):
             # use the compressed file, if it can be found
             fqn = self._source_names[0]
         return fqn
@@ -2634,7 +2646,7 @@ def get_version(collection):
         try:
             v = version(application)
         except PackageNotFoundError as e2:
-            logging.warning(f'No version found for {collection}')
+            logging.warning(f'No version found for {application}')
             v = '0.0.0'
     return f'{application}/{v}'
 

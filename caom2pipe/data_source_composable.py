@@ -201,7 +201,7 @@ class IncrementalDataSource(DataSource):
         super().__init__(config)
         self._start_key = start_key
         # do not initialize this here, so that a DataSource may also be used in a TodoRunner circumstance, without
-        # the need for a state.yml file on disk
+        # with no need for a state.yml file on disk
         self._state = None
         # start_dt and end_dt values should be naive datetimes
         self._start_dt = None
@@ -1041,7 +1041,7 @@ class VaultCleanupDataSource(VaultDataSource):
                 self._logger.error(f'Failed to move {fqn} to {destination}')
                 raise mc.CadcException(e)
         self._logger.debug('End _move_action')
-    
+
 
 def data_source_factory(config, clients, state, reader, reporter):
     """
