@@ -792,6 +792,10 @@ class Observable:
     def meta_producer(self):
         return self._meta_producer
 
+    @meta_producer.setter
+    def meta_producer(self, value):
+        self._meta_producer = value
+
     @property
     def metrics(self):
         return self._metrics
@@ -2637,17 +2641,16 @@ def get_now():
 
 def get_version(collection):
     """A common implementation to retrieve a pipeline version."""
-    try:
-        application = f'{collection.lower()}2caom2'
-        v = version(application)
-    except PackageNotFoundError as e:
-        # for BRITE-Constellation
-        application = f'{collection.split("-")[0].lower()}2caom2'
+    v = None
+    for application in [f'{collection.lower()}2caom2', f'{collection.split("-")[0].lower()}2caom2', f'{collection}2caom2']:
         try:
             v = version(application)
-        except PackageNotFoundError as e2:
-            logging.warning(f'No version found for {application}')
-            v = '0.0.0'
+            break
+        except PackageNotFoundError as ignore:
+            pass
+    if v is None:
+        logging.info(f'No version found for {collection}')
+        v = '0.0.0'
     return f'{application}/{v}'
 
 
