@@ -73,7 +73,7 @@ import traceback
 
 from collections import deque, defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from cadctap import CadcTapClient
 from cadcutils import exceptions
@@ -550,7 +550,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                             # 'succeeded' directory.
                             self._skipped_files += 1
                             self._move_action(entry.path, self._cleanup_success_directory)
-                            self._reporter.capture_success(entry.name, entry.name, datetime.utcnow().timestamp())
+                            self._reporter.capture_success(entry.name, entry.name, datetime.now(tz=timezone.utc).timestamp())
                 else:
                     work_with_file = True
             else:
@@ -971,7 +971,7 @@ class VaultCleanupDataSource(VaultDataSource):
                             self._skipped_files += 1
                             self._move_action(dir_entry_fqn, self._cleanup_success_directory)
                             self._reporter.capture_success(
-                                dir_entry_fqn, os.path.basename(dir_entry_fqn), datetime.utcnow().timestamp()
+                                dir_entry_fqn, os.path.basename(dir_entry_fqn), datetime.now(tz=timezone.utc).timestamp()
                             )
                 break
         self._logger.debug(f'Done default_filter says copy_file is {copy_file} for {dir_entry_fqn}')
@@ -1065,5 +1065,5 @@ def data_source_factory(config, clients, state, reader, reporter):
             else:
                 source = TodoFileDataSource(config)
     source.reporter = reporter
-    logging.debug(f'Created {type(source)} data_source_composable instance.')
+    logging.debug(f'Created {source.__class__.__name__} data_source_composable instance.')
     return source

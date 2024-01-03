@@ -115,7 +115,7 @@ import logging
 import os
 import traceback
 
-from datetime import datetime
+from datetime import datetime, timezone
 from shutil import copyfileobj
 from urllib.parse import urlparse
 
@@ -1061,7 +1061,7 @@ class OrganizeExecutes:
         """
         self._logger.debug(f'Begin do_one {storage_name}')
         self._set_up_file_logging(storage_name)
-        start_s = datetime.utcnow().timestamp()
+        start_s = datetime.now(tz=timezone.utc).timestamp()
         try:
             if self.is_rejected(storage_name):
                 self._reporter.capture_failure(storage_name, BaseException('StorageName.is_rejected'), 'Rejected')

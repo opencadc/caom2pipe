@@ -81,7 +81,7 @@ import os
 import traceback
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from io import BytesIO, StringIO
 from sys import getsizeof
 
@@ -238,7 +238,7 @@ def client_put_fqn(client, source_name, destination_name, metrics=None):
 
 def current():
     """Encapsulate returning UTC now in microsecond resolution."""
-    return datetime.utcnow().timestamp()
+    return datetime.now(tz=timezone.utc).timestamp()
 
 
 def data_get(client, working_directory, file_name, archive, metrics):

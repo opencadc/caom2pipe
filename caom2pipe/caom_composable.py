@@ -70,6 +70,7 @@ import logging
 import os
 import traceback
 
+from copy import deepcopy
 from datetime import datetime
 
 from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
@@ -524,14 +525,13 @@ def copy_artifact(from_artifact, features=None):
     return copy
 
 
-def copy_chunk(from_chunk, features=None):
+def copy_chunk(from_chunk):
     """Make a copy of a Chunk. This works around the CAOM2 constraint
     'org.postgresql.util.PSQLException: ERROR: duplicate key value violates
     unique constraint "chunk_pkey"', when trying to use the same chunk
     information in different parts (e.g. when referring to hdf5 files).
 
     :param from_chunk Chunk of which to make a copy
-    :param features which version of CAOM to use
     :return a copy of the from_chunk
     """
     copy = Chunk(
@@ -539,17 +539,17 @@ def copy_chunk(from_chunk, features=None):
         naxis=from_chunk.naxis,
         position_axis_1=from_chunk.position_axis_1,
         position_axis_2=from_chunk.position_axis_2,
-        position=from_chunk.position,
+        position=deepcopy(from_chunk.position),
         energy_axis=from_chunk.energy_axis,
-        energy=from_chunk.energy,
+        energy=deepcopy(from_chunk.energy),
         time_axis=from_chunk.time_axis,
-        time=from_chunk.time,
+        time=deepcopy(from_chunk.time),
         custom_axis=from_chunk.custom_axis,
-        custom=from_chunk.custom,
+        custom=deepcopy(from_chunk.custom),
         polarization_axis=from_chunk.polarization_axis,
-        polarization=from_chunk.polarization,
+        polarization=deepcopy(from_chunk.polarization),
         observable_axis=from_chunk.observable_axis,
-        observable=from_chunk.observable,
+        observable=deepcopy(from_chunk.observable),
     )
     copy.meta_producer = from_chunk.meta_producer
     return copy
@@ -1192,6 +1192,7 @@ class Fits2caom2Visitor:
                 f'Using a FitsParser for {self._storage_name.file_uri}'
             )
             parser = FitsParser(headers, blueprint, uri)
+        self._logger.debug(f'Created {parser.__class__.__name__} parser for {uri}.')
         return parser
 
     def _get_mapping(self, headers):

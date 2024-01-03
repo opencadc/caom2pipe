@@ -81,7 +81,8 @@ import traceback
 import yaml
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
 from dateutil import parser, tz
 from enum import Enum
 from hashlib import md5
@@ -482,7 +483,7 @@ class ExecutionReporter:
         """Support changing log file locations during a retry."""
         self._set_log_files(config)
         create_dir(config.log_file_directory)
-        now_s = datetime.utcnow().timestamp()
+        now_s = datetime.now(tz=timezone.utc).timestamp()
         for fqn in [self._success_fqn, self._failure_fqn, self._retry_fqn, self._report_fqn]:
             ExecutionReporter._init_log_file(fqn, now_s)
 
@@ -538,7 +539,7 @@ class ExecutionReporter:
         """
         self._logger.debug('Begin capture_success')
         self._summary.add_successes(1)
-        execution_s = datetime.utcnow().timestamp() - start_time
+        execution_s = datetime.now(tz=timezone.utc).timestamp() - start_time
         success = open(self._success_fqn, 'a')
         try:
             success.write(f'{datetime.now()} {obs_id} {file_name} {execution_s:.2f}\n')
@@ -613,7 +614,7 @@ class ExecutionSummary:
         """
         self._version = '0.0.0' if collection == 'TEST' else get_version(collection)
         self._location = location
-        self._start_time = datetime.now(tz=tz.UTC).timestamp()
+        self._start_time = datetime.now(tz=timezone.utc).timestamp()
         self._entries_sum = 0
         self._errors_sum = 0
         self._rejected_sum = 0
@@ -656,8 +657,8 @@ class ExecutionSummary:
 
     def report(self):
         msg1 = f'Location: {self._location}'
-        msg2 = f'Date: {datetime.isoformat(datetime.utcnow())}'
-        execution_time = datetime.now(tz=tz.UTC).timestamp() - self._start_time
+        msg2 = f'Date: {datetime.isoformat(datetime.now(tz=timezone.utc))}'
+        execution_time = datetime.now(tz=timezone.utc).timestamp() - self._start_time
         msg3 = f'Execution Time: {execution_time:.2f} s'
         msg4 = f'Version: {self._version}'
         msg5 = f'    Number of Inputs: {self._entries_sum}'
@@ -752,7 +753,7 @@ class Metrics:
     def capture(self):
         if self.enabled:
             create_dir(self.observable_dir)
-            now = datetime.utcnow().timestamp()
+            now = datetime.now(tz=timezone.utc).timestamp()
             for service in self.history.keys():
                 fqn = os.path.join(
                     self.observable_dir, f'{now}.{service}.yml'
@@ -977,7 +978,7 @@ class Config:
         self._scheme = 'cadc'
         self._storage_inventory_resource_id = None
         self._storage_inventory_tap_resource_id = None
-        self._time_zone = tz.UTC
+        self._time_zone = timezone.utc
         self._total_retry_fqn = None
 
     @property
@@ -2001,9 +2002,7 @@ class PreviewVisitor:
                 self._clients.data_client.put(self._working_dir, uri)
 
     def _gen_thumbnail(self):
-        self._logger.debug(
-            f'Generating thumbnail for file {self._science_fqn}.'
-        )
+        self._logger.debug(f'Generating thumbnail {self._thumb_fqn}.')
         count = 0
         if os.path.exists(self._preview_fqn):
             # keep import local
@@ -2209,10 +2208,6 @@ class StorageName:
         return pattern.match(self._file_name)
 
     def get_file_fqn(self, working_directory):
-        # if the decompressed file exists, use that
-        # else, if the compressed file exists, use that
-
-        # file_uri is the file name without the compression extension
         temp_f_name = os.path.basename(self.file_uri)
         temp_fqn = os.path.join(working_directory, temp_f_name)
         temp_obs_fqn = os.path.join(os.path.join(working_directory, self._obs_id), temp_f_name)
@@ -2221,7 +2216,7 @@ class StorageName:
             self._source_names is not None
             and len(self._source_names) > 0
             and os.path.exists(self._source_names[0])
-            # is there an interim, uncompressed file name?
+            # is there an uncompressed file name?
             and self._source_names[0].endswith(temp_f_name)
         ):
             fqn = self._source_names[0]
@@ -2923,7 +2918,6 @@ def query_endpoint_session(url, session, timeout=20):
     """Return a response for an endpoint. Caller needs to call 'close'
     on the response.
     """
-
     try:
         response = session.get(url, timeout=timeout)
         response.raise_for_status()
@@ -3075,9 +3069,11 @@ def http_get(url, local_fqn):
             with open(local_fqn, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=READ_BLOCK_SIZE):
                     f.write(chunk)
+            if not os.path.exists(local_fqn):
+                raise CadcException(f'Retrieve failed. {local_fqn} does not exist.')
+            file_meta = get_file_meta(local_fqn)
             length = to_int(r.headers.get('Content-Length'))
             if length is not None:
-                file_meta = get_file_meta(local_fqn)
                 if file_meta['size'] != length:
                     raise CadcException(
                         f'Could not retrieve {local_fqn} from {url}. File '
@@ -3085,16 +3081,11 @@ def http_get(url, local_fqn):
                     )
             checksum = r.headers.get('Content-Checksum')
             if checksum is not None:
-                file_meta = get_file_meta(local_fqn)
                 if file_meta['md5sum'] != checksum:
                     raise CadcException(
                         f'Could not retrieve {local_fqn} from {url}. File '
                         f'checksum error.'
                     )
-        if not os.path.exists(local_fqn):
-            raise CadcException(
-                f'Retrieve failed. {local_fqn} does not exist.'
-            )
     except requests.exceptions.HTTPError as e:
         logging.debug(traceback.format_exc())
         raise CadcException(
