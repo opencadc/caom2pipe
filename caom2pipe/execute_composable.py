@@ -323,11 +323,10 @@ class CaomExecute:
             }
             for visitor in self.meta_visitors:
                 try:
-                    self._logger.debug(f'Visit for {visitor.__class__.__name__}')
                     self._observation = visitor.visit(self._observation, **kwargs)
                     if self._observation is None:
-                        msg = f'Observation construction failed for {self._storage_name.file_uri}'
-                        self._logger.error(f'Stopping _visit_meta in {visitor.__class__.__name__} with {msg}')
+                        msg = f'No Observation for {self._storage_name.file_uri}. Construction failed.'
+                        self._logger.error(f'Stopping _visit_meta with {msg}')
                         raise mc.CadcException(msg)
                 except Exception as e:
                     raise mc.CadcException(e)

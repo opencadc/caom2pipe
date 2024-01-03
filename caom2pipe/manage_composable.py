@@ -922,6 +922,7 @@ class Config:
         self.work_fqn = None
         self._collection = None
         self._dump_blueprint = False
+        self._http_get_timeout = 10
         self._use_local_files = False
         self._resource_id = None
         self._tap_id = None
@@ -1062,6 +1063,14 @@ class Config:
     @dump_blueprint.setter
     def dump_blueprint(self, value):
         self._dump_blueprint = value
+
+    @property
+    def http_get_timeout(self):
+        return self._http_get_timeout
+
+    @http_get_timeout.setter
+    def http_get_timeout(self, value):
+        self._http_get_timeout = value
 
     @property
     def use_local_files(self):
@@ -1517,6 +1526,7 @@ class Config:
             f'  failure_fqn:: {self.failure_fqn}\n'
             f'  failure_log_file_name:: {self.failure_log_file_name}\n'
             f'  features:: {self.features}\n'
+            f'  http_get_timeout:: {self.http_get_timeout}\n'
             f'  interval:: {self.interval}\n'
             f'  log_file_directory:: {self.log_file_directory}\n'
             f'  log_to_file:: {self.log_to_file}\n'
@@ -1658,6 +1668,7 @@ class Config:
             )
             self.data_read_groups = config.get('data_read_groups', [])
             self.dump_blueprint = config.get('dump_blueprint', False)
+            self.http_get_timeout = config.get('http_get_timeout', 10)
             self.logging_level = config.get('logging_level', 'DEBUG')
             self.log_to_file = config.get('log_to_file', False)
             self.log_file_directory = config.get(
@@ -3056,7 +3067,7 @@ def increment_time(this_dt, by_interval, unit='%M'):
     return temp
 
 
-def http_get(url, local_fqn):
+def http_get(url, local_fqn, timeout=10):
     """Retrieve a file via http.
 
     :param url where the file can be found.
@@ -3064,7 +3075,7 @@ def http_get(url, local_fqn):
         locally.
     """
     try:
-        with requests.get(url, stream=True, timeout=10) as r:
+        with requests.get(url, stream=True, timeout=timeout) as r:
             r.raise_for_status()
             with open(local_fqn, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=READ_BLOCK_SIZE):
