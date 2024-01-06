@@ -1195,7 +1195,7 @@ class Fits2caom2Visitor:
         self._logger.debug(f'Created {parser.__class__.__name__} parser for {uri}.')
         return parser
 
-    def _get_mapping(self, headers):
+    def _get_mapping(self, headers, dest_uri):
         return TelescopeMapping(
             self._storage_name, headers, self._clients, self._observable, self._observation, self._config
         )
@@ -1206,7 +1206,7 @@ class Fits2caom2Visitor:
             for uri in self._storage_name.destination_uris:
                 self._logger.debug(f'Build observation for {uri}')
                 headers = self._metadata_reader.headers.get(uri)
-                telescope_data = self._get_mapping(headers)
+                telescope_data = self._get_mapping(headers, uri)
                 if telescope_data is None:
                     self._logger.info(f'Ignoring {uri} because there is no TelescopeMapping.')
                     continue
