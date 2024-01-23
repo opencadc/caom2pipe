@@ -1920,7 +1920,8 @@ class PreviewVisitor:
     def __str__(self):
         return (
             f'\nworking directory: {self._working_dir}\n'
-            f'science file: {self._storage_name.file_name}'
+            f'      science fqn: {self._science_fqn}\n'
+            f'     science file: {self._storage_name.file_name}'
         )
 
     def visit(self, observation):

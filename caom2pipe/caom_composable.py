@@ -71,7 +71,7 @@ import os
 import traceback
 
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 
 from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
@@ -81,8 +81,9 @@ from caom2 import CoordFunction1D, DerivedObservation, Provenance
 from caom2 import CoordBounds1D, TypedList, ProductType
 from caom2.caom_util import URISet
 from caom2.diff import get_differences
-from caom2utils import ObsBlueprint, BlueprintParser, FitsParser
-from caom2utils import update_artifact_meta, Caom2Exception
+from caom2utils.blueprints import ObsBlueprint
+from caom2utils.parsers import BlueprintParser, Caom2Exception, FitsParser
+from caom2utils.caom2blueprint import update_artifact_meta
 
 from caom2pipe import astro_composable as ac
 from caom2pipe import client_composable as clc
@@ -438,7 +439,7 @@ def change_to_composite(observation, algorithm_name='composite'):
         observation.target_position,
     )
     temp.meta_producer = observation.meta_producer
-    temp.last_modified = datetime.utcnow()
+    temp.last_modified = datetime.now(tz=timezone.utc).replace(tzinfo=None)
     temp._id = observation._id
     return temp
 
@@ -463,7 +464,7 @@ def change_to_simple(observation):
         observation.environment,
         observation.target_position,
     )
-    temp.last_modified = datetime.utcnow()
+    temp.last_modified = datetime.now(tz=timezone.utc).replace(tzinfo=None)
     temp._id = observation._id
     return temp
 
@@ -1233,7 +1234,6 @@ class Fits2caom2Visitor:
                             algorithm=Algorithm('composite'),
                         )
                     telescope_data.observation = self._observation
-
                 parser.augment_observation(
                     observation=self._observation,
                     artifact_uri=uri,
