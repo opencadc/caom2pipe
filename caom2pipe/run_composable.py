@@ -200,7 +200,7 @@ class TodoRunner:
         :param current_count: int - current retry count - needs to be passed
             to _process_entry.
         """
-        self._logger.debug('Begin _run_todo_list.')
+        self._logger.debug(f'Begin _run_todo_list with {len(self._todo_list)} records.')
         result = 0
         while len(self._todo_list) > 0:
             entry = self._todo_list.popleft()
@@ -294,6 +294,7 @@ class StateRunner(TodoRunner):
         self._reset_retries()
 
         result = 0
+        self._organizer.choose()
         for data_source in self._data_sources:
             result |= self._process_data_source(data_source)
 
@@ -324,7 +325,6 @@ class StateRunner(TodoRunner):
         else:
             cumulative = 0
             result = 0
-            self._organizer.choose()
             while exec_time <= data_source.end_dt:
                 self._logger.info(f'Processing {data_source.start_key} from {prev_exec_time} to {exec_time}')
                 save_time = exec_time

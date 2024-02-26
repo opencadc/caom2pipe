@@ -70,7 +70,8 @@ import logging
 import os
 import traceback
 
-from datetime import datetime
+from copy import deepcopy
+from datetime import datetime, timezone
 
 from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
@@ -80,8 +81,9 @@ from caom2 import CoordFunction1D, DerivedObservation, Provenance
 from caom2 import CoordBounds1D, TypedList, ProductType
 from caom2.caom_util import URISet
 from caom2.diff import get_differences
-from caom2utils import ObsBlueprint, BlueprintParser, FitsParser
-from caom2utils import update_artifact_meta, Caom2Exception
+from caom2utils.blueprints import ObsBlueprint
+from caom2utils.parsers import BlueprintParser, Caom2Exception, FitsParser
+from caom2utils.caom2blueprint import update_artifact_meta
 
 from caom2pipe import astro_composable as ac
 from caom2pipe import client_composable as clc
@@ -437,7 +439,7 @@ def change_to_composite(observation, algorithm_name='composite'):
         observation.target_position,
     )
     temp.meta_producer = observation.meta_producer
-    temp.last_modified = datetime.utcnow()
+    temp.last_modified = datetime.now(tz=timezone.utc).replace(tzinfo=None)
     temp._id = observation._id
     return temp
 
@@ -462,7 +464,7 @@ def change_to_simple(observation):
         observation.environment,
         observation.target_position,
     )
-    temp.last_modified = datetime.utcnow()
+    temp.last_modified = datetime.now(tz=timezone.utc).replace(tzinfo=None)
     temp._id = observation._id
     return temp
 
@@ -524,14 +526,13 @@ def copy_artifact(from_artifact, features=None):
     return copy
 
 
-def copy_chunk(from_chunk, features=None):
+def copy_chunk(from_chunk):
     """Make a copy of a Chunk. This works around the CAOM2 constraint
     'org.postgresql.util.PSQLException: ERROR: duplicate key value violates
     unique constraint "chunk_pkey"', when trying to use the same chunk
     information in different parts (e.g. when referring to hdf5 files).
 
     :param from_chunk Chunk of which to make a copy
-    :param features which version of CAOM to use
     :return a copy of the from_chunk
     """
     copy = Chunk(
@@ -539,17 +540,17 @@ def copy_chunk(from_chunk, features=None):
         naxis=from_chunk.naxis,
         position_axis_1=from_chunk.position_axis_1,
         position_axis_2=from_chunk.position_axis_2,
-        position=from_chunk.position,
+        position=deepcopy(from_chunk.position),
         energy_axis=from_chunk.energy_axis,
-        energy=from_chunk.energy,
+        energy=deepcopy(from_chunk.energy),
         time_axis=from_chunk.time_axis,
-        time=from_chunk.time,
+        time=deepcopy(from_chunk.time),
         custom_axis=from_chunk.custom_axis,
-        custom=from_chunk.custom,
+        custom=deepcopy(from_chunk.custom),
         polarization_axis=from_chunk.polarization_axis,
-        polarization=from_chunk.polarization,
+        polarization=deepcopy(from_chunk.polarization),
         observable_axis=from_chunk.observable_axis,
-        observable=from_chunk.observable,
+        observable=deepcopy(from_chunk.observable),
     )
     copy.meta_producer = from_chunk.meta_producer
     return copy
@@ -1132,6 +1133,8 @@ class TelescopeMapping:
                 update_artifact_meta(artifact, file_info)
                 self._update_artifact(artifact)
 
+        if isinstance(self._observation, DerivedObservation):
+            update_observation_members(self._observation)
         self._logger.debug('End update')
         return self._observation
 
@@ -1192,9 +1195,10 @@ class Fits2caom2Visitor:
                 f'Using a FitsParser for {self._storage_name.file_uri}'
             )
             parser = FitsParser(headers, blueprint, uri)
+        self._logger.debug(f'Created {parser.__class__.__name__} parser for {uri}.')
         return parser
 
-    def _get_mapping(self, headers):
+    def _get_mapping(self, headers, dest_uri):
         return TelescopeMapping(
             self._storage_name, headers, self._clients, self._observable, self._observation, self._config
         )
@@ -1205,7 +1209,7 @@ class Fits2caom2Visitor:
             for uri in self._storage_name.destination_uris:
                 self._logger.debug(f'Build observation for {uri}')
                 headers = self._metadata_reader.headers.get(uri)
-                telescope_data = self._get_mapping(headers)
+                telescope_data = self._get_mapping(headers, uri)
                 if telescope_data is None:
                     self._logger.info(f'Ignoring {uri} because there is no TelescopeMapping.')
                     continue
@@ -1232,7 +1236,6 @@ class Fits2caom2Visitor:
                             algorithm=Algorithm('composite'),
                         )
                     telescope_data.observation = self._observation
-
                 parser.augment_observation(
                     observation=self._observation,
                     artifact_uri=uri,
