@@ -117,6 +117,7 @@ __all__ = [
     'reset_energy',
     'reset_observable',
     'reset_position',
+    'reset_time',
     'TelescopeMapping',
     'undo_astropy_cdfix_call',
     'update_observation_members',
@@ -1043,6 +1044,14 @@ def reset_observable(chunk):
     """
     chunk.observable = None
     chunk.observable_axis = None
+
+
+def reset_time(chunk):
+    """
+    :param chunk: Set the temporal component of a chunk to None as a side-effect.
+    """
+    chunk.time = None
+    chunk.time_axis = None
 
 
 def undo_astropy_cdfix_call(chunk, time_delta):
