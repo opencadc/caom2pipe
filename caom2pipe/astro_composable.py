@@ -582,7 +582,7 @@ class FilterMetadataCache:
 
 
 def is_good_date(
-    value, start_date, check_end_date=True, end_date=Time(dt_datetime.now(tz=timezone.utc), scale='utc')
+    value, start_date, check_end_date=False, end_date=Time(dt_datetime.now(tz=timezone.utc), scale='utc')
 ):
     """
     Check that dates exist within a range.
