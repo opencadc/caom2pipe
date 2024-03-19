@@ -384,8 +384,9 @@ class Rejected:
         return False
 
     def record(self, reason, entry):
-        """Keep track of an additional entry."""
-        self.content[reason].append(entry)
+        """Keep track of an additional entry, avoiding duplicates."""
+        if entry not in self.content[reason]:
+            self.content[reason].append(entry)
 
     def persist_state(self):
         """Write the current state as a YAML file."""
