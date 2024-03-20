@@ -124,7 +124,7 @@ from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
 
-__all__ = ['CaomExecute', 'can_use_single_visit', 'OrganizeExecutes', 'OrganizeChooser']
+__all__ = ['CaomExecute', 'OrganizeExecutes', 'OrganizeChooser']
 
 
 class CaomExecute:
@@ -335,6 +335,7 @@ class CaomExecute:
         """Write an observation to disk from memory, represented in XML."""
         if self._observation is not None:
             self._logger.debug(f'Write model to {self._model_fqn}.')
+            self._logger.error(self._observation)
             mc.write_obs_to_file(self._observation, self._model_fqn)
 
     def execute(self, context):
@@ -918,6 +919,16 @@ class OrganizeExecutes:
             self._log_h.flush()
             self._log_h.close()
 
+    def can_use_single_visit(self):
+        return (
+            len(self.task_types) > 1
+            and (
+                (mc.TaskType.STORE in self.task_types and mc.TaskType.INGEST in self.task_types)
+                or (mc.TaskType.INGEST in self.task_types and mc.TaskType.MODIFY in self.task_types)
+                or (mc.TaskType.SCRAPE in self.task_types and mc.TaskType.MODIFY in self.task_types)
+            )
+        )
+
     def choose(self):
         """The logic that decides which descendants of CaomExecute to
         instantiate. This is based on the content of the config.yml file
@@ -925,7 +936,7 @@ class OrganizeExecutes:
         :destination_name StorageName extension that handles the naming rules
             for a file.
         """
-        if can_use_single_visit(self.task_types):
+        if self.can_use_single_visit():
             if mc.TaskType.SCRAPE in self.task_types:
                 self._logger.debug(f'Choosing executor NoFheadSScrape for tasks {self.task_types}.')
                 self._executors.append(
@@ -1211,14 +1222,3 @@ class FitsForCADCCompressor(FitsForCADCDecompressor):
                 returned_fqn = super().fix_compression(fqn)
                 # log message in the super
         return returned_fqn
-
-
-def can_use_single_visit(task_types):
-    return (
-        len(task_types) > 1
-        and (
-            (mc.TaskType.STORE in task_types and mc.TaskType.INGEST in task_types)
-            or (mc.TaskType.INGEST in task_types and mc.TaskType.MODIFY in task_types)
-            or (mc.TaskType.SCRAPE in task_types and mc.TaskType.MODIFY in task_types)
-        )
-    )

@@ -82,6 +82,7 @@ import traceback
 
 from collections import deque
 from datetime import datetime
+from importlib import import_module
 from time import sleep
 
 from caom2pipe import client_composable as cc
@@ -430,6 +431,8 @@ def common_runner_init(
     meta_visitors,
     data_visitors,
     chooser,
+    organizer_module_name='caom2pipe.execute_composable',
+    organizer_class_name='OrganizeExecutes',
 ):
     """The common initialization code between TodoRunner and StateRunner uses. <collection>2caom2 implementations can
     use the defaults created here for the 'run' call, or they can provide their own specializations of the various
@@ -490,7 +493,10 @@ def common_runner_init(
             config, clients
         )
 
-    organizer = ec.OrganizeExecutes(
+    mdul = import_module(organizer_module_name)
+    cls = getattr(mdul, organizer_class_name)
+    organizer = cls(
+    # organizer = ec.OrganizeExecutes(
         config,
         meta_visitors,
         data_visitors,
@@ -526,6 +532,8 @@ def run_by_todo(
     store_transfer=None,
     clients=None,
     metadata_reader=None,
+    organizer_module_name='caom2pipe.execute_composable',
+    organizer_class_name='OrganizeExecutes',
 ):
     """A default implementation for using the TodoRunner.
 
@@ -575,6 +583,8 @@ def run_by_todo(
         meta_visitors,
         data_visitors,
         chooser,
+        organizer_module_name,
+        organizer_class_name,
     )
 
     runner = TodoRunner(
@@ -597,6 +607,8 @@ def run_by_state(
     store_transfer=None,
     clients=None,
     metadata_reader=None,
+    organizer_module_name='caom2pipe.execute_composable',
+    organizer_class_name='OrganizeExecutes',
 ):
     """A default implementation for using the StateRunner.
 
@@ -646,6 +658,8 @@ def run_by_state(
         meta_visitors,
         data_visitors,
         chooser,
+        organizer_module_name,
+        organizer_class_name,
     )
     runner = StateRunner(
         config,
