@@ -715,23 +715,28 @@ def test_run_store_ingest_failure(
     assert not reader_headers_mock.called, 'get_head should be called'
 
 
+@patch('caom2utils.data_util.get_local_file_headers')
+@patch('caom2utils.data_util.get_local_file_info')
+@patch('caom2pipe.data_source_composable.LocalFilesDataSource._verify_file')
 @patch('caom2pipe.execute_composable.CaomExecute._caom2_store')
 @patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.data_source_composable.LocalFilesDataSource._move_action')
-@patch('caom2pipe.data_source_composable.LocalFilesDataSource._initialize_end_dt')
 @patch('caom2pipe.client_composable.CAOM2RepoClient')
 @patch('caom2pipe.client_composable.StorageClientWrapper')
 def test_run_store_get_work_failures(
     data_client_mock,
     repo_client_mock,
-    end_dt_mock,
     cleanup_mock,
     access_mock,
     visit_meta_mock,
     caom2_store_mock,
+    check_mock,
+    file_info_mock,
+    headers_mock,
     test_config,
-    tmpdir,
+    tmp_path,
+    change_test_dir,
 ):
     # this is a test that a fitsverify failure will be logged in the failure log,
     # and an md5sum that is the same on disk as at CADC will be logged in the success log
@@ -747,7 +752,7 @@ def test_run_store_get_work_failures(
         )
 
     data_client_mock.info.side_effect = _file_info_mock
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path)
     test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
     test_config.use_local_files = True
     test_config.cleanup_files_when_storing = True
@@ -760,74 +765,87 @@ def test_run_store_get_work_failures(
     test_config.proxy_file_name = 'cadcproxy.pem'
     test_config.recurse_data_sources = False
 
-    orig_cwd = os.getcwd()
-    try:
-        os.chdir(tmpdir)
-        test_config.write_to_file(test_config)
+    test_config.write_to_file(test_config)
 
-        with open(test_config.proxy_fqn, 'w') as f:
-            f.write('test content')
+    with open(test_config.proxy_fqn, 'w') as f:
+        f.write('test content')
 
-        test_end_time = datetime.fromtimestamp(1579740838)
-        start_time = test_end_time - timedelta(seconds=900)
-        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
+    test_end_time = datetime.fromtimestamp(1579740838)
+    start_time = test_end_time - timedelta(seconds=900)
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
 
-        stat_return_value = type('', (), {})
-        stat_return_value.st_mtime = 1579740835.7357888
-        dir_entry_1 = type('', (), {})
-        dir_entry_1.name = 'a2020_06_17_07_00_01.fits'
-        dir_entry_1.path = '/test_files/a2020_06_17_07_00_01.fits'
-        dir_entry_1.stat = Mock(return_value=stat_return_value)
-        dir_entry_1.is_dir = Mock(return_value=False)
-        dir_entry_2 = type('', (), {})
-        dir_entry_2.name = 'a2022_07_26_05_50_01.fits'
-        dir_entry_2.path = '/test_files/a2022_07_26_05_50_01.fits'
-        dir_entry_2.stat = Mock(return_value=stat_return_value)
-        dir_entry_2.is_dir = Mock(return_value=False)
+    stat_return_value = type('', (), {})
+    stat_return_value.st_mtime = 1579740835.7357888
+    dir_entry_1 = type('', (), {})
+    dir_entry_1.name = 'a2020_06_17_07_00_01.fits'
+    dir_entry_1.path = '/test_files/a2020_06_17_07_00_01.fits'
+    dir_entry_1.stat = Mock(return_value=stat_return_value)
+    dir_entry_1.is_dir = Mock(return_value=False)
+    dir_entry_2 = type('', (), {})
+    dir_entry_2.name = 'a2022_07_26_05_50_01.fits'
+    dir_entry_2.path = '/test_files/a2022_07_26_05_50_01.fits'
+    dir_entry_2.stat = Mock(return_value=stat_return_value)
+    dir_entry_2.is_dir = Mock(return_value=False)
 
-        file_metadata_reader = FileMetadataReader()
-        test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
-        with patch('os.scandir') as scandir_mock:
-            scandir_mock.return_value.__enter__.return_value = [dir_entry_1, dir_entry_2]
-            data_source = dsc.LocalFilesDataSource(test_config, data_client_mock, file_metadata_reader)
-            data_source.reporter = test_reporter
-            type(data_source).end_dt = PropertyMock(return_value=test_end_time)
-            clients_mock = ClientCollection(test_config)
-            clients_mock._data_client = data_client_mock
-            clients_mock._metadata_client = repo_client_mock
-            test_result = rc.run_by_state(
-                sources=[data_source], clients=clients_mock, metadata_reader=file_metadata_reader
-            )
+    check_mock.side_effect = [True, False]
 
-            assert test_result is not None, 'expect result'
-            assert test_result == 0, 'expect successful execution'
-            # execution stops before this call should be made
-            assert not repo_client_mock.return_value.read.called, 'no read'
-            # make sure data is not really being written to CADC storage :)
-            assert not data_client_mock.put.called, 'put should not be called'
-            assert cleanup_mock.called, 'cleanup'
-            cleanup_calls = [
-                call('/test_files/a2020_06_17_07_00_01.fits', '/data/success'),
-                call('/test_files/a2022_07_26_05_50_01.fits', '/data/failure'),
-            ]
-            cleanup_mock.assert_has_calls(cleanup_calls), 'wrong cleanup args'
-            assert not visit_meta_mock.called, 'no _visit_meta call'
-            assert not caom2_store_mock.called, 'no _caom2_store call'
-            assert os.path.exists(test_config.failure_fqn), f'failure log {test_config.failure_fqn} should exist'
-            with open(test_config.failure_fqn, 'r') as f:
-                content = f.readlines()
-                assert len(content) == 1, 'expect 1 failure'
-                assert 'a2022_07_26_05_50_01' in content[0], 'expect verify in failure log'
-                assert 'a2020_06_17_07_00_01' not in content[0], 'expect md5sum in success log'
+    file_metadata_reader = FileMetadataReader()
+    file_info_mock.side_effect = lambda x: FileInfo(
+        id=x, md5sum='d937df477fe2511995fa39a027e8ce2f', file_type='application/fits'
+    )
 
-            assert os.path.exists(test_config.success_fqn), f'failure log {test_config.success_fqn} should exist'
-            with open(test_config.success_fqn, 'r') as f:
-                content = f.readlines()
-                assert len(content) == 1, 'expect 1 success'
-                assert 'a2020_06_17_07_00_01' in content[0], 'expect md5sum in success log'
-                assert 'a2022_07_26_05_50_01' not in content[0], 'expect verify in failure log'
-    finally:
-        os.chdir(orig_cwd)
+    # minimal header for testing
+    h = fits.Header()
+    h['SIMPLE'] = 'T'
+    h['BITPIX'] = -32
+    h['NAXIS'] = 2
+    h['NAXIS1'] = 2048
+    h['NAXIS2'] = 2048
+    h['DATATYPE'] = 'REDUC'
+    h['TYPE'] = 'image '
+    test_headers = [h]
+    headers_mock.return_value = test_headers
+
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
+    with patch('os.scandir') as scandir_mock:
+        scandir_mock.return_value.__enter__.return_value = [dir_entry_1, dir_entry_2]
+        data_source = dsc.LocalFilesDataSource(test_config, data_client_mock, file_metadata_reader)
+        data_source.reporter = test_reporter
+        type(data_source).end_dt = PropertyMock(return_value=test_end_time)
+        clients_mock = ClientCollection(test_config)
+        clients_mock._data_client = data_client_mock
+        clients_mock._metadata_client = repo_client_mock
+        test_result = rc.run_by_state(
+            sources=[data_source], clients=clients_mock, metadata_reader=file_metadata_reader
+        )
+
+        assert test_result is not None, 'expect result'
+        assert test_result == 0, 'expect successful execution'
+        # execution stops before this call should be made
+        assert not repo_client_mock.return_value.read.called, 'no read'
+        # make sure data is not really being written to CADC storage :)
+        assert not data_client_mock.put.called, 'put should not be called'
+        assert cleanup_mock.called, 'cleanup'
+        cleanup_calls = [
+            call('/test_files/a2020_06_17_07_00_01.fits', '/data/success'),
+            call('/test_files/a2022_07_26_05_50_01.fits', '/data/failure'),
+        ]
+        cleanup_mock.assert_has_calls(cleanup_calls), 'wrong cleanup args'
+        assert not visit_meta_mock.called, 'no _visit_meta call'
+        assert not caom2_store_mock.called, 'no _caom2_store call'
+        assert os.path.exists(test_config.failure_fqn), f'failure log {test_config.failure_fqn} should exist'
+        with open(test_config.failure_fqn, 'r') as f:
+            content = f.readlines()
+            assert len(content) == 1, 'expect 1 failure'
+            assert 'a2022_07_26_05_50_01' in content[0], 'expect verify in failure log'
+            assert 'a2020_06_17_07_00_01' not in content[0], 'expect md5sum in success log'
+
+        assert os.path.exists(test_config.success_fqn), f'failure log {test_config.success_fqn} should exist'
+        with open(test_config.success_fqn, 'r') as f:
+            content = f.readlines()
+            assert len(content) == 1, 'expect 1 success'
+            assert 'a2020_06_17_07_00_01' in content[0], 'expect md5sum in success log'
+            assert 'a2022_07_26_05_50_01' not in content[0], 'expect verify in failure log'
 
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
