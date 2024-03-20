@@ -748,7 +748,7 @@ class QueryTimeBoxDataSource(IncrementalDataSource):
         super().__init__(config, config.bookmark)
         self._preview_suffix = preview_suffix
         subject = clc.define_subject(config)
-        self._client = CadcTapClient(subject, resource_id=self._config.tap_id)
+        self._client = CadcTapClient(subject, resource_id=self._config.storage_inventory_resource_id)
 
     def get_time_box_work(self, prev_exec_dt, exec_dt):
         """
