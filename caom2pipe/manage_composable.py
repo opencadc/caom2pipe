@@ -1512,14 +1512,12 @@ class Config:
 
     def __str__(self):
         return (
-            f'\nFrom {os.getcwd()}/config.yml:\n'
+            # f'\nFrom {os.getcwd()}/config.yml:\n'
+            f'\n'
             f'  cache_fqn:: {self.cache_fqn}\n'
-            f'  cleanup_failure_destination:: '
-            f'{self.cleanup_failure_destination}\n'
-            f'  cleanup_files_when_storing:: '
-            f'{self.cleanup_files_when_storing}\n'
-            f'  cleanup_success_destination:: '
-            f'{self.cleanup_success_destination}\n'
+            f'  cleanup_failure_destination:: {self.cleanup_failure_destination}\n'
+            f'  cleanup_files_when_storing:: {self.cleanup_files_when_storing}\n'
+            f'  cleanup_success_destination:: {self.cleanup_success_destination}\n'
             f'  collection:: {self.collection}\n'
             f'  data_read_groups:: {self.data_read_groups}\n'
             f'  data_sources:: {self.data_sources}\n'

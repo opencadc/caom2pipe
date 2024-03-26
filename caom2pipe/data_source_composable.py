@@ -257,15 +257,19 @@ class IncrementalDataSource(DataSource):
         """
         Do what needs to be done to set end_dt for an incremental harvest.
         """
+        self._logger.debug('Begin initialize_end_dt')
         end_timestamp = self._state.bookmarks.get(self._start_key).get('end_timestamp')
         if end_timestamp is None:
             self._initialize_end_dt()
         else:
             self._end_dt = mc.make_datetime(end_timestamp)
+        self._logger.debug(f'End initialize_end_dt with {self._end_dt}')
 
     def initialize_start_dt(self):
+        self._logger.debug('Begin initialize_start_dt')
         self._state = mc.State(self._config.state_fqn, self._config.time_zone)
         self._start_dt = self._state.get_bookmark(self._start_key)
+        self._logger.debug(f'End initialize_start_dt with {self._start_dt}')
 
     def save_start_dt(self, value):
         self._state.save_state(self._start_key, value)
