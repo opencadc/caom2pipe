@@ -73,7 +73,7 @@ import traceback
 from copy import deepcopy
 from datetime import datetime, timezone
 
-from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, SpectralWCS
+from caom2 import CoordAxis1D, Axis, RefCoord, CoordRange1D, Plane, SpectralWCS
 from caom2 import TypedSet, ObservationURI, PlaneURI, Chunk, CoordPolygon2D
 from caom2 import ValueCoord2D, Algorithm, Artifact, Part, TemporalWCS
 from caom2 import Instrument, TypedOrderedDict, SimpleObservation, CoordError
@@ -104,6 +104,7 @@ __all__ = [
     'copy_chunk',
     'copy_instrument',
     'copy_part',
+    'copy_plane',
     'copy_provenance',
     'do_something_to_chunks',
     'exec_footprintfinder',
@@ -588,6 +589,29 @@ def copy_part(from_part, features=None):
     )
     if features is not None and features.supports_latest_caom:
         copy.meta_producer = from_part.meta_producer
+    return copy
+
+
+def copy_plane(from_plane, new_product_id):
+    """Make a copy of a Plane instance, without the Artifacts.
+    :param from_plane Plane of which to make a shallow copy
+    :return a copy of the from_plane, with 0-length Artifacts
+    """
+    copy = Plane(
+        new_product_id,
+        creator_id=from_plane.creator_id,
+        artifacts=None,
+        meta_release=from_plane.meta_release,
+        data_release=from_plane.data_release,
+        meta_read_groups=from_plane.meta_read_groups,
+        data_read_groups=from_plane.data_read_groups,
+        data_product_type=from_plane.data_product_type,
+        calibration_level=from_plane.calibration_level,
+        provenance=from_plane.provenance,
+        metrics=from_plane.metrics,
+        quality=from_plane.quality,
+        observable=from_plane.observable,
+    )
     return copy
 
 

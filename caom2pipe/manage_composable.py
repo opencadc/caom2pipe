@@ -112,6 +112,7 @@ __all__ = [
     'compare_observations',
     'Config',
     'check_param',
+    'compute_md5sum',
     'convert_to_days',
     'exec_cmd',
     'exec_cmd_info',
@@ -2284,6 +2285,20 @@ def compare_observations(actual_fqn, expected_fqn):
             f'{compare_text}'
         )
     return msg
+
+
+def compute_md5sum(fqn):
+    """
+    Gets the md5sum for a file on disk.
+    :param fqn: Fully-qualified name of the file on disk.
+    :return: str, no scheme on the md5sum value.
+    """
+    # copy and paste from cadcdata/storageinventory.py
+    hash_md5 = md5()
+    with open(fqn, 'rb') as f:
+        for chunk in iter(lambda: f.read(4096), b''):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
 
 
 def to_float(value):
