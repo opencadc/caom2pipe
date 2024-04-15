@@ -980,6 +980,7 @@ class Config:
         self._cleanup_success_destination = None
         self._preview_scheme = 'cadc'
         self._scheme = 'cadc'
+        self._server_side_resource_id = None
         self._storage_inventory_resource_id = None
         self._storage_inventory_tap_resource_id = None
         self._time_zone = timezone.utc
@@ -1190,6 +1191,14 @@ class Config:
     @storage_host.setter
     def storage_host(self, value):
         self._storage_host = value
+
+    @property
+    def server_side_resource_id(self):
+        return self._server_side_resource_id
+
+    @server_side_resource_id.setter
+    def server_side_resource_id(self, value):
+        self._server_side_resource_id = value
 
     @property
     def storage_inventory_resource_id(self):
@@ -1557,6 +1566,7 @@ class Config:
             f'  source_host:: {self.source_host}\n'
             f'  state_file_name:: {self.state_file_name}\n'
             f'  state_fqn:: {self.state_fqn}\n'
+            f'  server_side_resource_id:: {self.server_side_resource_id}\n'
             f'  storage_inventory_resource_id:: {self.storage_inventory_resource_id}\n'
             f'  storage_inventory_tap_resource_id:: {self.storage_inventory_tap_resource_id}\n'
             f'  store_modified_files_only:: {self.store_modified_files_only}\n'
@@ -1714,6 +1724,7 @@ class Config:
             self.slack_channel = config.get('slack_channel', None)
             self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
+            self.server_side_resource_id = config.get('server_side_resource_id', 'ivo://cadc.nrc.ca/sc2repo')
             self.storage_inventory_resource_id = config.get(
                 'storage_inventory_resource_id',
                 'ivo://cadc.nrc.ca/global/raven',
