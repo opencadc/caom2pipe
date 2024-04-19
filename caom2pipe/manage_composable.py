@@ -932,6 +932,7 @@ class Config:
         self._logging_level = None
         self._log_to_file = False
         self._log_file_directory = None
+        self._lookup = {}
         self._storage_host = None
         self._task_types = []
         self._success_log_file_name = None
@@ -1075,6 +1076,14 @@ class Config:
     @http_get_timeout.setter
     def http_get_timeout(self, value):
         self._http_get_timeout = value
+
+    @property
+    def lookup(self):
+        return self._lookup
+
+    @lookup.setter
+    def lookup(self, value):
+        self._lookup = value
 
     @property
     def use_local_files(self):
@@ -1541,6 +1550,7 @@ class Config:
             f'  log_file_directory:: {self.log_file_directory}\n'
             f'  log_to_file:: {self.log_to_file}\n'
             f'  logging_level:: {self.logging_level}\n'
+            f'  lookup:: {self.lookup}\n'
             f'  meta_read_groups:: {self.meta_read_groups}\n'
             f'  observable_directory:: {self.observable_directory}\n'
             f'  observe_execution:: {self.observe_execution}\n'
@@ -1685,6 +1695,7 @@ class Config:
             self.log_file_directory = config.get(
                 'log_file_directory', self.working_directory
             )
+            self.lookup = config.get('lookup', {})
             self.meta_read_groups = config.get('meta_read_groups', [])
             self.task_types = Config._obtain_task_types(config, [])
             self.collection = config.get('collection', 'TEST')
