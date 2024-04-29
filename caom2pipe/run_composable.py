@@ -329,7 +329,6 @@ class StateRunner(TodoRunner):
             while exec_time <= data_source.end_dt:
                 self._logger.info(f'Processing {data_source.start_key} from {prev_exec_time} to {exec_time}')
                 save_time = exec_time
-                self._organizer.success_count = 0
                 self._reporter.set_log_location(self._config)
                 entries = data_source.get_time_box_work(prev_exec_time, exec_time)
                 num_entries = len(entries)
@@ -728,7 +727,6 @@ def run_single(
         observable,
         reporter,
     )
-    organizer.complete_record_count = 1
     organizer.choose()
     result = organizer.do_one(storage_name)
     logging.debug(f'run_single result is {result}')
