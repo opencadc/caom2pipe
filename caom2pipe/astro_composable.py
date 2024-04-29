@@ -241,6 +241,10 @@ def convert_time(start_time, exposure):
     return None, None
 
 
+def from_file_units_to_m(file_units, value):
+    from_unit = units.Unit(file_units)
+    return (value * from_unit).to(units.m, equivalencies=units.spectral()).value
+
 def get_datetime_mjd(from_value):
     """
     Ensure datetime values are in MJD.

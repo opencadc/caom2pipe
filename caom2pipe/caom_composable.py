@@ -591,6 +591,7 @@ def copy_part(from_part, features=None):
         copy.meta_producer = from_part.meta_producer
     return copy
 
+
 def copy_plane(from_plane, new_product_id):
     """Make a copy of a Plane instance, without the Artifacts.
     :param from_plane Plane of which to make a shallow copy
@@ -612,6 +613,7 @@ def copy_plane(from_plane, new_product_id):
         observable=from_plane.observable,
     )
     return copy
+
 
 def copy_provenance(from_provenance):
     """Make a deep copy of a Provenance instance.
