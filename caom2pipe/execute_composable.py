@@ -1097,6 +1097,7 @@ class OrganizeExecutes:
             self._logger.error(f'{storage_name.obs_id} failed naming validation check.')
             result = -1
             result_message = 'Invalid name format'
+        self._logger.debug(f'Done do_one with result {result} and message {result_message}')
         return result, result_message
 
 
