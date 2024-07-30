@@ -1056,7 +1056,8 @@ def data_source_factory(config, clients, state, reader, reporter):
     :return: DataSource specialization
     """
     if config.use_local_files:
-        source = ListDirSeparateDataSource(config)
+        # by default call fitsverify as part of setting up local file use
+        source = LocalFilesDataSource(config, clients.data_client, reader, config.recurse_data_sources, config.scheme)
     else:
         if config.use_vos and clients.vo_client is not None:
             if config.cleanup_files_when_storing:
