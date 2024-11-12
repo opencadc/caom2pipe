@@ -93,6 +93,7 @@ __all__ = [
     'LocalFilesDataSource',
     'QueryTimeBoxDataSource',
     'RetryTodoFileDataSource',
+    'RunnerMeta',
     'StateRunnerMeta',
     'TodoFileDataSource',
     'VaultCleanupDataSource',
@@ -734,6 +735,14 @@ def is_offset_aware(dt):
     :return: return True if tzinfo is set
     """
     return False if dt.tzinfo is None else True
+
+
+@dataclass
+class RunnerMeta:
+    # how to refer to the item of work to be processed
+    storage_entry: mc.StorageName
+    # tz-naive datetime associated with item of work
+    entry_dt: datetime
 
 
 @dataclass

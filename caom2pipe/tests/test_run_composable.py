@@ -1647,6 +1647,72 @@ def test_run_state_store_ingest_local_retry(
         os.chdir(orig_getcwd)
 
 
+@patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource')
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+@patch('caom2pipe.data_source_composable.CadcTapClient')
+@patch('caom2pipe.execute_composable.MetaVisit._visit_meta')
+def test_run_increment_runner_meta(
+    visit_meta_mock,
+    tap_mock,
+    clients_mock,
+    data_source_mock,
+    test_config,
+    tmpdir,
+):
+    # tap_mock is used by the data_source_composable class
+    visit_meta_mock.side_effect = _mock_visit
+    clients_mock.return_value.metadata_client.read.side_effect = _mock_read2
+
+    state_test_end_time = datetime.fromtimestamp(1579740838)
+    state_test_start_time = state_test_end_time - timedelta(seconds=900)
+    start_time_mock = PropertyMock(return_value=state_test_start_time)
+    type(data_source_mock.return_value).start_dt = start_time_mock
+    end_time_mock = PropertyMock(return_value=state_test_end_time)
+    type(data_source_mock.return_value).end_dt = end_time_mock
+    data_source_mock.return_value.get_time_box_work.side_effect = _mock_query2
+
+    orig_getcwd = os.getcwd()
+    try:
+        os.chdir(tmpdir)
+        test_config.change_working_directory(tmpdir)
+        test_config.task_types = [mc.TaskType.INGEST]
+        test_config.interval = 10
+        # use_local_files set so run_by_state chooses QueryTimeBoxDataSource
+        test_config.use_local_files = False
+        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, state_test_start_time)
+        individual_log_file = f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
+        test_chooser = ec.OrganizeChooser()
+        test_reader = Mock()
+        test_result = rc.run_by_state(config=test_config, chooser=test_chooser, metadata_reader=test_reader)
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+        assert visit_meta_mock.called, 'expect visit meta call'
+        visit_meta_mock.assert_called_once_with()
+        assert test_reader.reset.called, 'expect reset call'
+        assert test_reader.reset.call_count == 1, 'wrong call count'
+
+        assert data_source_mock.return_value.save_start_dt.called, 'save_start_dt should be called'
+        data_source_mock.return_value.save_start_dt.assert_called_with(state_test_end_time), 'wrong time'
+        assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+        assert os.path.exists(test_config.success_fqn), 'log_to_file set to false, no success file'
+        assert not os.path.exists(individual_log_file), f'log_to_file is False, no entry log'
+
+        # test that runner does nothing when times haven't changed
+        start_time = state_test_end_time
+        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
+        visit_meta_mock.reset_mock()
+        test_result = rc.run_by_state(config=test_config, chooser=test_chooser, metadata_reader=test_reader)
+        assert test_result is not None, 'expect a result'
+        assert test_result == 0, 'expect success'
+        assert not visit_meta_mock.called, 'expect no visit_meta call'
+        assert test_reader.reset.called, 'expect reset call'
+        assert test_reader.reset.call_count == 1, 'wrong call count'
+        assert data_source_mock.return_value.save_start_dt.called, 'save_start_dt should be called'
+        data_source_mock.return_value.save_start_dt.assert_called_with(state_test_end_time), 'wrong time'
+    finally:
+        os.chdir(orig_getcwd)
+
+
 def _write_todo(test_config):
     with open(test_config.work_fqn, 'w') as f:
         f.write(f'test_obs_id.fits.gz')
