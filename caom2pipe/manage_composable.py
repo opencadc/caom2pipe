@@ -2129,6 +2129,7 @@ class StorageName:
         # removed
         self._file_id = None
         self._logger = logging.getLogger(self.__class__.__name__)
+        self.set_file_name()
         self.set_destination_uris()
         self.set_file_id()
         self.set_obs_id()
@@ -2264,6 +2265,10 @@ class StorageName:
                 self._file_id = StorageName.remove_extensions(self._file_name)
             elif self._obs_id is not None:
                 self._file_id = self._obs_id
+
+    def set_file_name(self):
+        if not self._file_name and self._source_names:
+            self._file_name = os.path.basename(self._source_names[0])
 
     def set_obs_id(self, **kwargs):
         if self._obs_id is None:
