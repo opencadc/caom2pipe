@@ -118,7 +118,7 @@ import traceback
 from shutil import copyfileobj
 from urllib.parse import urlparse
 
-from caom2utils.data_util import get_local_file_info
+from caom2utils.data_util import get_local_file_info, get_local_file_headers, get_local_headers_from_fits
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
@@ -354,6 +354,35 @@ class CaomExecute:
         return lookup.get(logging_level, ('', logging.info))
 
 
+class CaomExecuteRunnerMeta(CaomExecute):
+
+    def __init__(self, clients, config, meta_visitors, reporter):
+        super().__init__(config, meta_visitors, reporter.observable, metadata_reader=None, clients=clients)
+        self._reporter = reporter
+
+    def _set_preconditions(self):
+        """This is probably not the best approach, but I want to think about where the optimal location for the
+        retrieve_file_info and retrieve_headers methods will be long-term. So, for the moment, use them here."""
+        for index, source_name in enumerate(self._storage_name.source_names):
+            uri = self._storage_name.destination_uris[index]
+            if uri not in self._storage_name.file_info:
+                self._storage_name.file_info[uri] = get_local_file_info(source_name)
+            if uri not in self._storage_name.metadata:
+                self._storage_name.metadata[uri] = []
+                if '.fits' in source_name:
+                    try:
+                        self._storage_name._metadata[uri] = get_local_headers_from_fits(source_name)
+                    except OSError as _:
+                        self._storage_name._metadata[uri] = get_local_file_headers(source_name)
+
+    def execute(self, context):
+        self._logger.debug('Begin execute with the steps:')
+        self.storage_name = context.get('storage_name')
+
+        self._logger.debug('initialize the metadata')
+        self._set_preconditions()
+
+
 class MetaVisitDeleteCreate(CaomExecute):
     """Defines the pipeline step for Collection ingestion of metadata into CAOM.
     This requires access to only header information.
@@ -421,6 +450,55 @@ class MetaVisit(CaomExecute):
             metadata_reader=metadata_reader,
             clients=clients,
         )
+
+    def execute(self, context):
+        super().execute(context)
+
+        self._logger.debug('retrieve the observation if it exists')
+        self._caom2_read()
+
+        self._logger.debug('the metadata visitors')
+        self._visit_meta()
+
+        self._logger.debug('write the updated xml to disk for debugging')
+        self._write_model()
+
+        self._logger.debug('store the xml')
+        self._caom2_store()
+
+        self._logger.debug('End execute')
+
+
+class MetaVisitRunnerMeta(CaomExecuteRunnerMeta):
+    """
+    Defines the pipeline step for Collection creation or augmentation by a visitor of metadata into CAOM.
+    """
+
+    def __init__(
+        self,
+        clients,
+        config,
+        meta_visitors,
+        reporter,
+    ):
+        super().__init__(
+            clients=clients,
+            config=config,
+            meta_visitors=meta_visitors,
+            reporter=reporter,
+        )
+
+    def _set_preconditions(self):
+        """This is probably not the best approach, but I want to think about where the optimal location for the
+        retrieve_file_info and retrieve_headers methods will be long-term. So, for the moment, use them here."""
+        for index, source_name in enumerate(self._storage_name.source_names):
+            uri = self._storage_name.destination_uris[index]
+            if uri not in self._storage_name.file_info:
+                self._storage_name.file_info[uri] = self._clients.data_client.info(uri)
+            if uri not in self._storage_name.metadata:
+                self._storage_name.metadata[uri] = []
+                if '.fits' in source_name:
+                    self._storage_name._metadata[uri] = self._clients.data_client.get_head(uri)
 
     def execute(self, context):
         super().execute(context)
@@ -705,6 +783,55 @@ class NoFheadStoreVisit(CaomExecute):
         self._logger.debug('initialize the metadata')
         self._metadata_reader.working_directory = self._working_dir
         self._metadata_reader.set(self._storage_name)
+
+        self._logger.debug('get the observation for the existing model')
+        self._caom2_read()
+
+        self._logger.debug('execute the meta visitors')
+        self._visit_meta()
+
+        self._logger.debug('execute the data visitors')
+        self._visit_data()
+
+        self._logger.debug('write the observation to disk for debugging')
+        self._write_model()
+
+        self._logger.debug('store the updated xml')
+        self._caom2_store()
+
+        self._logger.debug('End execute.')
+
+
+class NoFheadStoreVisitRunnerMeta(CaomExecuteRunnerMeta):
+    """Defines a pipeline step for all the operations that require access to the file on disk for metadata and data
+    operations that includes STORE.
+
+    At the time of writing, there is no --fhead metadata retrieval option for HDF5 files.
+    """
+
+    def __init__(
+        self,
+        config,
+        clients,
+        store_transferrer,
+        meta_visitors,
+        data_visitors,
+        reporter,
+    ):
+        super().__init__(
+            clients=clients,
+            config=config,
+            meta_visitors=meta_visitors,
+            reporter=reporter,
+        )
+        self._store_transferrer = store_transferrer
+        self._data_visitors = data_visitors
+
+    def execute(self, context):
+        super().execute(context)
+
+        self._logger.debug('store the input files')
+        self._store_data()
 
         self._logger.debug('get the observation for the existing model')
         self._caom2_read()
@@ -1100,6 +1227,167 @@ class OrganizeExecutes:
         self._logger.debug(f'Done do_one with result {result} and message {result_message}')
         return result, result_message
 
+
+class OrganizeExecutesRunnerMeta(OrganizeExecutes):
+
+    def __init__(
+            self,
+            config,
+            meta_visitors,
+            data_visitors,
+            chooser=None,
+            store_transfer=None,
+            modify_transfer=None,
+            clients=None,
+            reporter=None,
+    ):
+        self._reporter = reporter
+        super().__init__(
+            config,
+            meta_visitors,
+            data_visitors,
+            chooser,
+            store_transfer,
+            modify_transfer,
+            metadata_reader=None,
+            clients=clients,
+            observable = reporter.observable,
+        )
+
+    def _choose(self):
+        """The logic that decides which descendants of CaomExecute to
+        instantiate. This is based on the content of the config.yml file
+        for an application.
+        :destination_name StorageName extension that handles the naming rules
+            for a file.
+        """
+        if self.can_use_single_visit():
+            if mc.TaskType.SCRAPE in self.task_types:
+                self._logger.debug(f'Choosing executor NoFheadSScrape for tasks {self.task_types}.')
+                self._executors.append(
+                    NoFheadScrapeRunnerMeta(
+                        self.config,
+                        self._meta_visitors,
+                        self._data_visitors,
+                        self._metadata_reader,
+                        self._observable,
+                    )
+                )
+            elif mc.TaskType.STORE in self.task_types:
+                self._logger.debug(f'Choosing executor NoFheadStoreVisitRunnerMeta for tasks {self.task_types}.')
+                self._executors.append(
+                    NoFheadStoreVisitRunnerMeta(
+                        self.config,
+                        self._clients,
+                        self._store_transfer,
+                        self._meta_visitors,
+                        self._data_visitors,
+                        self._reporter,
+                    )
+                )
+            else:
+                self._logger.debug(f'Choosing executor NoFheadVisit for tasks {self.task_types}.')
+                self._executors.append(
+                    NoFheadVisitRunnerMeta(
+                        self.config,
+                        self._clients,
+                        self._modify_transfer,
+                        self._meta_visitors,
+                        self._data_visitors,
+                        self._metadata_reader,
+                        self._observable,
+                    )
+                )
+        else:
+            for task_type in self.task_types:
+                if task_type == mc.TaskType.SCRAPE:
+                    if self.config.use_local_files:
+                        self._logger.debug(
+                            f'Choosing executor Scrape for {task_type}.'
+                        )
+                        self._executors.append(ScrapeRunnerMeta(self.config,  self._meta_visitors, self._metadata_reader))
+
+                    else:
+                        raise mc.CadcException(
+                            'use_local_files must be True with Task Type '
+                            '"SCRAPE"'
+                        )
+                elif task_type == mc.TaskType.STORE:
+                    self._logger.debug(f'Choosing executor Store for {task_type}.')
+                    self._executors.append(
+                        StoreRunnerMeta(self.config, self._observable, self._clients, self._metadata_reader, self._store_transfer)
+                    )
+                elif task_type == mc.TaskType.INGEST:
+                    if self.chooser is not None and self.chooser.needs_delete():
+                        self._logger.debug(
+                            f'Choosing executor MetaVisitDeleteCreate for '
+                            f'{task_type}.'
+                        )
+                        self._executors.append(
+                            MetaVisitDeleteCreateRunnerMeta(
+                                self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
+                            )
+                        )
+                    else:
+                        self._logger.debug(
+                            f'Choosing executor MetaVisit for {task_type}.'
+                        )
+                        self._executors.append(
+                            MetaVisitRunnerMeta(
+                                self._clients, self.config, self._meta_visitors, self._reporter
+                            )
+                        )
+                elif task_type == mc.TaskType.MODIFY:
+                    if self.config.use_local_files:
+                        if len(self._executors) > 0 and isinstance(self._executors[0], Scrape):
+                            self._logger.debug(
+                                f'Choosing executor DataScrape for '
+                                f'{task_type}.'
+                            )
+                            self._executors.append(DataScrapeRunnerMeta(self.config, self._data_visitors, self._metadata_reader))
+                        else:
+                            self._logger.debug(
+                                f'Choosing executor LocalDataVisit for '
+                                f'{task_type}.'
+                            )
+                            self._executors.append(
+                                LocalDataVisitRunnerMeta(
+                                    self.config,
+                                    self._data_visitors,
+                                    self._observable,
+                                    self._clients,
+                                    self._metadata_reader,
+                                )
+                            )
+                    else:
+                        self._logger.debug(
+                            f'Choosing executor DataVisit for {task_type}.'
+                        )
+                        self._executors.append(
+                            DataVisitRunnerMeta(
+                                self.config,
+                                self._data_visitors,
+                                self._observable,
+                                self._modify_transfer,
+                                self._clients,
+                                self._metadata_reader,
+                            )
+                        )
+                elif task_type == mc.TaskType.VISIT:
+                    self._logger.debug(
+                        f'Choosing executor MetaVisit for {task_type}.'
+                    )
+                    self._executors.append(
+                        MetaVisitRunnerMeta(
+                            self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
+                        )
+                    )
+                elif task_type == mc.TaskType.DEFAULT:
+                    pass
+                else:
+                    raise mc.CadcException(
+                        f'Do not understand task type {task_type}'
+                    )
 
 def decompressor_factory(config, working_directory, log_level_as, storage_name):
     result = None
