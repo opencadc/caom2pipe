@@ -676,7 +676,7 @@ class ExecutionReporter:
         self._logger.debug('*' * len(msg))
 
     def capture_todo(self, todo, rejected, skipped):
-        self._logger.debug(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
+        self._logger.error(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
         self._summary.add_entries(todo + rejected + skipped)
         self._summary.add_rejections(rejected)
         self._summary.add_skipped(skipped)
@@ -712,7 +712,7 @@ class ExecutionReporter:
 class ExecutionReporter2(ExecutionReporter):
 
     def __init__(self, config):
-        super().__init__(config, observable=None)
+        super().__init__(config, observable=Observable(config))
 
     def capture_failure_2(self, entry, failure_message):
         """Log an error message to the failure file.
@@ -2390,7 +2390,7 @@ class StorageName:
             f'    source_names: {self.source_names}\n'
             f'destination_uris: {self.destination_uris}\n'
             f'       file_info: {f_info_keys}\n'
-            f'   len(metadata): {metadata_keys}'
+            f'        metadata: {metadata_keys}'
         )
 
     def _get_uri(self, file_name, scheme):

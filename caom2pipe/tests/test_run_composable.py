@@ -1690,11 +1690,11 @@ def test_run_increment_runner_meta(
     test_config.use_local_files = False
     mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, state_test_start_time)
     individual_log_file = f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
-    test_chooser = ec.OrganizeChooser()
-    test_data_source = dsc.QueryTimeBoxDataSourceRunnerMeta(test_config, '.jpg', mc.StorageName)
+    test_data_source = dsc.QueryTimeBoxDataSourceRunnerMeta(
+        test_config, '.jpg', mc.StorageName, clients_mock.storage_query_client
+    )
     test_result = rc.run_by_state_runner_meta(
         config=test_config,
-        chooser=test_chooser,
         sources=[test_data_source],
     )
     assert test_result is not None, 'expect a result'
@@ -1713,7 +1713,7 @@ def test_run_increment_runner_meta(
     start_time = state_test_end_time
     mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
     visit_meta_mock.reset_mock()
-    test_result = rc.run_by_state_runner_meta(config=test_config, chooser=test_chooser)
+    test_result = rc.run_by_state_runner_meta(config=test_config)
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert not visit_meta_mock.called, 'expect no visit_meta call'
@@ -1765,7 +1765,7 @@ def test_run_state_store_ingest_local_retry_runner_meta(
     test_f_3 = 'scatsmth.flat.V.00.01.fits'
     client_mock.data_client.info.side_effect = lambda x: FileInfo(id=x, md5sum='abc')
     test_config.change_working_directory(tmp_path)
-    test_config.logging_level = 'DEBUG'
+    test_config.logging_level = 'INFO'
     test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
     test_config.use_local_files = True
     test_data_source = '/data/imaginary'
@@ -1824,6 +1824,331 @@ def test_run_state_store_ingest_local_retry_runner_meta(
     assert test_reporter._summary._timeouts_sum == 0, 'timeouts'
     assert test_reporter._summary._rejected_sum == 1, 'rejected'
     assert test_reporter._summary._skipped_sum == 1, 'skipped'
+
+
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+@patch('caom2pipe.execute_composable.CaomExecute._caom2_store')
+@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
+@patch('caom2pipe.data_source_composable.TodoFileDataSourceRunnerMeta.get_work')
+@patch('caom2pipe.client_composable.CAOM2RepoClient')
+@patch('caom2pipe.client_composable.StorageClientWrapper')
+def test_run_ingest_runner_meta(
+    data_client_mock,
+    repo_client_mock,
+    data_source_mock,
+    meta_visit_mock,
+    caom2_store_mock,
+    access_url_mock,
+    test_config,
+    tmpdir,
+    change_test_dir,
+):
+    access_url_mock.return_value = 'https://localhost:8080'
+    temp_deque = deque()
+    test_f_name = '1319558w.fits.fz'
+    temp_deque.append(mc.StorageName(source_names=[test_f_name]))
+    data_source_mock.return_value = temp_deque
+    repo_client_mock.return_value.read.return_value = None
+    data_client_mock.return_value.get_head.return_value = [{'INSTRUME': 'WIRCam'}]
+
+    data_client_mock.return_value.info.return_value = FileInfo(
+        id=test_f_name,
+        file_type='application/fits',
+        md5sum='abcdef',
+    )
+
+    test_config.change_working_directory(tmpdir)
+    test_config.task_types = [mc.TaskType.INGEST]
+    test_config.logging_level = 'DEBUG'
+    test_config.collection = 'CFHT'
+    test_config.proxy_file_name = 'cadcproxy.pem'
+    test_config.use_local_files = False
+    test_config.write_to_file(test_config)
+    with open(test_config.proxy_fqn, 'w') as f:
+        f.write('test content')
+
+    test_reporter = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
+    test_data_source = dsc.TodoFileDataSourceRunnerMeta(test_config, mc.StorageName)
+    test_data_source.reporter = test_reporter
+    test_result = rc.run_by_todo_runner_meta(sources=[test_data_source])
+    assert test_result is not None, 'expect result'
+    assert test_result == 0, 'expect success'
+    assert repo_client_mock.return_value.read.called, 'read called'
+    assert data_client_mock.return_value.info.called, 'info'
+    assert (
+        data_client_mock.return_value.info.call_count == 1
+    ), 'wrong number of info calls'
+    data_client_mock.return_value.info.assert_called_with(f'cadc:OMM/{test_f_name}')
+    assert (
+        data_client_mock.return_value.get_head.called
+    ), 'get_head should be called'
+    assert (
+        data_client_mock.return_value.get_head.call_count == 1
+    ), 'wrong number of get_heads'
+    data_client_mock.return_value.get_head.assert_called_with(f'cadc:OMM/{test_f_name}')
+    assert meta_visit_mock.called, '_visit_meta call'
+    assert meta_visit_mock.call_count == 1, '_visit_meta call count'
+    assert caom2_store_mock.called, '_caom2_store call'
+    assert caom2_store_mock.call_count == 1, '_caom2_store call count'
+    # get_work is mocked, so Reporter/Summary cannot be checked
+
+
+@patch('caom2pipe.execute_composable.CaomExecute._caom2_store')
+@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
+@patch('cadcutils.net.ws.WsCapabilities.get_access_url')
+@patch('caom2pipe.execute_composable.get_local_headers_from_fits')
+@patch('caom2pipe.execute_composable.get_local_file_info')
+@patch('caom2pipe.data_source_composable.LocalFilesDataSourceRunnerMeta._move_action')
+@patch('caom2pipe.data_source_composable.LocalFilesDataSourceRunnerMeta.get_work')
+@patch('caom2pipe.client_composable.CAOM2RepoClient')
+@patch('caom2pipe.client_composable.StorageClientWrapper')
+def test_run_store_ingest_failure_runner_meta(
+    data_client_mock,
+    repo_client_mock,
+    get_work_mock,
+    cleanup_mock,
+    file_info_mock,
+    headers_mock,
+    access_mock,
+    visit_meta_mock,
+    caom2_store_mock,
+    test_config,
+    tmpdir,
+):
+    access_mock.return_value = 'https://localhost'
+    temp_deque = deque()
+    temp_deque.append(mc.StorageName(source_names=['/data/dao_c122_2021_005157_e.fits']))
+    temp_deque.append(mc.StorageName(source_names=['/data/dao_c122_2021_005157.fits']))
+    get_work_mock.return_value = temp_deque
+    repo_client_mock.return_value.read.return_value = None
+    headers_mock.return_value = [{'OBSMODE': 'abc'}]
+
+    def _file_info_mock(key):
+        return FileInfo(
+            id=key,
+            file_type='application/fits',
+            md5sum='md5:def',
+        )
+
+    # this is the exception raised in data_util.StorageClientWrapper, as the mc.CadcException definition is not
+    # available to that package
+    data_client_mock.return_value.put.side_effect = exceptions.UnexpectedException
+    # mock a series of failures with the CADC storage service
+    data_client_mock.return_value.info.side_effect = exceptions.UnexpectedException
+    file_info_mock.side_effect = _file_info_mock
+    test_config.change_working_directory(tmpdir)
+    test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
+    test_config.use_local_files = True
+    test_config.cleanup_files_when_storing = True
+    test_config.cleanup_failure_destination = '/data/failure'
+    test_config.cleanup_success_destination = '/data/success'
+    test_config.data_sources = ['/data']
+    test_config.data_source_extensions = ['.fits']
+    test_config.logging_level = 'INFO'
+    test_config.proxy_file_name = 'cadcproxy.pem'
+    test_config.write_to_file(test_config)
+
+    with open(test_config.proxy_fqn, 'w') as f:
+        f.write('test content')
+
+    data_source = dsc.LocalFilesDataSourceRunnerMeta(
+        test_config,
+        data_client_mock,
+        storage_name_ctor=mc.StorageName,
+    )
+    test_result = rc.run_by_todo_runner_meta(sources=[data_source])
+    assert test_result is not None, 'expect result'
+    assert test_result == -1, 'expect failure'
+    # execution stops before this call should be made
+    assert not repo_client_mock.return_value.read.called, 'no read'
+    # make sure data is not really being written to CADC storage :)
+    assert (
+        data_client_mock.return_value.put.called
+    ), 'put should be called'
+    assert (
+        data_client_mock.return_value.put.call_count == 2
+    ), 'wrong number of puts'
+    put_calls = [
+        call('/data', 'cadc:OMM/dao_c122_2021_005157_e.fits'),
+        call('/data', 'cadc:OMM/dao_c122_2021_005157.fits'),
+    ]
+    data_client_mock.return_value.put.assert_has_calls(
+        put_calls, any_order=False
+    )
+    assert cleanup_mock.called, 'cleanup'
+    cleanup_calls = [
+        call('/data/dao_c122_2021_005157_e.fits', '/data/failure'),
+        call('/data/dao_c122_2021_005157.fits', '/data/failure'),
+    ]
+    cleanup_mock.assert_has_calls(cleanup_calls), 'wrong cleanup args'
+    assert not visit_meta_mock.called, 'no _visit_meta call'
+    assert not caom2_store_mock.called, 'no _caom2_store call'
+    assert file_info_mock.called, 'info'
+    assert file_info_mock.call_count == 2, 'info'
+    info_calls = [
+        call('/data/dao_c122_2021_005157_e.fits'),
+        call('/data/dao_c122_2021_005157.fits'),
+    ]
+    file_info_mock.assert_has_calls(info_calls)
+    assert headers_mock.called, 'get_head should be called'
+    assert headers_mock.call_count == 2, 'get_head should be called'
+    header_calls = [
+        call('/data/dao_c122_2021_005157_e.fits'),
+        call('/data/dao_c122_2021_005157.fits'),
+    ]
+    headers_mock.assert_has_calls(header_calls)
+
+
+ALL_TASK_OPTIONS = [
+    [mc.TaskType.SCRAPE],
+    [mc.TaskType.STORE],
+    [mc.TaskType.INGEST],
+    [mc.TaskType.MODIFY],
+    [mc.TaskType.VISIT],
+    [mc.TaskType.SCRAPE, mc.TaskType.MODIFY],
+    [mc.TaskType.INGEST, mc.TaskType.MODIFY],
+    [mc.TaskType.STORE, mc.TaskType.INGEST],
+    [mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY],
+]
+
+
+@patch('caom2pipe.execute_composable.OrganizeExecutesRunnerMeta.do_one')
+@patch('caom2pipe.client_composable.ClientCollection')
+def test_run_todo_all_task_options_runner_meta(clients_mock, do_one_mock, test_config, tmpdir, change_test_dir):
+
+    # tests all the possible _choose options, I think :)
+    # assumes successful execution for two files
+    # TODO must test decompression as well, because that changes file sizes and checksums
+
+    test_config.cleanup_files_when_storing = False
+    test_config.data_source_extensions = ['.fits']
+    test_config.logging_level = 'INFO'
+
+    for task_types in ALL_TASK_OPTIONS:
+        do_one_mock.return_value = (0, None)
+        test_config.change_working_directory(tmpdir)
+        test_config.task_types = task_types
+        if mc.TaskType.SCRAPE in task_types or mc.TaskType.STORE in task_types:
+            test_config.use_local_files = True
+            test_config.data_sources = ['/data']
+        else:
+            test_config.use_local_files = False
+
+        needs_delete = False
+        if task_types == [mc.TaskType.INGEST]:
+            needs_delete = True
+
+        test_config.proxy_file_name = 'cadcproxy.pem'
+        test_config.write_to_file(test_config)
+
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
+
+        test_reporter = mc.ExecutionReporter2(test_config)
+
+        data_source = dsc.runner_meta_data_source_factory(
+            test_config,
+            clients_mock,
+            state=False,
+            reporter=test_reporter,
+            storage_name_ctor=mc.StorageName,
+        )
+        temp_deque = deque()
+        temp_deque.append(mc.StorageName(source_names=['/data/dao_c122_2021_005157_e.fits']))
+        temp_deque.append(mc.StorageName(source_names=['/data/dao_c122_2021_005157.fits']))
+        data_source._find_work = Mock()
+        data_source._work = temp_deque
+
+        test_result = rc.run_by_todo_runner_meta(
+            sources=[data_source], reporter=test_reporter, needs_delete=needs_delete
+        )
+        assert test_result is not None, f'expect result {task_types}'
+        assert test_result == 0, f'expect success {task_types}'
+        assert do_one_mock.called, f'do_one {task_types}'
+        assert do_one_mock.call_count == 2, f'do_one count {task_types}'
+        args, kwargs = do_one_mock.call_args
+        assert isinstance(args[0], mc.StorageName), f'do_one parameter {task_types}'
+        assert test_reporter.all == 2, f'all {task_types} {test_reporter._summary}'
+        assert test_reporter.success == 2, f'success {task_types} {test_reporter._summary}'
+        do_one_mock.reset_mock()
+
+   #  assert False
+
+
+@skip('it runs stand-alone, but otherwise the time-box is broken')
+@patch('caom2pipe.execute_composable.OrganizeExecutesRunnerMeta.do_one')
+@patch('caom2pipe.client_composable.ClientCollection')
+def test_run_incremental_all_task_options_runner_meta(clients_mock, do_one_mock, test_config, tmpdir, change_test_dir):
+
+    # tests all the possible _choose options, I think :)
+    # assumes successful execution for two files
+    # TODO must test decompression as well, because that changes file sizes and checksums
+
+    test_config.cleanup_files_when_storing = False
+    test_config.data_source_extensions = ['.fits']
+    test_config.logging_level = 'INFO'
+
+    for task_types in ALL_TASK_OPTIONS:
+        import logging
+        logging.error(task_types)
+        do_one_mock.return_value = (0, None)
+        test_config.change_working_directory(tmpdir)
+        test_config.task_types = task_types
+        if mc.TaskType.SCRAPE in task_types or mc.TaskType.STORE in task_types:
+            test_config.use_local_files = True
+            test_config.data_sources = ['/data']
+        else:
+            test_config.use_local_files = False
+
+        needs_delete = False
+        if task_types == [mc.TaskType.INGEST]:
+            needs_delete = True
+
+        test_config.proxy_file_name = 'cadcproxy.pem'
+        test_config.write_to_file(test_config)
+
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
+
+        state_test_end_time = datetime.fromtimestamp(1579740838)
+        state_test_start_time = state_test_end_time - timedelta(seconds=900)
+        mc.State.write_bookmark(
+            test_config.state_fqn, test_config.bookmark, state_test_start_time, state_test_end_time
+        )
+
+        test_reporter = mc.ExecutionReporter2(test_config)
+
+        data_source = dsc.runner_meta_data_source_factory(
+            test_config,
+            clients_mock,
+            state=True,
+            reporter=test_reporter,
+            storage_name_ctor=mc.StorageName,
+        )
+        temp_work = defaultdict(list)
+        temp_work[
+            datetime(2019, 10, 23, 16, 27, 19, 0)
+        ].append(mc.StorageName(source_names=['/data/dao_c122_2021_005157_e.fits']))
+        temp_work[
+            datetime(2019, 10, 23, 16, 27, 20, 0)
+        ].append(mc.StorageName(source_names=['/data/dao_c122_2021_005157.fits']))
+        data_source._append_work = Mock()
+        data_source._temp = temp_work
+
+        test_result = rc.run_by_state_runner_meta(
+            sources=[data_source], reporter=test_reporter, needs_delete=needs_delete
+        )
+        assert test_result is not None, f'expect result {task_types}'
+        assert test_result == 0, f'expect success {task_types}'
+        assert do_one_mock.called, f'do_one {task_types}'
+        assert do_one_mock.call_count == 2, f'do_one count {task_types}'
+        args, kwargs = do_one_mock.call_args
+        assert isinstance(args[0], mc.StorageName), f'do_one parameter {task_types}'
+        assert test_reporter.all == 2, f'all {task_types} {test_reporter._summary}'
+        assert test_reporter.success == 2, f'success {task_types} {test_reporter._summary}'
+        do_one_mock.reset_mock()
+
+   #  assert False
 
 
 def _write_todo(test_config):

@@ -244,6 +244,63 @@ class TodoRunner:
         return result
 
 
+class TodoRunnerMeta(TodoRunner):
+
+    def __init__(self, config, data_sources, organizer, reporter):
+        super().__init__(
+            config,
+            organizer,
+            None,  # builder
+            data_sources,
+            None,  # metadata_reader
+            reporter.observable,
+            reporter,
+        )
+
+    def _process_entry(self, storage_name):
+        self._logger.debug(f'Begin _process_entry for {storage_name.file_uri}.')
+        try:
+            start_s = datetime.now(tz=timezone.utc).timestamp()
+            result, result_message = self._organizer.do_one(storage_name)
+            if result == 0 and result_message is None:
+                self._reporter.capture_success(storage_name.obs_id, storage_name.file_name, start_s)
+            elif result == -1 and not result_message.startswith('No executors'):
+                self._reporter.capture_failure(storage_name, BaseException(result_message), result_message)
+        except Exception as e:
+            self._reporter.capture_failure(storage_name, e, traceback.format_exc())
+            self._logger.info(f'Execution failed for {storage_name.file_name} with {e}')
+            self._logger.debug(traceback.format_exc())
+            # keep processing the rest of the entries, so don't throw this or any other exception at this point
+            result = -1
+        self._logger.debug(f'End _process_entry with result {result}.')
+        return result
+
+    def _run_todo_list(self, data_source, current_count):
+        """
+        :param current_count: int - current retry count - needs to be passed
+            to _process_entry.
+        """
+        self._logger.debug(f'Begin _run_todo_list with {len(self._todo_list)} records.')
+        result = 0
+        retry_list = deque()
+        while len(self._todo_list) > 0:
+            entry = self._todo_list.popleft()
+            temp_result = self._process_entry(entry)
+            result |= temp_result
+            try:
+                retry_again = data_source.clean_up(entry, temp_result, current_count)
+                if retry_again:
+                    retry_list.append(entry)
+            except Exception as e:
+                self._logger.info(f'Cleanup failed for {entry.file_uri} with {e}')
+                self._logger.debug(traceback.format_exc())
+                result = -1
+        self._finish_run()
+        self._logger.debug('End _run_todo_list.')
+        self._todo_list = retry_list
+        return result
+
+
 class StateRunner(TodoRunner):
     """
     This class brings together the mechanisms for identifying the time-boxed lists of work to be done
@@ -448,21 +505,17 @@ class StateRunnerMeta(StateRunner):
                         entry = pop_action()
                         temp_result = self._process_entry(entry.storage_entry)
                         result |= temp_result
-                        if temp_result == 0:
-                            try:
-                                data_source.clean_up(entry.storage_entry, result, 0)
-                            except Exception as e:
-                                self._logger.info(f'Cleanup failed for {entry} with {e}')
-                                self._logger.debug(traceback.format_exc())
-                                result |= -1
-                            save_time = min(entry.entry_dt, exec_time)
-                        else:
-                            # treat the todo_list as the retry list
-                            self._todo_list.append(entry)
-                    # this reset call is outside the while process_entry loop for GEMINI which gets all the metadata
-                    # for an interval in a single call, and it wouldn't be polite to throw away all the metadata
-                    # that will be just need to be retrieved # again for each record
-                    # self._metadata_reader.reset()
+                        try:
+                            retry_again = data_source.clean_up(entry.storage_entry, temp_result, 0)
+                            if retry_again:
+                                # treat the todo_list as the retry list
+                                self._todo_list.append(entry)
+                            else:
+                                save_time = min(entry.entry_dt, exec_time)
+                        except Exception as e:
+                            self._logger.info(f'Cleanup failed for {entry} with {e}')
+                            self._logger.debug(traceback.format_exc())
+                            result |= -1
                     self._finish_run()
 
                 self._record_progress(num_entries, cumulative, prev_exec_time, save_time)
@@ -521,18 +574,17 @@ class StateRunnerMeta(StateRunner):
             entry = self._todo_list.popleft()
             temp_result = self._process_entry(entry.storage_entry)
             result |= temp_result
-            if temp_result == 0:
-                try:
-                    data_source.clean_up(entry.storage_entry, result, current_count)
-                except Exception as e:
-                    self._logger.info(f'Cleanup failed for {entry} with {e}')
-                    self._logger.debug(traceback.format_exc())
-                    result |= -1
-            else:
-                retry_list.append(entry)
-        # self._metadata_reader.reset()
+            try:
+                retry_again = data_source.clean_up(entry.storage_entry, temp_result, current_count)
+                if retry_again:
+                    retry_list.append(entry)
+            except Exception as e:
+                self._logger.info(f'Cleanup failed for {entry} with {e}')
+                self._logger.debug(traceback.format_exc())
+                result |= -1
         self._finish_run()
         self._todo_list = retry_list
+        self._logger.error(f'lenght retry_list {len(retry_list)}')
         self._logger.debug('End _run_todo_list.')
         return result
 
@@ -584,6 +636,7 @@ def common_runner_init(
     chooser,
     organizer_module_name='caom2pipe.execute_composable',
     organizer_class_name='OrganizeExecutes',
+    reporter=None,
 ):
     """The common initialization code between TodoRunner and StateRunner uses. <collection>2caom2 implementations can
     use the defaults created here for the 'run' call, or they can provide their own specializations of the various
@@ -619,7 +672,8 @@ def common_runner_init(
     mc.StorageName.scheme = config.scheme
 
     observable = mc.Observable(config)
-    reporter = mc.ExecutionReporter(config, observable)
+    if reporter is None:
+        reporter = mc.ExecutionReporter(config, observable)
     reporter.set_log_location(config)
     if clients is None:
         clients = cc.ClientCollection(config)
@@ -826,17 +880,108 @@ def run_by_state(
     return result
 
 
-def run_by_state_runner_meta(
+def run_by_todo_runner_meta(
     config=None,
-    meta_visitors=None,
-    data_visitors=None,
     chooser=None,
     sources=None,
+    meta_visitors=None,
+    data_visitors=None,
     modify_transfer=None,
     store_transfer=None,
     clients=None,
     organizer_module_name='caom2pipe.execute_composable',
     organizer_class_name='OrganizeExecutesRunnerMeta',
+    reporter=None,
+    needs_delete=False,
+):
+    """A default implementation for using the TodoRunner.
+
+    :param config Config instance
+    :param name_builder NameBuilder extension that creates an instance of
+        a StorageName extension, from an entry from a DataSourceComposable
+        listing
+    :param sources list of DataSource implementations, if there are specializations
+    :param meta_visitors list of modules with visit methods, that expect
+        the metadata of a work file to exist on disk
+    :param data_visitors list of modules with visit methods, that expect the
+        work file to exist on disk
+    :param chooser OrganizerChooser, if there's strange rules about file
+        naming.
+    :param modify_transfer Transfer extension that identifies how to retrieve
+        data from a source for modification of CAOM2 metadata. By this time,
+        files are usually stored at CADC, so it's probably a CadcTransfer
+        instance, but this allows for the case that a file is never stored
+        at CADC. Try to guess what this one is.
+    :param store_transfer Transfer extension that identifies hot to retrieve
+        data from a source for storage at CADC, probably an HTTP or FTP site.
+        Don't try to guess what this one is.
+    :param clients: ClientCollection instance
+    :param metadata_reader: MetadataReader instance
+    """
+    meta_visitors = [] if meta_visitors is None else meta_visitors
+    data_visitors = [] if data_visitors is None else data_visitors
+    sources = [] if sources is None else sources
+    (
+        config,
+        clients,
+        ignore_name_builder,
+        data_sources,
+        ignore_metadata_reader,
+        organizer,
+        ignore_observable,
+        reporter,
+    ) = common_runner_init(
+        config,
+        clients,
+        None,
+        sources,
+        modify_transfer,
+        None,
+        False,
+        store_transfer,
+        meta_visitors,
+        data_visitors,
+        chooser,
+        reporter=reporter,
+    )
+
+    mdul = import_module(organizer_module_name)
+    cls = getattr(mdul, organizer_class_name)
+    organizer = cls(
+        config,
+        meta_visitors,
+        data_visitors,
+        needs_delete,
+        store_transfer,
+        modify_transfer,
+        clients,
+        reporter,
+    )
+
+    runner = TodoRunnerMeta(
+        config,
+        data_sources,
+        organizer,
+        reporter,
+    )
+    result = runner.run()
+    result |= runner.run_retry()
+    runner.report()
+    return result
+
+
+def run_by_state_runner_meta(
+    config=None,
+    meta_visitors=None,
+    data_visitors=None,
+    sources=None,
+    modify_transfer=None,
+    store_transfer=None,
+    clients=None,
+    reporter=None,
+    organizer_module_name='caom2pipe.execute_composable',
+    organizer_class_name='OrganizeExecutesRunnerMeta',
+    needs_delete=False,
 ):
     """A default implementation for using the StateRunner.
 
@@ -885,7 +1030,8 @@ def run_by_state_runner_meta(
         store_transfer,
         meta_visitors,
         data_visitors,
-        chooser,
+        chooser=None,
+        reporter=reporter,
     )
 
     mdul = import_module(organizer_module_name)
@@ -894,7 +1040,7 @@ def run_by_state_runner_meta(
         config,
         meta_visitors,
         data_visitors,
-        chooser,
+        needs_delete,
         store_transfer,
         modify_transfer,
         clients,

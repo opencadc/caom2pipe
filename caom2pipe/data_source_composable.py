@@ -128,6 +128,8 @@ class DataSource:
         self._skipped_files = 0
         self._work = deque()
         self._reporter = None
+        self._retry_failures = config.retry_failures
+        self._retry_count = config.retry_count
         self._logger = logging.getLogger(self.__class__.__name__)
 
     @property
@@ -159,6 +161,27 @@ class DataSource:
         # do not need the record of the rejected or skipped files any longer
         self._rejected_files = 0
         self._skipped_files = 0
+
+
+class DataSourceRunnerMeta(DataSource):
+
+    def __init__(self, config):
+        super().__init__(config)
+
+    def clean_up(self, entry, execution_result, current_count):
+        """Clean up files locally after there has been a storage attempt.
+
+        :return True if a file should have the [TaskTypes] retried, False otherwise.
+        """
+        retry_again = True
+        if (
+            (not self._retry_failures)
+            or (self._retry_failures and current_count >= self._retry_count)
+            or (self._retry_failures and execution_result == 0)
+        ):
+            retry_again = False
+        self._logger.debug(f'End clean_up. Retry for {entry.file_uri} is {retry_again}.')
+        return retry_again
 
 
 class IncrementalDataSource(DataSource):
@@ -775,8 +798,8 @@ class LocalFilesDataSourceRunnerMeta(LocalFilesDataSource):
 
     def clean_up(self, entry, execution_result, current_count=0):
         """
-        Move a file to the success or failure location, depending on whether a file with the same checksum is at
-        CADC.
+        Move a file to the success or failure location. The success location is for when a file with the same
+        checksum is at CADC, the failure location is for when it is not.
 
         Move the file only after all retries (as specified in config.yml) have been attempted. Note that this
         cleanup behaviour will be assigned to the TodoFileDataSource during a retry.
@@ -785,21 +808,23 @@ class LocalFilesDataSourceRunnerMeta(LocalFilesDataSource):
         :param execution_result: int if it's 0, it's ok to clean up, regardless of how many times a file has been
             processed
         :param current_count: int how many retries have been executed
+        :return True if a file should have the [TaskTypes] retried, False otherwise. If a file was moved, that also
+            indicates retries are completed, so that is also a False case.
         """
-        self._logger.debug(f'Begin clean_up with {entry}')
-        if self._cleanup_when_storing and (
-            (not self._retry_failures)
-            or (self._retry_failures and current_count >= self._retry_count)
-            or (self._retry_failures and execution_result == 0)
-        ):
+        self._logger.debug(f'Begin clean_up with {entry.file_uri}')
+        retry_again = DataSourceRunnerMeta.clean_up(self, entry, execution_result, current_count)
+        if self._cleanup_when_storing and not retry_again:
             for index, source_name in enumerate(entry.source_names):
                 self._logger.debug(f'Clean up {entry.file_uri}')
                 if self._is_remote_different(index, entry):
                     # the transfer itself failed, so track as a failure
                     self._move_action(source_name, self._cleanup_failure_directory)
+                    retry_again = False
                 else:
                     self._move_action(source_name, self._cleanup_success_directory)
-        self._logger.debug('End clean_up.')
+                    retry_again = False
+        self._logger.debug(f'End clean_up. Retry for {entry.file_uri} is {retry_again}.')
+        return retry_again
 
     def default_filter(self, dir_entry):
         """
@@ -898,6 +923,33 @@ class TodoFileDataSource(DataSource):
                     # ignore empty lines
                     self._logger.debug(f'Adding entry {temp} to work list.')
                     self._work.append(temp)
+        self._capture_todo()
+        self._logger.debug(f'End get_work.')
+        return self._work
+
+
+class TodoFileDataSourceRunnerMeta(DataSource):
+    """
+    Implements the identification of the work to be done, by reading the
+    contents of a file.
+    """
+
+    def __init__(self, config, storage_name_ctor):
+        super().__init__(config)
+        self._storage_name_ctor = storage_name_ctor
+
+    def _find_work(self, entry_path):
+        with open(entry_path) as f:
+            for line in f:
+                temp = line.strip()
+                if len(temp) > 0:
+                    # ignore empty lines
+                    self._logger.debug(f'Adding entry {temp} to work list.')
+                    self._work.append(self._storage_name_ctor(source_names=[temp]))
+
+    def get_work(self):
+        self._logger.debug(f'Begin get_work from {self._config.work_fqn}.')
+        self._find_work(self._config.work_fqn)
         self._capture_todo()
         self._logger.debug(f'End get_work.')
         return self._work
@@ -1015,27 +1067,22 @@ class QueryTimeBoxDataSourceRunnerMeta(QueryTimeBoxDataSource):
     deque content will have the RunnerMeta class.
     """
 
-    def __init__(self, config, preview_suffix, storage_name_ctor):
-        super().__init__(config, preview_suffix)
+    def __init__(self, config, preview_suffix, storage_name_ctor, storage_query_client):
+        IncrementalDataSource.__init__(self, config, config.bookmark)
+        self._preview_suffix = preview_suffix
         self._storage_name_ctor = storage_name_ctor
+        self._client = storage_query_client
+        self._temp = defaultdict(list)
 
-    def get_time_box_work(self, prev_exec_dt, exec_dt):
-        """
-        Get a set of file names from a collection. Limit the entries by
-        time-boxing on lastModified, and don't include previews.
-
-        :param prev_exec_dt tz-naive datetime start of the time-boxed chunk
-        :param exec_dt tz-naive datetime end of the time-boxed chunk
-        :return: a list of StateRunnerMeta instances in the CADC storage system
-        """
+    def _append_work(self, prev_exec_dt, exec_dt, entry_path):
+        self._logger.debug(f'Begin _append_work from {prev_exec_dt} to {exec_dt}')
+        prev_exec_dt = mc.make_datetime(prev_exec_dt)
+        exec_dt = mc.make_datetime(exec_dt)
         # SG 8-09-22
         # All timestamps in the SI databases are in UTC
         #
         # SGo
         # Use 'lastModified', because that should be the later timestamp (avoid eventual consistency lags).
-        self._logger.debug(f'Begin get_time_box_work.')
-        prev_exec_dt = mc.make_datetime(prev_exec_dt)
-        exec_dt = mc.make_datetime(exec_dt)
         query = f"""
             SELECT A.uri, A.lastModified
             FROM inventory.Artifact AS A
@@ -1047,10 +1094,27 @@ class QueryTimeBoxDataSourceRunnerMeta(QueryTimeBoxDataSource):
         """
         self._logger.debug(query)
         rows = clc.query_tap_client(query, self._client)
-        self._work = deque()
         for row in rows:
             r_dt = mc.make_datetime(row['lastModified'])
-            self._work.append(RunnerMeta(self._storage_name_ctor(source_names=[row['uri']]), r_dt))
+            self._temp[r_dt].append(self._storage_name_ctor(source_names=[row['uri']]))
+
+    def get_time_box_work(self, prev_exec_dt, exec_dt):
+        """
+        Get a set of file names from a collection. Limit the entries by time-boxing on lastModified, and don't
+        include previews.
+
+        :param prev_exec_dt tz-naive datetime start of the time-boxed chunk
+        :param exec_dt tz-naive datetime end of the time-boxed chunk
+        :return: a time-sorted deque of RunnerMeta instances in the CADC storage system
+        """
+        self._logger.debug(f'Begin get_time_box_work.')
+        self._append_work(prev_exec_dt, exec_dt, None)
+        self._work = deque()
+        for dt in sorted(self._temp):
+            for storage_names in self._temp.get(dt):
+                # TODO this is wrong - there should need to be another loop through the list of storage_names
+                self._work.append(RunnerMeta(storage_names, dt))
+        self._temp = defaultdict(list)
         self._capture_todo()
         self._logger.debug(f'End get_time_box_work.')
         return self._work
@@ -1319,6 +1383,41 @@ def data_source_factory(config, clients, state, reader, reporter):
                 source = QueryTimeBoxDataSource(config)
             else:
                 source = TodoFileDataSource(config)
+    source.reporter = reporter
+    logging.debug(f'Created {source.__class__.__name__} data_source_composable instance.')
+    return source
+
+
+def runner_meta_data_source_factory(config, clients, state, reporter, storage_name_ctor):
+    """
+    :param config: manage_composable.Config
+    :param clients: client_composable.ClientCollection
+    :param state: bool True is the DataSource is time-boxed.
+    :param reporter: ExecutionReporter instance tracks and reports on successes and failures
+    :return: DataSource specialization
+    """
+    if config.use_local_files:
+        # by default call fitsverify as part of setting up local file use
+        # this class implements both get_work and get_time_box_work
+        source = LocalFilesDataSourceRunnerMeta(
+            config, clients.data_client, config.recurse_data_sources, config.scheme, storage_name_ctor
+        )
+    else:
+        if config.use_vos and clients.vo_client is not None:
+            if config.cleanup_files_when_storing:
+                source = VaultCleanupDataSourceRunnerMeta(config, clients.vo_client, clients.data_client, reader)
+            else:
+                source = VaultDataSourceRunnerMeta(clients.vo_client, config)
+        else:
+            if state:
+                source = QueryTimeBoxDataSourceRunnerMeta(
+                    config,
+                    preview_suffix='jpg',
+                    storage_name_ctor=storage_name_ctor,
+                    storage_query_client=clients.storage_query_client,
+                )
+            else:
+                source = TodoFileDataSourceRunnerMeta(config, storage_name_ctor)
     source.reporter = reporter
     logging.debug(f'Created {source.__class__.__name__} data_source_composable instance.')
     return source
