@@ -360,6 +360,16 @@ class CaomExecuteRunnerMeta(CaomExecute):
         super().__init__(config, meta_visitors, reporter.observable, metadata_reader=None, clients=clients)
         self._reporter = reporter
 
+    def _cadc_put(self, source_fqn, uri):
+        interim_fqn = self._decompressor.fix_compression(source_fqn)
+        self.cadc_client.put(os.path.dirname(interim_fqn), uri)
+        # fix FileInfo that becomes out-dated by decompression during a STORE task, in this common location,
+        # affecting all collections
+        if source_fqn != interim_fqn:
+            self._logger.debug(f'Recalculate FileInfo for {interim_fqn}')
+            interim_file_info = get_local_file_info(interim_fqn)
+            self._storage_name.file_info[uri] = interim_file_info
+
     def _set_preconditions(self):
         """This is probably not the best approach, but I want to think about where the optimal location for the
         retrieve_file_info and retrieve_headers methods will be long-term. So, for the moment, use them here."""
@@ -641,12 +651,16 @@ class DataVisitRunnerMeta(CaomExecuteRunnerMeta):
         self._transferrer = transferrer
 
     def execute(self, context):
-        super().execute(context)
+        self._logger.debug('begin execute with the steps:')
+        self.storage_name = context.get('storage_name')
 
         self._logger.debug('get the input files')
         for entry in self._storage_name.destination_uris:
             local_fqn = os.path.join(self._working_dir, os.path.basename(entry))
             self._transferrer.get(entry, local_fqn)
+
+        self._logger.debug('set the preconditions')
+        NoFheadVisitRunnerMeta._set_preconditions(self)
 
         self._logger.debug('get the observation for the existing model')
         self._caom2_read()
@@ -732,7 +746,7 @@ class LocalDataVisitRunnerMeta(DataVisitRunnerMeta):
         )
 
     def execute(self, context):
-        CaomExecuteRunnerMeta.execute(context)
+        CaomExecuteRunnerMeta.execute(self, context)
 
         self._logger.debug('get the observation for the existing model')
         self._caom2_read()
@@ -926,17 +940,34 @@ class NoFheadVisitRunnerMeta(CaomExecuteRunnerMeta):
         self._modify_transferrer = modify_transferrer
         self._data_visitors = data_visitors
 
+    def _set_preconditions(self):
+        """This is probably not the best approach, but I want to think about where the optimal location for the
+        retrieve_file_info and retrieve_headers methods will be long-term. So, for the moment, use them here."""
+        self._logger.debug(f'Begin _set_preconditions for {self._storage_name.file_name}')
+        for uri in self._storage_name.destination_uris:
+            local_fqn = os.path.join(self._working_dir, os.path.basename(uri))
+            if uri not in self._storage_name.file_info:
+                self._storage_name.file_info[uri] = get_local_file_info(local_fqn)
+            if uri not in self._storage_name.metadata:
+                self._storage_name.metadata[uri] = []
+                if '.fits' in local_fqn:
+                    try:
+                        self._storage_name._metadata[uri] = get_local_headers_from_fits(local_fqn)
+                    except OSError as _:
+                        self._storage_name._metadata[uri] = get_local_file_headers(local_fqn)
+        self._logger.debug('End _set_preconditions')
+
     def execute(self, context):
-        super().execute(context)
+        self._logger.debug('begin execute with the steps:')
+        self.storage_name = context.get('storage_name')
 
         self._logger.debug('get the input files')
         for entry in self._storage_name.destination_uris:
             local_fqn = os.path.join(self._working_dir, os.path.basename(entry))
             self._modify_transferrer.get(entry, local_fqn)
 
-        self._logger.debug('initialize the metadata')
-        self._metadata_reader.working_directory = self._working_dir
-        self._metadata_reader.set(self._storage_name)
+        self._logger.debug('set the preconditions')
+        self._set_preconditions()
 
         self._logger.debug('get the observation for the existing model')
         self._caom2_read()
@@ -1261,9 +1292,7 @@ class OrganizeExecutes:
             for ii in os.listdir(working_dir):
                 os.remove(os.path.join(working_dir, ii))
             os.rmdir(working_dir)
-        self._logger.debug(
-            f'Removed working directory {working_dir} and contents.'
-        )
+            self._logger.debug(f'Removed working directory {working_dir} and contents.')
 
     def _create_workspace(self, obs_id):
         """Create the working area if it does not already exist."""

@@ -71,11 +71,11 @@ import os
 import pytest
 import sys
 
-from unittest.mock import Mock, patch, ANY
+from unittest.mock import call, Mock, patch, ANY
 
 from astropy.io import fits
 from hashlib import md5
-from shutil import copy
+from shutil import copy, copyfile
 
 from cadcdata import FileInfo
 from caom2 import SimpleObservation, Algorithm
@@ -1099,7 +1099,7 @@ class TestFhead:
             self._test_storage_name = mc.StorageName(
                 obs_id='testz',
                 file_name='testz.hdf5',
-                source_names=[f'{tc.TEST_DATA_DIR}/testz.hdf5'],
+                source_names=['/test_files/testz.hdf5'],
             )
             os.mkdir(os.path.join(tmpdir, self._test_storage_name.obs_id))
             test_subject = ec.NoFheadStoreVisit(
@@ -1115,7 +1115,7 @@ class TestFhead:
             assert not self._clients_mock.data_client.get.called, 'should not be called'
             assert self._clients_mock.data_client.put.called, 'put call'
             self._clients_mock.data_client.put.assert_called_with(
-                f'{tc.TEST_DATA_DIR}', self._test_storage_name.destination_uris[0]
+                '/test_files', self._test_storage_name.destination_uris[0]
             ), 'put args'
             self._post(tmpdir)
         finally:
@@ -1158,6 +1158,479 @@ class TestFhead:
             self._test_metadata_reader.reset()
 
 
+class TestDoOneIngestRunnerMeta:
+
+    def _ini(self, test_config, tmp_path):
+
+        test_config.change_working_directory(tmp_path)
+        self._reporter = mc.ExecutionReporter2(test_config)
+        self._clients = Mock()
+        self._storage_name = tc.TStorageName()
+
+    def test_do_one_execute_success(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.INGEST]
+        self._ini(test_config, tmp_path)
+        # check that failure/retry files have the correct content if do_one succeeds
+        test_meta = [VisitNoException()]
+
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            [],
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, None), 'expect success'
+
+    def test_do_one_execute_raises_exception(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.INGEST]
+        self._ini(test_config, tmp_path)
+        # check that failure/retry files have the correct content if is_rejected returns False, the
+        # number of executors > 0, execute raises an exception without timeout in the message text
+        test_meta = [VisitWithException()]
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            [],
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert (
+            test_result == (-1, 'Execution failed for test_obs_id with Cannot build an observation')
+        ), 'expect failure for the general exception case'
+
+    def test_do_one_is_rejected_true(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.INGEST]
+        self._ini(test_config, tmp_path)
+        # check that failure/retry files have the correct content if is_rejected returns True
+        test_meta = [VisitNoException()]
+        self._reporter._observable._rejected.record('bad_metadata', 'test_file.fits.gz')
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            [],
+            reporter=self._reporter,
+        )
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, 'Rejected'), 'expect success for the bad metadata case'
+
+    def test_do_one_is_rejected_false_executors_len_zero(self, test_config, tmp_path):
+        self._ini(test_config, tmp_path)
+        # check that failure/retry files have the correct content if is_rejected returns False, but the
+        # number of executors == 0
+        try:
+            _ = ec.OrganizeExecutesRunnerMeta(test_config, [], [], reporter=self._reporter)
+        except mc.CadcException as e:
+            return
+        assert False, 'expect exception'
+
+    def test_do_one_execute_raises_timeout_exception(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.INGEST]
+        self._ini(test_config, tmp_path)
+        # check that failure/retry files have the correct content if is_rejected returns False, the
+        # number of executors > 0, execute raises an exception with timeout in the message text
+        test_meta = [VisitWithTimeoutException()]
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            [],
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert (
+            test_result == (-1, 'Execution failed for test_obs_id with Read timed out')
+        ), 'expect failure for the timeout exception case'
+
+
+class TestDoOneTaskTypesRunnerMeta:
+    """Test all the possible combinations of TaskType, plus decompression."""
+
+    def _ini(self, test_config, tmp_path):
+        test_config.logging_level = 'DEBUG'
+        test_config.change_working_directory(tmp_path)
+        self._reporter = mc.ExecutionReporter2(test_config)
+        self._clients = Mock()
+        if test_config.use_local_files:
+            self._storage_name = mc.StorageName(source_names=['/test_files/correct.fits.gz'])
+        else:
+            self._storage_name = mc.StorageName(source_names=['correct.fits'])
+
+    def test_scrape(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.SCRAPE]
+        test_config.use_local_files = True
+        self._ini(test_config, tmp_path)
+        test_meta = [VisitNoException()]
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            [],
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        assert test_subject._executors is not None
+        assert len(test_subject._executors) == 1
+        assert isinstance(test_subject._executors[0], ec.ScrapeRunnerMeta)
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, None), 'expect success'
+        assert not self._clients.data_client.info.called, 'data info called'
+        assert not self._clients.data_client.put.called, 'data put called'
+        assert not self._clients.data_client.get.called, 'data get called'
+        assert not self._clients.data_client.get_head.called, 'data get_head called'
+        assert not self._clients.data_client.remove.called, 'data remove called'
+        assert not self._clients.metadata_client.read.called, 'meta read called'
+        assert not self._clients.metadata_client.create.called, 'meta create called'
+        assert not self._clients.metadata_client.update.called, 'meta update called'
+        assert not self._clients.metadata_client.delete.called, 'meta delete called'
+
+    def test_store(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.STORE]
+        test_config.use_local_files = True
+        self._ini(test_config, tmp_path)
+        test_meta = [VisitNoException()]
+        test_store_transferrer = transfer_composable.store_transfer_factory(test_config, self._clients)
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            [],
+            clients=self._clients,
+            reporter=self._reporter,
+            store_transfer=test_store_transferrer,
+        )
+        assert test_subject._executors is not None
+        assert len(test_subject._executors) == 1
+        assert isinstance(test_subject._executors[0], ec.StoreRunnerMeta)
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, None), 'expect success'
+        assert not self._clients.data_client.info.called, 'data info called'
+        assert self._clients.data_client.put.called, 'data put called'
+        assert self._clients.data_client.put.call_count == 1, 'data put call_count'
+        self._clients.data_client.put.assert_called_with(
+            f'{tmp_path}/correct', 'cadc:OMM/correct.fits'
+        ), 'data put calls'
+        assert not self._clients.data_client.get.called, 'data get called'
+        assert not self._clients.data_client.get_head.called, 'data get_head called'
+        assert not self._clients.data_client.remove.called, 'data remove called'
+        assert not self._clients.metadata_client.read.called, 'meta read called'
+        assert not self._clients.metadata_client.create.called, 'meta create called'
+        assert not self._clients.metadata_client.update.called, 'meta update called'
+        assert not self._clients.metadata_client.delete.called, 'meta delete called'
+
+    def test_ingest(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.INGEST]
+        self._ini(test_config, tmp_path)
+        test_meta = [VisitNoException()]
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            [],
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        assert test_subject._executors is not None
+        assert len(test_subject._executors) == 1
+        assert isinstance(test_subject._executors[0], ec.MetaVisitRunnerMeta)
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, None), 'expect success'
+        assert self._clients.data_client.info.called, 'data info called'
+        assert self._clients.data_client.info.call_count == 1, 'data info call_count'
+        self._clients.data_client.info.assert_called_with('cadc:OMM/correct.fits'), 'data info calls'
+        assert not self._clients.data_client.put.called, 'data put called'
+        assert not self._clients.data_client.get.called, 'data get called'
+        assert self._clients.data_client.get_head.called, 'data get_head called'
+        assert self._clients.data_client.get_head.call_count == 1, 'data get_head call_count'
+        self._clients.data_client.get_head.assert_called_with('cadc:OMM/correct.fits'), 'data get_head calls'
+        assert not self._clients.data_client.remove.called, 'data remove called'
+        assert self._clients.metadata_client.read.called, 'meta read called'
+        assert self._clients.metadata_client.read.call_count == 1, 'meta read call_count'
+        self._clients.metadata_client.read.assert_called_with('OMM', ANY), 'meta read call_count'
+        assert self._clients.metadata_client.update.called, 'meta update called'
+        assert self._clients.metadata_client.update.call_count == 1, 'meta update call_count'
+        self._clients.metadata_client.update.assert_called_with(ANY), 'meta update call_count'
+        # the read returns a Mock, so the service action is update, not create
+        assert not self._clients.metadata_client.create.called, 'meta create called'
+        assert not self._clients.metadata_client.delete.called, 'meta delete called'
+
+    def test_modify(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.MODIFY]
+        self._ini(test_config, tmp_path)
+        test_data = [VisitNoException()]
+        test_modify_transfer = transfer_composable.modify_transfer_factory(test_config, self._clients)
+        self._clients.metadata_client.read.return_value = _read_obs(None)
+        def _copy_file(destination_path, uri):
+            copyfile('/test_files/correct.fits', f'{destination_path}/correct.fits')
+        self._clients.data_client.get.side_effect = _copy_file
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            [],
+            test_data,
+            clients=self._clients,
+            reporter=self._reporter,
+            modify_transfer=test_modify_transfer,
+        )
+        assert test_subject._executors is not None
+        assert len(test_subject._executors) == 1
+        assert isinstance(test_subject._executors[0], ec.DataVisitRunnerMeta)
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, None), 'expect success'
+        assert not self._clients.data_client.info.called, 'data info called'
+        assert not self._clients.data_client.put.called, 'data put called'
+        assert self._clients.data_client.get.called, 'data get called'
+        assert self._clients.data_client.get.call_count == 1, 'data get call_count'
+        self._clients.data_client.get.assert_called_with(
+            f'{tmp_path}/correct', 'cadc:OMM/correct.fits'
+        ), 'data get calls'
+        assert not self._clients.data_client.get_head.called, 'data get_head called'
+        assert not self._clients.data_client.remove.called, 'data remove called'
+        assert self._clients.metadata_client.read.called, 'meta read called'
+        assert self._clients.metadata_client.read.call_count == 1, 'meta read call_count'
+        self._clients.metadata_client.read.assert_called_with('OMM', ANY), 'meta read call_count'
+        assert self._clients.metadata_client.update.called, 'meta update called'
+        assert self._clients.metadata_client.update.call_count == 1, 'meta update call_count'
+        self._clients.metadata_client.update.assert_called_with(ANY), 'meta update call_count'
+        # the read returns an observation, so the service action is update, not create
+        assert not self._clients.metadata_client.create.called, 'meta create called'
+        assert not self._clients.metadata_client.delete.called, 'meta delete called'
+
+    def test_visit(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.VISIT]
+        self._ini(test_config, tmp_path)
+        test_meta = [VisitNoException()]
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            [],
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        assert test_subject._executors is not None
+        assert len(test_subject._executors) == 1
+        assert isinstance(test_subject._executors[0], ec.MetaVisitRunnerMeta)
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, None), 'expect success'
+        assert self._clients.data_client.info.called, 'data info called'
+        assert self._clients.data_client.info.call_count == 1, 'data info call_count'
+        self._clients.data_client.info.assert_called_with('cadc:OMM/correct.fits'), 'data info calls'
+        assert not self._clients.data_client.put.called, 'data put called'
+        assert not self._clients.data_client.get.called, 'data get called'
+        assert self._clients.data_client.get_head.called, 'data get_head called'
+        assert self._clients.data_client.get_head.call_count == 1, 'data get_head call_count'
+        self._clients.data_client.get_head.assert_called_with('cadc:OMM/correct.fits'), 'data get_head calls'
+        assert not self._clients.data_client.remove.called, 'data remove called'
+        assert self._clients.metadata_client.read.called, 'meta read called'
+        assert self._clients.metadata_client.read.call_count == 1, 'meta read call_count'
+        self._clients.metadata_client.read.assert_called_with('OMM', ANY), 'meta read call_count'
+        assert self._clients.metadata_client.update.called, 'meta update called'
+        assert self._clients.metadata_client.update.call_count == 1, 'meta update call_count'
+        self._clients.metadata_client.update.assert_called_with(ANY), 'meta update call_count'
+        # the read returns a Mock, so the service action is update, not create
+        assert not self._clients.metadata_client.create.called, 'meta create called'
+        assert not self._clients.metadata_client.delete.called, 'meta delete called'
+
+    def test_scrape_modify(self, test_config, tmp_path):
+        test_config.use_local_files = True
+        test_config.task_types = [mc.TaskType.SCRAPE, mc.TaskType.MODIFY]
+        self._ini(test_config, tmp_path)
+        test_data = [VisitNoException()]
+        test_meta = [VisitNoException()]
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            test_data,
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        assert test_subject._executors is not None
+        assert len(test_subject._executors) == 1
+        assert isinstance(test_subject._executors[0], ec.NoFheadScrapeRunnerMeta)
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, None), 'expect success'
+        assert not self._clients.data_client.info.called, 'data info called'
+        assert not self._clients.data_client.put.called, 'data put called'
+        assert not self._clients.data_client.get.called, 'data get called'
+        assert not self._clients.data_client.get_head.called, 'data get_head called'
+        assert not self._clients.data_client.remove.called, 'data remove called'
+        assert not self._clients.metadata_client.read.called, 'meta read called'
+        assert not self._clients.metadata_client.create.called, 'meta create called'
+        assert not self._clients.metadata_client.update.called, 'meta update called'
+        assert not self._clients.metadata_client.delete.called, 'meta delete called'
+
+    def test_ingest_modify(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.INGEST, mc.TaskType.MODIFY]
+        self._ini(test_config, tmp_path)
+        test_data = [VisitNoException()]
+        test_meta = [VisitNoException()]
+        test_modify_transfer = transfer_composable.modify_transfer_factory(test_config, self._clients)
+        def _copy_file(destination_path, uri):
+            copyfile('/test_files/correct.fits', f'{destination_path}/correct.fits')
+        self._clients.data_client.get.side_effect = _copy_file
+        self._clients.metadata_client.read.return_value = _read_obs(None)
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            test_data,
+            clients=self._clients,
+            reporter=self._reporter,
+            modify_transfer=test_modify_transfer,
+        )
+        assert test_subject._executors is not None
+        assert len(test_subject._executors) == 1
+        assert isinstance(test_subject._executors[0], ec.NoFheadVisitRunnerMeta)
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, None), 'expect success'
+        assert not self._clients.data_client.info.called, 'data info called'
+        assert not self._clients.data_client.put.called, 'data put called'
+        assert self._clients.data_client.get.called, 'data get called'
+        assert self._clients.data_client.get.call_count == 1, 'data get call_count'
+        self._clients.data_client.get.assert_called_with(
+            f'{tmp_path}/correct', 'cadc:OMM/correct.fits'
+        ), 'data get calls'
+        assert not self._clients.data_client.get_head.called, 'data get_head called'
+        assert not self._clients.data_client.remove.called, 'data remove called'
+        assert self._clients.metadata_client.read.called, 'meta read called'
+        assert self._clients.metadata_client.read.call_count == 1, 'meta read call_count'
+        self._clients.metadata_client.read.assert_called_with('OMM', ANY), 'meta read call_count'
+        assert self._clients.metadata_client.update.called, 'meta update called'
+        assert self._clients.metadata_client.update.call_count == 1, 'meta update call_count'
+        self._clients.metadata_client.update.assert_called_with(ANY), 'meta update call_count'
+        # the read returns the test observation, so the service action is update, not create
+        assert not self._clients.metadata_client.create.called, 'meta create called'
+        assert not self._clients.metadata_client.delete.called, 'meta delete called'
+
+    def test_store_ingest(self, test_config, tmp_path):
+        test_config.use_local_files = True
+        test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
+        self._ini(test_config, tmp_path)
+        test_meta = [VisitNoException()]
+        test_store_transferrer = transfer_composable.store_transfer_factory(test_config, self._clients)
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            [],
+            clients=self._clients,
+            reporter=self._reporter,
+            store_transfer=test_store_transferrer,
+        )
+        assert test_subject._executors is not None
+        assert len(test_subject._executors) == 1
+        assert isinstance(test_subject._executors[0], ec.NoFheadStoreVisitRunnerMeta)
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, None), 'expect success'
+        assert not self._clients.data_client.info.called, 'data info called'
+        assert self._clients.data_client.put.called, 'data put called'
+        assert self._clients.data_client.put.call_count == 1, 'data put call_count'
+        self._clients.data_client.put.assert_called_with(
+            f'{tmp_path}/correct', 'cadc:OMM/correct.fits'
+        ), 'data put calls'
+        assert not self._clients.data_client.get.called, 'data get called'
+        assert not self._clients.data_client.get_head.called, 'data get_head called'
+        assert not self._clients.data_client.remove.called, 'data remove called'
+        assert self._clients.metadata_client.read.called, 'meta read called'
+        assert self._clients.metadata_client.read.call_count == 1, 'meta read call_count'
+        self._clients.metadata_client.read.assert_called_with('OMM', ANY), 'meta read call_count'
+        assert self._clients.metadata_client.update.called, 'meta update called'
+        assert self._clients.metadata_client.update.call_count == 1, 'meta update call_count'
+        self._clients.metadata_client.update.assert_called_with(ANY), 'meta update call_count'
+        # the read returns a Mock, so the service action is update, not create
+        assert not self._clients.metadata_client.create.called, 'meta create called'
+        assert not self._clients.metadata_client.delete.called, 'meta delete called'
+
+    def test_store_ingest_modify(self, test_config, tmp_path):
+        test_config.use_local_files = True
+        test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST, mc.TaskType.MODIFY]
+        self._ini(test_config, tmp_path)
+        test_data = [VisitNoException()]
+        test_meta = [VisitNoException()]
+        test_store_transferrer = transfer_composable.store_transfer_factory(test_config, self._clients)
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            test_data,
+            clients=self._clients,
+            reporter=self._reporter,
+            store_transfer=test_store_transferrer,
+        )
+        assert test_subject._executors is not None
+        assert len(test_subject._executors) == 1
+        assert isinstance(test_subject._executors[0], ec.NoFheadStoreVisitRunnerMeta)
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, None), 'expect success'
+        assert not self._clients.data_client.info.called, 'data info called'
+        assert self._clients.data_client.put.called, 'data put called'
+        assert self._clients.data_client.put.call_count == 1, 'data put call_count'
+        self._clients.data_client.put.assert_called_with(
+            f'{tmp_path}/correct', 'cadc:OMM/correct.fits'
+        ), 'data put calls'
+        assert not self._clients.data_client.get.called, 'data get called'
+        assert not self._clients.data_client.get_head.called, 'data get_head called'
+        assert not self._clients.data_client.remove.called, 'data remove called'
+        assert self._clients.metadata_client.read.called, 'meta read called'
+        assert self._clients.metadata_client.read.call_count == 1, 'meta read call_count'
+        self._clients.metadata_client.read.assert_called_with('OMM', ANY), 'meta read call_count'
+        assert self._clients.metadata_client.update.called, 'meta update called'
+        assert self._clients.metadata_client.update.call_count == 1, 'meta update call_count'
+        self._clients.metadata_client.update.assert_called_with(ANY), 'meta update call_count'
+        # the read returns a Mock, so the service action is update, not create
+        assert not self._clients.metadata_client.create.called, 'meta create called'
+        assert not self._clients.metadata_client.delete.called, 'meta delete called'
+
+    def test_ingest_create_delete(self, test_config, tmp_path):
+        test_config.task_types = [mc.TaskType.INGEST]
+        self._ini(test_config, tmp_path)
+        test_meta = [VisitNoException()]
+        self._clients.metadata_client.read.return_value = _read_obs(None)
+        test_subject = ec.OrganizeExecutesRunnerMeta(
+            test_config,
+            test_meta,
+            [],
+            needs_delete=True,
+            clients=self._clients,
+            reporter=self._reporter,
+        )
+        assert test_subject._executors is not None
+        assert len(test_subject._executors) == 1
+        assert isinstance(test_subject._executors[0], ec.MetaVisitDeleteCreateRunnerMeta)
+        test_result = test_subject.do_one(self._storage_name)
+        assert test_result is not None, 'expect a result'
+        assert test_result == (0, None), 'expect success'
+        assert self._clients.data_client.info.called, 'data info called'
+        assert self._clients.data_client.info.call_count == 1, 'data info call_count'
+        self._clients.data_client.info.assert_called_with('cadc:OMM/correct.fits'), 'data info calls'
+        assert not self._clients.data_client.put.called, 'data put called'
+        assert not self._clients.data_client.get.called, 'data get called'
+        assert self._clients.data_client.get_head.called, 'data get_head called'
+        assert self._clients.data_client.get_head.call_count == 1, 'data get_head call_count'
+        self._clients.data_client.get_head.assert_called_with('cadc:OMM/correct.fits'), 'data get_head calls'
+        assert not self._clients.data_client.remove.called, 'data remove called'
+        assert self._clients.metadata_client.read.called, 'meta read called'
+        assert self._clients.metadata_client.read.call_count == 1, 'meta read call_count'
+        self._clients.metadata_client.read.assert_called_with('OMM', ANY), 'meta read calls'
+        assert self._clients.metadata_client.create.called, 'meta create called'
+        assert self._clients.metadata_client.create.call_count == 1, 'meta create call_count'
+        self._clients.metadata_client.create.assert_called_with(ANY), 'meta create calls'
+        # the read returns a Mock, so the service action is update, not create
+        assert not self._clients.metadata_client.update.called, 'meta create called'
+        assert self._clients.metadata_client.delete.called, 'meta delete called'
+        assert self._clients.metadata_client.delete.call_count == 1, 'meta delete call_count'
+        self._clients.metadata_client.delete.assert_called_with(
+            'test_collection', 'test_obs_id'
+        ), 'meta delete calls'
+
 def _transfer_get_mock(entry, fqn):
     assert entry == 'vos:goliaths/nonexistent.fits.gz', 'wrong entry'
     with open(fqn, 'w') as f:
@@ -1169,7 +1642,7 @@ def _transfer_hdf5_external_mock(entry, fqn):
 
 
 def _transfer_hdf5_get_mock(fqn, entry):
-    copy(f'{tc.TEST_DATA_DIR}/testz.hdf5', fqn)
+    copy('/test_files/testz.hdf5', fqn)
 
 
 def _communicate():
