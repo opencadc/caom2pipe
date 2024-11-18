@@ -764,8 +764,8 @@ def test_use_vos():
 
 
 def test_log_directory_construction(test_config, tmpdir):
+    test_config.change_working_directory(tmpdir)
     test_config.log_to_file = True
-    test_config.log_file_directory = tmpdir
     # reset the fqn's
     test_config.success_log_file_name = 'good.txt'
     test_config.failure_log_file_name = 'bad.txt'
@@ -773,7 +773,9 @@ def test_log_directory_construction(test_config, tmpdir):
     assert not os.path.exists(test_config.success_fqn)
     assert not os.path.exists(test_config.failure_fqn)
     assert not os.path.exists(test_config.retry_fqn)
-    test_subject = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
+    assert not os.path.exists(test_config.rejected_fqn), test_config.rejected_fqn
+    # test_subject = mc.ExecutionReporter(test_config, observable=Mock(autospec=True))
+    test_subject = mc.ExecutionReporter(test_config, mc.Observable(test_config))
     assert os.path.exists(test_config.success_fqn)
     assert os.path.exists(test_config.failure_fqn)
     assert os.path.exists(test_config.retry_fqn)
@@ -785,7 +787,7 @@ def test_log_directory_construction(test_config, tmpdir):
         test_subject.capture_failure(test_sname, e, traceback.format_exc())
 
     try:
-        raise RuntimeError('some other error')
+        raise RuntimeError('Cannot build an observation')
     except Exception as e2:
         test_sname = tc.TStorageName(obs_id='test_obs_id')
         test_subject.capture_failure(test_sname, e2, traceback.format_exc())
@@ -796,13 +798,20 @@ def test_log_directory_construction(test_config, tmpdir):
     success_content = open(test_config.success_fqn).read()
     assert 'test_obs_id C121212_01234_CAL.fits.gz' in success_content, 'wrong content'
     retry_content = open(test_config.retry_fqn).read()
-    assert retry_content == '/tmp/test_file.fits.gz\n/tmp/test_file.fits.gz\n', f'{retry_content}'
+    #  assert retry_content =#= '/tmp/test_file.fits.gz\n/tmp/test_file.fits.gz\n', f'{retry_content}'
+    assert retry_content == '/tmp/test_file.fits.gz\n', f'{retry_content}'
     failure_content = open(test_config.failure_fqn).read()
-    assert failure_content.endswith('some other error\n'), failure_content
+    assert failure_content.endswith('Cannot build an observation\n'), failure_content
+    assert not os.path.exists(test_config.rejected_fqn), test_config.rejected_fqn
+
+    test_subject._observable.rejected.persist_state()
     assert os.path.exists(test_config.rejected_fqn), test_config.rejected_fqn
     rejected_content = mc.read_as_yaml(test_config.rejected_fqn)
     assert rejected_content is not None, 'expect a result'
     test_result = rejected_content.get('bad_metadata')
+    assert test_result is not None, 'wrong result'
+    assert len(test_result) == 1, f'wrong number of entries {test_result}'
+    test_result = rejected_content.get('bad_data')
     assert test_result is not None, 'wrong result'
     assert len(test_result) == 0, f'wrong number of entries {test_result}'
 

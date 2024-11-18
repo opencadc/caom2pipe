@@ -1800,7 +1800,8 @@ def test_run_state_store_ingest_local_retry_runner_meta(
         sources=test_sources,
         clients=client_mock,
         store_transfer=Mock(),
-        modify_transfer=Mock()
+        modify_transfer=Mock(),
+        storage_name_ctor=mc.StorageName,
     )
     assert test_result is not None, 'expect result'
     assert test_result == -1, 'expect failures because of the retries'

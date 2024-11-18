@@ -243,7 +243,7 @@ def test_report_output_todo_local(test_config, tmpdir):
 
 
 @patch('caom2pipe.astro_composable.check_fitsverify')
-def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
+def test_report_output_todo_vault(verify_mock, test_config, tmpdir, change_test_dir):
     # VaultCleanupDataSource - incremental and all
     # work is all the list of files,
     #   one has been stored already,
@@ -251,170 +251,166 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir):
     #   one fails ingestion
     #   one succeeds
 
-    orig_cwd = getcwd()
-    try:
-        chdir(tmpdir)
-        test_config.task_types = [TaskType.STORE]
-        test_config.interval = 100
-        test_config.change_working_directory(tmpdir)
-        test_config.logging_level = 'ERROR'
-        test_config.use_local_files = False
-        test_config.data_sources = ['vos://cadc.nrc.ca!vault/goliaths/test']
-        test_config.cleanup_failure_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/failure'
-        test_config.cleanup_success_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/success'
+    test_config.task_types = [TaskType.STORE]
+    test_config.interval = 100
+    test_config.change_working_directory(tmpdir)
+    test_config.logging_level = 'ERROR'
+    test_config.use_local_files = False
+    test_config.data_sources = ['vos://cadc.nrc.ca!vault/goliaths/test']
+    test_config.cleanup_failure_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/failure'
+    test_config.cleanup_success_destination = 'vos://cadc.nrc.ca!vault/goliaths/test/success'
 
-        ignore_pre_success_listing, file_info_list = _create_dir_listing('/tmp', 4)
-        vo_listing, vo_file_info_list, vo_listdir = _get_node_listing(4)
-        test_reader = Mock()
-        test_reader.file_info = {
-            'cadc:OMM/A0.fits': file_info_list[0],
-            'cadc:OMM/A1.fits': file_info_list[1],
-            'cadc:OMM/A2.fits': file_info_list[2],
-            'cadc:OMM/A3.fits': file_info_list[3],
-        }
-        test_clients = Mock()
+    ignore_pre_success_listing, file_info_list = _create_dir_listing('/tmp', 4)
+    vo_listing, vo_file_info_list, vo_listdir = _get_node_listing(4)
+    test_reader = Mock()
+    test_reader.file_info = {
+        'cadc:OMM/A0.fits': file_info_list[0],
+        'cadc:OMM/A1.fits': file_info_list[1],
+        'cadc:OMM/A2.fits': file_info_list[2],
+        'cadc:OMM/A3.fits': file_info_list[3],
+    }
+    test_clients = Mock()
 
-        for clean_up in [True, False]:
-            for store_modified in [True, False]:
+    for clean_up in [True, False]:
+        for store_modified in [True, False]:
+            put_side_effect = [None, CadcException, None]
+            info_side_effect = [file_info_list[0], None, None, file_info_list[0]]
+            skipped_sum = 0
+            if store_modified:
+                put_side_effect = [CadcException, None]
+                info_side_effect = [file_info_list[0], None, None, None, None, None, file_info_list[3]]
+                skipped_sum = 1
+            test_config.cleanup_files_when_storing = clean_up
+            test_config.store_modified_files_only = store_modified
+            if clean_up:
+                store_transfer = VoScienceTransfer(test_clients.vo_client)
+            else:
+                store_transfer = VoScienceTransfer(test_clients.vo_client)
                 put_side_effect = [None, CadcException, None]
-                info_side_effect = [file_info_list[0], None, None, file_info_list[0]]
-                skipped_sum = 0
-                if store_modified:
-                    put_side_effect = [CadcException, None]
-                    info_side_effect = [file_info_list[0], None, None, None, None, None, file_info_list[3]]
-                    skipped_sum = 1
-                test_config.cleanup_files_when_storing = clean_up
-                test_config.store_modified_files_only = store_modified
-                if clean_up:
-                    store_transfer = VoScienceTransfer(test_clients.vo_client)
-                else:
-                    store_transfer = VoScienceTransfer(test_clients.vo_client)
-                    put_side_effect = [None, CadcException, None]
 
-                test_data_source = dsc.VaultCleanupDataSource(
-                    test_config, test_clients.vo_client, test_clients.data_client, test_reader
+            test_data_source = dsc.VaultCleanupDataSource(
+                test_config, test_clients.vo_client, test_clients.data_client, test_reader
+            )
+            type(test_data_source).end_dt = PropertyMock(return_value=TEST_END_TIME)
+            Config.write_to_file(test_config)
+            State.write_bookmark(test_config.state_fqn, test_config.bookmark, TEST_START_TIME)
+            # state == True is incremental operation
+            for state in [True, False]:
+                (
+                    test_config,
+                    test_clients,
+                    test_builder,
+                    test_data_sources,
+                    test_reader,
+                    test_organizer,
+                    test_observable,
+                    test_reporter,
+                ) = rc.common_runner_init(
+                    config=test_config,
+                    clients=test_clients,
+                    name_builder=None,
+                    sources=[test_data_source],
+                    modify_transfer=None,
+                    metadata_reader=test_reader,
+                    state=state,
+                    store_transfer=store_transfer,
+                    meta_visitors=[],
+                    data_visitors=[],
+                    chooser=None,
                 )
-                type(test_data_source).end_dt = PropertyMock(return_value=TEST_END_TIME)
-                Config.write_to_file(test_config)
-                State.write_bookmark(test_config.state_fqn, test_config.bookmark, TEST_START_TIME)
-                # state == True is incremental operation
-                for state in [True, False]:
-                    (
+                # 0 stored already
+                # 1 fails fitsverify
+                # 2 fails ingestion
+                # 3 succeeds
+                test_clients.data_client.info.side_effect = info_side_effect
+                test_clients.data_client.put.side_effect = put_side_effect
+                test_clients.vo_client.isdir.return_value = False
+                test_clients.vo_client.listdir.side_effect = vo_listdir
+                if not state:
+                    test_clients.vo_client.listdir.side_effect = [vo_listdir.node_list]
+                test_clients.vo_client.get_node.side_effect = vo_listing
+                if store_modified:
+                    # FITS files are valid, invalid, valid, valid, but the verify is called in the transfer, so
+                    # the first 'valid' check never happens
+                    verify_mock.side_effect = [False, True, True]
+                else:
+                    verify_mock.side_effect = [True, False, True, True]
+
+                if state:
+                    test_subject = rc.StateRunner(
                         test_config,
-                        test_clients,
+                        test_organizer,
                         test_builder,
                         test_data_sources,
                         test_reader,
-                        test_organizer,
                         test_observable,
                         test_reporter,
-                    ) = rc.common_runner_init(
-                        config=test_config,
-                        clients=test_clients,
-                        name_builder=None,
-                        sources=[test_data_source],
-                        modify_transfer=None,
-                        metadata_reader=test_reader,
-                        state=state,
-                        store_transfer=store_transfer,
-                        meta_visitors=[],
-                        data_visitors=[],
-                        chooser=None,
                     )
-                    # 0 stored already
-                    # 1 fails fitsverify
-                    # 2 fails ingestion
-                    # 3 succeeds
-                    test_clients.data_client.info.side_effect = info_side_effect
-                    test_clients.data_client.put.side_effect = put_side_effect
-                    test_clients.vo_client.isdir.return_value = False
-                    test_clients.vo_client.listdir.side_effect = vo_listdir
-                    if not state:
-                        test_clients.vo_client.listdir.side_effect = [vo_listdir.node_list]
-                    test_clients.vo_client.get_node.side_effect = vo_listing
+                else:
+                    test_subject = rc.TodoRunner(
+                        test_config,
+                        test_organizer,
+                        test_builder,
+                        test_data_sources,
+                        test_reader,
+                        test_observable,
+                        test_reporter,
+                    )
+
+                diagnostic = f'clean up {clean_up} store modified {store_modified} subject {type(test_subject)}'
+                ds_move_mock = Mock()
+                test_subject._data_sources[0]._move_action = ds_move_mock
+                transfer_move_mock = Mock()
+                store_transfer._move_action = transfer_move_mock
+                try:
+                    test_result = test_subject.run()
+                except Exception as e:
+                    logging.error(format_exc())
+                    assert False, f'{e} {diagnostic}'
+
+                assert test_result is not None, f'expect a result {diagnostic}'
+                assert test_result == -1, f'there are some failures {diagnostic}'
+                # the move mock is always called - there's an 'if cleanup_when_storing check in the method itself
+                if clean_up:
+                    assert ds_move_mock.called, f'ds move should be called {diagnostic}'
+                    assert ds_move_mock.call_count == 4, f'ds wrong move call count {diagnostic}'
+                    ds_move_mock.assert_has_calls([
+                        call(
+                            'vos://cadc.nrc.ca!vault/goliaths/test/A0.fits',
+                            'vos://cadc.nrc.ca!vault/goliaths/test/success',
+                        ),
+                        call(
+                            'vos://cadc.nrc.ca!vault/goliaths/test/A1.fits',
+                            'vos://cadc.nrc.ca!vault/goliaths/test/failure',
+                        ),
+                        call(
+                            'vos://cadc.nrc.ca!vault/goliaths/test/A2.fits',
+                            'vos://cadc.nrc.ca!vault/goliaths/test/failure',
+                        ),
+                        call(
+                            'vos://cadc.nrc.ca!vault/goliaths/test/A3.fits',
+                            'vos://cadc.nrc.ca!vault/goliaths/test/success',
+                        ),
+                    ])
+                else:
                     if store_modified:
-                        # FITS files are valid, invalid, valid, valid, but the verify is called in the transfer, so
-                        # the first 'valid' check never happens
-                        verify_mock.side_effect = [False, True, True]
-                    else:
-                        verify_mock.side_effect = [True, False, True, True]
-
-                    if state:
-                        test_subject = rc.StateRunner(
-                            test_config,
-                            test_organizer,
-                            test_builder,
-                            test_data_sources,
-                            test_reader,
-                            test_observable,
-                            test_reporter,
-                        )
-                    else:
-                        test_subject = rc.TodoRunner(
-                            test_config,
-                            test_organizer,
-                            test_builder,
-                            test_data_sources,
-                            test_reader,
-                            test_observable,
-                            test_reporter,
-                        )
-
-                    diagnostic = f'clean up {clean_up} store modified {store_modified} subject {type(test_subject)}'
-                    ds_move_mock = Mock()
-                    test_subject._data_sources[0]._move_action = ds_move_mock
-                    transfer_move_mock = Mock()
-                    store_transfer._move_action = transfer_move_mock
-                    try:
-                        test_result = test_subject.run()
-                    except Exception as e:
-                        logging.error(format_exc())
-                        assert False, f'{e} {diagnostic}'
-
-                    assert test_result is not None, f'expect a result {diagnostic}'
-                    assert test_result == -1, f'there are some failures {diagnostic}'
-                    # the move mock is always called - there's an 'if cleanup_when_storing check in the method itself
-                    if clean_up:
                         assert ds_move_mock.called, f'ds move should be called {diagnostic}'
-                        assert ds_move_mock.call_count == 4, f'ds wrong move call count {diagnostic}'
-                        ds_move_mock.assert_has_calls([
-                            call(
-                                'vos://cadc.nrc.ca!vault/goliaths/test/A0.fits',
-                                'vos://cadc.nrc.ca!vault/goliaths/test/success',
-                            ),
-                            call(
-                                'vos://cadc.nrc.ca!vault/goliaths/test/A1.fits',
-                                'vos://cadc.nrc.ca!vault/goliaths/test/failure',
-                            ),
-                            call(
-                                'vos://cadc.nrc.ca!vault/goliaths/test/A2.fits',
-                                'vos://cadc.nrc.ca!vault/goliaths/test/failure',
-                            ),
-                            call(
-                                'vos://cadc.nrc.ca!vault/goliaths/test/A3.fits',
-                                'vos://cadc.nrc.ca!vault/goliaths/test/success',
-                            ),
-                        ])
+                        assert ds_move_mock.call_count == 1, f'ds wrong move call count {diagnostic}'
+                        ds_move_mock.assert_called_with(
+                            'vos://cadc.nrc.ca!vault/goliaths/test/A0.fits',
+                            'vos://cadc.nrc.ca!vault/goliaths/test/success',
+                        )
                     else:
-                        if store_modified:
-                            assert ds_move_mock.called, f'ds move should be called {diagnostic}'
-                            assert ds_move_mock.call_count == 1, f'ds wrong move call count {diagnostic}'
-                            ds_move_mock.assert_called_with(
-                                'vos://cadc.nrc.ca!vault/goliaths/test/A0.fits',
-                                'vos://cadc.nrc.ca!vault/goliaths/test/success',
-                            )
-                        else:
-                            assert not ds_move_mock.called, 'ds move mock not called'
-                    test_report = test_subject._data_sources[0]._reporter._summary
-                    assert test_report._entries_sum == 4, f'entries {diagnostic} {test_report.report()}'
-                    assert test_report._success_sum == 2, f'success {diagnostic} {test_report.report()}'
-                    assert test_report._timeouts_sum == 0, f'timeouts {diagnostic} {test_report.report()}'
-                    assert test_report._retry_sum == 0, f'retry {diagnostic} {test_report.report()}'
-                    assert test_report._errors_sum == 2, f'errors {diagnostic} {test_report.report()}'
-                    assert test_report._rejected_sum == 0, f'rejection {diagnostic} {test_report.report()}'
-                    assert test_report._skipped_sum == skipped_sum, f'skipped {diagnostic} {test_report.report()}'
-    finally:
-        chdir(orig_cwd)
+                        assert not ds_move_mock.called, 'ds move mock not called'
+                test_report = test_subject._data_sources[0]._reporter._summary
+                assert test_report._entries_sum == 4, f'entries {diagnostic} {test_report.report()}'
+                assert test_report._success_sum == 2, f'success {diagnostic} {test_report.report()}'
+                assert test_report._timeouts_sum == 0, f'timeouts {diagnostic} {test_report.report()}'
+                assert test_report._retry_sum == 0, f'retry {diagnostic} {test_report.report()}'
+                assert test_report._errors_sum == 2, f'errors {diagnostic} {test_report.report()}'
+                # there's a fitsverify error
+                assert test_report._rejected_sum == 1, f'rejection {diagnostic} {test_report.report()}'
+                assert test_report._skipped_sum == skipped_sum, f'skipped {diagnostic} {test_report.report()}'
 
 
 def _get_node_listing(count, prefix='A'):

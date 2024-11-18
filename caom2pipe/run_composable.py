@@ -725,6 +725,93 @@ def common_runner_init(
     )
 
 
+def common_runner_init_runner_meta(
+    clients,
+    config,
+    data_sources,
+    data_visitors,
+    meta_visitors,
+    modify_transfer,
+    needs_delete,
+    organizer_class_name='OrganizeExecutesRunnerMeta',
+    organizer_module_name='caom2pipe.execute_composable',
+    reporter=None,
+    state=False,
+    storage_name_ctor=mc.StorageName,
+    store_transfer=False,
+):
+    """The common initialization code between TodoRunner and StateRunner uses. <collection>2caom2 implementations can
+    use the defaults created here for the 'run' call, or they can provide their own specializations of the various
+    classes required to store data and ingest metadata at CADC.
+
+    :param config: Config instance
+    :param clients: ClientCollection instance
+    :param name_builder NameBuilder extension that creates an instance of a StorageName extension, from an entry from
+        a DataSourceComposable listing
+    :param sources list of DataSource implementations, if there are specializations
+    :param modify_transfer Transfer extension that identifies how to retrieve data from a source for modification of
+        CAOM2 metadata. By this time, files are usually stored at CADC, so it's probably a CadcTransfer instance, but
+        this allows for the case that a file is never stored at CADC. Try to guess what this one is.
+    :param metadata_reader: MetadataReader instance
+    :param state: bool True if using StateRunner
+    :param store_transfer Transfer extension that identifies hot to retrieve data from a source for storage at CADC,
+        probably an HTTP or FTP site. Don't try to guess what this one is.
+    :param meta_visitors list of modules with visit methods, that expect the metadata of a work file to exist on disk
+    :param data_visitors list of modules with visit methods, that expect the work file to exist on disk
+    :param chooser OrganizerChooser, if there's rules that are unique to a collection about file naming.
+    """
+    if config is None:
+        config = mc.Config()
+        config.get_executors()
+
+    set_logging(config)
+    logging.debug(
+        f'Setting collection to {config.collection}, preview scheme to {config.preview_scheme}, scheme to '
+        f'{config.scheme} in StorageName, and data_source_extensions to {config.data_source_extensions}.'
+    )
+    mc.StorageName.collection = config.collection
+    mc.StorageName.preview_scheme = config.preview_scheme
+    mc.StorageName.scheme = config.scheme
+    mc.StorageName.data_source_extensions = config.data_source_extensions
+
+    if reporter is None:
+        reporter = mc.ExecutionReporter2(config)
+    reporter.set_log_location(config)
+    if clients is None:
+        clients = cc.ClientCollection(config)
+    clients.metrics = reporter.observable.metrics
+    if data_sources is None or len(data_sources) == 0:
+        data_sources = list()
+        data_sources.append(
+            data_source_composable.runner_meta_data_source_factory(
+                config, clients, state, reporter, storage_name_ctor
+            ),
+        )
+    else:
+        for data_source in data_sources:
+            data_source.reporter = reporter
+    if modify_transfer is None:
+        modify_transfer = transfer_composable.modify_transfer_factory(config, clients)
+
+    if store_transfer is None:
+        store_transfer = transfer_composable.store_transfer_factory(config, clients)
+
+    mdul = import_module(organizer_module_name)
+    cls = getattr(mdul, organizer_class_name)
+    organizer = cls(
+        config,
+        meta_visitors,
+        data_visitors,
+        needs_delete,
+        store_transfer,
+        modify_transfer,
+        clients,
+        reporter,
+    )
+
+    return (clients, config, data_sources, organizer, reporter)
+
+
 def run_by_todo(
     config=None,
     name_builder=None,
@@ -882,7 +969,6 @@ def run_by_state(
 
 def run_by_todo_runner_meta(
     config=None,
-    chooser=None,
     sources=None,
     meta_visitors=None,
     data_visitors=None,
@@ -893,6 +979,7 @@ def run_by_todo_runner_meta(
     organizer_class_name='OrganizeExecutesRunnerMeta',
     reporter=None,
     needs_delete=False,
+    storage_name_ctor=None,
 ):
     """A default implementation for using the TodoRunner.
 
@@ -921,49 +1008,23 @@ def run_by_todo_runner_meta(
     meta_visitors = [] if meta_visitors is None else meta_visitors
     data_visitors = [] if data_visitors is None else data_visitors
     sources = [] if sources is None else sources
-    (
-        config,
+    clients, config, data_sources, organizer, reporter = common_runner_init_runner_meta(
         clients,
-        ignore_name_builder,
-        data_sources,
-        ignore_metadata_reader,
-        organizer,
-        ignore_observable,
-        reporter,
-    ) = common_runner_init(
         config,
-        clients,
-        None,
         sources,
+        data_visitors,
+        meta_visitors,
         modify_transfer,
-        None,
-        False,
-        store_transfer,
-        meta_visitors,
-        data_visitors,
-        chooser,
-        reporter=reporter,
-    )
-
-    mdul = import_module(organizer_module_name)
-    cls = getattr(mdul, organizer_class_name)
-    organizer = cls(
-        config,
-        meta_visitors,
-        data_visitors,
         needs_delete,
-        store_transfer,
-        modify_transfer,
-        clients,
+        organizer_class_name,
+        organizer_module_name,
         reporter,
+        False,  # state
+        storage_name_ctor,
+        store_transfer,
     )
 
-    runner = TodoRunnerMeta(
-        config,
-        data_sources,
-        organizer,
-        reporter,
-    )
+    runner = TodoRunnerMeta(config, data_sources, organizer, reporter)
     result = runner.run()
     result |= runner.run_retry()
     runner.report()
@@ -982,6 +1043,7 @@ def run_by_state_runner_meta(
     organizer_module_name='caom2pipe.execute_composable',
     organizer_class_name='OrganizeExecutesRunnerMeta',
     needs_delete=False,
+    storage_name_ctor=None,
 ):
     """A default implementation for using the StateRunner.
 
@@ -1010,49 +1072,23 @@ def run_by_state_runner_meta(
     meta_visitors = [] if meta_visitors is None else meta_visitors
     data_visitors = [] if data_visitors is None else data_visitors
     sources = [] if sources is None else sources
-    (
-        config,
-        clients,
-        ignore_name_builder,
-        sources,
-        ignore_metadata_reader,
-        ignore_organizer,
-        ignore_observable,
-        reporter,
-    ) = common_runner_init(
-        config,
-        clients,
-        None,  # name_builder
-        sources,
-        modify_transfer,
-        None,  # metadata_reader
-        True,
-        store_transfer,
-        meta_visitors,
-        data_visitors,
-        chooser=None,
+    clients, config, sources, organizer, reporter = common_runner_init_runner_meta(
+        clients=clients,
+        config=config,
+        data_sources=sources,
+        data_visitors=data_visitors,
+        meta_visitors=meta_visitors,
+        modify_transfer=modify_transfer,
+        needs_delete=needs_delete,
+        organizer_class_name=organizer_class_name,
+        organizer_module_name=organizer_module_name,
         reporter=reporter,
+        state=True,  # state
+        storage_name_ctor=storage_name_ctor,
+        store_transfer=store_transfer,
     )
 
-    mdul = import_module(organizer_module_name)
-    cls = getattr(mdul, organizer_class_name)
-    organizer = cls(
-        config,
-        meta_visitors,
-        data_visitors,
-        needs_delete,
-        store_transfer,
-        modify_transfer,
-        clients,
-        reporter,
-    )
-
-    runner = StateRunnerMeta(
-        config,
-        organizer,
-        sources,
-        reporter,
-    )
+    runner = StateRunnerMeta(config, organizer, sources, reporter)
     result = runner.run()
     result |= runner.run_retry()
     runner.report()
