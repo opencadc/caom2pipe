@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<caom2:Observation xmlns:caom2="http://www.opencadc.org/caom2/xml/v2.4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="caom2:SimpleObservation" caom2:id="a94f37fb-5ac0-45b7-b357-6e5c6f6075f8">
+<caom2:Observation xmlns:caom2="http://www.opencadc.org/caom2/xml/v2.4" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="caom2:SimpleObservation" caom2:id="ad3fb8af-8bb1-4f6c-9a11-e9679b0f1e6a">
   <caom2:collection>test_collection</caom2:collection>
   <caom2:observationID>test_obs_id</caom2:observationID>
   <caom2:algorithm>
