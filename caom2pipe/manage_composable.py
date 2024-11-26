@@ -2389,8 +2389,8 @@ class StorageName:
             f'       file_name: {self.file_name}\n'
             f'    source_names: {self.source_names}\n'
             f'destination_uris: {self.destination_uris}\n'
-            f'       file_info: {f_info_keys}\n'
-            f'        metadata: {metadata_keys}'
+            f'  file_info keys: {f_info_keys}\n'
+            f'   metadata keys: {metadata_keys}'
         )
 
     def _get_uri(self, file_name, scheme):
@@ -2437,7 +2437,12 @@ class StorageName:
     def model_file_name(self):
         """The file name used on local disk that holds the CAOM2 Observation
         XML."""
-        return f'{self._obs_id}.xml'
+        # return f'{self._obs_id}.xml'
+        return f'{self.name}.xml'
+
+    @property
+    def name(self):
+        return self._obs_id
 
     @property
     def prev(self):

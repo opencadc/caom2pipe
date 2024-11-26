@@ -197,7 +197,7 @@ class CaomExecute:
     @storage_name.setter
     def storage_name(self, value):
         self._storage_name = value
-        self._working_dir = os.path.join(self.root_dir, value.obs_id)
+        self._working_dir = os.path.join(self.root_dir, value.name)
         if self._config.log_to_file:
             self._model_fqn = os.path.join(self._config.log_file_directory, value.model_file_name)
         else:
@@ -333,7 +333,7 @@ class CaomExecute:
     def _write_model(self):
         """Write an observation to disk from memory, represented in XML."""
         if self._observation is not None:
-            self._logger.debug(f'Write model to {self._model_fqn}.')
+            self._logger.error(f'Write model to {self._model_fqn}.')
             mc.write_obs_to_file(self._observation, self._model_fqn)
 
     def execute(self, context):
@@ -395,17 +395,20 @@ class CaomExecuteRunnerMeta(CaomExecute):
                 'config': self._config,
                 'clients': self._clients,
                 'storage_name': self._storage_name,
-                'observable': self.observable,
+                'reporter': self._reporter,
             }
             for visitor in self.meta_visitors:
                 try:
                     self._observation = visitor.visit(self._observation, **kwargs)
-                    if self._observation is None:
-                        msg = f'No Observation for {self._storage_name.file_uri}. Construction failed.'
-                        self._logger.error(f'Stopping _visit_meta with {msg}')
-                        raise mc.CadcException(msg)
                 except Exception as e:
+                    self._logger.error(e)
+                    self._logger.error(traceback.format_exc())
                     raise mc.CadcException(e)
+
+                if self._observation is None:
+                    msg = f'No Observation for {self._storage_name.file_uri}. Construction failed.'
+                    self._logger.error(f'Stopping _visit_meta with {msg}')
+                    raise mc.CadcException(msg)
 
     def execute(self, context):
         self._logger.debug('Begin execute with the steps:')
@@ -1298,13 +1301,13 @@ class OrganizeExecutes:
         if len(self._executors) == 0:
             raise mc.CadcException(f'No executors. Will not continue.')
 
-    def _clean_up_workspace(self, obs_id):
+    def _clean_up_workspace(self, name):
         """Remove a directory and all its contents. Only do this if there
         is not a 'SCRAPE' task type, since the point of scraping is to
         be able to look at the pipeline execution artefacts once the
         processing is done.
         """
-        working_dir = os.path.join(self.config.working_directory, obs_id)
+        working_dir = os.path.join(self.config.working_directory, name)
         if (
             os.path.exists(working_dir)
             and mc.TaskType.SCRAPE not in self.config.task_types
@@ -1314,9 +1317,10 @@ class OrganizeExecutes:
             os.rmdir(working_dir)
             self._logger.debug(f'Removed working directory {working_dir} and contents.')
 
-    def _create_workspace(self, obs_id):
+    def _create_workspace(self, name):
         """Create the working area if it does not already exist."""
-        working_dir = os.path.join(self.config.working_directory, obs_id)
+        self._logger.error(f'{self.config.working_directory} obs_id {name}')
+        working_dir = os.path.join(self.config.working_directory, name)
         self._logger.debug(f'Create working directory {working_dir}')
         mc.create_dir(working_dir)
 
@@ -1524,23 +1528,23 @@ class OrganizeExecutes:
                     result = 0
                     result_message = 'Rejected'
                 else:
-                    self._create_workspace(storage_name.obs_id)
+                    self._create_workspace(storage_name.name)
                     context = {'storage_name': storage_name}
                     for executor in self._executors:
-                        self._logger.info(f'Task with {executor.__class__.__name__} for {storage_name.obs_id}')
+                        self._logger.info(f'Task with {executor.__class__.__name__} for {storage_name.name}')
                         executor.execute(context)
                     result = 0
                     result_message = None
             except Exception as e:
-                result_message = f'Execution failed for {storage_name.obs_id} with {e}'
+                result_message = f'Execution failed for {storage_name.name} with {e}'
                 self._logger.warning(result_message)
                 self._logger.debug(traceback.format_exc())
                 result = -1
             finally:
-                self._clean_up_workspace(storage_name.obs_id)
+                self._clean_up_workspace(storage_name.name)
                 self._unset_file_logging()
         else:
-            self._logger.error(f'{storage_name.obs_id} failed naming validation check.')
+            self._logger.error(f'{storage_name.name} failed naming validation check.')
             result = -1
             result_message = 'Invalid name format'
         self._logger.debug(f'Done do_one with result {result} and message {result_message}')
