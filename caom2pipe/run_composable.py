@@ -490,14 +490,14 @@ class StateRunnerMeta(StateRunner):
             cumulative = 0
             result = 0
             while exec_time <= data_source.end_dt:
-                self._logger.info(f'Processing {data_source.start_key} from {prev_exec_time} to {exec_time}')
+                self._logger.error(f'Processing {data_source.start_key} from {prev_exec_time} to {exec_time}')
                 save_time = exec_time
                 self._reporter.set_log_location(self._config)
                 entries = data_source.get_time_box_work(prev_exec_time, exec_time)
                 num_entries = len(entries)
 
                 if num_entries > 0:
-                    self._logger.info(f'Processing {num_entries} entries.')
+                    self._logger.error(f'Processing {num_entries} entries.')
                     pop_action = entries.pop
                     if isinstance(entries, deque):
                         pop_action = entries.popleft
@@ -518,10 +518,14 @@ class StateRunnerMeta(StateRunner):
                             result |= -1
                     self._finish_run()
 
+                self._logger.error(
+                    f'num_entries {num_entries} cumulative {cumulative} prev_exec_time {prev_exec_time} '
+                    f'save_time {save_time} exec_time {exec_time} max_records {data_source.max_records_encountered()}'
+                )
                 self._record_progress(num_entries, cumulative, prev_exec_time, save_time)
                 data_source.save_start_dt(save_time)
 
-                if exec_time == data_source.end_dt:
+                if exec_time == data_source.end_dt and not data_source.max_records_encountered():
                     # the last interval will always have the exec time equal to the end time, which will fail the
                     # while check so leave after the last interval has been processed
                     #
@@ -529,7 +533,11 @@ class StateRunnerMeta(StateRunner):
                     # will get executed, so don't get rid of the '=' in the while loop comparison, just because
                     # this one exists
                     break
-                prev_exec_time = exec_time
+
+                if data_source.max_records_encountered():
+                    prev_exec_time = save_time
+                else:
+                    prev_exec_time = exec_time
                 new_time = mc.increment_time(prev_exec_time, self._config.interval)
                 exec_time = min(new_time, data_source.end_dt)
 

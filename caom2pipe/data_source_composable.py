@@ -156,6 +156,9 @@ class DataSource:
     def get_work(self):
         return self._work
 
+    def max_records_encountered(self):
+        return False
+
     def _capture_todo(self):
         self._reporter.capture_todo(len(self._work), self._rejected_files, self._skipped_files)
         # do not need the record of the rejected or skipped files any longer
