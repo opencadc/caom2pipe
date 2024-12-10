@@ -391,6 +391,7 @@ class StateRunner(TodoRunner):
                     self._finish_run()
 
                 self._record_progress(num_entries, cumulative, prev_exec_time, save_time)
+                cumulative += num_entries
                 data_source.save_start_dt(save_time)
 
                 if exec_time == data_source.end_dt:
@@ -523,6 +524,7 @@ class StateRunnerMeta(StateRunner):
                     f'save_time {save_time} exec_time {exec_time} max_records {data_source.max_records_encountered()}'
                 )
                 self._record_progress(num_entries, cumulative, prev_exec_time, save_time)
+                cumulative += num_entries
                 data_source.save_start_dt(save_time)
 
                 if exec_time == data_source.end_dt and not data_source.max_records_encountered():

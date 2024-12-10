@@ -1292,8 +1292,7 @@ class Fits2caom2Visitor:
                     product_id=self._storage_name.product_id,
                 )
 
-                file_info = self._metadata_reader.file_info.get(uri)
-                self._observation = telescope_data.update(file_info)
+                self._observation = telescope_data.update()
         except Caom2Exception as e:
             self._logger.debug(traceback.format_exc())
             self._logger.warning(
@@ -1319,9 +1318,6 @@ class Fits2caom2VisitorRunnerMeta(Fits2caom2Visitor):
         self._reporter = kwargs.get('reporter')
         self._config = kwargs.get('config')
         self._logger = logging.getLogger(self.__class__.__name__)
-
-    # def _get_blueprint(self, instantiated_class):
-    #     return ObsBlueprint(instantiated_class=instantiated_class)
 
     def _get_parser(self, blueprint, uri):
         headers = self._storage_name.metadata.get(uri)
