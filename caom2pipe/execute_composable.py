@@ -333,7 +333,7 @@ class CaomExecute:
     def _write_model(self):
         """Write an observation to disk from memory, represented in XML."""
         if self._observation is not None:
-            self._logger.error(f'Write model to {self._model_fqn}.')
+            self._logger.debug(f'Write model to {self._model_fqn}.')
             mc.write_obs_to_file(self._observation, self._model_fqn)
 
     def execute(self, context):
