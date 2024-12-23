@@ -786,6 +786,7 @@ class LocalFilesDataSourceRunnerMeta(LocalFilesDataSource):
             if cadc_meta is None:
                 result = True
             else:
+                # the file_info is updated in execute_composable.py if conditional decompression occurs
                 if (
                     entry.file_info.get(entry.destination_uris[index]).md5sum.replace('md5:', '')
                     == cadc_meta.md5sum.replace('md5:', '')

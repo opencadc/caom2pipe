@@ -1319,7 +1319,6 @@ class OrganizeExecutes:
 
     def _create_workspace(self, name):
         """Create the working area if it does not already exist."""
-        self._logger.error(f'{self.config.working_directory} obs_id {name}')
         working_dir = os.path.join(self.config.working_directory, name)
         self._logger.debug(f'Create working directory {working_dir}')
         mc.create_dir(working_dir)

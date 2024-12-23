@@ -756,19 +756,20 @@ def common_runner_init_runner_meta(
 
     :param config: Config instance
     :param clients: ClientCollection instance
-    :param name_builder NameBuilder extension that creates an instance of a StorageName extension, from an entry from
-        a DataSourceComposable listing
     :param sources list of DataSource implementations, if there are specializations
+    :param data_visitors list of modules with visit methods, that expect the work file to exist on disk
+    :param meta_visitors list of modules with visit methods, that expect the metadata of a work file to exist on disk
     :param modify_transfer Transfer extension that identifies how to retrieve data from a source for modification of
         CAOM2 metadata. By this time, files are usually stored at CADC, so it's probably a CadcTransfer instance, but
         this allows for the case that a file is never stored at CADC. Try to guess what this one is.
-    :param metadata_reader: MetadataReader instance
+    :param needs_delete:
+    :param organizer_class_name:
+    :param organizer_module_name:
+    :param reporter:
     :param state: bool True if using StateRunner
+    :param storage_name_ctor:
     :param store_transfer Transfer extension that identifies hot to retrieve data from a source for storage at CADC,
         probably an HTTP or FTP site. Don't try to guess what this one is.
-    :param meta_visitors list of modules with visit methods, that expect the metadata of a work file to exist on disk
-    :param data_visitors list of modules with visit methods, that expect the work file to exist on disk
-    :param chooser OrganizerChooser, if there's rules that are unique to a collection about file naming.
     """
     if config is None:
         config = mc.Config()
@@ -1058,15 +1059,10 @@ def run_by_state_runner_meta(
     """A default implementation for using the StateRunner.
 
     :param config: Config instance
-    :param name_builder: NameBuilder extension that creates an instance of
-        a StorageName extension, from an entry from a DataSourceComposable
-        listing
     :param meta_visitors: list of modules with visit methods, that expect
         the metadata of a work file to exist on disk
     :param data_visitors: list of modules with visit methods, that expect the
         work file to exist on disk
-    :param chooser: OrganizerChooser, if there's strange rules about file
-        naming.
     :param sources: list of DataSource implementations, if there are specializations to identify the work to be done
     :param modify_transfer: Transfer extension that identifies how to retrieve
         data from a source for modification of CAOM2 metadata. By this time,
@@ -1077,7 +1073,11 @@ def run_by_state_runner_meta(
         data from a source for storage at CADC, probably an HTTP or FTP site.
         Don't try to guess what this one is.
     :param clients: instance of ClientsCollection, if one was required
-    :param metadata_reader: instance of MetadataReader
+    :param reporter:
+    :param organizer_module_name:
+    :param organizer_class_name:
+    :param needs_delete:
+    :param storage_name_ctor:
     """
     meta_visitors = [] if meta_visitors is None else meta_visitors
     data_visitors = [] if data_visitors is None else data_visitors

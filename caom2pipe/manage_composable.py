@@ -693,7 +693,6 @@ class ExecutionReporter:
         """
         :return: a list of file names from one of the failure, retry, or success log files.
         """
-        logging.error('enter get_file_names_from_log_file')
         result = []
         with open(log_fqn) as f_in:
             for line in f_in:
@@ -925,6 +924,8 @@ class Metrics:
 
             fqn = os.path.join(self.observable_dir, f'{now}.fail.yml')
             write_as_yaml(self.failures, fqn)
+            self.history = {}
+            self.failures = {}
 
 
 def minimize_on_keyword(x, candidate):
@@ -2404,6 +2405,10 @@ class StorageName:
     @property
     def file_info(self):
         return self._file_info
+
+    @file_info.setter
+    def file_info(self, value):
+        self._file_info = value
 
     @property
     def file_uri(self):
