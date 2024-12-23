@@ -840,7 +840,7 @@ class LocalFilesDataSourceRunnerMeta(LocalFilesDataSource):
                 # skip dot files
                 work_with_file = False
             else:
-                self._temp_storage_name = self._storage_name_ctor(sources_names=[dir_entry.path])
+                self._temp_storage_name = self._storage_name_ctor(source_names=[dir_entry.path])
                 local_file_info = get_local_file_info(dir_entry.path)
                 index = 0
                 self._temp_storage_name.set_file_info(index, local_file_info)
@@ -884,7 +884,7 @@ class LocalFilesDataSourceRunnerMeta(LocalFilesDataSource):
                     self._temp_storage_name = None
         else:
             work_with_file = False
-        self._logger.debug(f'Done default_filter says work_with_file is {work_with_file} for {entry.name}')
+        self._logger.debug(f'Done default_filter says work_with_file is {work_with_file} for {dir_entry.path}')
         return work_with_file
 
     def get_time_box_work(self, prev_exec_dt, exec_dt):
