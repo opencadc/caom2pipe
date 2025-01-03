@@ -1203,12 +1203,19 @@ class TelescopeMapping2(TelescopeMapping):
     n:n (FITS keywords:CAOM2 keywords) mapping, using the 'update' method.
 
     This is a temporary class to support refactoring, and was introduced to support an update method with no
-    file_info parameter, and a constructor with no headers parameter (future work). Both of these changes are
+    file_info parameter, and a constructor with no headers parameter. Both of these changes are
     dependent on significant changes to the StorageName class, so when all dependent applications have also been
     refactored to use this API, this class will be integrated back into the TelescopeMapping class.
     """
-    def __init__(self, storage_name, headers, clients, observable=None, observation=None, config=None):
-        super().__init__(storage_name, headers, clients, observable, observation, config)
+    def __init__(self, storage_name, clients, reporter=None, observation=None, config=None):
+        super().__init__(
+            storage_name,
+            storage_name.metadata.get(storage_name.destination_uris[0]),
+            clients,
+            reporter.observable,
+            observation,
+            config,
+        )
 
     def update(self):
         file_info = self._storage_name.file_info.get(self._storage_name.destination_uris[0])
