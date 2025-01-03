@@ -83,29 +83,27 @@ from caom2pipe import manage_composable as mc
 
 import test_conf as tc
 
-TEST_STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')
-TEST_OBS_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_obs_id.fits.xml')
 ISO8601_FORMAT = '%Y-%m-%dT%H:%M:%S.%f'
 
 
 def test_read_write_obs_with_file():
-    if os.path.exists(TEST_OBS_FILE):
-        os.unlink(TEST_OBS_FILE)
+    if os.path.exists(tc.TEST_OBS_FILE):
+        os.unlink(tc.TEST_OBS_FILE)
     mc.write_obs_to_file(
         SimpleObservation(
             collection='test_collection',
             observation_id='test_obs_id',
             algorithm=Algorithm('exposure'),
         ),
-        TEST_OBS_FILE,
+        tc.TEST_OBS_FILE,
     )
-    test_subject = mc.read_obs_from_file(TEST_OBS_FILE)
+    test_subject = mc.read_obs_from_file(tc.TEST_OBS_FILE)
     assert test_subject is not None, 'expect a result'
     assert isinstance(test_subject, SimpleObservation), 'wrong read'
 
 
 def test_read_from_file():
-    test_subject = mc.read_from_file(TEST_OBS_FILE)
+    test_subject = mc.read_from_file(tc.TEST_OBS_FILE)
     assert test_subject is not None, 'expect a result'
     assert isinstance(test_subject, list), 'wrong type of result'
     assert len(test_subject) == 8, 'missed some content'
@@ -229,8 +227,8 @@ def test_exec_cmd():
         mc.exec_cmd(test_cmd)
 
 
-def test_exec_cmd_redirect():
-    fqn = os.path.join(tc.TEST_DATA_DIR, 'exec_cmd_redirect.txt')
+def test_exec_cmd_redirect(test_data_dir):
+    fqn = os.path.join(test_data_dir, 'exec_cmd_redirect.txt')
     if os.path.exists(fqn):
         os.remove(fqn)
 
@@ -259,31 +257,31 @@ def test_decompose_uri():
         mc.decompose_uri('')
 
 
-def test_read_csv_file():
+def test_read_csv_file(test_data_dir):
     # bad read
     with pytest.raises(mc.CadcException):
         mc.read_csv_file(None)
 
     # good read
-    test_file_name = os.path.join(tc.TEST_DATA_DIR, 'test_csv.csv')
+    test_file_name = os.path.join(test_data_dir, 'test_csv.csv')
     content = mc.read_csv_file(test_file_name)
     assert content is not None, 'empty results returned'
     assert len(content) == 1, 'missed the comment and the header'
     assert len(content[0]) == 24, 'missed the content'
 
 
-def test_get_file_meta():
+def test_get_file_meta(test_data_dir):
     # None
     with pytest.raises(mc.CadcException):
         mc.get_file_meta(None)
 
     # non-existent file
-    fqn = os.path.join(tc.TEST_DATA_DIR, 'abc.txt')
+    fqn = os.path.join(test_data_dir, 'abc.txt')
     with pytest.raises(mc.CadcException):
         mc.get_file_meta(fqn)
 
     # empty file
-    fqn = os.path.join(tc.TEST_DATA_DIR, 'todo.txt')
+    fqn = os.path.join(test_data_dir, 'todo.txt')
     if os.path.exists(fqn):
         os.unlink(fqn)
     open(fqn, 'w').close()
@@ -291,9 +289,9 @@ def test_get_file_meta():
     assert result['size'] == 0, result['size']
 
 
-def test_write_to_file():
+def test_write_to_file(test_data_dir):
     content = ['a.txt', 'b.jpg', 'c.fits.gz']
-    test_fqn = f'{tc.TEST_DATA_DIR}/test_out.txt'
+    test_fqn = f'{test_data_dir}/test_out.txt'
     if os.path.exists(test_fqn):
         os.remove(test_fqn)
 
@@ -301,8 +299,8 @@ def test_write_to_file():
     assert os.path.exists(test_fqn)
 
 
-def test_get_artifact_metadata():
-    test_fqn = os.path.join(tc.TEST_DATA_DIR, 'config.yml')
+def test_get_artifact_metadata(test_data_dir):
+    test_fqn = os.path.join(test_data_dir, 'config.yml')
     test_uri = 'ad:TEST/config.yml'
 
     # wrong command line parameters
@@ -331,10 +329,12 @@ def test_get_artifact_metadata():
     assert result.content_checksum.uri == 'md5:e9db496ab9e875cc13ea52d4cc9db2c7', 'wrong checksum'
 
 
-def test_state():
-    if os.path.exists(TEST_STATE_FILE):
-        os.unlink(TEST_STATE_FILE)
-    with open(TEST_STATE_FILE, 'w') as f:
+def test_state(test_data_dir):
+    test_state_file = os.path.join(test_data_dir, 'test_state.yml')
+
+    if os.path.exists(test_state_file):
+        os.unlink(test_state_file)
+    with open(test_state_file, 'w') as f:
         f.write(
             'bookmarks:\n'
             '  gemini_timestamp:\n'
@@ -348,7 +348,7 @@ def test_state():
     with pytest.raises(mc.CadcException):
         test_subject = mc.State('nonexistent', tz.UTC)
 
-    test_subject = mc.State(TEST_STATE_FILE, tz.UTC)
+    test_subject = mc.State(test_state_file, tz.UTC)
     assert test_subject is not None, 'expect result'
     test_result = test_subject.get_bookmark('gemini_timestamp')
     assert test_result is not None, 'expect content'
@@ -364,7 +364,7 @@ def test_state():
     test_subject.save_state('gemini_timestamp', test_result + timedelta(3))
     test_subject.save_state('neossat_context', test_context)
 
-    with open(TEST_STATE_FILE) as f:
+    with open(test_state_file) as f:
         text = f.readlines()
         compare = ''.join(ii for ii in text)
         assert '2019-07-23' not in compare, 'content not updated'
@@ -447,14 +447,8 @@ def test_http_get(mock_req):
     assert mock_req.called, 'mock not called'
 
 
-def test_create_dir():
-    test_f_name = f'{tc.TEST_DATA_DIR}/test_file_dir'
-    if os.path.exists(test_f_name):
-        if os.path.isdir(test_f_name):
-            os.rmdir(test_f_name)
-        else:
-            os.unlink(test_f_name)
-
+def test_create_dir(tmp_path, change_test_dir):
+    test_f_name = f'{tmp_path}/test_file_dir'
     with open(test_f_name, 'w') as f:
         f.write('test content')
 
@@ -487,7 +481,7 @@ def test_query_tap(caps_mock, base_mock, test_config):
     assert result['count'] == 3212556, 'wrong test data'
 
 
-def test_visit():
+def test_visit(test_data_dir, tmp_path, change_test_dir):
 
     class TestVisitor(mc.PreviewVisitor):
 
@@ -519,7 +513,7 @@ def test_visit():
     test_config = mc.Config()
     test_config.collection = 'TEST'
     test_config.rejected_file_name = 'rejected.yml'
-    test_config.rejected_directory = tc.TEST_DATA_DIR
+    test_config.rejected_directory = tmp_path.as_posix()
     test_observable = mc.Observable(test_config)
     cadc_client_mock = Mock()
     clients_mock = Mock()
@@ -539,7 +533,7 @@ def test_visit():
         'storage_name': storage_name,
     }
 
-    obs = mc.read_obs_from_file(f'{tc.TEST_DATA_DIR}/fpf_start_obs.xml')
+    obs = mc.read_obs_from_file(f'{test_data_dir}/fpf_start_obs.xml')
     assert (
         len(obs.planes[test_product_id].artifacts) == 2
     ), 'initial condition'
@@ -576,31 +570,26 @@ def test_visit():
     # assert False
 
 
-def test_config_write(tmpdir):
+def test_config_write(tmp_path, change_test_dir):
     """Test that TaskType read/write is working"""
-    orig_cwd = os.getcwd()
-    try:
-        os.chdir(tmpdir)
-        test_config = mc.Config()
-        test_config.working_directory = tmpdir
-        test_config.logging_level = 'WARNING'
-        test_config.collection = 'collection'
-        scrape_found = False
-        if mc.TaskType.SCRAPE in test_config.task_types:
-            test_config.task_types = [mc.TaskType.VISIT, mc.TaskType.MODIFY]
-            scrape_found = True
-        else:
-            test_config.task_types = [mc.TaskType.SCRAPE]
-        test_config.write_to_file(test_config)
-        second_config = mc.Config()
-        second_config.get_executors()
-        if scrape_found:
-            assert mc.TaskType.VISIT in test_config.task_types, 'visit end'
-            assert mc.TaskType.MODIFY in test_config.task_types, 'modify end'
-        else:
-            assert mc.TaskType.SCRAPE in test_config.task_types, 'scrape end'
-    finally:
-        os.chdir(orig_cwd)
+    test_config = mc.Config()
+    test_config.working_directory = tmp_path.as_posix()
+    test_config.logging_level = 'WARNING'
+    test_config.collection = 'collection'
+    scrape_found = False
+    if mc.TaskType.SCRAPE in test_config.task_types:
+        test_config.task_types = [mc.TaskType.VISIT, mc.TaskType.MODIFY]
+        scrape_found = True
+    else:
+        test_config.task_types = [mc.TaskType.SCRAPE]
+    test_config.write_to_file(test_config)
+    second_config = mc.Config()
+    second_config.get_executors()
+    if scrape_found:
+        assert mc.TaskType.VISIT in test_config.task_types, 'visit end'
+        assert mc.TaskType.MODIFY in test_config.task_types, 'modify end'
+    else:
+        assert mc.TaskType.SCRAPE in test_config.task_types, 'scrape end'
 
 
 def test_reverse_lookup():
@@ -612,40 +601,33 @@ def test_reverse_lookup():
     assert test_result is None, 'value not in dict'
 
 
-def test_cache(test_config, tmpdir):
-    test_config.change_working_directory(tmpdir)
+def test_cache(test_config, test_data_dir, tmp_path, change_test_dir):
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.cache_file_name = 'cache.yml'
-    orig_cwd = os.getcwd()
-    try:
-        os.chdir(tmpdir)
-        test_config.write_to_file(test_config)
-        copy(f'{tc.TEST_DATA_DIR}/cache.yml', tmpdir)
-        test_subject = mc.Cache()
-        assert test_subject is not None, 'expect a return value'
-        with pytest.raises(mc.CadcException):
-            test_subject.get_from('not_found')
-        test_subject = mc.Cache(rigorous_get=False)
-        assert test_subject is not None, 'expect a return value'
-        test_result = test_subject.get_from('not_found')
-        assert test_result == [], 'expect no execution failure'
-    finally:
-        os.chdir(orig_cwd)
+    test_config.write_to_file(test_config)
+    copy(f'{test_data_dir}/cache.yml', tmp_path)
+    test_subject = mc.Cache()
+    assert test_subject is not None, 'expect a return value'
+    with pytest.raises(mc.CadcException):
+        test_subject.get_from('not_found')
+    test_subject = mc.Cache(rigorous_get=False)
+    assert test_subject is not None, 'expect a return value'
+    test_result = test_subject.get_from('not_found')
+    assert test_result == [], 'expect no execution failure'
 
 
-def test_value_repair_cache(test_config, tmpdir):
+def test_value_repair_cache(test_data_dir, test_config, tmpdir):
     test_config.change_working_directory(tmpdir)
     cache_file_name = 'value_repair_cache.yml'
     test_config.cache_file_name = cache_file_name
     test_config.write_to_file(test_config)
-    test_cache_fqn = f'{tc.TEST_DATA_DIR}/{cache_file_name}'
+    test_cache_fqn = f'{test_data_dir}/{cache_file_name}'
     copy(test_cache_fqn, f'{tmpdir}/{cache_file_name}')
 
     test_subject = mc.ValueRepairCache()
     assert test_subject is not None, 'expect a result'
 
-    test_observation = mc.read_obs_from_file(
-        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
-    )
+    test_observation = mc.read_obs_from_file(os.path.join(test_data_dir, 'value_repair_start.xml'))
     test_product_id = 'GN2001BQ013-04'
     test_artifact_uri = 'gemini:GEM/GN2001BQ013-04.fits'
     test_part = '0'
@@ -717,16 +699,12 @@ def test_value_repair_cache(test_config, tmpdir):
     # pre-condition of 'Could not figure out attribute name' the attribute is
     # not set in the test observation, so the observation should remain
     # unchanged
-    test_observation = mc.read_obs_from_file(
-        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
-    )
+    test_observation = mc.read_obs_from_file(os.path.join(test_data_dir, 'value_repair_start.xml'))
 
     test_subject._value_repair = {'chunk.observable.dependent': 'not_found'}
     test_subject.repair(test_observation)
 
-    test_compare_observation = mc.read_obs_from_file(
-        os.path.join(tc.TEST_DATA_DIR, 'value_repair_start.xml')
-    )
+    test_compare_observation = mc.read_obs_from_file(os.path.join(test_data_dir, 'value_repair_start.xml'))
     test_diff = get_differences(test_compare_observation, test_observation)
     assert test_diff is None, 'expect no comparison error'
 
