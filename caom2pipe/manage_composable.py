@@ -339,18 +339,14 @@ class StateRay(State):
         super().add_bookmark(bookmark_key, start_dt)
 
     def get_bookmark_end(self, bookmark_key):
-        result = None
-        temp = self.bookmarks.get(bookmark_key)
-        if temp:
-            result = temp.get('end_timestamp')
-        if not result:
-            result = datetime.now()
+        result = datetime.now()
+        if (temp := self.bookmarks.get(bookmark_key)):
+            result = temp.get('end_timestamp', datetime.now())
         return result
 
     def get_bookmark_start(self, bookmark_key):
         result = None
-        temp = self.bookmarks.get(bookmark_key)
-        if temp:
+        if (temp := self.bookmarks.get(bookmark_key)):
             result = temp.get('last_record')
         return result
 
@@ -613,6 +609,10 @@ class ExecutionReporter:
         list. The rejected list will be saved to disk when the execute method
         completes.
 
+        This is a temporary method to support refactoring, and when all dependent applications have also been
+        refactored to use this method instead of the capture_failure method, this method will be integrated back
+        into the capture_failure method.
+
         :obs_id observation ID being processed
         :file_name file name being processed
         :e Exception to log - the entire stack trace, which, if logging
@@ -659,6 +659,11 @@ class ExecutionReporter:
 
     def capture_success_2(self, entry, start_time):
         """Capture, with a timestamp, the successful entries that have been processed.
+
+        This is a temporary method to support refactoring, and when all dependent applications have also been
+        refactored to use this method instead of the capture_success method, this method will be integrated back
+        into the capture_success method.
+
         :param entry str processing unit
         :param start_time int seconds since beginning of execution.
         """
@@ -709,6 +714,12 @@ class ExecutionReporter:
 
 
 class ExecutionReporter2(ExecutionReporter):
+    """
+    This is a temporary class to support refactoring of Observable being a member of the ExecutionReporter class,
+    instead of the ExecutionReporter class being a member of the Observable class, and when all dependent
+    applications have also been refactored to use the ExecutionReporter2 class, this class will be integrated back
+    into the ExecutionReporter class.
+    """
 
     def __init__(self, config):
         super().__init__(config, observable=Observable(config))
@@ -971,6 +982,12 @@ class Observable:
 
 
 class Observable2(Observable):
+    """
+    This is a temporary class to support refactoring of Observable being a member of the ExecutionReporter class,
+    instead of the ExecutionReporter class being a member of the Observable class, and when all dependent
+    applications have also been refactored to use the Observable2 class, this class will be integrated back
+    into the Observable class.
+    """
 
     def __init__(self, config):
         super().__init__(config)

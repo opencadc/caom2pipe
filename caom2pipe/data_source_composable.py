@@ -140,9 +140,24 @@ class DataSource:
     def reporter(self, value):
         self._reporter = value
 
+    def can_clean_up(self, execution_result, current_count):
+        """Logic to determine whether or not to clean up files locally after there has been a storage attempt.
+
+        :return True if a file should be cleaned up, False otherwise.
+        """
+        can_clean = False
+        if (
+            (not self._retry_failures)
+            or (self._retry_failures and current_count >= self._retry_count)
+            or (self._retry_failures and execution_result == 0)
+        ):
+            can_clean = True
+        self._logger.debug(f'End can_clean_up with can_clean: {can_clean}.')
+        return can_clean
+
     def clean_up(self, entry, execution_result, current_count):
         """Clean up files locally after there has been a storage attempt."""
-        pass
+        return self.can_clean_up(execution_result, current_count)
 
     def default_filter(self, entry):
         """
@@ -164,27 +179,6 @@ class DataSource:
         # do not need the record of the rejected or skipped files any longer
         self._rejected_files = 0
         self._skipped_files = 0
-
-
-class DataSourceRunnerMeta(DataSource):
-
-    def __init__(self, config):
-        super().__init__(config)
-
-    def clean_up(self, entry, execution_result, current_count):
-        """Clean up files locally after there has been a storage attempt.
-
-        :return True if a file should have the [TaskTypes] retried, False otherwise.
-        """
-        retry_again = True
-        if (
-            (not self._retry_failures)
-            or (self._retry_failures and current_count >= self._retry_count)
-            or (self._retry_failures and execution_result == 0)
-        ):
-            retry_again = False
-        self._logger.debug(f'End clean_up. Retry for {entry.file_uri} is {retry_again}.')
-        return retry_again
 
 
 class IncrementalDataSource(DataSource):
@@ -534,6 +528,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         :param current_count: int how many retries have been executed
         """
         self._logger.debug(f'Begin clean_up with {entry}')
+        can_clean = False
         if self._cleanup_when_storing and (
             (not self._retry_failures)
             or (self._retry_failures and current_count >= self._retry_count)
@@ -547,9 +542,12 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             if self._is_remote_different(fqn):
                 # the transfer itself failed, so track as a failure
                 self._move_action(fqn, self._cleanup_failure_directory)
+                can_clean = True
             else:
                 self._move_action(fqn, self._cleanup_success_directory)
+                can_clean = True
         self._logger.debug('End clean_up.')
+        return can_clean
 
     def _verify_file(self, fqn):
         """
@@ -812,23 +810,23 @@ class LocalFilesDataSourceRunnerMeta(LocalFilesDataSource):
         :param execution_result: int if it's 0, it's ok to clean up, regardless of how many times a file has been
             processed
         :param current_count: int how many retries have been executed
-        :return True if a file should have the [TaskTypes] retried, False otherwise. If a file was moved, that also
-            indicates retries are completed, so that is also a False case.
+        :return False if a file should have the [TaskTypes] retried, True otherwise. If a file was moved, that also
+            indicates retries are completed, so that is also a True case.
         """
         self._logger.debug(f'Begin clean_up with {entry.file_uri}')
-        retry_again = DataSourceRunnerMeta.clean_up(self, entry, execution_result, current_count)
-        if self._cleanup_when_storing and not retry_again:
+        can_clean = self.can_clean_up(execution_result, current_count)
+        if self._cleanup_when_storing and can_clean:
             for index, source_name in enumerate(entry.source_names):
                 self._logger.debug(f'Clean up {entry.file_uri}')
                 if self._is_remote_different(index, entry):
                     # the transfer itself failed, so track as a failure
                     self._move_action(source_name, self._cleanup_failure_directory)
-                    retry_again = False
+                    can_clean = True
                 else:
                     self._move_action(source_name, self._cleanup_success_directory)
-                    retry_again = False
-        self._logger.debug(f'End clean_up. Retry for {entry.file_uri} is {retry_again}.')
-        return retry_again
+                    can_clean = True
+        self._logger.debug(f'End clean_up. Clean up for {entry.file_uri} is {can_clean}.')
+        return can_clean
 
     def default_filter(self, dir_entry):
         """
@@ -1116,7 +1114,6 @@ class QueryTimeBoxDataSourceRunnerMeta(QueryTimeBoxDataSource):
         self._work = deque()
         for dt in sorted(self._temp):
             for storage_names in self._temp.get(dt):
-                # TODO this is wrong - there should need to be another loop through the list of storage_names
                 self._work.append(RunnerMeta(storage_names, dt))
         self._temp = defaultdict(list)
         self._capture_todo()
@@ -1244,6 +1241,7 @@ class VaultCleanupDataSource(VaultDataSource):
         a file with the same checksum is at CADC.
         """
         self._logger.debug(f'Begin clean_up with {entry}')
+        can_clean = False
         if self._cleanup_when_storing and (
             (not self._retry_failures)
             or (self._retry_failures and current_count >= self._retry_count)
@@ -1259,11 +1257,14 @@ class VaultCleanupDataSource(VaultDataSource):
                 if self._is_remote_different(storage_name.destination_uris[0]):
                     # the transfer itself failed, so track as a failure
                     self._move_action(fqn, self._cleanup_failure_directory)
+                    can_clean = True
                 else:
                     self._move_action(fqn, self._cleanup_success_directory)
+                    can_clean = True
             else:
                 self._logger.warning(f'No clean up for {fqn} because there is no vos metadata.')
             self._logger.debug('End clean_up.')
+        return can_clean
 
     def default_filter(self, dir_entry):
         """

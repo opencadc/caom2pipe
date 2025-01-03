@@ -355,6 +355,10 @@ class CaomExecute:
 
 
 class CaomExecuteRunnerMeta(CaomExecute):
+    """
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the CaomExecute class.
+    """
 
     def __init__(self, clients, config, meta_visitors, reporter):
         super().__init__(config, meta_visitors, reporter.observable, metadata_reader=None, clients=clients)
@@ -371,8 +375,10 @@ class CaomExecuteRunnerMeta(CaomExecute):
             self._storage_name.file_info[uri] = interim_file_info
 
     def _set_preconditions(self):
-        """This is probably not the best approach, but I want to think about where the optimal location for the
-        retrieve_file_info and retrieve_headers methods will be long-term. So, for the moment, use them here."""
+        """The default preconditions are ensuring that the StorageName instance from the 'context' parameter has
+        both the metadata and file_info members initialized correctly. For the default case assume the files are
+        found on local posix disk, and the preconditions are satisfied by local file access functions to the
+        source_names values in StorageName."""
         self._logger.debug(f'Begin _set_preconditions for {self._storage_name.file_name}')
         for index, source_name in enumerate(self._storage_name.source_names):
             uri = self._storage_name.destination_uris[index]
@@ -381,10 +387,7 @@ class CaomExecuteRunnerMeta(CaomExecute):
             if uri not in self._storage_name.metadata:
                 self._storage_name.metadata[uri] = []
                 if '.fits' in source_name:
-                    try:
-                        self._storage_name._metadata[uri] = get_local_headers_from_fits(source_name)
-                    except OSError as _:
-                        self._storage_name._metadata[uri] = get_local_file_headers(source_name)
+                    self._storage_name._metadata[uri] = get_local_file_headers(source_name)
         self._logger.debug('End _set_preconditions')
 
     def _visit_meta(self):
@@ -469,14 +472,20 @@ class MetaVisitDeleteCreateRunnerMeta(CaomExecuteRunnerMeta):
     information.
 
     This pipeline step will execute a caom2-repo delete followed by a create, because an update will not support a
-    Simple->Derived or Derived->Simple type change for the Observation structure."""
+    Simple->Derived or Derived->Simple type change for the Observation structure.
+
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the MetaVisitDeleteCreate
+    class."""
 
     def __init__(self, clients, config, meta_visitors, reporter):
         super().__init__(clients, config, meta_visitors, reporter)
 
     def _set_preconditions(self):
-        """This is probably not the best approach, but I want to think about where the optimal location for the
-        retrieve_file_info and retrieve_headers methods will be long-term. So, for the moment, use them here."""
+        """The default preconditions are ensuring that the StorageName instance from the 'context' parameter has
+        both the metadata and file_info members initialized correctly. For the MetaVisitDeleteCreate case (only
+        require metadata for files that exist at CADC), the preconditions are satisfied by retrieval from CADC
+        services."""
         for index, source_name in enumerate(self._storage_name.source_names):
             uri = self._storage_name.destination_uris[index]
             if uri not in self._storage_name.file_info:
@@ -550,6 +559,9 @@ class MetaVisit(CaomExecute):
 class MetaVisitRunnerMeta(CaomExecuteRunnerMeta):
     """
     Defines the pipeline step for Collection creation or augmentation by a visitor of metadata into CAOM.
+
+    This is a temporary class to support StorageName refactoring, and when all dependent applications have also been
+    refactored to provide the expected API, this class will be integrated back into the MetaVisit class.
     """
 
     def __init__(
@@ -567,7 +579,11 @@ class MetaVisitRunnerMeta(CaomExecuteRunnerMeta):
         )
 
     def _set_preconditions(self):
-        """This is probably not the best approach, but I want to think about where the optimal location for the
+        """The default preconditions are ensuring that the StorageName instance from the 'context' parameter has
+        both the metadata and file_info members initialized correctly. For the MetaVisit case (only require metadata
+        for files that exist at CADC), the preconditions are satisfied by retrieval from CADC services.
+
+        This is probably not the best approach, but I want to think about where the optimal location for the
         retrieve_file_info and retrieve_headers methods will be long-term. So, for the moment, use them here."""
         for index, source_name in enumerate(self._storage_name.source_names):
             uri = self._storage_name.destination_uris[index]
@@ -652,6 +668,9 @@ class DataVisit(CaomExecute):
 class DataVisitRunnerMeta(CaomExecuteRunnerMeta):
     """Defines the pipeline step for all the operations that require access to the file on disk. The data must be
     retrieved from a separate source.
+
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the DataVisit class.
 
     :param transferrer: instance of transfer_composable.Transfer - how to get data from any DataSource for execution.
     """
@@ -751,6 +770,9 @@ class LocalDataVisitRunnerMeta(DataVisitRunnerMeta):
     the files on disk - i.e. there is not need to retrieve the files from
     the CADC storage system, but there is a need to update CAOM
     entries with the service.
+
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the LocalDataVisit class.
     """
 
     def __init__(
@@ -860,6 +882,9 @@ class Store(CaomExecute):
 
 class StoreRunnerMeta(CaomExecuteRunnerMeta):
     """Defines the pipeline step for Collection storage of a file. This requires access to the file on disk.
+
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the Store class.
     """
 
     def __init__(
@@ -948,6 +973,9 @@ class NoFheadVisitRunnerMeta(CaomExecuteRunnerMeta):
     operations. This is to support HDF5 operations, since at the time of writing, there is no --fhead metadata
     retrieval option for HDF5 files.
 
+
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the NoFheadVisit class.
     """
 
     def __init__(
@@ -964,8 +992,11 @@ class NoFheadVisitRunnerMeta(CaomExecuteRunnerMeta):
         self._data_visitors = data_visitors
 
     def _set_preconditions(self):
-        """This is probably not the best approach, but I want to think about where the optimal location for the
-        retrieve_file_info and retrieve_headers methods will be long-term. So, for the moment, use them here."""
+        """The default preconditions are ensuring that the StorageName instance from the 'context' parameter has
+        both the metadata and file_info members initialized correctly. For the NoFheadVisit case the files must be
+        temporarily staged on local posix disk, and the preconditions are satisfied by local file access functions
+        to the current working directory.
+        """
         self._logger.debug(f'Begin _set_preconditions for {self._storage_name.file_name}')
         for uri in self._storage_name.destination_uris:
             local_fqn = os.path.join(self._working_dir, os.path.basename(uri))
@@ -974,10 +1005,7 @@ class NoFheadVisitRunnerMeta(CaomExecuteRunnerMeta):
             if uri not in self._storage_name.metadata:
                 self._storage_name.metadata[uri] = []
                 if '.fits' in local_fqn:
-                    try:
-                        self._storage_name._metadata[uri] = get_local_headers_from_fits(local_fqn)
-                    except OSError as _:
-                        self._storage_name._metadata[uri] = get_local_file_headers(local_fqn)
+                    self._storage_name._metadata[uri] = get_local_file_headers(local_fqn)
         self._logger.debug('End _set_preconditions')
 
     def execute(self, context):
@@ -1071,6 +1099,9 @@ class NoFheadStoreVisitRunnerMeta(CaomExecuteRunnerMeta):
     operations that includes STORE.
 
     At the time of writing, there is no --fhead metadata retrieval option for HDF5 files.
+
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the NoFheadStoreVisit class.
     """
 
     def __init__(
@@ -1140,7 +1171,12 @@ class Scrape(CaomExecute):
 
 class ScrapeRunnerMeta(CaomExecuteRunnerMeta):
     """Defines the pipeline step for Collection creation of a CAOM model observation. The file containing the
-    metadata is located on disk. No record is written to a web service."""
+    metadata is located on disk. No record is written to a web service.
+
+
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the Scrape class.
+    """
 
     def __init__(self, config, meta_visitors, reporter):
         super().__init__(clients=None, config=config, meta_visitors=meta_visitors, reporter=reporter)
@@ -1201,7 +1237,10 @@ class NoFheadScrape(CaomExecute):
 class NoFheadScrapeRunnerMeta(CaomExecuteRunnerMeta):
     """Defines the pipeline step for Defines a pipeline step for all the operations that require access to the file
     on disk for metadata and data operations without internet access. The file is located on disk.
-    No record is written to a web service."""
+    No record is written to a web service.
+
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the NoFheadScrape class."""
 
     def __init__(self, config, meta_visitors, data_visitors, reporter):
         super().__init__(
@@ -1559,6 +1598,9 @@ class OrganizeExecutesRunnerMeta(OrganizeExecutes):
         _choose():
             Determines which descendants of CaomExecute to instantiate based on the content of the config.yml
             file for an application.
+
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the OrganizeExecutes class.
     """
 
     def __init__(

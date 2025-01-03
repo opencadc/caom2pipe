@@ -507,12 +507,12 @@ class StateRunnerMeta(StateRunner):
                         temp_result = self._process_entry(entry.storage_entry)
                         result |= temp_result
                         try:
-                            retry_again = data_source.clean_up(entry.storage_entry, temp_result, 0)
-                            if retry_again:
+                            all_done = data_source.clean_up(entry.storage_entry, temp_result, 0)
+                            if all_done:
+                                save_time = min(entry.entry_dt, exec_time)
+                            else:
                                 # treat the todo_list as the retry list
                                 self._todo_list.append(entry)
-                            else:
-                                save_time = min(entry.entry_dt, exec_time)
                         except Exception as e:
                             self._logger.info(f'Cleanup failed for {entry} with {e}')
                             self._logger.debug(traceback.format_exc())

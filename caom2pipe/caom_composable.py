@@ -1201,6 +1201,11 @@ class TelescopeMapping2(TelescopeMapping):
     """
     A default implementation for building up and applying an ObsBlueprint map for a file, and then doing any
     n:n (FITS keywords:CAOM2 keywords) mapping, using the 'update' method.
+
+    This is a temporary class to support refactoring, and was introduced to support an update method with no
+    file_info parameter, and a constructor with no headers parameter (future work). Both of these changes are
+    dependent on significant changes to the StorageName class, so when all dependent applications have also been
+    refactored to use this API, this class will be integrated back into the TelescopeMapping class.
     """
     def __init__(self, storage_name, headers, clients, observable=None, observation=None, config=None):
         super().__init__(storage_name, headers, clients, observable, observation, config)
@@ -1307,8 +1312,12 @@ class Fits2caom2Visitor:
 
 class Fits2caom2VisitorRunnerMeta(Fits2caom2Visitor):
     """
-    Use a TelescopeMapping specialization instance to create a CAOM2
-    record, as expected by the execute_composable.MetaVisits class.
+    Use a TelescopeMapping2 specialization instance to create a CAOM2 record, as expected by the
+    execute_composable.MetaVisits class.
+
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the Fits2caom2Visitor class.
+    This class also works for HDF5 files, so it will probably be renamed to something like File2caom2Visitor then.
     """
 
     def __init__(self, observation, **kwargs):
@@ -1331,7 +1340,7 @@ class Fits2caom2VisitorRunnerMeta(Fits2caom2Visitor):
         return parser
 
     def _get_mapping(self, dest_uri):
-        return TelescopeMapping(
+        return TelescopeMapping2(
             self._storage_name,
             self._storage_name.metadata.get(dest_uri),
             self._clients,

@@ -852,7 +852,7 @@ def test_dt():
     ]:
         result = mc.make_datetime(fmt)
         assert result is not None, f'expect a result {fmt}'
-        if fmt != '10:08:31':  # get today's date with that hour
+        if fmt != '10:08:31' and fmt != 'Mar 23 10:08':  # get today's date with that hour
             assert (result.year == 2024 or result.year == 0), f'year {fmt}'
             assert (result.month == 3 or result.month == 0), f'month {fmt}'
             assert (result.day == 23 or result.day == 0), f'day {fmt} {result.day}'

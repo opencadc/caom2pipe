@@ -100,6 +100,151 @@ STATE_FILE = os.path.join(tc.TEST_DATA_DIR, 'test_state.yml')
 TEST_DIR = f'{tc.TEST_DATA_DIR}/run_composable'
 
 
+@patch('caom2pipe.client_composable.query_tap_client')
+@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
+@patch('caom2pipe.data_source_composable.CadcTapClient')
+@patch('caom2pipe.execute_composable.MetaVisitRunnerMeta._visit_meta')
+def test_run_increment_runner_meta(
+    visit_meta_mock,
+    tap_mock,
+    clients_mock,
+    query_mock,
+    test_config,
+    tmp_path,
+    change_test_dir,
+):
+    # tap_mock is used by the data_source_composable class
+    visit_meta_mock.side_effect = _mock_visit
+    clients_mock.return_value.metadata_client.read.side_effect = _mock_read2
+
+    state_test_end_time = datetime.fromtimestamp(1579740838)
+    state_test_start_time = state_test_end_time - timedelta(seconds=900)
+
+    def _mock_timebox(query, arg2):
+        if 'max(A.lastModified)' in query:
+            return Table.read(f'm\n{state_test_end_time.isoformat()}\n'.split('\n'), format='ascii.tab')
+        else:
+            if '2020-01-23 00:38:58' in query:
+                return Table.read(
+                    'uri\tlastModified\n'
+                    'NEOS_SCI_2015347000000_clean.fits\t2019-10-23T16:27:19.000\n'.split('\n'),
+                    format='ascii.tab',
+                )
+            else:
+                return Table.read('uri\tlastModified\n'.split('\n'), format='ascii.tab')
+
+    query_mock.side_effect = _mock_timebox
+
+    test_config.change_working_directory(tmp_path.as_posix())
+    test_config.task_types = [mc.TaskType.INGEST]
+    test_config.interval = 10
+    test_config.use_local_files = False
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, state_test_start_time)
+    individual_log_file = f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
+    test_data_source = dsc.QueryTimeBoxDataSourceRunnerMeta(
+        test_config, '.jpg', mc.StorageName, clients_mock.storage_query_client
+    )
+    test_result = rc.run_by_state_runner_meta(
+        config=test_config,
+        sources=[test_data_source],
+    )
+    assert test_result is not None, 'expect a result'
+    assert test_result == 0, 'expect success'
+    assert visit_meta_mock.called, 'expect visit meta call'
+    visit_meta_mock.assert_called_once_with()
+
+    assert test_data_source.end_dt == state_test_end_time, f'wrong end time {test_data_source.end_dt}'
+    assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+    assert os.path.exists(test_config.success_fqn), 'log_to_file set to false, no success file'
+    assert not os.path.exists(individual_log_file), f'log_to_file is False, no entry log'
+    test_state_post = mc.State(test_config.state_fqn, None)
+    assert test_state_post.get_bookmark(test_config.bookmark) == state_test_end_time, 'wrong end time saved'
+
+    # test that runner does nothing when times haven't changed
+    start_time = state_test_end_time
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
+    visit_meta_mock.reset_mock()
+    test_result = rc.run_by_state_runner_meta(config=test_config)
+    assert test_result is not None, 'expect a result'
+    assert test_result == 0, 'expect success'
+    assert not visit_meta_mock.called, 'expect no visit_meta call'
+    test_state_post_2 = mc.State(test_config.state_fqn, None)
+    assert test_state_post_2.get_bookmark(test_config.bookmark) == state_test_end_time, 'wrong end time saved'
+
+
+@patch('caom2pipe.execute_composable.OrganizeExecutesRunnerMeta.do_one')
+@patch('caom2pipe.client_composable.ClientCollection')
+def test_run_incremental_all_task_options_runner_meta(
+    clients_mock, do_one_mock, test_config, tmp_path, change_test_dir
+):
+
+    # tests all the possible _choose options, I think :)
+    # assumes successful execution for two files
+    # TODO must test decompression as well, because that changes file sizes and checksums
+
+    test_config.cleanup_files_when_storing = False
+    test_config.data_source_extensions = ['.fits']
+    test_config.logging_level = 'INFO'
+
+    for task_types in ALL_TASK_OPTIONS:
+        do_one_mock.return_value = (0, None)
+        test_config.change_working_directory(tmp_path.as_posix())
+        test_config.task_types = task_types
+        if mc.TaskType.SCRAPE in task_types or mc.TaskType.STORE in task_types:
+            test_config.use_local_files = True
+            test_config.data_sources = ['/data']
+        else:
+            test_config.use_local_files = False
+
+        needs_delete = False
+        if task_types == [mc.TaskType.INGEST]:
+            needs_delete = True
+
+        test_config.proxy_file_name = 'cadcproxy.pem'
+        test_config.write_to_file(test_config)
+
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
+
+        state_test_end_time = datetime.fromtimestamp(1579740838)
+        state_test_start_time = state_test_end_time - timedelta(seconds=900)
+        mc.State.write_bookmark(
+            test_config.state_fqn, test_config.bookmark, state_test_start_time, state_test_end_time
+        )
+
+        test_reporter = mc.ExecutionReporter2(test_config)
+
+        data_source = dsc.runner_meta_data_source_factory(
+            test_config,
+            clients_mock,
+            state=True,
+            reporter=test_reporter,
+            storage_name_ctor=mc.StorageName,
+        )
+        temp_work = defaultdict(list)
+        temp_work[
+            datetime(2019, 10, 23, 16, 27, 19, 0)
+        ].append(mc.StorageName(source_names=['/data/dao_c122_2021_005157_e.fits']))
+        temp_work[
+            datetime(2019, 10, 23, 16, 27, 20, 0)
+        ].append(mc.StorageName(source_names=['/data/dao_c122_2021_005157.fits']))
+        data_source._append_work = Mock()
+        data_source._temp = temp_work
+
+        test_result = rc.run_by_state_runner_meta(
+            sources=[data_source], reporter=test_reporter, needs_delete=needs_delete
+        )
+        assert test_result is not None, f'expect result {task_types}'
+        assert test_result == 0, f'expect success {task_types}'
+        assert do_one_mock.called, f'do_one {task_types}'
+        assert do_one_mock.call_count == 2, f'do_one count {task_types}'
+        args, _ = do_one_mock.call_args
+        assert isinstance(args[0], mc.StorageName), f'do_one parameter {task_types}'
+        assert test_reporter.all == 2, f'all {task_types} {test_reporter._summary}'
+        assert test_reporter.success == 2, f'success {task_types} {test_reporter._summary}'
+        do_one_mock.reset_mock()
+
+
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
 @patch('caom2pipe.manage_composable.read_obs_from_file')
@@ -110,15 +255,16 @@ def test_run_todo_list_dir_data_source(
     visit_meta_mock,
     clients_mock,
     test_config,
-    tmpdir,
+    tmp_path,
+    change_test_dir,
 ):
-    test_dir = f'{tmpdir}/abc'
+    test_dir = f'{tmp_path}/abc'
     os.mkdir(test_dir)
     with open(f'{test_dir}/abc.xml', 'w') as f:
         f.write('test content')
 
     read_obs_mock.side_effect = _mock_read
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.use_local_files = True
     test_config.data_sources = ['/test_files/sub_directory']
     test_config.data_source_extensions = ['.fits']
@@ -140,14 +286,14 @@ def test_run_todo_list_dir_data_source(
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_run_todo_list_dir_data_source_invalid_fname(clients_mock, test_config, tmpdir):
-    test_fqn = os.path.join(tmpdir, 'abc.fits.gz')
+def test_run_todo_list_dir_data_source_invalid_fname(clients_mock, test_config, tmp_path, change_test_dir):
+    test_fqn = os.path.join(tmp_path, 'abc.fits.gz')
     with open(test_fqn, 'w') as f:
         f.write('abc')
 
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.use_local_files = True
-    test_config.data_sources = [tmpdir]
+    test_config.data_sources = [tmp_path]
     test_config.data_source_extensions = ['.fits', '.fits.gz']
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.log_to_file = False
@@ -184,8 +330,8 @@ def test_run_todo_list_dir_data_source_invalid_fname(clients_mock, test_config, 
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_run_todo_file_data_source(clients_mock, test_config, tmpdir):
-    test_config.change_working_directory(tmpdir)
+def test_run_todo_file_data_source(clients_mock, test_config, tmp_path, change_test_dir):
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.proxy_fqn = 'test_proxy.pem'
     clients_mock.return_value.metadata_client.read.side_effect = Mock(
         return_value=SimpleObservation(
@@ -195,7 +341,7 @@ def test_run_todo_file_data_source(clients_mock, test_config, tmpdir):
         )
     )
 
-    test_config.work_fqn = f'{tmpdir}/todo.txt'
+    test_config.work_fqn = f'{tmp_path}/todo.txt'
     with open(test_config.work_fqn, 'w') as f:
         f.write('def.fits.gz\n')
 
@@ -225,7 +371,8 @@ def test_run_state(
     clients_mock,
     data_source_mock,
     test_config,
-    tmpdir,
+    tmp_path,
+    change_test_dir,
 ):
     # tap_mock is used by the data_source_composable class
     visit_meta_mock.side_effect = _mock_visit
@@ -239,46 +386,41 @@ def test_run_state(
     type(data_source_mock.return_value).end_dt = end_time_mock
     data_source_mock.return_value.get_time_box_work.side_effect = _mock_query2
 
-    orig_getcwd = os.getcwd()
-    try:
-        os.chdir(tmpdir)
-        test_config.change_working_directory(tmpdir)
-        test_config.task_types = [mc.TaskType.INGEST]
-        test_config.interval = 10
-        # use_local_files set so run_by_state chooses QueryTimeBoxDataSource
-        test_config.use_local_files = False
-        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, state_test_start_time)
-        individual_log_file = f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
-        test_chooser = ec.OrganizeChooser()
-        test_reader = Mock()
-        test_result = rc.run_by_state(config=test_config, chooser=test_chooser, metadata_reader=test_reader)
-        assert test_result is not None, 'expect a result'
-        assert test_result == 0, 'expect success'
-        assert visit_meta_mock.called, 'expect visit meta call'
-        visit_meta_mock.assert_called_once_with()
-        assert test_reader.reset.called, 'expect reset call'
-        assert test_reader.reset.call_count == 1, 'wrong call count'
+    test_config.change_working_directory(tmp_path.as_posix())
+    test_config.task_types = [mc.TaskType.INGEST]
+    test_config.interval = 10
+    # use_local_files set so run_by_state chooses QueryTimeBoxDataSource
+    test_config.use_local_files = False
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, state_test_start_time)
+    individual_log_file = f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
+    test_chooser = ec.OrganizeChooser()
+    test_reader = Mock()
+    test_result = rc.run_by_state(config=test_config, chooser=test_chooser, metadata_reader=test_reader)
+    assert test_result is not None, 'expect a result'
+    assert test_result == 0, 'expect success'
+    assert visit_meta_mock.called, 'expect visit meta call'
+    visit_meta_mock.assert_called_once_with()
+    assert test_reader.reset.called, 'expect reset call'
+    assert test_reader.reset.call_count == 1, 'wrong call count'
 
-        assert data_source_mock.return_value.save_start_dt.called, 'save_start_dt should be called'
-        data_source_mock.return_value.save_start_dt.assert_called_with(state_test_end_time), 'wrong time'
-        assert os.path.exists(test_config.progress_fqn), 'expect progress file'
-        assert os.path.exists(test_config.success_fqn), 'log_to_file set to false, no success file'
-        assert not os.path.exists(individual_log_file), f'log_to_file is False, no entry log'
+    assert data_source_mock.return_value.save_start_dt.called, 'save_start_dt should be called'
+    data_source_mock.return_value.save_start_dt.assert_called_with(state_test_end_time), 'wrong time'
+    assert os.path.exists(test_config.progress_fqn), 'expect progress file'
+    assert os.path.exists(test_config.success_fqn), 'log_to_file set to false, no success file'
+    assert not os.path.exists(individual_log_file), f'log_to_file is False, no entry log'
 
-        # test that runner does nothing when times haven't changed
-        start_time = state_test_end_time
-        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
-        visit_meta_mock.reset_mock()
-        test_result = rc.run_by_state(config=test_config, chooser=test_chooser, metadata_reader=test_reader)
-        assert test_result is not None, 'expect a result'
-        assert test_result == 0, 'expect success'
-        assert not visit_meta_mock.called, 'expect no visit_meta call'
-        assert test_reader.reset.called, 'expect reset call'
-        assert test_reader.reset.call_count == 1, 'wrong call count'
-        assert data_source_mock.return_value.save_start_dt.called, 'save_start_dt should be called'
-        data_source_mock.return_value.save_start_dt.assert_called_with(state_test_end_time), 'wrong time'
-    finally:
-        os.chdir(orig_getcwd)
+    # test that runner does nothing when times haven't changed
+    start_time = state_test_end_time
+    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
+    visit_meta_mock.reset_mock()
+    test_result = rc.run_by_state(config=test_config, chooser=test_chooser, metadata_reader=test_reader)
+    assert test_result is not None, 'expect a result'
+    assert test_result == 0, 'expect success'
+    assert not visit_meta_mock.called, 'expect no visit_meta call'
+    assert test_reader.reset.called, 'expect reset call'
+    assert test_reader.reset.call_count == 1, 'wrong call count'
+    assert data_source_mock.return_value.save_start_dt.called, 'save_start_dt should be called'
+    data_source_mock.return_value.save_start_dt.assert_called_with(state_test_end_time), 'wrong time'
 
 
 @patch('caom2pipe.data_source_composable.CadcTapClient')
@@ -291,7 +433,8 @@ def test_run_state_log_to_file_true(
     clients_mock,
     tap_mock2,
     test_config,
-    tmpdir,
+    tmp_path,
+    change_test_dir,
 ):
     # tap_mock2 is needed by the data_source_composable specialization
     # this test is about making sure the summary .txt files are copied
@@ -300,9 +443,8 @@ def test_run_state_log_to_file_true(
     global call_count
     call_count = 0
 
-    test_config.change_working_directory(tmpdir)
-    if not os.path.exists(os.path.dirname(test_config.success_fqn)):
-        os.mkdir(os.path.dirname(test_config.success_fqn))
+    test_config.change_working_directory(tmp_path)
+    os.mkdir(os.path.dirname(test_config.success_fqn))
 
     clients_mock.return_value.metadata_client.read.side_effect = Mock(
         return_value=SimpleObservation(
@@ -350,14 +492,14 @@ def test_run_state_log_to_file_true(
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 def test_run_todo_list_dir_data_source_exception(
-    do_one_mock, clients_mock, test_config, tmpdir
+    do_one_mock, clients_mock, test_config, tmp_path, change_test_dir
 ):
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.use_local_files = True
     test_config.task_types = [mc.TaskType.SCRAPE]
     test_config.log_to_file = True
 
-    with open(f'{tmpdir}/abc.fits.gz', 'w') as f:
+    with open(f'{tmp_path}/abc.fits.gz', 'w') as f:
         f.write('test content\n')
 
     do_one_mock.side_effect = mc.CadcException
@@ -398,16 +540,16 @@ def test_run_todo_list_dir_data_source_exception(
 @patch('caom2pipe.data_source_composable.TodoFileDataSource.clean_up')
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
-def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config, tmpdir):
-    test_config.change_working_directory(tmpdir)
+def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config, tmp_path, change_test_dir):
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.log_to_file = True
     test_config.retry_failures = True
     test_config.retry_decay = 0
     test_config.task_types = [mc.TaskType.INGEST]
     _write_todo(test_config)
-    retry_success_fqn = f'{tmpdir}/logs_0/{test_config.success_log_file_name}'
-    retry_failure_fqn = f'{tmpdir}/logs_0/{test_config.failure_log_file_name}'
-    retry_retry_fqn = f'{tmpdir}/logs_0/{test_config.retry_file_name}'
+    retry_success_fqn = f'{tmp_path}/logs_0/{test_config.success_log_file_name}'
+    retry_failure_fqn = f'{tmp_path}/logs_0/{test_config.failure_log_file_name}'
+    retry_retry_fqn = f'{tmp_path}/logs_0/{test_config.retry_file_name}'
     do_one_mock.side_effect = _mock_do_one_failure
 
     test_result = rc.run_by_todo(config=test_config)
@@ -450,17 +592,17 @@ def test_run_todo_retry(do_one_mock, clients_mock, source_mock, test_config, tmp
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
 @patch('caom2pipe.data_source_composable.QueryTimeBoxDataSource')
-def test_run_state_retry(ds_mock, do_one_mock, clients_mock, test_config, tmpdir):
-    test_config.change_working_directory(tmpdir)
+def test_run_state_retry(ds_mock, do_one_mock, clients_mock, test_config, tmp_path, change_test_dir):
+    test_config.change_working_directory(tmp_path.as_posix())
     test_start_time = mc.get_now()
     test_end_time = test_start_time + timedelta(hours=1)
     mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, test_start_time)
     type(ds_mock.return_value).start_dt = PropertyMock(return_value=test_start_time)
     type(ds_mock.return_value).end_dt = PropertyMock(return_value=test_end_time)
 
-    retry_success_fqn = f'{tmpdir}/logs_0/{test_config.success_log_file_name}'
-    retry_failure_fqn = f'{tmpdir}/logs_0/{test_config.failure_log_file_name}'
-    retry_retry_fqn = f'{tmpdir}/logs_0/{test_config.retry_file_name}'
+    retry_success_fqn = f'{tmp_path}/logs_0/{test_config.success_log_file_name}'
+    retry_failure_fqn = f'{tmp_path}/logs_0/{test_config.failure_log_file_name}'
+    retry_retry_fqn = f'{tmp_path}/logs_0/{test_config.retry_file_name}'
 
     global call_count
     call_count = 0
@@ -475,28 +617,23 @@ def test_run_state_retry(ds_mock, do_one_mock, clients_mock, test_config, tmpdir
     test_config.interval = 10
     test_config.logging_level = 'DEBUG'
     test_config.task_types = [mc.TaskType.INGEST]
-    orig_cwd = os.getcwd()
-    try:
-        os.chdir(tmpdir)
-        mc.Config.write_to_file(test_config)
-        test_result = rc.run_by_state(config=test_config)
+    mc.Config.write_to_file(test_config)
+    test_result = rc.run_by_state(config=test_config)
 
-        assert test_result is not None, 'expect a result'
-        assert test_result == -1, 'expect failure'
-        _check_log_files_for_failure(test_config, retry_success_fqn, retry_failure_fqn, retry_retry_fqn)
-        assert do_one_mock.called, 'expect do_one call'
-        assert do_one_mock.call_count == 2, 'wrong number of calls'
-    finally:
-        os.chdir(orig_cwd)
+    assert test_result is not None, 'expect a result'
+    assert test_result == -1, 'expect failure'
+    _check_log_files_for_failure(test_config, retry_success_fqn, retry_failure_fqn, retry_retry_fqn)
+    assert do_one_mock.called, 'expect do_one call'
+    assert do_one_mock.call_count == 2, 'wrong number of calls'
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_time_box(clients_mock, test_config, tmpdir):
+def test_time_box(clients_mock, test_config, tmp_path, change_test_dir):
     # test that the time boxes increment as expected, to a maximum value
     # time-boxing is handled by DataSource specializations, and is in the time zone of the data source
     # end timestamp is handled by StateRunner
 
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path.as_posix())
 
     test_config.interval = 700
     test_config.task_types = [mc.TaskType.INGEST]
@@ -548,9 +685,9 @@ def test_time_box(clients_mock, test_config, tmpdir):
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_time_box_equal(clients_mock, test_config, tmpdir):
+def test_time_box_equal(clients_mock, test_config, tmp_path, change_test_dir):
     # test that if the end datetime is the same as the start datetime, there are no calls
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.interval = 700
     test_config.task_types = [mc.TaskType.INGEST]
 
@@ -580,8 +717,8 @@ def test_time_box_equal(clients_mock, test_config, tmpdir):
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_time_box_once_through(clients_mock, test_config, tmpdir):
-    test_config.change_working_directory(tmpdir)
+def test_time_box_once_through(clients_mock, test_config, tmp_path, change_test_dir):
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.interval = 700
     test_config.task_types = [mc.TaskType.INGEST]
 
@@ -639,7 +776,8 @@ def test_run_store_ingest_failure(
     visit_meta_mock,
     caom2_store_mock,
     test_config,
-    tmpdir,
+    tmp_path,
+    change_test_dir,
 ):
     access_mock.return_value = 'https://localhost'
     temp_deque = deque()
@@ -666,7 +804,7 @@ def test_run_store_ingest_failure(
         exceptions.UnexpectedException
     )
     reader_file_info_mock.side_effect = _file_info_mock
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
     test_config.use_local_files = True
     test_config.cleanup_files_when_storing = True
@@ -725,10 +863,11 @@ def test_run_store_fitsverify_failure(
     visit_meta_mock,
     caom2_store_mock,
     test_config,
-    tmpdir,
+    tmp_path,
+    change_test_dir,
 ):
     # check that the default DataSource behaviour (LocalFilesDataSource) calls fitsverify
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
     test_config.use_local_files = True
     test_config.cleanup_files_when_storing = False
@@ -907,7 +1046,8 @@ def test_run_ingest(
     caom2_store_mock,
     access_url_mock,
     test_config,
-    tmpdir
+    tmp_path,
+    change_test_dir,
 ):
     access_url_mock.return_value = 'https://localhost:8080'
     temp_deque = deque()
@@ -925,7 +1065,7 @@ def test_run_ingest(
         md5sum='abcdef',
     )
 
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.logging_level = 'INFO'
     test_config.collection = 'CFHT'
@@ -973,7 +1113,8 @@ def test_vo_with_cleanup(
     vault_info_mock,
     local_file_info_mock,
     test_config,
-    tmpdir
+    tmp_path,
+    change_test_dir,
 ):
     access_mock.return_value = 'https://localhost'
     test_obs_id = 'sky_cam_image'
@@ -992,8 +1133,8 @@ def test_vo_with_cleanup(
     clients_mock.vo_client = vo_client_mock
     clients_mock.data_client.info.side_effect = [None, test_file_info]
     store_transfer_mock = Mock(autospec=True)
-    fix_mock.return_value = f'{tmpdir}/{test_f_name}'
-    test_config.change_working_directory(tmpdir)
+    fix_mock.return_value = f'{tmp_path}/{test_f_name}'
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.task_types = [mc.TaskType.STORE]
     test_config.logging_level = 'INFO'
     test_config.collection = 'DAO'
@@ -1017,14 +1158,14 @@ def test_vo_with_cleanup(
     assert test_result is not None, 'expect a result'
     assert test_result == 0, 'expect success'
     assert fix_mock.called, 'fix_compression call'
-    fix_mock.assert_called_with(f'{tmpdir}/sky_cam_image/{test_f_name}')
+    fix_mock.assert_called_with(f'{tmp_path}/sky_cam_image/{test_f_name}')
     assert vo_client_mock.move.called, 'vo mock call'
     vo_client_mock.move.assert_called_with(
         'vos:goliaths/DAOTest/sky_cam_image.fits.gz',
         'vos:goliaths/DAOTest/pass/sky_cam_image.fits.gz',
     ), 'move args'
     assert clients_mock.data_client.put.called, 'put call'
-    clients_mock.data_client.put.assert_called_with(tmpdir, 'cadc:DAO/sky_cam_image.fits')
+    clients_mock.data_client.put.assert_called_with(tmp_path.as_posix(), 'cadc:DAO/sky_cam_image.fits')
 
 
 def _check_logs(reporter, storage_name, failure_should_exist, retry_should_exist, success_should_exist):
@@ -1065,12 +1206,12 @@ def _check_log_files_for_failure(test_config, retry_success_fqn, retry_failure_f
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-def test_time_box_time_zones(clients_mock, test_config, tmpdir):
+def test_time_box_time_zones(clients_mock, test_config, tmp_path, change_test_dir):
     # test that the time boxes increment as expected, to a maximum value
     # time-boxing is handled by DataSource specializations, and is in the time zone of the data source
     # end timestamp is handled by StateRunner
 
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path.as_posix())
 
     test_config.interval = 700
     test_config.task_types = [mc.TaskType.INGEST]
@@ -1167,7 +1308,7 @@ class TestProcessEntry:
         )
         self._storage_name = tc.TStorageName()
 
-    def test_build_raises_exception(self, test_config, tmp_path):
+    def test_build_raises_exception(self, test_config, tmp_path, change_test_dir):
         # NameBuilder.build call raises an Exception
         # retry exists because there could be a service call in the naming code
         self._ini(test_config, tmp_path)
@@ -1191,7 +1332,7 @@ class TestProcessEntry:
             success_should_exist=False,
         )
 
-    def test_is_valid_fails(self, test_config, tmp_path):
+    def test_is_valid_fails(self, test_config, tmp_path, change_test_dir):
         # storage_name.is_valid == False
         self._ini(test_config, tmp_path)
         test_builder = BuilderWithIsValidFails()
@@ -1214,7 +1355,7 @@ class TestProcessEntry:
             success_should_exist=False,
         )
 
-    def test_do_one_raises_exception(self, test_config, tmp_path):
+    def test_do_one_raises_exception(self, test_config, tmp_path, change_test_dir):
         # storage_name.is_valid == True, do_one raises an exception
         self._ini(test_config, tmp_path)
         test_builder = BuilderWithNoException()
@@ -1238,7 +1379,7 @@ class TestProcessEntry:
                 success_should_exist=False,
             )
 
-    def test_do_one_succeeds(self, test_config, tmp_path):
+    def test_do_one_succeeds(self, test_config, tmp_path, change_test_dir):
         # storage_name.is_valid == True, do_one succeeds
         self._ini(test_config, tmp_path)
         test_builder = BuilderWithNoException()
@@ -1262,7 +1403,7 @@ class TestProcessEntry:
                 success_should_exist=True,
             )
 
-    def test_do_one_non_zero_return(self, test_config, tmp_path):
+    def test_do_one_non_zero_return(self, test_config, tmp_path, change_test_dir):
         # storage_name.is_valid == True, do_one fails
         self._ini(test_config, tmp_path)
         test_builder = BuilderWithNoException()
@@ -1326,49 +1467,44 @@ class TestRetry:
         test_config.retry_failures = True
         test_config.retry_decay = 0
         test_config.retry_count = 1
-        orig_dir = os.getcwd()
-        try:
-            os.chdir(tmp_path)
-            mc.Config.write_to_file(test_config)
-            mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
-            with open(test_config.proxy_fqn, 'w') as f:
-                f.write('test content')
+        mc.Config.write_to_file(test_config)
+        mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
+        with open(test_config.proxy_fqn, 'w') as f:
+            f.write('test content')
 
-            test_data_source = dsc.QueryTimeBoxDataSource(test_config)
-            time_box_work = deque()
-            time_box_work.append(dsc.StateRunnerMeta('abc.fits', now_dt))
-            test_data_source.get_time_box_work = Mock(return_value = time_box_work)
-            test_data_source.initialize_end_dt = Mock()
-            type(test_data_source).end_dt = PropertyMock(return_value=end_time)
-            test_sources = [test_data_source]
-            self._reader = Mock()
-            self._observer = mc.Observable(test_config)
-            self._reporter = mc.ExecutionReporter(test_config, self._observer)
-            self._clients = Mock()
-            self._name_builder = BuilderWithNoException()
-            self._modify_transfer = CadcTransfer(self._clients.data_client)
-            self._store_transfer = Mock()
-            self._organizer = ec.OrganizeExecutes(
-                config=test_config,
-                meta_visitors=test_meta,
-                data_visitors=test_data,
-                metadata_reader=self._reader,
-                observable=self._observer,
-                clients=self._clients,
-                store_transfer=self._store_transfer,
-                modify_transfer=self._modify_transfer,
-            )
-            self._runner = rc.StateRunner(
-                test_config,
-                self._organizer,
-                self._name_builder,
-                test_sources,
-                self._reader,
-                self._observer,
-                self._reporter,
-            )
-        finally:
-            os.chdir(orig_dir)
+        test_data_source = dsc.QueryTimeBoxDataSource(test_config)
+        time_box_work = deque()
+        time_box_work.append(dsc.StateRunnerMeta('abc.fits', now_dt))
+        test_data_source.get_time_box_work = Mock(return_value = time_box_work)
+        test_data_source.initialize_end_dt = Mock()
+        type(test_data_source).end_dt = PropertyMock(return_value=end_time)
+        test_sources = [test_data_source]
+        self._reader = Mock()
+        self._observer = mc.Observable(test_config)
+        self._reporter = mc.ExecutionReporter(test_config, self._observer)
+        self._clients = Mock()
+        self._name_builder = BuilderWithNoException()
+        self._modify_transfer = CadcTransfer(self._clients.data_client)
+        self._store_transfer = Mock()
+        self._organizer = ec.OrganizeExecutes(
+            config=test_config,
+            meta_visitors=test_meta,
+            data_visitors=test_data,
+            metadata_reader=self._reader,
+            observable=self._observer,
+            clients=self._clients,
+            store_transfer=self._store_transfer,
+            modify_transfer=self._modify_transfer,
+        )
+        self._runner = rc.StateRunner(
+            test_config,
+            self._organizer,
+            self._name_builder,
+            test_sources,
+            self._reader,
+            self._observer,
+            self._reporter,
+        )
 
     def _post(self):
         assert self._reporter._summary.success == 1, 'success'
@@ -1380,7 +1516,7 @@ class TestRetry:
 
     @patch('caom2pipe.data_source_composable.CadcTapClient')
     @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
-    def test_meta_visit(self, caom2_store_mock, tap_client_mock, tmp_path):
+    def test_meta_visit(self, caom2_store_mock, tap_client_mock, tmp_path, change_test_dir):
         test_config = TestRetry.meta_visit_config
         test_meta = [test_execute_composable.VisitNoException()]
         test_data = []
@@ -1397,7 +1533,7 @@ class TestRetry:
 
     @patch('caom2pipe.data_source_composable.CadcTapClient')
     @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
-    def test_nofhead_visit(self, caom2_store_mock, tap_client_mock, tmp_path):
+    def test_nofhead_visit(self, caom2_store_mock, tap_client_mock, tmp_path, change_test_dir):
         test_config = TestRetry.nofhead_visit_config
         test_meta = [test_execute_composable.VisitNoException()]
         test_data = [test_execute_composable.VisitNoException()]
@@ -1417,7 +1553,7 @@ class TestRetry:
     @patch('caom2pipe.data_source_composable.CadcTapClient')
     @patch('caom2pipe.execute_composable.CaomExecute._cadc_put')
     @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
-    def test_nofheadstore_visit(self, cadc_put_mock, caom2_store_mock, tap_client_mock, tmp_path):
+    def test_nofheadstore_visit(self, cadc_put_mock, caom2_store_mock, tap_client_mock, tmp_path, change_test_dir):
         test_config = TestRetry.nofheadstore_visit_config
         test_meta = [test_execute_composable.VisitNoException()]
         test_data = [test_execute_composable.VisitNoException()]
@@ -1444,7 +1580,7 @@ class TestRetry:
 @patch('caom2pipe.transfer_composable.HttpTransfer')
 @patch('caom2pipe.client_composable.ClientCollection')
 def test_run_state_store_ingest_http_retry(
-    client_mock, transferrer_mock, end_dt_mock, endpoint_mock, m2, test_config, tmp_path
+    client_mock, transferrer_mock, end_dt_mock, endpoint_mock, m2, test_config, tmp_path, change_test_dir
 ):
     # Test store + ingest + modify, DelayedReader, NoFheadStore Executor, HttpDataSource (VLASS)
     # 1 success
@@ -1490,59 +1626,54 @@ def test_run_state_store_ingest_http_retry(
     test_config.retry_count = 2
     mc.State.write_bookmark(test_config.state_fqn, test_url, datetime(2019, 4, 29, 12, 34))
     client_mock.metadata_client.read.return_value = None
-    orig_getcwd = os.getcwd()
-    try:
-        os.chdir(tmp_path)
-        mc.Config.write_to_file(test_config)
-        test_metadata_reader = DelayedClientReader(client_mock.data_client)
-        session_mock = Mock()
-        test_source = HttpDataSource(test_config, test_url, HtmlFilteredPagesTemplate(test_config), session_mock)
-        test_source._work = deque(
-            [
-                dsc.StateRunnerMeta(f'{test_url}T01t01/{os.path.basename(test_uri_1)}', datetime(2019, 4, 30, 1, 1, 1)),
-                dsc.StateRunnerMeta(f'{test_url}T01t01/{os.path.basename(test_uri_2)}', datetime(2019, 4, 30, 2, 2, 2)),
-                dsc.StateRunnerMeta(f'{test_url}T27t32/{os.path.basename(test_uri_3)}', datetime(2019, 5, 2)),
-            ]
-        )
-        test_source.initialize_end_dt = Mock(autospec=True)
-        test_sources = [test_source]
-        test_name_builder = nbc.GuessingBuilder(mc.StorageName)
-        test_result = rc.run_by_state(
-            config=test_config,
-            meta_visitors=[visit_mock],
-            sources=test_sources,
-            store_transfer=transferrer_mock,
-            metadata_reader=test_metadata_reader,
-            clients=client_mock,
-            name_builder=test_name_builder,
-        )
-        assert test_result is not None, 'expect result'
-        assert test_result == -1, 'expect failures because of the retries'
-        test_reporter = test_sources[0].reporter
-        assert client_mock.metadata_client.read.called, 'read called'
-        # 6 = 1 success + 2 failures + 1 retry success + 1 retry failure + 1 second retry failure
-        assert client_mock.metadata_client.read.call_count == 6, 'read call count'
-        assert client_mock.metadata_client.create.called, 'create called'
-        assert client_mock.metadata_client.create.call_count == 6, 'create call count'
-        assert client_mock.data_client.put.called, 'put should be called'
-        assert client_mock.data_client.put.call_count == 6, 'wrong number of puts'
-        client_mock.data_client.put.assert_called_with(
-            f'{tmp_path}/{os.path.basename(test_uri_3).replace(".fits", "")}',
-            f'{test_config.scheme}:{test_config.collection}/{os.path.basename(test_uri_3)}'
-        )
-        assert client_mock.data_client.get_head.called, 'get_head called'
-        assert client_mock.data_client.get_head.call_count == 6, 'get_head call count'
-        assert client_mock.data_client.info.called, 'info called'
-        assert client_mock.data_client.info.call_count == 6, 'info call count'
-        assert test_reporter._summary.entries == 3, 'all'
-        assert test_reporter._summary._errors_sum == 4, 'errors'
-        assert test_reporter._summary._retry_sum == 3, 'retry'
-        assert test_reporter._summary.success == 2, 'success'
-        assert test_reporter._summary._timeouts_sum == 0, 'timeouts'
-        assert test_reporter._summary._rejected_sum == 0, 'rejected'
-        assert test_reporter._summary._skipped_sum == 0, 'skipped'
-    finally:
-        os.chdir(orig_getcwd)
+    mc.Config.write_to_file(test_config)
+    test_metadata_reader = DelayedClientReader(client_mock.data_client)
+    session_mock = Mock()
+    test_source = HttpDataSource(test_config, test_url, HtmlFilteredPagesTemplate(test_config), session_mock)
+    test_source._work = deque(
+        [
+            dsc.StateRunnerMeta(f'{test_url}T01t01/{os.path.basename(test_uri_1)}', datetime(2019, 4, 30, 1, 1, 1)),
+            dsc.StateRunnerMeta(f'{test_url}T01t01/{os.path.basename(test_uri_2)}', datetime(2019, 4, 30, 2, 2, 2)),
+            dsc.StateRunnerMeta(f'{test_url}T27t32/{os.path.basename(test_uri_3)}', datetime(2019, 5, 2)),
+        ]
+    )
+    test_source.initialize_end_dt = Mock(autospec=True)
+    test_sources = [test_source]
+    test_name_builder = nbc.GuessingBuilder(mc.StorageName)
+    test_result = rc.run_by_state(
+        config=test_config,
+        meta_visitors=[visit_mock],
+        sources=test_sources,
+        store_transfer=transferrer_mock,
+        metadata_reader=test_metadata_reader,
+        clients=client_mock,
+        name_builder=test_name_builder,
+    )
+    assert test_result is not None, 'expect result'
+    assert test_result == -1, 'expect failures because of the retries'
+    test_reporter = test_sources[0].reporter
+    assert client_mock.metadata_client.read.called, 'read called'
+    # 6 = 1 success + 2 failures + 1 retry success + 1 retry failure + 1 second retry failure
+    assert client_mock.metadata_client.read.call_count == 6, 'read call count'
+    assert client_mock.metadata_client.create.called, 'create called'
+    assert client_mock.metadata_client.create.call_count == 6, 'create call count'
+    assert client_mock.data_client.put.called, 'put should be called'
+    assert client_mock.data_client.put.call_count == 6, 'wrong number of puts'
+    client_mock.data_client.put.assert_called_with(
+        f'{tmp_path}/{os.path.basename(test_uri_3).replace(".fits", "")}',
+        f'{test_config.scheme}:{test_config.collection}/{os.path.basename(test_uri_3)}'
+    )
+    assert client_mock.data_client.get_head.called, 'get_head called'
+    assert client_mock.data_client.get_head.call_count == 6, 'get_head call count'
+    assert client_mock.data_client.info.called, 'info called'
+    assert client_mock.data_client.info.call_count == 6, 'info call count'
+    assert test_reporter._summary.entries == 3, 'all'
+    assert test_reporter._summary._errors_sum == 4, 'errors'
+    assert test_reporter._summary._retry_sum == 3, 'retry'
+    assert test_reporter._summary.success == 2, 'success'
+    assert test_reporter._summary._timeouts_sum == 0, 'timeouts'
+    assert test_reporter._summary._rejected_sum == 0, 'rejected'
+    assert test_reporter._summary._skipped_sum == 0, 'skipped'
 
 
 @patch('caom2utils.data_util.get_local_headers_from_fits')
@@ -1554,7 +1685,7 @@ def test_run_state_store_ingest_http_retry(
 )
 @patch('caom2pipe.client_composable.ClientCollection')
 def test_run_state_store_ingest_local_retry(
-    client_mock, end_dt_mock, time_box_mock, file_info_mock, header_mock, test_config, tmp_path
+    client_mock, end_dt_mock, time_box_mock, file_info_mock, header_mock, test_config, tmp_path, change_test_dir
 ):
     # Test store + ingest + modify, Hdf5FileMetadataReader, NoFheadStore Executor, LocalFilesDataSource (CFHT-like/DAO)
     # 1 success
@@ -1599,129 +1730,51 @@ def test_run_state_store_ingest_local_retry(
     test_config.retry_count = 2
     mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, datetime(2019, 4, 29, 12, 34))
     client_mock.metadata_client.read.return_value = None
-    orig_getcwd = os.getcwd()
-    try:
-        os.chdir(tmp_path)
-        mc.Config.write_to_file(test_config)
-        test_metadata_reader = Hdf5FileMetadataReader()
-        test_source = dsc.LocalFilesDataSource(test_config, client_mock.data_client, test_metadata_reader)
-        # mock _append_work because want to test the _capture_todo call in get_time_box_work
-        test_source._temp = defaultdict(list)
-        test_source._temp[datetime(2019, 4, 30, 1, 1, 1)].append(f'{test_data_source}/{test_f_1}')
-        test_source._temp[datetime(2019, 4, 30, 2, 2, 2)].append(f'{test_data_source}/{test_f_2}')
-        test_source._temp[datetime(2019, 5, 2)].append(f'{test_data_source}/{test_f_3}')
-        test_source._rejected_files = 1
-        test_source._skipped_files = 1
-        test_sources = [test_source]
-        test_name_builder = nbc.GuessingBuilder(mc.StorageName)
-        test_result = rc.run_by_state(
-            config=test_config,
-            meta_visitors=[visit_mock],
-            sources=test_sources,
-            metadata_reader=test_metadata_reader,
-            clients=client_mock,
-            name_builder=test_name_builder,
-        )
-        assert test_result is not None, 'expect result'
-        assert test_result == -1, 'expect failures because of the retries'
-        assert client_mock.metadata_client.read.called, 'read called'
-        # 6 = 1 success + 2 failures + 1 retry success + 1 retry failure + 1 second retry failure
-        assert client_mock.metadata_client.read.call_count == 6, 'read call count'
-        assert client_mock.metadata_client.create.called, 'create called'
-        assert client_mock.metadata_client.create.call_count == 6, 'create call count'
-        assert client_mock.data_client.put.called, 'put should be called'
-        assert client_mock.data_client.put.call_count == 6, 'wrong number of puts'
-        client_mock.data_client.put.assert_called_with(
-            test_data_source, f'{test_config.scheme}:{test_config.collection}/{test_f_3}'
-        )
-        assert not client_mock.data_client.get_head.called, 'get_head not called, not a DelayedClientReader'
-        assert not client_mock.data_client.info.called, 'info called, not a DelayedClientReader'
-        test_reporter = test_sources[0].reporter
-        assert test_reporter._summary.entries == 5, 'all'
-        assert test_reporter._summary._errors_sum == 4, 'errors'
-        assert test_reporter._summary._retry_sum == 3, 'retry'
-        assert test_reporter._summary.success == 2, 'success'
-        assert test_reporter._summary._timeouts_sum == 0, 'timeouts'
-        assert test_reporter._summary._rejected_sum == 1, 'rejected'
-        assert test_reporter._summary._skipped_sum == 1, 'skipped'
-    finally:
-        os.chdir(orig_getcwd)
-
-
-@skip('it runs stand-alone, but otherwise the time-box is broken')
-@patch('caom2pipe.client_composable.query_tap_client')
-@patch('caom2pipe.client_composable.ClientCollection', autospec=True)
-@patch('caom2pipe.data_source_composable.CadcTapClient')
-@patch('caom2pipe.execute_composable.MetaVisitRunnerMeta._visit_meta')
-def test_run_increment_runner_meta(
-    visit_meta_mock,
-    tap_mock,
-    clients_mock,
-    query_mock,
-    test_config,
-    tmpdir,
-    change_test_dir,
-):
-    # tap_mock is used by the data_source_composable class
-    visit_meta_mock.side_effect = _mock_visit
-    clients_mock.return_value.metadata_client.read.side_effect = _mock_read2
-
-    state_test_end_time = datetime.fromtimestamp(1579740838)
-    state_test_start_time = state_test_end_time - timedelta(seconds=900)
-
-    def _mock_timebox(query, arg2):
-        if 'max(A.lastModified)' in query:
-            return Table.read(f'm\n{state_test_end_time.isoformat()}\n'.split('\n'), format='ascii.tab')
-        else:
-            if '2020-01-23 00:38:58' in query:
-                return Table.read(
-                    'uri\tlastModified\n'
-                    'NEOS_SCI_2015347000000_clean.fits\t2019-10-23T16:27:19.000\n'.split('\n'),
-                    format='ascii.tab',
-                )
-            else:
-                return Table.read('uri\tlastModified\n'.split('\n'), format='ascii.tab')
-
-    query_mock.side_effect = _mock_timebox
-
-    test_config.change_working_directory(tmpdir)
-    test_config.task_types = [mc.TaskType.INGEST]
-    test_config.interval = 10
-    test_config.use_local_files = False
-    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, state_test_start_time)
-    individual_log_file = f'{test_config.log_file_directory}/NEOS_SCI_2015347000000_clean.log'
-    test_data_source = dsc.QueryTimeBoxDataSourceRunnerMeta(
-        test_config, '.jpg', mc.StorageName, clients_mock.storage_query_client
-    )
-    test_result = rc.run_by_state_runner_meta(
+    mc.Config.write_to_file(test_config)
+    test_metadata_reader = Hdf5FileMetadataReader()
+    test_source = dsc.LocalFilesDataSource(test_config, client_mock.data_client, test_metadata_reader)
+    # mock _append_work because want to test the _capture_todo call in get_time_box_work
+    test_source._temp = defaultdict(list)
+    test_source._temp[datetime(2019, 4, 30, 1, 1, 1)].append(f'{test_data_source}/{test_f_1}')
+    test_source._temp[datetime(2019, 4, 30, 2, 2, 2)].append(f'{test_data_source}/{test_f_2}')
+    test_source._temp[datetime(2019, 5, 2)].append(f'{test_data_source}/{test_f_3}')
+    test_source._rejected_files = 1
+    test_source._skipped_files = 1
+    test_sources = [test_source]
+    test_name_builder = nbc.GuessingBuilder(mc.StorageName)
+    test_result = rc.run_by_state(
         config=test_config,
-        sources=[test_data_source],
+        meta_visitors=[visit_mock],
+        sources=test_sources,
+        metadata_reader=test_metadata_reader,
+        clients=client_mock,
+        name_builder=test_name_builder,
     )
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert visit_meta_mock.called, 'expect visit meta call'
-    visit_meta_mock.assert_called_once_with()
+    assert test_result is not None, 'expect result'
+    assert test_result == -1, 'expect failures because of the retries'
+    assert client_mock.metadata_client.read.called, 'read called'
+    # 6 = 1 success + 2 failures + 1 retry success + 1 retry failure + 1 second retry failure
+    assert client_mock.metadata_client.read.call_count == 6, 'read call count'
+    assert client_mock.metadata_client.create.called, 'create called'
+    assert client_mock.metadata_client.create.call_count == 6, 'create call count'
+    assert client_mock.data_client.put.called, 'put should be called'
+    assert client_mock.data_client.put.call_count == 6, 'wrong number of puts'
+    client_mock.data_client.put.assert_called_with(
+        test_data_source, f'{test_config.scheme}:{test_config.collection}/{test_f_3}'
+    )
+    assert not client_mock.data_client.get_head.called, 'get_head not called, not a DelayedClientReader'
+    assert not client_mock.data_client.info.called, 'info called, not a DelayedClientReader'
+    test_reporter = test_sources[0].reporter
+    assert test_reporter._summary.entries == 5, 'all'
+    assert test_reporter._summary._errors_sum == 4, 'errors'
+    assert test_reporter._summary._retry_sum == 3, 'retry'
+    assert test_reporter._summary.success == 2, 'success'
+    assert test_reporter._summary._timeouts_sum == 0, 'timeouts'
+    assert test_reporter._summary._rejected_sum == 1, 'rejected'
+    assert test_reporter._summary._skipped_sum == 1, 'skipped'
 
-    assert test_data_source.end_dt == state_test_end_time, f'wrong end time {test_data_source.end_dt}'
-    assert os.path.exists(test_config.progress_fqn), 'expect progress file'
-    assert os.path.exists(test_config.success_fqn), 'log_to_file set to false, no success file'
-    assert not os.path.exists(individual_log_file), f'log_to_file is False, no entry log'
-    test_state_post = mc.State(test_config.state_fqn, None)
-    assert test_state_post.get_bookmark(test_config.bookmark) == state_test_end_time, 'wrong end time saved'
 
-    # test that runner does nothing when times haven't changed
-    start_time = state_test_end_time
-    mc.State.write_bookmark(test_config.state_fqn, test_config.bookmark, start_time)
-    visit_meta_mock.reset_mock()
-    test_result = rc.run_by_state_runner_meta(config=test_config)
-    assert test_result is not None, 'expect a result'
-    assert test_result == 0, 'expect success'
-    assert not visit_meta_mock.called, 'expect no visit_meta call'
-    test_state_post_2 = mc.State(test_config.state_fqn, None)
-    assert test_state_post_2.get_bookmark(test_config.bookmark) == state_test_end_time, 'wrong end time saved'
-
-
-@patch('caom2pipe.execute_composable.get_local_headers_from_fits')
+@patch('caom2pipe.execute_composable.get_local_file_headers')
 @patch('caom2pipe.execute_composable.get_local_file_info')
 @patch('caom2pipe.data_source_composable.LocalFilesDataSourceRunnerMeta._append_work')
 @patch(
@@ -1812,7 +1865,7 @@ def test_run_state_store_ingest_local_retry_runner_meta(
     assert client_mock.metadata_client.create.call_count == 6, 'create call count'
     assert client_mock.data_client.put.called, 'put should be called'
     assert client_mock.data_client.put.call_count == 6, 'wrong number of puts'
-    client_mock.data_client.put.assert_called_with(
+    client_mock.data_client.put.assert_any_call(
         test_data_source, f'{test_config.scheme}:{test_config.collection}/{test_f_3}'
     )
     assert not client_mock.data_client.get_head.called, 'get_head not called, not a DelayedClientReader'
@@ -1829,7 +1882,7 @@ def test_run_state_store_ingest_local_retry_runner_meta(
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2pipe.execute_composable.CaomExecute._caom2_store')
-@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
+@patch('caom2pipe.execute_composable.CaomExecuteRunnerMeta._visit_meta')
 @patch('caom2pipe.data_source_composable.TodoFileDataSourceRunnerMeta.get_work')
 @patch('caom2pipe.client_composable.CAOM2RepoClient')
 @patch('caom2pipe.client_composable.StorageClientWrapper')
@@ -1841,7 +1894,7 @@ def test_run_ingest_runner_meta(
     caom2_store_mock,
     access_url_mock,
     test_config,
-    tmpdir,
+    tmp_path,
     change_test_dir,
 ):
     access_url_mock.return_value = 'https://localhost:8080'
@@ -1858,7 +1911,7 @@ def test_run_ingest_runner_meta(
         md5sum='abcdef',
     )
 
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.task_types = [mc.TaskType.INGEST]
     test_config.logging_level = 'DEBUG'
     test_config.collection = 'CFHT'
@@ -1895,9 +1948,9 @@ def test_run_ingest_runner_meta(
 
 
 @patch('caom2pipe.execute_composable.CaomExecute._caom2_store')
-@patch('caom2pipe.execute_composable.CaomExecute._visit_meta')
+@patch('caom2pipe.execute_composable.CaomExecuteRunnerMeta._visit_meta')
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
-@patch('caom2pipe.execute_composable.get_local_headers_from_fits')
+@patch('caom2pipe.execute_composable.get_local_file_headers')
 @patch('caom2pipe.execute_composable.get_local_file_info')
 @patch('caom2pipe.data_source_composable.LocalFilesDataSourceRunnerMeta._move_action')
 @patch('caom2pipe.data_source_composable.LocalFilesDataSourceRunnerMeta.get_work')
@@ -1914,7 +1967,8 @@ def test_run_store_ingest_failure_runner_meta(
     visit_meta_mock,
     caom2_store_mock,
     test_config,
-    tmpdir,
+    tmp_path,
+    change_test_dir,
 ):
     access_mock.return_value = 'https://localhost'
     temp_deque = deque()
@@ -1937,7 +1991,7 @@ def test_run_store_ingest_failure_runner_meta(
     # mock a series of failures with the CADC storage service
     data_client_mock.return_value.info.side_effect = exceptions.UnexpectedException
     file_info_mock.side_effect = _file_info_mock
-    test_config.change_working_directory(tmpdir)
+    test_config.change_working_directory(tmp_path.as_posix())
     test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
     test_config.use_local_files = True
     test_config.cleanup_files_when_storing = True
@@ -2015,7 +2069,7 @@ ALL_TASK_OPTIONS = [
 
 @patch('caom2pipe.execute_composable.OrganizeExecutesRunnerMeta.do_one')
 @patch('caom2pipe.client_composable.ClientCollection')
-def test_run_todo_all_task_options_runner_meta(clients_mock, do_one_mock, test_config, tmpdir, change_test_dir):
+def test_run_todo_all_task_options_runner_meta(clients_mock, do_one_mock, test_config, tmp_path, change_test_dir):
 
     # tests all the possible _choose options, I think :)
     # assumes successful execution for two files
@@ -2027,7 +2081,7 @@ def test_run_todo_all_task_options_runner_meta(clients_mock, do_one_mock, test_c
 
     for task_types in ALL_TASK_OPTIONS:
         do_one_mock.return_value = (0, None)
-        test_config.change_working_directory(tmpdir)
+        test_config.change_working_directory(tmp_path.as_posix())
         test_config.task_types = task_types
         if mc.TaskType.SCRAPE in task_types or mc.TaskType.STORE in task_types:
             test_config.use_local_files = True
@@ -2076,97 +2130,12 @@ def test_run_todo_all_task_options_runner_meta(clients_mock, do_one_mock, test_c
    #  assert False
 
 
-@skip('it runs stand-alone, but otherwise the time-box is broken')
-@patch('caom2pipe.execute_composable.OrganizeExecutesRunnerMeta.do_one')
-@patch('caom2pipe.client_composable.ClientCollection')
-def test_run_incremental_all_task_options_runner_meta(clients_mock, do_one_mock, test_config, tmpdir, change_test_dir):
-
-    # tests all the possible _choose options, I think :)
-    # assumes successful execution for two files
-    # TODO must test decompression as well, because that changes file sizes and checksums
-
-    test_config.cleanup_files_when_storing = False
-    test_config.data_source_extensions = ['.fits']
-    test_config.logging_level = 'INFO'
-
-    for task_types in ALL_TASK_OPTIONS:
-        import logging
-        logging.error(task_types)
-        do_one_mock.return_value = (0, None)
-        test_config.change_working_directory(tmpdir)
-        test_config.task_types = task_types
-        if mc.TaskType.SCRAPE in task_types or mc.TaskType.STORE in task_types:
-            test_config.use_local_files = True
-            test_config.data_sources = ['/data']
-        else:
-            test_config.use_local_files = False
-
-        needs_delete = False
-        if task_types == [mc.TaskType.INGEST]:
-            needs_delete = True
-
-        test_config.proxy_file_name = 'cadcproxy.pem'
-        test_config.write_to_file(test_config)
-
-        with open(test_config.proxy_fqn, 'w') as f:
-            f.write('test content')
-
-        state_test_end_time = datetime.fromtimestamp(1579740838)
-        state_test_start_time = state_test_end_time - timedelta(seconds=900)
-        mc.State.write_bookmark(
-            test_config.state_fqn, test_config.bookmark, state_test_start_time, state_test_end_time
-        )
-
-        test_reporter = mc.ExecutionReporter2(test_config)
-
-        data_source = dsc.runner_meta_data_source_factory(
-            test_config,
-            clients_mock,
-            state=True,
-            reporter=test_reporter,
-            storage_name_ctor=mc.StorageName,
-        )
-        temp_work = defaultdict(list)
-        temp_work[
-            datetime(2019, 10, 23, 16, 27, 19, 0)
-        ].append(mc.StorageName(source_names=['/data/dao_c122_2021_005157_e.fits']))
-        temp_work[
-            datetime(2019, 10, 23, 16, 27, 20, 0)
-        ].append(mc.StorageName(source_names=['/data/dao_c122_2021_005157.fits']))
-        data_source._append_work = Mock()
-        data_source._temp = temp_work
-
-        test_result = rc.run_by_state_runner_meta(
-            sources=[data_source], reporter=test_reporter, needs_delete=needs_delete
-        )
-        assert test_result is not None, f'expect result {task_types}'
-        assert test_result == 0, f'expect success {task_types}'
-        assert do_one_mock.called, f'do_one {task_types}'
-        assert do_one_mock.call_count == 2, f'do_one count {task_types}'
-        args, kwargs = do_one_mock.call_args
-        assert isinstance(args[0], mc.StorageName), f'do_one parameter {task_types}'
-        assert test_reporter.all == 2, f'all {task_types} {test_reporter._summary}'
-        assert test_reporter.success == 2, f'success {task_types} {test_reporter._summary}'
-        do_one_mock.reset_mock()
-
-   #  assert False
-
-
 def _write_todo(test_config):
     with open(test_config.work_fqn, 'w') as f:
         f.write(f'test_obs_id.fits.gz')
 
 
 call_count = 0
-
-
-def _mock_get_compressed_file(working_dir, uri):
-    fqn = f'{working_dir}/{os.path.basename(uri)}'
-    with open(fqn, 'wb') as f:
-        f.write(
-            b"\x1f\x8b\x08\x08\xd0{Lb\x02\xff.abc.fits\x00+I-.QH\xce"
-            b"\xcf+I\xcd+\xe1\x02\x00\xbd\xdfZ'\r\x00\x00\x00"
-        )
 
 
 def _mock_get_work(arg1, arg2):
@@ -2228,21 +2197,6 @@ def _mock_do_one_failure(arg1):
         assert False, f'unexpected obs id {arg1.obs_id}'
     # mock execution failure
     return -1, None
-
-
-def _mock_write():
-    fqn = (
-        f'{tc.THIS_DIR}/NEOS_SCI_2015347000000_clean/'
-        f'NEOS_SCI_2015347000000_clean.xml'
-    )
-    mc.write_obs_to_file(
-        SimpleObservation(
-            collection='test_collection',
-            observation_id='ghi',
-            algorithm=Algorithm('test'),
-        ),
-        fqn,
-    )
 
 
 def _mock_read2(ign1, ign2):
