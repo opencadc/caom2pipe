@@ -138,6 +138,7 @@ class ClientCollection:
         self._metadata_client = None
         self._data_client = None
         self._query_client = None
+        self._storage_query_client = None
         self._vo_client = None
         self._metrics = None
         self._subject = None
@@ -167,6 +168,10 @@ class ClientCollection:
         return self._query_client
 
     @property
+    def storage_query_client(self):
+        return self._storage_query_client
+
+    @property
     def vo_client(self):
         return self._vo_client
 
@@ -185,6 +190,10 @@ class ClientCollection:
             self._data_client = declare_client(config)
             if config.tap_id is not None:
                 self._query_client = CadcTapClient(subject=self._subject, resource_id=config.tap_id)
+            if config.storage_inventory_tap_resource_id is not None:
+                self._query_client = CadcTapClient(
+                    subject=self._subject, resource_id=config.storage_inventory_tap_resource_id
+                )
 
 
 def client_get(client, working_directory, file_name, source, metrics):

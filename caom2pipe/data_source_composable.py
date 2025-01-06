@@ -77,6 +77,7 @@ from datetime import datetime, timezone
 
 from cadctap import CadcTapClient
 from cadcutils import exceptions
+from caom2utils.data_util import get_local_file_info
 from caom2pipe import astro_composable as ac
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
@@ -93,6 +94,7 @@ __all__ = [
     'LocalFilesDataSource',
     'QueryTimeBoxDataSource',
     'RetryTodoFileDataSource',
+    'RunnerMeta',
     'StateRunnerMeta',
     'TodoFileDataSource',
     'VaultCleanupDataSource',
@@ -126,6 +128,8 @@ class DataSource:
         self._skipped_files = 0
         self._work = deque()
         self._reporter = None
+        self._retry_failures = config.retry_failures
+        self._retry_count = config.retry_count
         self._logger = logging.getLogger(self.__class__.__name__)
 
     @property
@@ -136,9 +140,24 @@ class DataSource:
     def reporter(self, value):
         self._reporter = value
 
+    def can_clean_up(self, execution_result, current_count):
+        """Logic to determine whether or not to clean up files locally after there has been a storage attempt.
+
+        :return True if a file should be cleaned up, False otherwise.
+        """
+        can_clean = False
+        if (
+            (not self._retry_failures)
+            or (self._retry_failures and current_count >= self._retry_count)
+            or (self._retry_failures and execution_result == 0)
+        ):
+            can_clean = True
+        self._logger.debug(f'End can_clean_up with can_clean: {can_clean}.')
+        return can_clean
+
     def clean_up(self, entry, execution_result, current_count):
         """Clean up files locally after there has been a storage attempt."""
-        pass
+        return self.can_clean_up(execution_result, current_count)
 
     def default_filter(self, entry):
         """
@@ -151,6 +170,9 @@ class DataSource:
 
     def get_work(self):
         return self._work
+
+    def max_records_encountered(self):
+        return False
 
     def _capture_todo(self):
         self._reporter.capture_todo(len(self._work), self._rejected_files, self._skipped_files)
@@ -463,8 +485,10 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         self._source_directories = config.data_sources
         self._collection = config.collection
         self._recursive = recursive
-        self._metadata_reader = metadata_reader
-        self._metadata_reader.working_directory = config.working_directory
+        self._metadata_reader = None
+        if metadata_reader is not None:
+            self._metadata_reader = metadata_reader
+            self._metadata_reader.working_directory = config.working_directory
         self._is_connected = config.is_connected
         self._scheme = scheme
         if not self._is_connected:
@@ -504,6 +528,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
         :param current_count: int how many retries have been executed
         """
         self._logger.debug(f'Begin clean_up with {entry}')
+        can_clean = False
         if self._cleanup_when_storing and (
             (not self._retry_failures)
             or (self._retry_failures and current_count >= self._retry_count)
@@ -517,9 +542,12 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             if self._is_remote_different(fqn):
                 # the transfer itself failed, so track as a failure
                 self._move_action(fqn, self._cleanup_failure_directory)
+                can_clean = True
             else:
                 self._move_action(fqn, self._cleanup_success_directory)
+                can_clean = True
         self._logger.debug('End clean_up.')
+        return can_clean
 
     def _verify_file(self, fqn):
         """
@@ -693,6 +721,191 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 raise mc.CadcException(e)
 
 
+class LocalFilesDataSourceRunnerMeta(LocalFilesDataSource):
+    """
+    For when use_local_files: True and cleanup_when_storing: True
+    """
+
+    def __init__(self, config, cadc_client, recursive=True, scheme='cadc', storage_name_ctor=None):
+        super().__init__(config, cadc_client, metadata_reader=None, recursive=recursive, scheme=scheme)
+        self._storage_name_ctor = storage_name_ctor
+        self._temp_storage_name = None
+
+    def _append_work(self, prev_exec_dt, exec_dt, entry_path):
+        with os.scandir(entry_path) as dir_listing:
+            for dir_entry in dir_listing:
+                if dir_entry.is_dir() and self._recursive:
+                    entry_stats = dir_entry.stat()
+                    entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime)
+                    if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
+                        self._append_work(prev_exec_dt, exec_dt, dir_entry.path)
+                else:
+                    # order the stats check before the default_filter check, because CFHT likes to work with tens
+                    # of thousands of files, not a few, and the default filter is the one that opens and reads every
+                    # file to see if it's a valid FITS file
+                    #
+                    # send the dir_listing value
+                    # skip dot files, but have a special exclusion, because otherwise the entry.stat() call will
+                    # sometimes fail.
+                    if not dir_entry.name.startswith('.'):
+                        entry_stats = dir_entry.stat()
+                        entry_st_mtime_dt = datetime.fromtimestamp(entry_stats.st_mtime)
+                        if exec_dt >= entry_st_mtime_dt >= prev_exec_dt:
+                            if self.default_filter(dir_entry):
+                                self._temp[entry_st_mtime_dt].append(self._temp_storage_name)
+                                self._temp_storage_name = None
+
+    def _find_work(self, entry_path):
+        with os.scandir(entry_path) as dir_listing:
+            for entry in dir_listing:
+                if entry.is_dir() and self._recursive:
+                    self._find_work(entry.path)
+                else:
+                    if self.default_filter(entry):
+                        self._logger.info(f'Adding {entry.path} to work list.')
+                        self._work.append(self._temp_storage_name)
+                        self._temp_storage_name = None
+
+    def _is_remote_different(self, index, entry):
+        """
+        Check whether a file is different at its source than it is at CADC, using md5sum comparisons.
+
+        :return: boolean False if the data is the same locally as at CADC, True otherwise
+        """
+        result = True
+        if self._is_connected:
+            # get the CADC FileInfo
+            try:
+                cadc_meta = self._cadc_client.info(entry.destination_uris[index])
+            except Exception as e:
+                self._logger.error(f'info call failed for {entry.destination_uris[index]} with {e}')
+                self._logger.debug(traceback.format_exc())
+                cadc_meta = None
+            if cadc_meta is None:
+                result = True
+            else:
+                # the file_info is updated in execute_composable.py if conditional decompression occurs
+                if (
+                    entry.file_info.get(entry.destination_uris[index]).md5sum.replace('md5:', '')
+                    == cadc_meta.md5sum.replace('md5:', '')
+                ):
+                    result = False
+        else:
+            self._logger.debug(f'SCRAPE\'ing data - no md5sum checking with CADC for {entry.source_names[index]}.')
+        temp_text = 'different' if result else 'same'
+        self._logger.debug(
+            f'Done _is_remote_different for {entry.source_names[index]} result is {temp_text} at CADC.'
+        )
+        return result
+
+    def clean_up(self, entry, execution_result, current_count=0):
+        """
+        Move a file to the success or failure location. The success location is for when a file with the same
+        checksum is at CADC, the failure location is for when it is not.
+
+        Move the file only after all retries (as specified in config.yml) have been attempted. Note that this
+        cleanup behaviour will be assigned to the TodoFileDataSource during a retry.
+
+        :param entry: StorageName specialization instance
+        :param execution_result: int if it's 0, it's ok to clean up, regardless of how many times a file has been
+            processed
+        :param current_count: int how many retries have been executed
+        :return False if a file should have the [TaskTypes] retried, True otherwise. If a file was moved, that also
+            indicates retries are completed, so that is also a True case.
+        """
+        self._logger.debug(f'Begin clean_up with {entry.file_uri}')
+        can_clean = self.can_clean_up(execution_result, current_count)
+        if self._cleanup_when_storing and can_clean:
+            for index, source_name in enumerate(entry.source_names):
+                self._logger.debug(f'Clean up {entry.file_uri}')
+                if self._is_remote_different(index, entry):
+                    # the transfer itself failed, so track as a failure
+                    self._move_action(source_name, self._cleanup_failure_directory)
+                    can_clean = True
+                else:
+                    self._move_action(source_name, self._cleanup_success_directory)
+                    can_clean = True
+        self._logger.debug(f'End clean_up. Clean up for {entry.file_uri} is {can_clean}.')
+        return can_clean
+
+    def default_filter(self, dir_entry):
+        """
+        :param dir_entry: os.DirEntry
+        """
+        work_with_file = True
+        if super().default_filter(dir_entry):
+            if dir_entry.name.startswith('.'):
+                # skip dot files
+                work_with_file = False
+            else:
+                self._temp_storage_name = self._storage_name_ctor(source_names=[dir_entry.path])
+                local_file_info = get_local_file_info(dir_entry.path)
+                index = 0
+                self._temp_storage_name.set_file_info(index, local_file_info)
+                if '.hdf5' in dir_entry.name:
+                    # no hdf5 validation
+                    pass
+                elif self._verify_file(dir_entry.path):
+                    # only work with files that pass the FITS verification
+                    if self._cleanup_when_storing:
+                        if self._store_modified_files_only:
+                            # only transfer files with a different MD5 checksum
+                            work_with_file = self._is_remote_different(index, self._temp_storage_name)
+                            if not work_with_file:
+                                self._logger.warning(
+                                    f'{dir_entry.path} has the same md5sum at CADC. Not transferring.'
+                                )
+                                # KW - 23-06-21
+                                # if the file already exists, with the same checksum, at CADC, Kanoa says move it to the
+                                # 'succeeded' directory.
+                                self._skipped_files += 1
+                                self._move_action(dir_entry.path, self._cleanup_success_directory)
+                                self._reporter.capture_success(
+                                    self._temp_storage_name.obs_id,
+                                    self._temp_storage_name.file_name,
+                                    datetime.now(tz=timezone.utc).timestamp(),
+                                )
+                                self._temp_storage_name = None
+                    else:
+                        work_with_file = True
+                else:
+                    self._rejected_files += 1
+                    if self._cleanup_when_storing:
+                        self._logger.warning(
+                            f'Rejecting {dir_entry.path}. Moving to {self._cleanup_failure_directory}'
+                        )
+                        self._move_action(dir_entry.path, self._cleanup_failure_directory)
+                    self._reporter.capture_failure(
+                        self._temp_storage_name, BaseException('_verify_file errors'), '_verify_file errors'
+                    )
+                    work_with_file = False
+                    self._temp_storage_name = None
+        else:
+            work_with_file = False
+        self._logger.debug(f'Done default_filter says work_with_file is {work_with_file} for {dir_entry.path}')
+        return work_with_file
+
+    def get_time_box_work(self, prev_exec_dt, exec_dt):
+        """
+        :param prev_exec_dt tz-naive datetime start of the time-boxed chunk
+        :param exec_dt tz-naive datetime end of the time-goxed chunk
+        :return: a deque of RunnerMeta instances, with prev_exec_time <= os.stat.mtime <= exec_time, and
+            sorted by os.stat.mtime
+        """
+        self._logger.debug(f'Begin get_time_box_work from {prev_exec_dt} to {exec_dt}.')
+        for source in self._source_directories:
+            self._logger.debug(f'Looking for work in {source}')
+            self._append_work(prev_exec_dt, exec_dt, source)
+        # ensure the result returned is sorted by timestamp in ascending order
+        for mtime in sorted(self._temp):
+            for storage_entry in self._temp[mtime]:
+                self._work.append(RunnerMeta(storage_entry=storage_entry, entry_dt=mtime))
+        self._temp = defaultdict(list)
+        self._capture_todo()
+        self._logger.debug('End get_time_box_work')
+        return self._work
+
+
 class TodoFileDataSource(DataSource):
     """
     Implements the identification of the work to be done, by reading the
@@ -717,6 +930,33 @@ class TodoFileDataSource(DataSource):
         return self._work
 
 
+class TodoFileDataSourceRunnerMeta(DataSource):
+    """
+    Implements the identification of the work to be done, by reading the
+    contents of a file.
+    """
+
+    def __init__(self, config, storage_name_ctor):
+        super().__init__(config)
+        self._storage_name_ctor = storage_name_ctor
+
+    def _find_work(self, entry_path):
+        with open(entry_path) as f:
+            for line in f:
+                temp = line.strip()
+                if len(temp) > 0:
+                    # ignore empty lines
+                    self._logger.debug(f'Adding entry {temp} to work list.')
+                    self._work.append(self._storage_name_ctor(source_names=[temp]))
+
+    def get_work(self):
+        self._logger.debug(f'Begin get_work from {self._config.work_fqn}.')
+        self._find_work(self._config.work_fqn)
+        self._capture_todo()
+        self._logger.debug(f'End get_work.')
+        return self._work
+
+
 class RetryTodoFileDataSource(TodoFileDataSource):
     """
     Extends the TodoFileDataSource to not update the "Number of Inputs" report line when retrying ingestion.
@@ -734,6 +974,14 @@ def is_offset_aware(dt):
     :return: return True if tzinfo is set
     """
     return False if dt.tzinfo is None else True
+
+
+@dataclass
+class RunnerMeta:
+    # how to refer to the item of work to be processed
+    storage_entry: mc.StorageName
+    # tz-naive datetime associated with item of work
+    entry_dt: datetime
 
 
 @dataclass
@@ -810,6 +1058,67 @@ class QueryTimeBoxDataSource(IncrementalDataSource):
             self._end_dt = mc.make_datetime(row['m'])
             self._logger.info(f'Setting end time to {self._end_dt}')
             break
+
+
+class QueryTimeBoxDataSourceRunnerMeta(QueryTimeBoxDataSource):
+    """
+    Implements the identification of the work to be done, by querying a
+    TAP service, in time-boxed chunks. The time values are timestamps
+    (floats).
+
+    deque content will have the RunnerMeta class.
+    """
+
+    def __init__(self, config, preview_suffix, storage_name_ctor, storage_query_client):
+        IncrementalDataSource.__init__(self, config, config.bookmark)
+        self._preview_suffix = preview_suffix
+        self._storage_name_ctor = storage_name_ctor
+        self._client = storage_query_client
+        self._temp = defaultdict(list)
+
+    def _append_work(self, prev_exec_dt, exec_dt, entry_path):
+        self._logger.debug(f'Begin _append_work from {prev_exec_dt} to {exec_dt}')
+        prev_exec_dt = mc.make_datetime(prev_exec_dt)
+        exec_dt = mc.make_datetime(exec_dt)
+        # SG 8-09-22
+        # All timestamps in the SI databases are in UTC
+        #
+        # SGo
+        # Use 'lastModified', because that should be the later timestamp (avoid eventual consistency lags).
+        query = f"""
+            SELECT A.uri, A.lastModified
+            FROM inventory.Artifact AS A
+            WHERE A.uri NOT LIKE '%{self._preview_suffix}'
+            AND A.lastModified > '{prev_exec_dt}'
+            AND A.lastModified <= '{exec_dt}'
+            AND split_part( split_part( A.uri, '/', 1 ), ':', 2 ) = '{self._config.collection}'
+            ORDER BY A.lastModified ASC
+        """
+        self._logger.debug(query)
+        rows = clc.query_tap_client(query, self._client)
+        for row in rows:
+            r_dt = mc.make_datetime(row['lastModified'])
+            self._temp[r_dt].append(self._storage_name_ctor(source_names=[row['uri']]))
+
+    def get_time_box_work(self, prev_exec_dt, exec_dt):
+        """
+        Get a set of file names from a collection. Limit the entries by time-boxing on lastModified, and don't
+        include previews.
+
+        :param prev_exec_dt tz-naive datetime start of the time-boxed chunk
+        :param exec_dt tz-naive datetime end of the time-boxed chunk
+        :return: a time-sorted deque of RunnerMeta instances in the CADC storage system
+        """
+        self._logger.debug(f'Begin get_time_box_work.')
+        self._append_work(prev_exec_dt, exec_dt, None)
+        self._work = deque()
+        for dt in sorted(self._temp):
+            for storage_names in self._temp.get(dt):
+                self._work.append(RunnerMeta(storage_names, dt))
+        self._temp = defaultdict(list)
+        self._capture_todo()
+        self._logger.debug(f'End get_time_box_work.')
+        return self._work
 
 
 class VaultDataSource(ListDirTimeBoxDataSource):
@@ -932,6 +1241,7 @@ class VaultCleanupDataSource(VaultDataSource):
         a file with the same checksum is at CADC.
         """
         self._logger.debug(f'Begin clean_up with {entry}')
+        can_clean = False
         if self._cleanup_when_storing and (
             (not self._retry_failures)
             or (self._retry_failures and current_count >= self._retry_count)
@@ -947,11 +1257,14 @@ class VaultCleanupDataSource(VaultDataSource):
                 if self._is_remote_different(storage_name.destination_uris[0]):
                     # the transfer itself failed, so track as a failure
                     self._move_action(fqn, self._cleanup_failure_directory)
+                    can_clean = True
                 else:
                     self._move_action(fqn, self._cleanup_success_directory)
+                    can_clean = True
             else:
                 self._logger.warning(f'No clean up for {fqn} because there is no vos metadata.')
             self._logger.debug('End clean_up.')
+        return can_clean
 
     def default_filter(self, dir_entry):
         """
@@ -1075,6 +1388,41 @@ def data_source_factory(config, clients, state, reader, reporter):
                 source = QueryTimeBoxDataSource(config)
             else:
                 source = TodoFileDataSource(config)
+    source.reporter = reporter
+    logging.debug(f'Created {source.__class__.__name__} data_source_composable instance.')
+    return source
+
+
+def runner_meta_data_source_factory(config, clients, state, reporter, storage_name_ctor):
+    """
+    :param config: manage_composable.Config
+    :param clients: client_composable.ClientCollection
+    :param state: bool True is the DataSource is time-boxed.
+    :param reporter: ExecutionReporter instance tracks and reports on successes and failures
+    :return: DataSource specialization
+    """
+    if config.use_local_files:
+        # by default call fitsverify as part of setting up local file use
+        # this class implements both get_work and get_time_box_work
+        source = LocalFilesDataSourceRunnerMeta(
+            config, clients.data_client, config.recurse_data_sources, config.scheme, storage_name_ctor
+        )
+    else:
+        if config.use_vos and clients.vo_client is not None:
+            if config.cleanup_files_when_storing:
+                source = VaultCleanupDataSourceRunnerMeta(config, clients.vo_client, clients.data_client, reader)
+            else:
+                source = VaultDataSourceRunnerMeta(clients.vo_client, config)
+        else:
+            if state:
+                source = QueryTimeBoxDataSourceRunnerMeta(
+                    config,
+                    preview_suffix='jpg',
+                    storage_name_ctor=storage_name_ctor,
+                    storage_query_client=clients.storage_query_client,
+                )
+            else:
+                source = TodoFileDataSourceRunnerMeta(config, storage_name_ctor)
     source.reporter = reporter
     logging.debug(f'Created {source.__class__.__name__} data_source_composable instance.')
     return source

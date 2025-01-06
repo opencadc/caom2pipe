@@ -107,7 +107,6 @@ __all__ = [
     'build_uri',
     'Cache',
     'CadcException',
-
     'CaomName',
     'compare_observations',
     'Config',
@@ -309,13 +308,73 @@ class State:
         write_as_yaml(self.content, state_fqn)
 
     @staticmethod
-    def write_bookmark(state_fqn, book_mark, time_dt):
+    def write_bookmark(state_fqn, book_mark, time_dt, end_timestamp=None):
         bookmark = {
             'bookmarks': {
                 f'{book_mark}': {'last_record': time_dt},
             }
         }
+        if end_timestamp:
+            bookmark['bookmarks'][book_mark]['end_timestamp'] = end_timestamp
         write_as_yaml(bookmark, state_fqn)
+
+
+class StateRay(State):
+
+    def __init__(self):
+        self.bookmarks = {}
+        self.context = {}
+        self.content = {
+            'bookmarks': self.bookmarks,
+            'context': self.context,
+        }
+        self.logger = logging.getLogger(self.__class__.__name__)
+
+    def add_bookmark_end(self, bookmark_key, end_dt):
+        if bookmark_key not in self.bookmarks:
+            self.bookmarks[bookmark_key] = {}
+        self.bookmarks[bookmark_key]['end_timestamp'] = end_dt
+
+    def add_bookmark_start(self, bookmark_key, start_dt):
+        super().add_bookmark(bookmark_key, start_dt)
+
+    def get_bookmark_end(self, bookmark_key):
+        result = datetime.now()
+        if (temp := self.bookmarks.get(bookmark_key)):
+            result = temp.get('end_timestamp', datetime.now())
+        return result
+
+    def get_bookmark_start(self, bookmark_key):
+        result = None
+        if (temp := self.bookmarks.get(bookmark_key)):
+            result = temp.get('last_record')
+        return result
+
+    def read_from_file(self, fqn):
+        result = read_as_yaml(fqn)
+        if result:
+            self.bookmarks = result.get('bookmarks', {})
+            self.context = result.get('context', {})
+            self.content = result
+
+    def save_start_dt(self, key, value, fqn):
+        """Write the current state as a YAML file.
+        :param key which record is being updated
+        :param value the value to update the record with
+        """
+        bookmarks = self.get_bookmark(key)
+        if bookmarks is None:
+            context = self.get_context(key)
+            if context is None:
+                self.logger.warning(f'No content found for {key}')
+            else:
+                self.context[key] = value
+                self.logger.debug(f'Saving context {value} {fqn}')
+                write_as_yaml(self.content, fqn)
+        else:
+            self.bookmarks[key]['last_record'] = value
+            self.logger.debug(f'Saving bookmarked last record {value} {fqn}')
+            write_as_yaml(self.content, fqn)
 
 
 class Rejected:
@@ -326,6 +385,7 @@ class Rejected:
     NO_REASON = ''
     BAD_DATA = 'bad_data'
     BAD_METADATA = 'bad_metadata'
+    FITS_VERIFY = 'fitsverify'
     INVALID_FILE_NAME = 'invalid_file_name'
     INVALID_FORMAT = 'is_valid_fails'
     MISSING = 'missing_at_source'
@@ -339,6 +399,7 @@ class Rejected:
     reasons = {
         BAD_DATA: 'Header missing END card',
         BAD_METADATA: 'Cannot build an observation',
+        FITS_VERIFY: 'fitsverify',
         INVALID_FILE_NAME: 'Invalid name format',
         INVALID_FORMAT: 'Invalid observation ID',
         MISSING: 'Could not find JSON record for',
@@ -402,6 +463,9 @@ class Rejected:
     def get_bad_metadata(self):
         return self.content[Rejected.BAD_METADATA]
 
+    def get_fitsverify(self):
+        return self.content[Rejected.FITS_VERIFY]
+
     def get_no_preview(self):
         return self.content[Rejected.NO_PREVIEW]
 
@@ -453,6 +517,10 @@ class ExecutionReporter:
     @property
     def all(self):
         return self._summary.entries
+
+    @property
+    def observable(self):
+        return self._observable
 
     @property
     def success(self):
@@ -534,6 +602,39 @@ class ExecutionReporter:
             self._summary.add_rejections(1)
         self._logger.debug('End capture_failure')
 
+    def capture_failure_2(self, entry, failure_message):
+        """Log an error message to the failure file.
+
+        If the failure is of a known type, also capture it to the rejected
+        list. The rejected list will be saved to disk when the execute method
+        completes.
+
+        This is a temporary method to support refactoring, and when all dependent applications have also been
+        refactored to use this method instead of the capture_failure method, this method will be integrated back
+        into the capture_failure method.
+
+        :obs_id observation ID being processed
+        :file_name file name being processed
+        :e Exception to log - the entire stack trace, which, if logging
+            level is not set to debug, will be lost for debugging purposes.
+        """
+        self._logger.debug('Begin capture_failure_2')
+        self._summary.add_errors(1)
+        if self._is_timeout(failure_message):
+            self._summary.add_timeouts(1)
+        with open(self._failure_fqn, 'a') as failure:
+            failure.write(f'{datetime.now()} {entry} {failure_message}\n')
+
+        # only retry entries that are not permanently marked as rejected
+        reason = Rejected.known_failure(failure_message)
+        if reason == Rejected.NO_REASON or self._is_timeout(failure_message):
+            with open(self._retry_fqn, 'a') as retry:
+                retry.write(f'{entry}\n')
+        else:
+            self._observable.rejected.record(reason, entry)
+            self._summary.add_rejections(1)
+        self._logger.debug('End capture_failure_2')
+
     def capture_success(self, obs_id, file_name, start_time):
         """Capture, with a timestamp, the successful observations/file names that have been processed.
         :param obs_id str observation ID being processed
@@ -556,8 +657,31 @@ class ExecutionReporter:
         self._logger.info(msg)
         self._logger.debug('*' * len(msg))
 
+    def capture_success_2(self, entry, start_time):
+        """Capture, with a timestamp, the successful entries that have been processed.
+
+        This is a temporary method to support refactoring, and when all dependent applications have also been
+        refactored to use this method instead of the capture_success method, this method will be integrated back
+        into the capture_success method.
+
+        :param entry str processing unit
+        :param start_time int seconds since beginning of execution.
+        """
+        self._logger.debug('Begin capture_success')
+        self._summary.add_successes(1)
+        execution_s = datetime.now(tz=timezone.utc).timestamp() - start_time
+        with open(self._success_fqn, 'a') as success:
+            success.write(f'{datetime.now()} {entry} {execution_s:.2f}\n')
+        msg = (
+            f'Progress - record {self._summary.success} of {self._summary.entries} records processed in '
+            f'{execution_s:.2f} s.'
+        )
+        self._logger.debug('*' * len(msg))
+        self._logger.info(msg)
+        self._logger.debug('*' * len(msg))
+
     def capture_todo(self, todo, rejected, skipped):
-        self._logger.debug(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
+        self._logger.error(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
         self._summary.add_entries(todo + rejected + skipped)
         self._summary.add_rejections(rejected)
         self._summary.add_skipped(skipped)
@@ -574,7 +698,6 @@ class ExecutionReporter:
         """
         :return: a list of file names from one of the failure, retry, or success log files.
         """
-        logging.error('enter get_file_names_from_log_file')
         result = []
         with open(log_fqn) as f_in:
             for line in f_in:
@@ -588,6 +711,53 @@ class ExecutionReporter:
                     else:
                         result.append(bits[3])
         return result
+
+
+class ExecutionReporter2(ExecutionReporter):
+    """
+    This is a temporary class to support refactoring of Observable being a member of the ExecutionReporter class,
+    instead of the ExecutionReporter class being a member of the Observable class, and when all dependent
+    applications have also been refactored to use the ExecutionReporter2 class, this class will be integrated back
+    into the ExecutionReporter class.
+    """
+
+    def __init__(self, config):
+        super().__init__(config, observable=Observable(config))
+
+    def capture_failure_2(self, entry, failure_message):
+        """Log an error message to the failure file.
+
+        If the failure is of a known type, also capture it to the rejected list. The rejected list will be saved to
+        disk when the execute method completes.
+
+        :obs_id observation ID being processed
+        :file_name file name being processed
+        :e Exception to log - the entire stack trace, which, if logging level is not set to debug, will be lost
+            for debugging purposes.
+        """
+        self._logger.debug('Begin capture_failure_2')
+        self._summary.add_errors(1)
+        if self._is_timeout(failure_message):
+            self._summary.add_timeouts(1)
+        with open(self._failure_fqn, 'a') as failure:
+            failure.write(f'{datetime.now()} {entry} {failure_message}\n')
+
+        # only retry entries that are not permanently marked as rejected
+        reason = Rejected.known_failure(failure_message)
+        if reason == Rejected.NO_REASON or self._is_timeout(failure_message):
+            with open(self._retry_fqn, 'a') as retry:
+                retry.write(f'{entry}\n')
+        else:
+            self._observable.rejected.record(reason, entry)
+            self._summary.add_rejections(1)
+        self._logger.debug('End capture_failure_2')
+
+
+class ExecutionReporterRay(ExecutionReporter2):
+
+    def __init__(self, config):
+        super().__init__(config)
+        self._observable = Observable(config)
 
 
 class ExecutionSummary:
@@ -765,6 +935,8 @@ class Metrics:
 
             fqn = os.path.join(self.observable_dir, f'{now}.fail.yml')
             write_as_yaml(self.failures, fqn)
+            self.history = {}
+            self.failures = {}
 
 
 def minimize_on_keyword(x, candidate):
@@ -803,6 +975,57 @@ class Observable:
     @property
     def metrics(self):
         return self._metrics
+
+    @property
+    def reporter(self):
+        return self._reporter
+
+
+class Observable2(Observable):
+    """
+    This is a temporary class to support refactoring of Observable being a member of the ExecutionReporter class,
+    instead of the ExecutionReporter class being a member of the Observable class, and when all dependent
+    applications have also been refactored to use the Observable2 class, this class will be integrated back
+    into the Observable class.
+    """
+
+    def __init__(self, config):
+        super().__init__(config)
+        self._reporter = ExecutionReporter2(config)
+        self._reporter.set_log_location(config)
+
+    @property
+    def reporter(self):
+        return self._reporter
+
+    def capture_failure(self, entry, failure_message):
+        """Log an error message to the failure file.
+
+        If the failure is of a known type, also capture it to the rejected
+        list. The rejected list will be saved to disk when the execute method
+        completes.
+
+        :obs_id observation ID being processed
+        :file_name file name being processed
+        :e Exception to log - the entire stack trace, which, if logging
+            level is not set to debug, will be lost for debugging purposes.
+        """
+        self._logger.debug('Begin capture_failure')
+        self._reporter._summary.add_errors(1)
+        if self._reporter._is_timeout(failure_message):
+            self._reporter._summary.add_timeouts(1)
+        with open(self._reporter._failure_fqn, 'a') as failure:
+            failure.write(f'{datetime.now()} {entry} {failure_message}\n')
+
+        # only retry entries that are not permanently marked as rejected
+        reason = Rejected.known_failure(failure_message)
+        if reason == Rejected.NO_REASON or self._reporter._is_timeout(failure_message):
+            with open(self._reporter._retry_fqn, 'a') as retry:
+                retry.write(f'{entry}\n')
+        else:
+            self.rejected.record(reason, entry)
+            self._reporter._summary.add_rejections(1)
+        self._logger.debug('End capture_failure')
 
 
 class Cache:
@@ -933,6 +1156,7 @@ class Config:
         self._log_to_file = False
         self._log_file_directory = None
         self._lookup = {}
+        self._rclone_options = {}
         self._storage_host = None
         self._task_types = []
         self._success_log_file_name = None
@@ -979,6 +1203,7 @@ class Config:
         self._features = Features()
         self._cleanup_failure_destination = None
         self._cleanup_success_destination = None
+        self._parallel_count = 1
         self._preview_scheme = 'cadc'
         self._scheme = 'cadc'
         self._server_side_resource_id = None
@@ -1084,6 +1309,14 @@ class Config:
     @lookup.setter
     def lookup(self, value):
         self._lookup = value
+
+    @property
+    def rclone_options(self):
+        return self._rclone_options
+
+    @rclone_options.setter
+    def rclone_options(self, value):
+        self._rclone_options = value
 
     @property
     def use_local_files(self):
@@ -1479,6 +1712,15 @@ class Config:
         self._observable_directory = value
 
     @property
+    def parallel_count(self):
+        """How many parallel tasks to run."""
+        return self._parallel_count
+
+    @parallel_count.setter
+    def parallel_count(self, value):
+        self._parallel_count = value
+
+    @property
     def preview_scheme(self):
         """Preview scheme for Artifact URIs, which may be different based on who creates the file."""
         return self._preview_scheme
@@ -1554,11 +1796,13 @@ class Config:
             f'  meta_read_groups:: {self.meta_read_groups}\n'
             f'  observable_directory:: {self.observable_directory}\n'
             f'  observe_execution:: {self.observe_execution}\n'
+            f'  parallel_count:: {self.parallel_count}\n'
             f'  preview_scheme:: {self.preview_scheme}\n'
             f'  progress_file_name:: {self.progress_file_name}\n'
             f'  progress_fqn:: {self.progress_fqn}\n'
             f'  proxy_file_name:: {self.proxy_file_name}\n'
             f'  proxy_fqn:: {self.proxy_fqn}\n'
+            f'  rclone_options:: {self.rclone_options}\n'
             f'  recurse_data_sources:: {self.recurse_data_sources}\n'
             f'  rejected_directory:: {self.rejected_directory}\n'
             f'  rejected_file_name:: {self.rejected_file_name}\n'
@@ -1697,6 +1941,7 @@ class Config:
             )
             self.lookup = config.get('lookup', {})
             self.meta_read_groups = config.get('meta_read_groups', [])
+            self.rclone_options = config.get('rclone_options', {})
             self.task_types = Config._obtain_task_types(config, [])
             self.collection = config.get('collection', 'TEST')
             self.success_log_file_name = config.get(
@@ -1746,6 +1991,7 @@ class Config:
             self.store_modified_files_only = config.get(
                 'store_modified_files_only', False
             )
+            self.parallel_count = config.get('parallel_count', 1)
             self.preview_scheme = config.get('preview_scheme', 'cadc')
             self._report_fqn = os.path.join(
                 self.log_file_directory,
@@ -2091,6 +2337,16 @@ class StorageName:
     - source_names: fully-qualified name of a file at it's source, if required.
       This may be a Linux directory+file name, and HTTP URL, or an IVOA Virtual
       Storage URI.
+    - metadata associated with an instance. The is perhaps temporal in nature, and maybe there should be an
+      uber-class to capture the relationship between the naming rules and the metadata, instead of shoe-horning
+      those two concepts together here?  TODO - decide whether an uber-class is required?
+
+    Lifecycle of a StorageName
+       1. Created when a unit of work is identified
+       2. FileInfo - as lazy as possible
+       3. Header metadata - as lazy as possible
+       4. Removed from the list of work when it’s (successfully? TODO - decide the optimal removal time ) done
+          processing
     """
 
     # string value for Observation.collection
@@ -2102,6 +2358,7 @@ class StorageName:
     # scheme for Storage Inventory
     scheme = 'cadc'
     preview_scheme = 'cadc'
+    data_source_extensions = ['.fits']
 
     def __init__(
         self,
@@ -2125,10 +2382,14 @@ class StorageName:
         # list of str - the Artifact URIs as represented at CADC. Sufficient
         # for storing/retrieving to/from CADC.
         self._destination_uris = []
-        # str - the file name with all file type and compression extensions
-        # removed
+        # str - the file name with all file type and compression extensions removed
         self._file_id = None
+        # key is destination uri, value is file metadata, such as fits headers, db record, etc
+        self._metadata = {}
+        # key is destination uri, value is type FileInfo
+        self._file_info = {}
         self._logger = logging.getLogger(self.__class__.__name__)
+        self.set_file_name()
         self.set_destination_uris()
         self.set_file_id()
         self.set_obs_id()
@@ -2136,14 +2397,18 @@ class StorageName:
         self._logger.debug(self)
 
     def __str__(self):
+        f_info_keys = '\n                  '.join(ii for ii in self.file_info.keys())
+        metadata_keys = '\n                  '.join(ii for ii in self.metadata.keys())
         return (
             f'\n'
             f'          obs_id: {self.obs_id}\n'
-            f'       file_name: {self.file_name}\n'
-            f'        file_uri: {self.file_uri}\n'
             f'      product_id: {self.product_id}\n'
+            f'        file_uri: {self.file_uri}\n'
+            f'       file_name: {self.file_name}\n'
             f'    source_names: {self.source_names}\n'
-            f'destination_uris: {self.destination_uris}'
+            f'destination_uris: {self.destination_uris}\n'
+            f'  file_info keys: {f_info_keys}\n'
+            f'   metadata keys: {metadata_keys}'
         )
 
     def _get_uri(self, file_name, scheme):
@@ -2153,6 +2418,14 @@ class StorageName:
     def file_id(self):
         """The file name with all file type and compression extensions removed"""
         return self._file_id
+
+    @property
+    def file_info(self):
+        return self._file_info
+
+    @file_info.setter
+    def file_info(self, value):
+        self._file_info = value
 
     @property
     def file_uri(self):
@@ -2175,10 +2448,23 @@ class StorageName:
         return StorageName.is_hdf5(self._file_name)
 
     @property
+    def metadata(self):
+        return self._metadata
+
+    @metadata.setter
+    def metadata(self, value):
+        self._metadata = value
+
+    @property
     def model_file_name(self):
         """The file name used on local disk that holds the CAOM2 Observation
         XML."""
-        return f'{self._obs_id}.xml'
+        # return f'{self._obs_id}.xml'
+        return f'{self.name}.xml'
+
+    @property
+    def name(self):
+        return self._obs_id
 
     @property
     def prev(self):
@@ -2264,6 +2550,14 @@ class StorageName:
                 self._file_id = StorageName.remove_extensions(self._file_name)
             elif self._obs_id is not None:
                 self._file_id = self._obs_id
+
+    def set_file_info(self, index, value):
+        uri = self._destination_uris[index]
+        self._file_info[uri] = value
+
+    def set_file_name(self):
+        if not self._file_name and self._source_names:
+            self._file_name = os.path.basename(self._source_names[0])
 
     def set_obs_id(self, **kwargs):
         if self._obs_id is None:
@@ -2361,7 +2655,7 @@ def exec_cmd(cmd, log_level_as=logging.debug, timeout=None):
     :return None
     """
     logging.debug(cmd)
-    cmd_array = cmd.split()
+    cmd_array = ['/bin/bash', '-c', cmd]
     exec_cmd_array(cmd_array, log_level_as, timeout)
 
 
@@ -2423,7 +2717,8 @@ def exec_cmd_info(cmd):
     :return The text from stdout.
     """
     logging.debug(cmd)
-    cmd_array = cmd.split()
+    # cmd_array = cmd.split()
+    cmd_array = ['/bin/bash', '-c', cmd]
     try:
         output, outerr = subprocess.Popen(
             cmd_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE
@@ -3052,6 +3347,7 @@ def _parse_plus_some_formats(from_value):
             '%Y_%m_%dT%H_%M_%S.%f',
             '%Y-%m-%dHST%H:%M:%S',
             '%Y%b%d',
+            '%y%b%d:%H:%M:%S.%f',
         ]:
             try:
                 result = datetime.strptime(from_value, fmt)
