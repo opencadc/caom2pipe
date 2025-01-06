@@ -275,6 +275,15 @@ class TodoRunnerMeta(TodoRunner):
         self._logger.debug(f'End _process_entry with result {result}.')
         return result
 
+    def _reset_for_retry(self, data_source, count):
+        self._config.update_for_retry(count)
+        # the log location changes for each retry
+        self._reporter.set_log_location(self._config)
+        # change the data source handling for the retry, but preserve the original clean_up behaviour
+        # self._retry_data_source = data_source_composable.RetryTodoFileDataSource(self._config)
+        # self._retry_data_source.reporter = self._reporter
+        # self._retry_data_source.clean_up = data_source.clean_up
+
     def _run_todo_list(self, data_source, current_count):
         """
         :param current_count: int - current retry count - needs to be passed
@@ -298,6 +307,34 @@ class TodoRunnerMeta(TodoRunner):
         self._finish_run()
         self._logger.debug('End _run_todo_list.')
         self._todo_list = retry_list
+        return result
+ 
+    def run_retry(self):
+        self._logger.debug('Begin retry run.')
+        result = 0
+        # if self._config.need_to_retry():
+        if self._config.retry_failures and len(self._todo_list) > 0:
+            for count in range(0, self._config.retry_count):
+                self._logger.warning(
+                    f'Beginning retry {count + 1} in {os.getcwd()} for data source {self._data_sources[0]}'
+                )
+                # to preserve the clean_up behaviour from one of the original data sources
+                self._reset_for_retry(self._data_sources[0], count)
+                # make another file list
+                # self._build_todo_list(self._retry_data_source)
+                self._reporter.capture_retry(len(self._todo_list))
+                decay_interval = self._config.retry_decay * (count + 1) * 60
+                self._logger.warning(f'Retry {len(self._todo_list)} entries at {decay_interval} seconds from now.')
+                sleep(decay_interval)
+                # result |= self._run_todo_list(self._retry_data_source, current_count=count + 1)
+                result |= self._run_todo_list(self._data_sources[0], current_count=count + 1)
+                # if not self._config.need_to_retry():
+                if len(self._todo_list) == 0:
+                    break
+            self._logger.warning(f'Done retry attempts with result {result}.')
+        else:
+            self._logger.info(f'No failures to be retried.')
+        self._logger.debug(f'End retry run with result {result}.')
         return result
 
 
