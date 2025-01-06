@@ -297,8 +297,8 @@ class TodoRunnerMeta(TodoRunner):
             temp_result = self._process_entry(entry)
             result |= temp_result
             try:
-                cannot_clean_up = data_source.clean_up(entry, temp_result, current_count)
-                if cannot_clean_up:
+                can_clean_up = data_source.clean_up(entry, temp_result, current_count)
+                if not can_clean_up:
                     retry_list.append(entry)
             except Exception as e:
                 self._logger.info(f'Cleanup failed for {entry.file_uri} with {e}')
