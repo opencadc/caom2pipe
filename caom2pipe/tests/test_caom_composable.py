@@ -87,32 +87,21 @@ except ImportError:
     no_footprintfinder = True
 
 
-@pytest.mark.skipif(
-    no_footprintfinder, reason='footprintfinder must be installed'
-)
+@pytest.mark.skipif(no_footprintfinder, reason='footprintfinder must be installed')
 def test_exec_footprintfinder():
     test_obs_file = 'fpf_start_obs.xml'
-    test_obs = mc.read_obs_from_file(
-        os.path.join(tc.TEST_DATA_DIR, test_obs_file)
-    )
+    test_obs = mc.read_obs_from_file(os.path.join(tc.TEST_DATA_DIR, test_obs_file))
     test_chunk = (
         test_obs.planes['VLASS1.2.T07t14.J084202-123000.quicklook.v1']
-        .artifacts[
-            'ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
-            'image.pbcor.tt0.subim.fits'
-        ]
+        .artifacts['ad:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.' 'image.pbcor.tt0.subim.fits']
         .parts['0']
         .chunks.pop()
     )
-    test_file_id = (
-        'VLASS1.2.ql.T24t07.J065836+563000.10.2048.v1.I.iter1.'
-        'image.pbcor.tt0.subim'
-    )
+    test_file_id = 'VLASS1.2.ql.T24t07.J065836+563000.10.2048.v1.I.iter1.' 'image.pbcor.tt0.subim'
     test_file = os.path.join(tc.TEST_FILES_DIR, f'{test_file_id}.fits')
     if not os.path.exists(test_file):
         shutil.copy(
-            f'/usr/src/app/vlass2caom2/int_test/test_files/'
-            f'{test_file_id}.fits',
+            f'/usr/src/app/vlass2caom2/int_test/test_files/' f'{test_file_id}.fits',
             test_file,
         )
     test_log_dir = os.path.join(tc.TEST_DATA_DIR, 'logs')
@@ -121,16 +110,12 @@ def test_exec_footprintfinder():
     assert test_chunk.position.axis is not None, 'axis expected'
     assert test_chunk.position.axis.bounds is None, 'bounds not expected'
 
-    cc.exec_footprintfinder(
-        test_chunk, test_file, test_log_dir, test_file_id, '-t 10'
-    )
+    cc.exec_footprintfinder(test_chunk, test_file, test_log_dir, test_file_id, '-t 10')
     assert test_chunk is not None, 'chunk unchanged'
     assert test_chunk.position is not None, 'position unchanged'
     assert test_chunk.position.axis is not None, 'axis unchanged'
     assert test_chunk.position.axis.bounds is not None, 'bounds expected'
-    assert (
-        len(test_chunk.position.axis.bounds.vertices) == 17
-    ), 'wrong number of vertices'
+    assert len(test_chunk.position.axis.bounds.vertices) == 17, 'wrong number of vertices'
     assert test_chunk.position.axis.bounds.vertices[0] == ValueCoord2D(
         coord1=105.188421, coord2=55.98216
     ), 'wrong first vertex'
@@ -144,15 +129,10 @@ def test_exec_footprintfinder():
 
 def test_reset():
     test_obs_file = 'fpf_start_obs.xml'
-    test_obs = mc.read_obs_from_file(
-        os.path.join(tc.TEST_DATA_DIR, test_obs_file)
-    )
+    test_obs = mc.read_obs_from_file(os.path.join(tc.TEST_DATA_DIR, test_obs_file))
     test_chunk = (
         test_obs.planes['VLASS1.2.T07t14.J084202-123000.quicklook.v1']
-        .artifacts[
-            'cadc:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
-            'image.pbcor.tt0.subim.fits'
-        ]
+        .artifacts['cadc:VLASS/VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.' 'image.pbcor.tt0.subim.fits']
         .parts['0']
         .chunks.pop()
     )
@@ -186,23 +166,19 @@ def test_build_temporal_wcs(query_mock):
     def _mock_query(arg1, arg2):
         if 'N20160102S0296' in arg1:
             return Table.read(
-                'val,delta,cunit,naxis\n'
-                '57389.66314699074,0.000115798611111111,d,1\n'.split('\n'),
+                'val,delta,cunit,naxis\n' '57389.66314699074,0.000115798611111111,d,1\n'.split('\n'),
                 format='csv',
             )
         else:
             return Table.read(
-                'val,delta,cunit,naxis\n'
-                '57389.66342476852,0.000115798611111111,d,1\n'.split('\n'),
+                'val,delta,cunit,naxis\n' '57389.66342476852,0.000115798611111111,d,1\n'.split('\n'),
                 format='csv',
             )
 
     query_mock.side_effect = _mock_query
 
     test_tap_client = Mock()
-    test_observation = mc.read_obs_from_file(
-        f'{tc.TEST_DATA_DIR}/build_temporal_wcs_start.xml'
-    )
+    test_observation = mc.read_obs_from_file(f'{tc.TEST_DATA_DIR}/build_temporal_wcs_start.xml')
     test_plane = test_observation.planes['GN2001BQ013-04']
     test_part = test_plane.artifacts['cadc:GEMINI/test.fits'].parts['0']
     assert test_part.chunks[0].time is None, 'temporal wcs ic'

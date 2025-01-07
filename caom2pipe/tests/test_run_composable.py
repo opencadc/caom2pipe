@@ -126,8 +126,7 @@ def test_run_increment_runner_meta(
         else:
             if '2020-01-23 00:38:58' in query:
                 return Table.read(
-                    'uri\tlastModified\n'
-                    'NEOS_SCI_2015347000000_clean.fits\t2019-10-23T16:27:19.000\n'.split('\n'),
+                    'uri\tlastModified\n' 'NEOS_SCI_2015347000000_clean.fits\t2019-10-23T16:27:19.000\n'.split('\n'),
                     format='ascii.tab',
                 )
             else:
@@ -222,12 +221,12 @@ def test_run_incremental_all_task_options_runner_meta(
             storage_name_ctor=mc.StorageName,
         )
         temp_work = defaultdict(list)
-        temp_work[
-            datetime(2019, 10, 23, 16, 27, 19, 0)
-        ].append(mc.StorageName(source_names=['/data/dao_c122_2021_005157_e.fits']))
-        temp_work[
-            datetime(2019, 10, 23, 16, 27, 20, 0)
-        ].append(mc.StorageName(source_names=['/data/dao_c122_2021_005157.fits']))
+        temp_work[datetime(2019, 10, 23, 16, 27, 19, 0)].append(
+            mc.StorageName(source_names=['/data/dao_c122_2021_005157_e.fits'])
+        )
+        temp_work[datetime(2019, 10, 23, 16, 27, 20, 0)].append(
+            mc.StorageName(source_names=['/data/dao_c122_2021_005157.fits'])
+        )
         data_source._append_work = Mock()
         data_source._temp = temp_work
 
@@ -277,12 +276,8 @@ def test_run_todo_list_dir_data_source(
     visit_meta_mock.assert_called_with()
     assert read_obs_mock.called, 'read_obs not called'
     assert write_obs_mock.called, 'write_obs mock not called'
-    assert not (
-        clients_mock.return_value.metadata_client.read.called
-    ), 'scrape, should be no client access'
-    assert not (
-        clients_mock.return_value.data_client.get_file.called
-    ), 'scrape, should be no client access'
+    assert not (clients_mock.return_value.metadata_client.read.called), 'scrape, should be no client access'
+    assert not (clients_mock.return_value.data_client.get_file.called), 'scrape, should be no client access'
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
@@ -316,17 +311,15 @@ def test_run_todo_list_dir_data_source_invalid_fname(clients_mock, test_config, 
     test_builder = TStorageNameInstanceBuilder()
     test_chooser = ec.OrganizeChooser()
     data_source = dsc.ListDirSeparateDataSource(test_config)
-    test_result = rc.run_by_todo(config=test_config, chooser=test_chooser, sources=[data_source], name_builder=test_builder)
+    test_result = rc.run_by_todo(
+        config=test_config, chooser=test_chooser, sources=[data_source], name_builder=test_builder
+    )
     assert test_result is not None, 'expect a result'
     assert test_result == -1, 'expect failure, because of file naming'
     assert os.path.exists(test_config.failure_fqn), 'expect failure file'
     assert os.path.exists(test_config.retry_fqn), 'expect retry file'
-    assert (
-        not clients_mock.metadata_client.read.called
-    ), 'repo client read access happens after is_valid call'
-    assert not (
-        clients_mock.data_client.get_file.called
-    ), 'bad file naming, should be no client access'
+    assert not clients_mock.metadata_client.read.called, 'repo client read access happens after is_valid call'
+    assert not (clients_mock.data_client.get_file.called), 'bad file naming, should be no client access'
 
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
@@ -491,9 +484,7 @@ def test_run_state_log_to_file_true(
 
 @patch('caom2pipe.client_composable.ClientCollection', autospec=True)
 @patch('caom2pipe.execute_composable.OrganizeExecutes.do_one')
-def test_run_todo_list_dir_data_source_exception(
-    do_one_mock, clients_mock, test_config, tmp_path, change_test_dir
-):
+def test_run_todo_list_dir_data_source_exception(do_one_mock, clients_mock, test_config, tmp_path, change_test_dir):
     test_config.change_working_directory(tmp_path.as_posix())
     test_config.use_local_files = True
     test_config.task_types = [mc.TaskType.SCRAPE]
@@ -529,12 +520,8 @@ def test_run_todo_list_dir_data_source_exception(
         # retry file names
         assert content == 'abc.fits\n', 'wrong retry content'
 
-    assert not (
-        clients_mock.return_value.metadata_client.read.called
-    ), 'scrape, should be no metadata client call'
-    assert not (
-        clients_mock.return_value.data_client.get_file_info.called
-    ), 'scrape, should be no data client call'
+    assert not (clients_mock.return_value.metadata_client.read.called), 'scrape, should be no metadata client call'
+    assert not (clients_mock.return_value.data_client.get_file_info.called), 'scrape, should be no data client call'
 
 
 @patch('caom2pipe.data_source_composable.TodoFileDataSource.clean_up')
@@ -796,13 +783,9 @@ def test_run_store_ingest_failure(
 
     # this is the exception raised in data_util.StorageClientWrapper, as
     # the mc.CadcException definition is not available to that package
-    data_client_mock.return_value.put.side_effect = (
-        exceptions.UnexpectedException
-    )
+    data_client_mock.return_value.put.side_effect = exceptions.UnexpectedException
     # mock a series of failures with the CADC storage service
-    data_client_mock.return_value.info.side_effect = (
-        exceptions.UnexpectedException
-    )
+    data_client_mock.return_value.info.side_effect = exceptions.UnexpectedException
     reader_file_info_mock.side_effect = _file_info_mock
     test_config.change_working_directory(tmp_path.as_posix())
     test_config.task_types = [mc.TaskType.STORE, mc.TaskType.INGEST]
@@ -830,19 +813,13 @@ def test_run_store_ingest_failure(
     # execution stops before this call should be made
     assert not repo_client_mock.return_value.read.called, 'no read'
     # make sure data is not really being written to CADC storage :)
-    assert (
-        data_client_mock.return_value.put.called
-    ), 'put should be called'
-    assert (
-        data_client_mock.return_value.put.call_count == 2
-    ), 'wrong number of puts'
+    assert data_client_mock.return_value.put.called, 'put should be called'
+    assert data_client_mock.return_value.put.call_count == 2, 'wrong number of puts'
     put_calls = [
         call('/data', 'cadc:OMM/dao_c122_2021_005157_e.fits'),
         call('/data', 'cadc:OMM/dao_c122_2021_005157.fits'),
     ]
-    data_client_mock.return_value.put.assert_has_calls(
-        put_calls, any_order=False
-    )
+    data_client_mock.return_value.put.assert_has_calls(put_calls, any_order=False)
     assert cleanup_mock.called, 'cleanup'
     cleanup_calls = [
         call('/data/dao_c122_2021_005157_e.fits', '/data/failure'),
@@ -1083,16 +1060,10 @@ def test_run_ingest(
     assert test_result == 0, 'expect success'
     assert repo_client_mock.return_value.read.called, 'read called'
     assert data_client_mock.return_value.info.called, 'info'
-    assert (
-        data_client_mock.return_value.info.call_count == 1
-    ), 'wrong number of info calls'
+    assert data_client_mock.return_value.info.call_count == 1, 'wrong number of info calls'
     data_client_mock.return_value.info.assert_called_with(f'cadc:CFHT/{test_f_name}')
-    assert (
-        data_client_mock.return_value.get_head.called
-    ), 'get_head should be called'
-    assert (
-        data_client_mock.return_value.get_head.call_count == 1
-    ), 'wrong number of get_heads'
+    assert data_client_mock.return_value.get_head.called, 'get_head should be called'
+    assert data_client_mock.return_value.get_head.call_count == 1, 'wrong number of get_heads'
     data_client_mock.return_value.get_head.assert_called_with(f'cadc:CFHT/{test_f_name}')
     assert meta_visit_mock.called, '_visit_meta call'
     assert meta_visit_mock.call_count == 1, '_visit_meta call count'
@@ -1178,13 +1149,11 @@ def _check_logs(reporter, storage_name, failure_should_exist, retry_should_exist
         assert storage_name.file_name not in failure_files, 'should not be failure logging'
     if retry_should_exist:
         assert (
-            storage_name.source_names[0] in retry_files
-            or storage_name.file_name in retry_files
+            storage_name.source_names[0] in retry_files or storage_name.file_name in retry_files
         ), 'should be retry logging'
     else:
         assert not (
-            storage_name.source_names[0] in retry_files
-            and storage_name.file_name in retry_files
+            storage_name.source_names[0] in retry_files and storage_name.file_name in retry_files
         ), 'should not be retry logging'
     if success_should_exist:
         assert storage_name.file_name in success_files, 'should be success logging'
@@ -1369,7 +1338,9 @@ class TestProcessEntry:
                 self._observer,
                 self._reporter,
             )
-            test_result = test_subject._process_entry(self._data_source, self._storage_name.file_name, current_count=0)
+            test_result = test_subject._process_entry(
+                self._data_source, self._storage_name.file_name, current_count=0
+            )
             assert test_result == -1, 'expect failure'
             _check_logs(
                 self._reporter,
@@ -1393,7 +1364,9 @@ class TestProcessEntry:
                 self._observer,
                 self._reporter,
             )
-            test_result = test_subject._process_entry(self._data_source, self._storage_name.file_name, current_count=0)
+            test_result = test_subject._process_entry(
+                self._data_source, self._storage_name.file_name, current_count=0
+            )
             assert test_result == 0, 'expect success'
             _check_logs(
                 self._reporter,
@@ -1417,7 +1390,9 @@ class TestProcessEntry:
                 self._observer,
                 self._reporter,
             )
-            test_result = test_subject._process_entry(self._data_source, self._storage_name.file_name, current_count=0)
+            test_result = test_subject._process_entry(
+                self._data_source, self._storage_name.file_name, current_count=0
+            )
             assert test_result == -1, 'expect failure'
             # success_should_exist == False as it's only set in the do_one implementation
             _check_logs(
@@ -1475,7 +1450,7 @@ class TestRetry:
         test_data_source = dsc.QueryTimeBoxDataSource(test_config)
         time_box_work = deque()
         time_box_work.append(dsc.StateRunnerMeta('abc.fits', now_dt))
-        test_data_source.get_time_box_work = Mock(return_value = time_box_work)
+        test_data_source.get_time_box_work = Mock(return_value=time_box_work)
         test_data_source.initialize_end_dt = Mock()
         type(test_data_source).end_dt = PropertyMock(return_value=end_time)
         test_sources = [test_data_source]
@@ -1515,7 +1490,9 @@ class TestRetry:
         assert self._reporter._summary._timeouts_sum == 0, 'timeout'
 
     @patch('caom2pipe.data_source_composable.CadcTapClient')
-    @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
+    @patch(
+        'caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None]
+    )
     def test_meta_visit(self, caom2_store_mock, tap_client_mock, tmp_path, change_test_dir):
         test_config = TestRetry.meta_visit_config
         test_meta = [test_execute_composable.VisitNoException()]
@@ -1532,7 +1509,9 @@ class TestRetry:
         self._post()
 
     @patch('caom2pipe.data_source_composable.CadcTapClient')
-    @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
+    @patch(
+        'caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None]
+    )
     def test_nofhead_visit(self, caom2_store_mock, tap_client_mock, tmp_path, change_test_dir):
         test_config = TestRetry.nofhead_visit_config
         test_meta = [test_execute_composable.VisitNoException()]
@@ -1552,7 +1531,9 @@ class TestRetry:
 
     @patch('caom2pipe.data_source_composable.CadcTapClient')
     @patch('caom2pipe.execute_composable.CaomExecute._cadc_put')
-    @patch('caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None])
+    @patch(
+        'caom2pipe.execute_composable.CaomExecute._caom2_store', side_effect=[exceptions.AlreadyExistsException, None]
+    )
     def test_nofheadstore_visit(self, cadc_put_mock, caom2_store_mock, tap_client_mock, tmp_path, change_test_dir):
         test_config = TestRetry.nofheadstore_visit_config
         test_meta = [test_execute_composable.VisitNoException()]
@@ -1605,10 +1586,10 @@ def test_run_state_store_ingest_http_retry(
     transferrer_mock.return_value.get.side_effect = _transferrer_get
     client_mock.data_client.get_head.return_value = test_headers
     client_mock.metadata_client.create.side_effect = [
-        None,              # success
+        None,  # success
         mc.CadcException,  # first failure
         mc.CadcException,  # fails first + retry 1 + retry 2 times, the first time
-        None,              # succeeds the second time
+        None,  # succeeds the second time
         mc.CadcException,  # fails first + retry 1 + retry 2 times, the second time
         mc.CadcException,  # fails first + retry 1 + retry 2 times, the third time
     ]
@@ -1661,7 +1642,7 @@ def test_run_state_store_ingest_http_retry(
     assert client_mock.data_client.put.call_count == 6, 'wrong number of puts'
     client_mock.data_client.put.assert_called_with(
         f'{tmp_path}/{os.path.basename(test_uri_3).replace(".fits", "")}',
-        f'{test_config.scheme}:{test_config.collection}/{os.path.basename(test_uri_3)}'
+        f'{test_config.scheme}:{test_config.collection}/{os.path.basename(test_uri_3)}',
     )
     assert client_mock.data_client.get_head.called, 'get_head called'
     assert client_mock.data_client.get_head.call_count == 6, 'get_head call count'
@@ -1707,10 +1688,10 @@ def test_run_state_store_ingest_local_retry(
     header_mock.return_value = test_headers
 
     client_mock.metadata_client.create.side_effect = [
-        None,              # success
+        None,  # success
         mc.CadcException,  # first failure
         mc.CadcException,  # fails first + retry 1 + retry 2 times, the first time
-        None,              # succeeds the second time
+        None,  # succeeds the second time
         mc.CadcException,  # fails first + retry 1 + retry 2 times, the second time
         mc.CadcException,  # fails first + retry 1 + retry 2 times, the third time
     ]
@@ -1806,10 +1787,10 @@ def test_run_state_store_ingest_local_retry_runner_meta(
     header_mock.return_value = test_headers
 
     client_mock.metadata_client.create.side_effect = [
-        None,              # success
+        None,  # success
         mc.CadcException,  # first failure
         mc.CadcException,  # fails first + retry 1 + retry 2 times, the first time
-        None,              # succeeds the second time
+        None,  # succeeds the second time
         mc.CadcException,  # fails first + retry 1 + retry 2 times, the second time
         mc.CadcException,  # fails first + retry 1 + retry 2 times, the third time
     ]
@@ -1841,9 +1822,7 @@ def test_run_state_store_ingest_local_retry_runner_meta(
     test_source._temp[datetime(2019, 4, 30, 2, 2, 2)].append(
         mc.StorageName(source_names=[f'{test_data_source}/{test_f_2}'])
     )
-    test_source._temp[datetime(2019, 5, 2)].append(
-        mc.StorageName(source_names=[f'{test_data_source}/{test_f_3}'])
-    )
+    test_source._temp[datetime(2019, 5, 2)].append(mc.StorageName(source_names=[f'{test_data_source}/{test_f_3}']))
     test_source._rejected_files = 1
     test_source._skipped_files = 1
     test_sources = [test_source]
@@ -1929,16 +1908,10 @@ def test_run_ingest_runner_meta(
     assert test_result == 0, 'expect success'
     assert repo_client_mock.return_value.read.called, 'read called'
     assert data_client_mock.return_value.info.called, 'info'
-    assert (
-        data_client_mock.return_value.info.call_count == 1
-    ), 'wrong number of info calls'
+    assert data_client_mock.return_value.info.call_count == 1, 'wrong number of info calls'
     data_client_mock.return_value.info.assert_called_with(f'cadc:OMM/{test_f_name}')
-    assert (
-        data_client_mock.return_value.get_head.called
-    ), 'get_head should be called'
-    assert (
-        data_client_mock.return_value.get_head.call_count == 1
-    ), 'wrong number of get_heads'
+    assert data_client_mock.return_value.get_head.called, 'get_head should be called'
+    assert data_client_mock.return_value.get_head.call_count == 1, 'wrong number of get_heads'
     data_client_mock.return_value.get_head.assert_called_with(f'cadc:OMM/{test_f_name}')
     assert meta_visit_mock.called, '_visit_meta call'
     assert meta_visit_mock.call_count == 1, '_visit_meta call count'
@@ -2017,19 +1990,13 @@ def test_run_store_ingest_failure_runner_meta(
     # execution stops before this call should be made
     assert not repo_client_mock.return_value.read.called, 'no read'
     # make sure data is not really being written to CADC storage :)
-    assert (
-        data_client_mock.return_value.put.called
-    ), 'put should be called'
-    assert (
-        data_client_mock.return_value.put.call_count == 2
-    ), 'wrong number of puts'
+    assert data_client_mock.return_value.put.called, 'put should be called'
+    assert data_client_mock.return_value.put.call_count == 2, 'wrong number of puts'
     put_calls = [
         call('/data', 'cadc:OMM/dao_c122_2021_005157_e.fits'),
         call('/data', 'cadc:OMM/dao_c122_2021_005157.fits'),
     ]
-    data_client_mock.return_value.put.assert_has_calls(
-        put_calls, any_order=False
-    )
+    data_client_mock.return_value.put.assert_has_calls(put_calls, any_order=False)
     assert cleanup_mock.called, 'cleanup'
     cleanup_calls = [
         call('/data/dao_c122_2021_005157_e.fits', '/data/failure'),
@@ -2127,7 +2094,8 @@ def test_run_todo_all_task_options_runner_meta(clients_mock, do_one_mock, test_c
         assert test_reporter.success == 2, f'success {task_types} {test_reporter._summary}'
         do_one_mock.reset_mock()
 
-   #  assert False
+
+#  assert False
 
 
 def _write_todo(test_config):

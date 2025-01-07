@@ -126,9 +126,7 @@ def test_query_endpoint():
 
 def test_query_endpoint_session():
     session_mock = Mock()
-    test_result = mc.query_endpoint_session(
-        'https://localhost', session_mock, timeout=25
-    )
+    test_result = mc.query_endpoint_session('https://localhost', session_mock, timeout=25)
     assert test_result is not None, 'expected result'
     assert session_mock.get.called, 'mock not called'
     session_mock.get.assert_called_with('https://localhost', timeout=25)
@@ -249,9 +247,7 @@ def test_decompose_uri():
     scheme, path, f_name = mc.decompose_uri(test_uri)
     assert scheme == 'vos', 'expected vos'
     assert path == 'ngvs/merge', 'expected ngvs/merge'
-    assert (
-        f_name == 'NGVS-2-4.m.z.Mg002.weight.fits.fz'
-    ), f'wrong f_name {f_name}'
+    assert f_name == 'NGVS-2-4.m.z.Mg002.weight.fits.fz', f'wrong f_name {f_name}'
 
     with pytest.raises(mc.CadcException):
         mc.decompose_uri('')
@@ -305,14 +301,10 @@ def test_get_artifact_metadata(test_data_dir):
 
     # wrong command line parameters
     with pytest.raises(mc.CadcException):
-        mc.get_artifact_metadata(
-            test_fqn, ProductType.WEIGHT, ReleaseType.META
-        )
+        mc.get_artifact_metadata(test_fqn, ProductType.WEIGHT, ReleaseType.META)
 
     # create action
-    result = mc.get_artifact_metadata(
-        test_fqn, ProductType.WEIGHT, ReleaseType.META, uri=test_uri
-    )
+    result = mc.get_artifact_metadata(test_fqn, ProductType.WEIGHT, ReleaseType.META, uri=test_uri)
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.product_type == ProductType.WEIGHT, 'wrong product type'
@@ -321,9 +313,7 @@ def test_get_artifact_metadata(test_data_dir):
 
     # update action
     result.content_checksum = ChecksumURI('md5:abc')
-    result = mc.get_artifact_metadata(
-        test_fqn, ProductType.WEIGHT, ReleaseType.META, artifact=result
-    )
+    result = mc.get_artifact_metadata(test_fqn, ProductType.WEIGHT, ReleaseType.META, artifact=result)
     assert result is not None, 'expect a result'
     assert isinstance(result, Artifact), 'expect an artifact'
     assert result.content_checksum.uri == 'md5:e9db496ab9e875cc13ea52d4cc9db2c7', 'wrong checksum'
@@ -440,9 +430,7 @@ def test_http_get(mock_req):
     mock_req.reset_mock()
 
     # checks succeed
-    test_object.headers[
-        'Content-Checksum'
-    ] = '6547436690a26a399603a7096e876a2d'
+    test_object.headers['Content-Checksum'] = '6547436690a26a399603a7096e876a2d'
     mc.http_get('https://localhost/index.html', '/tmp/abc')
     assert mock_req.called, 'mock not called'
 
@@ -519,10 +507,7 @@ def test_visit(test_data_dir, tmp_path, change_test_dir):
     clients_mock = Mock()
     clients_mock.data_client = cadc_client_mock
     test_product_id = 'VLASS1.2.T07t14.J084202-123000.quicklook.v1'
-    test_file_name = (
-        'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.'
-        'image.pbcor.tt0.subim.fits'
-    )
+    test_file_name = 'VLASS1.2.ql.T07t14.J084202-123000.10.2048.v1.I.iter1.' 'image.pbcor.tt0.subim.fits'
 
     storage_name = VisitStorageName()
     kwargs = {
@@ -534,9 +519,7 @@ def test_visit(test_data_dir, tmp_path, change_test_dir):
     }
 
     obs = mc.read_obs_from_file(f'{test_data_dir}/fpf_start_obs.xml')
-    assert (
-        len(obs.planes[test_product_id].artifacts) == 2
-    ), 'initial condition'
+    assert len(obs.planes[test_product_id].artifacts) == 2, 'initial condition'
 
     try:
         test_subject = TestVisitor(**kwargs)
@@ -547,22 +530,14 @@ def test_visit(test_data_dir, tmp_path, change_test_dir):
         check_number = 1
         end_artifact_count = 3
         expected_call_count = 1
-        assert (
-            test_subject.report['artifacts'] == check_number
-        ), 'artifact not added'
-        assert (
-            len(obs.planes[test_product_id].artifacts) == end_artifact_count
-        ), f'new artifacts'
+        assert test_subject.report['artifacts'] == check_number, 'artifact not added'
+        assert len(obs.planes[test_product_id].artifacts) == end_artifact_count, f'new artifacts'
 
         test_preview_uri = 'cadc:VLASS/test_obs_id_prev.jpg'
-        assert (
-            test_preview_uri in obs.planes[test_product_id].artifacts.keys()
-        ), 'no preview'
+        assert test_preview_uri in obs.planes[test_product_id].artifacts.keys(), 'no preview'
 
         assert cadc_client_mock.put.called, 'put mock not called'
-        assert (
-            cadc_client_mock.put.call_count == expected_call_count
-        ), 'put called wrong number of times'
+        assert cadc_client_mock.put.call_count == expected_call_count, 'put called wrong number of times'
         # it's an ad call, so there's a stream parameter
         cadc_client_mock.put.assert_called_with('/test_files', 'cadc:VLASS/test_obs_id_prev.jpg')
     except Exception as e:
@@ -638,9 +613,7 @@ def test_value_repair_cache(test_data_dir, test_config, tmpdir):
     test_chunk = test_part.chunks[test_chunk_index]
     assert test_observation.type == 'Dark', 'repair initial condition'
     assert test_observation.proposal.pi_name == 'jjk', 'pi name ic'
-    assert test_plane.meta_release == datetime(
-        1990, 1, 1, 0, 0
-    ), 'plane meta release ic'
+    assert test_plane.meta_release == datetime(1990, 1, 1, 0, 0), 'plane meta release ic'
     assert math.isclose(
         test_chunk.position.axis.function.ref_coord.coord1.pix,
         512.579594886106,
@@ -655,19 +628,13 @@ def test_value_repair_cache(test_data_dir, test_config, tmpdir):
     test_subject.repair(test_observation)
 
     assert test_observation.type == 'DARK', 'repair failed'
-    assert (
-        test_observation.proposal.pi_name == 'JJ Kavelaars'
-    ), 'proposal pi name repair failed'
-    assert test_plane.meta_release == datetime(
-        2000, 1, 1, 0, 0
-    ), 'plane meta release repair failed'
+    assert test_observation.proposal.pi_name == 'JJ Kavelaars', 'proposal pi name repair failed'
+    assert test_plane.meta_release == datetime(2000, 1, 1, 0, 0), 'plane meta release repair failed'
     assert math.isclose(
         test_chunk.position.axis.function.ref_coord.coord1.pix,
         512.57959987654321,
     ), 'position pix repair failed'
-    assert (
-        test_artifact.uri == 'cadc:GEMINI/GN2001BQ013-04.fits'
-    ), f'uri repair failed {test_artifact.uri}'
+    assert test_artifact.uri == 'cadc:GEMINI/GN2001BQ013-04.fits', f'uri repair failed {test_artifact.uri}'
     assert test_part.product_type is None, 'product type repair failed'
 
     # check that values that do not match are un-changed
@@ -677,12 +644,8 @@ def test_value_repair_cache(test_data_dir, test_config, tmpdir):
     assert (
         test_observation.intent == ObservationIntentType.SCIENCE
     ), 'None value should be set, since "none" was the original type'
-    assert (
-        test_observation.environment.seeing is None
-    ), 'None remains None because the original is a specific value'
-    assert (
-        test_chunk.position.axis.axis1.ctype == 'RA---TAN'
-    ), 'unchanged post'
+    assert test_observation.environment.seeing is None, 'None remains None because the original is a specific value'
+    assert test_chunk.position.axis.axis1.ctype == 'RA---TAN', 'unchanged post'
 
     with pytest.raises(mc.CadcException):
         # pre-condition of 'Unexpected repair key' error
@@ -723,9 +686,7 @@ def test_extract_file_name_from_uri():
     assert test_result == 'abc.fits.gz', 'wrong file name'
 
     # fqn
-    test_result = mc.extract_file_name_from_uri(
-        '/usr/src/app/data/abc.fits.gz'
-    )
+    test_result = mc.extract_file_name_from_uri('/usr/src/app/data/abc.fits.gz')
     assert test_result == 'abc.fits.gz', 'wrong fqn'
 
 
@@ -770,7 +731,9 @@ def test_log_directory_construction(test_config, tmpdir):
         test_sname = tc.TStorageName(obs_id='test_obs_id')
         test_subject.capture_failure(test_sname, e2, traceback.format_exc())
 
-    test_subject.capture_success('test_obs_id', 'C121212_01234_CAL.fits.gz', datetime.now(tz=timezone.utc).timestamp())
+    test_subject.capture_success(
+        'test_obs_id', 'C121212_01234_CAL.fits.gz', datetime.now(tz=timezone.utc).timestamp()
+    )
     test_subject.report()
 
     success_content = open(test_config.success_fqn).read()
@@ -801,46 +764,46 @@ def test_log_directory_construction(test_config, tmpdir):
 def test_dt():
     # formats that have been encountered in FITS files
     for fmt in [
-        '2024-03-23T10:08:31.123456',     # ISO_8601_FORMAT,
-        '2024-03-23T10:08:31',            # '%Y-%m-%dT%H:%M:%S',
-        '2024-03-23 10:08:31.123456',     # '%Y-%m-%d %H:%M:%S.%f',
-        '23-Mar-2024 10:08',              # '%d-%b-%Y %H:%M',
-        'Mar 23 2024',                    # '%b %d %Y',
-        'Mar 23 10:08',                   # '%b %d %H:%M',
-        '20240323-100831',                # '%Y%m%d-%H%M%S',
-        '2024-03-23',                     # '%Y-%m-%d',
-        'Fri Mar 23 10:08:31 HST 2024',   # '%a %b %d %H:%M:%S HST %Y',
-        '2024/03/23 10:08:31',            # '%Y/%m/%d %H:%M:%S',
+        '2024-03-23T10:08:31.123456',  # ISO_8601_FORMAT,
+        '2024-03-23T10:08:31',  # '%Y-%m-%dT%H:%M:%S',
+        '2024-03-23 10:08:31.123456',  # '%Y-%m-%d %H:%M:%S.%f',
+        '23-Mar-2024 10:08',  # '%d-%b-%Y %H:%M',
+        'Mar 23 2024',  # '%b %d %Y',
+        'Mar 23 10:08',  # '%b %d %H:%M',
+        '20240323-100831',  # '%Y%m%d-%H%M%S',
+        '2024-03-23',  # '%Y-%m-%d',
+        'Fri Mar 23 10:08:31 HST 2024',  # '%a %b %d %H:%M:%S HST %Y',
+        '2024/03/23 10:08:31',  # '%Y/%m/%d %H:%M:%S',
         'Fri, 23 Mar 2024 10:08:31 GMT',  # '%a, %d %b %Y %H:%M:%S GMT',
-        '2024-03-23T10:08',               # '%Y-%m-%dT%H:%M',
-        'Fri Mar 23 2024 10:08:31',       # '%a %b %d %Y %H:%M:%S',
-        '20240323 10:08',                 # '%Y%m%d %H:%M',
-        '23Mar2024 10:08',                # '%d%b%Y %H:%M',
-        '2024-03-23 10:08',               # '%Y-%m-%d %H:%M',
-        '23Mar24',                        # %y%b%d
-        '2024/03/23',                     # '%Y/%m/%d',
-        '23/03/24',                       # '%d/%m/%y',
-        '23/03/24 10:08:31',              # '%d/%m/%y %H:%M:%S',
+        '2024-03-23T10:08',  # '%Y-%m-%dT%H:%M',
+        'Fri Mar 23 2024 10:08:31',  # '%a %b %d %Y %H:%M:%S',
+        '20240323 10:08',  # '%Y%m%d %H:%M',
+        '23Mar2024 10:08',  # '%d%b%Y %H:%M',
+        '2024-03-23 10:08',  # '%Y-%m-%d %H:%M',
+        '23Mar24',  # %y%b%d
+        '2024/03/23',  # '%Y/%m/%d',
+        '23/03/24',  # '%d/%m/%y',
+        '23/03/24 10:08:31',  # '%d/%m/%y %H:%M:%S',
         '2024-03-23 10:08:31.123456+00:00',
-        '10:08:31',                       # '%H:%M:%S',
-        '2024/03/23,10:08:31',            # '%Y/%m/%d,%H:%M:%S',
-        '2024_03_23T10_08_31.123456',     # '%Y_%m_%dT%H_%M_%S.%f',
-        '2024-03-23HST10:08:31',          # '%Y-%m-%dHST%H:%M:%S',
-        '2024Mar23',                      # %Y%b%d
+        '10:08:31',  # '%H:%M:%S',
+        '2024/03/23,10:08:31',  # '%Y/%m/%d,%H:%M:%S',
+        '2024_03_23T10_08_31.123456',  # '%Y_%m_%dT%H_%M_%S.%f',
+        '2024-03-23HST10:08:31',  # '%Y-%m-%dHST%H:%M:%S',
+        '2024Mar23',  # %Y%b%d
     ]:
         result = mc.make_datetime(fmt)
         assert result is not None, f'expect a result {fmt}'
         if fmt != '10:08:31' and fmt != 'Mar 23 10:08':  # get today's date with that hour
-            assert (result.year == 2024 or result.year == 0), f'year {fmt}'
-            assert (result.month == 3 or result.month == 0), f'month {fmt}'
-            assert (result.day == 23 or result.day == 0), f'day {fmt} {result.day}'
+            assert result.year == 2024 or result.year == 0, f'year {fmt}'
+            assert result.month == 3 or result.month == 0, f'month {fmt}'
+            assert result.day == 23 or result.day == 0, f'day {fmt} {result.day}'
         if 'HST' in fmt:
-            assert (result.hour == 20 or result.hour == 0), f'hour {fmt}'
+            assert result.hour == 20 or result.hour == 0, f'hour {fmt}'
         else:
-            assert (result.hour == 10 or result.hour == 0), f'hour {fmt}'
-        assert (result.minute == 8 or result.minute == 0), f'minute {fmt}'
-        assert (result.second == 31 or result.second == 0), f'second {fmt}'
-        assert (result.microsecond == 123456 or result.microsecond == 0), f'micro {fmt}'
+            assert result.hour == 10 or result.hour == 0, f'hour {fmt}'
+        assert result.minute == 8 or result.minute == 0, f'minute {fmt}'
+        assert result.second == 31 or result.second == 0, f'second {fmt}'
+        assert result.microsecond == 123456 or result.microsecond == 0, f'micro {fmt}'
         assert result.tzname() is None, f'{fmt} {result.tzname()}'
 
 

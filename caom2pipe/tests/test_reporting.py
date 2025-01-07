@@ -374,24 +374,26 @@ def test_report_output_todo_vault(verify_mock, test_config, tmpdir, change_test_
                 if clean_up:
                     assert ds_move_mock.called, f'ds move should be called {diagnostic}'
                     assert ds_move_mock.call_count == 4, f'ds wrong move call count {diagnostic}'
-                    ds_move_mock.assert_has_calls([
-                        call(
-                            'vos://cadc.nrc.ca!vault/goliaths/test/A0.fits',
-                            'vos://cadc.nrc.ca!vault/goliaths/test/success',
-                        ),
-                        call(
-                            'vos://cadc.nrc.ca!vault/goliaths/test/A1.fits',
-                            'vos://cadc.nrc.ca!vault/goliaths/test/failure',
-                        ),
-                        call(
-                            'vos://cadc.nrc.ca!vault/goliaths/test/A2.fits',
-                            'vos://cadc.nrc.ca!vault/goliaths/test/failure',
-                        ),
-                        call(
-                            'vos://cadc.nrc.ca!vault/goliaths/test/A3.fits',
-                            'vos://cadc.nrc.ca!vault/goliaths/test/success',
-                        ),
-                    ])
+                    ds_move_mock.assert_has_calls(
+                        [
+                            call(
+                                'vos://cadc.nrc.ca!vault/goliaths/test/A0.fits',
+                                'vos://cadc.nrc.ca!vault/goliaths/test/success',
+                            ),
+                            call(
+                                'vos://cadc.nrc.ca!vault/goliaths/test/A1.fits',
+                                'vos://cadc.nrc.ca!vault/goliaths/test/failure',
+                            ),
+                            call(
+                                'vos://cadc.nrc.ca!vault/goliaths/test/A2.fits',
+                                'vos://cadc.nrc.ca!vault/goliaths/test/failure',
+                            ),
+                            call(
+                                'vos://cadc.nrc.ca!vault/goliaths/test/A3.fits',
+                                'vos://cadc.nrc.ca!vault/goliaths/test/success',
+                            ),
+                        ]
+                    )
                 else:
                     if store_modified:
                         assert ds_move_mock.called, f'ds move should be called {diagnostic}'

@@ -147,9 +147,7 @@ def test_storage_time_box_query(query_mock, test_config, tmp_path, change_test_d
             'uri,lastModified\n'
             'cadc:NEOSSAT/NEOS_SCI_2015347000000_clean.fits,2019-10-23T16:27:19.000\n'
             'cadc:NEOSSAT/NEOS_SCI_2015347000000.fits,2019-10-23T16:27:27.000\n'
-            'cadc:NEOSSAT/NEOS_SCI_2015347002200_clean.fits,2019-10-23T16:27:33.000\n'.split(
-                '\n'
-            ),
+            'cadc:NEOSSAT/NEOS_SCI_2015347002200_clean.fits,2019-10-23T16:27:33.000\n'.split('\n'),
             format='csv',
         )
 
@@ -166,9 +164,7 @@ def test_storage_time_box_query(query_mock, test_config, tmp_path, change_test_d
         test_result = test_subject.get_time_box_work(prev_exec_date, exec_date)
         assert test_result is not None, 'expect result'
         assert len(test_result) == 3, 'wrong number of results'
-        assert (
-            test_result[0].entry_name == 'NEOS_SCI_2015347000000_clean.fits'
-        ), 'wrong results'
+        assert test_result[0].entry_name == 'NEOS_SCI_2015347000000_clean.fits', 'wrong results'
         assert test_reporter.all == 3, 'wrong report'
     finally:
         CadcTapClient.__init__ = tap_client_ctor_orig
@@ -256,9 +252,7 @@ def test_list_dir_time_box_data_source(test_config, tmp_path, change_test_dir):
     assert test_result is not None, 'expect a result'
     assert len(test_result) == 2, 'expect contents in the result'
     test_entry = test_result.popleft()
-    assert (
-        test_entry.entry_name == test_file_1
-    ), 'wrong expected file, order matters since should be sorted deque'
+    assert test_entry.entry_name == test_file_1, 'wrong expected file, order matters since should be sorted deque'
     assert test_reporter.all == 2, 'wrong report'
 
     test_config.recurse_data_sources = False
@@ -297,9 +291,7 @@ def test_list_dir_separate_data_source(test_config, tmp_path, change_test_dir):
     test_result = test_subject.get_work()
     assert test_result is not None, 'expect a non-recursive result'
     assert len(test_result) == 104, 'expect contents in non-recursive result'
-    assert (
-        '/test_files/sub_directory/abc.fits' not in test_result
-    ), 'recursive result should not be present'
+    assert '/test_files/sub_directory/abc.fits' not in test_result, 'recursive result should not be present'
     assert test_reporter.all == 214, 'wrong 2nd report'
 
 
@@ -319,10 +311,7 @@ def test_vault_list_dir_time_box_data_source(test_config, tmp_path, change_test_
     test_result = test_subject.get_time_box_work(test_prev_exec_dt, test_exec_dt)
     assert test_result is not None, 'expect a test result'
     assert len(test_result) == 1, 'wrong number of results'
-    assert (
-        'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
-        == test_result[0].entry_name
-    ), 'wrong name result'
+    assert 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits' == test_result[0].entry_name, 'wrong name result'
     # the datetime from the record in the test_result, which should be between the start and stop times
     assert (
         datetime(year=2020, month=9, day=15, hour=19, minute=55, second=3, microsecond=67000)
@@ -335,7 +324,7 @@ def test_vault_list_dir_time_box_data_source(test_config, tmp_path, change_test_
         [
             call('vos:goliaths/wrong', limit=None, force=True),
             call('vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'),
-            call('vos://cadc.nrc.ca!vault/goliaths/moc/994899p_moc.fits')
+            call('vos://cadc.nrc.ca!vault/goliaths/moc/994899p_moc.fits'),
         ]
     )
 
@@ -434,9 +423,7 @@ def test_transfer_check_fits_verify(test_config, tmp_path, change_test_dir):
         assert len(test_result) == 3, 'wrong number of results returned'
         assert test_result[0].entry_name == f'{tmp_path}/cfht_source/correct.fits.gz', 'wrong result'
         assert test_result[1].entry_name == f'{tmp_path}/cfht_source/same_file.fits', 'wrong result'
-        assert (
-            test_result[2].entry_name == f'{tmp_path}/cfht_source/already_successful.fits'
-        ), 'wrong result'
+        assert test_result[2].entry_name == f'{tmp_path}/cfht_source/already_successful.fits', 'wrong result'
         for f in [test_empty_file, test_broken_file, test_correct_file, test_dot_file, test_same_file]:
             assert f.exists(), 'file at source'
             moved = Path(test_failure_directory, f.name)
@@ -483,9 +470,7 @@ def test_transfer_check_fits_verify(test_config, tmp_path, change_test_dir):
                 child.unlink()
         for entry in [test_empty_file, test_dot_file]:
             entry.touch()
-        for source in [
-            test_broken_source, test_correct_source, test_same_source, test_already_successful_source
-        ]:
+        for source in [test_broken_source, test_correct_source, test_same_source, test_already_successful_source]:
             shutil.copy(source, test_source_directory)
 
         # CFHT test case - try to move a file that would have the effect
@@ -600,7 +585,9 @@ def test_all_local_files_some_already_stored_some_broken(
         assert test_reporter._summary._rejected_sum == 1, f'wrong report {test_reporter._summary}'
         assert move_mock.called, 'move should be called'
         assert move_mock.call_count == 2, 'wrong move call count'
-        move_mock.assert_has_calls([call('/tmp/A0.fits', '/data/success'), call('/tmp/A1.fits', '/data/failure')]), 'wrong move_mock calls'
+        move_mock.assert_has_calls(
+            [call('/tmp/A0.fits', '/data/success'), call('/tmp/A1.fits', '/data/failure')]
+        ), 'wrong move_mock calls'
 
 
 @patch('caom2pipe.client_composable.vault_info', autospec=True)
@@ -701,7 +688,11 @@ def test_vault_clean_up_get_time_box(test_config, tmp_path, change_test_dir):
     for cleanup_files in [True, False]:
         # get_node is called twice for each DataNode, once originally, and a second time by the MetadataReader
         test_vos_client.get_node.side_effect = [
-            node_listing[0], node_listing[1], node_listing[1], node_listing[2], node_listing[2]
+            node_listing[0],
+            node_listing[1],
+            node_listing[1],
+            node_listing[2],
+            node_listing[2],
         ]
         test_reader = rdc.VaultReader(test_vos_client)
         test_config.cleanup_files_when_storing = cleanup_files
@@ -717,9 +708,11 @@ def test_vault_clean_up_get_time_box(test_config, tmp_path, change_test_dir):
 
         assert test_result is not None, 'expect a work list'
         assert len(test_result) == 1, 'wrong work list entries'
-        assert test_result[0].entry_name == 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits', 'wrong work entry url'
         assert (
-            test_result[0].entry_dt == datetime(2020, 9, 15, 19, 55, 3, 67000)
+            test_result[0].entry_name == 'vos://cadc.nrc.ca!vault/goliaths/moc/994898p_moc.fits'
+        ), 'wrong work entry url'
+        assert test_result[0].entry_dt == datetime(
+            2020, 9, 15, 19, 55, 3, 67000
         ), 'wrong work entry timestamp on file modification'
 
         assert test_vos_client.isdir.call_count == 0, 'wrong is_dir count'

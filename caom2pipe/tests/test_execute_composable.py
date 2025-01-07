@@ -112,14 +112,10 @@ class LocalTestVisit:
     def visit(observation, **kwargs):
         x = kwargs['working_directory']
         assert x is not None, 'working directory'
-        assert (
-            x == f'{tc.TEST_DATA_DIR}/test_obs_id'
-        ), 'wrong working directory'
+        assert x == f'{tc.TEST_DATA_DIR}/test_obs_id', 'wrong working directory'
         y = kwargs['storage_name']
         assert y is not None, 'storage name'
-        assert (
-            y.destination_uris[0] == 'cadc:TEST/test_file.fits'
-        ), 'wrong science file'
+        assert y.destination_uris[0] == 'cadc:TEST/test_file.fits', 'wrong science file'
         z = kwargs['log_file_directory']
         assert z is not None, 'log file directory'
         assert z == tc.TEST_DATA_DIR, 'wrong log dir'
@@ -176,9 +172,7 @@ def test_client_visit(access_mock, test_config):
         )
 
         test_executor.execute({'storage_name': tc.TStorageName()})
-        repo_client_mock.read.assert_called_with(
-            'TEST', 'test_obs_id'
-        ), 'read call missed'
+        repo_client_mock.read.assert_called_with('TEST', 'test_obs_id'), 'read call missed'
         assert repo_client_mock.update.called, 'update call missed'
         assert test_observer.metrics.observe.called, 'observe not called'
         assert write_mock.called, 'write mock not called'
@@ -307,15 +301,17 @@ def test_data_local_execute(access_mock, test_config):
         clients=clients,
         metadata_reader=None,
     )
-    test_executor.execute({'storage_name': tc.TStorageName(
-        source_names=[f'{tc.TEST_DATA_DIR}/test_file.fits.gz'],
-    )})
+    test_executor.execute(
+        {
+            'storage_name': tc.TStorageName(
+                source_names=[f'{tc.TEST_DATA_DIR}/test_file.fits.gz'],
+            )
+        }
+    )
 
     # check that things worked as expected - no cleanup
     assert repo_client_mock.read.called, 'read call missed'
-    repo_client_mock.read.assert_called_with(
-        'TEST', 'test_obs_id'
-    ), 'wrong repo client read args'
+    repo_client_mock.read.assert_called_with('TEST', 'test_obs_id'), 'wrong repo client read args'
     assert repo_client_mock.update.called, 'update call missed'
     assert test_observer.metrics.observe.called, 'observe not called'
     assert os.path.exists(test_model_fqn), 'observation not written to disk'
@@ -349,9 +345,13 @@ def test_data_store(fix_mock, access_mock, test_config, tmpdir):
             clients=clients,
             metadata_reader=mock_metadata_reader,
         )
-        test_executor.execute({'storage_name': tc.TStorageName(
-            source_names=[f'{tc.TEST_DATA_DIR}/test_file.fits.gz'],
-        )})
+        test_executor.execute(
+            {
+                'storage_name': tc.TStorageName(
+                    source_names=[f'{tc.TEST_DATA_DIR}/test_file.fits.gz'],
+                )
+            }
+        )
 
         # check that things worked as expected - no cleanup
         assert data_client_mock.put.called, 'put_file call missed'
@@ -485,10 +485,7 @@ def test_caom_name():
     assert cn.file_id == 'test_obs_id'
     assert cn.file_name == 'test_obs_id.fits.gz'
     assert cn.uncomp_file_name == 'test_obs_id.fits'
-    assert (
-        mc.CaomName.make_obs_uri_from_obs_id('TEST', 'test_obs_id')
-        == 'caom:TEST/test_obs_id'
-    )
+    assert mc.CaomName.make_obs_uri_from_obs_id('TEST', 'test_obs_id') == 'caom:TEST/test_obs_id'
 
 
 def test_omm_name_dots():
@@ -503,9 +500,7 @@ def test_choose_exceptions(test_config):
     test_config.init_local_files = False
     test_config.task_types = [mc.TaskType.SCRAPE]
     with pytest.raises(mc.CadcException):
-        test_organizer = ec.OrganizeExecutes(
-            test_config, 'command name', [], []
-        )
+        test_organizer = ec.OrganizeExecutes(test_config, 'command name', [], [])
         test_organizer.choose()
 
 
@@ -650,17 +645,13 @@ def test_data_visit(client_mock, access_mock, test_config, tmpdir):
     test_subject.execute({'storage_name': test_sn})
     assert client_mock.get.called, 'should be called'
     client_mock.get.assert_called_with(f'{tmpdir}/test_obs_id', test_sn.destination_uris[0])
-    test_repo_client.read.assert_called_with(
-        'TEST', 'test_obs_id'
-    ), 'wrong values'
+    test_repo_client.read.assert_called_with('TEST', 'test_obs_id'), 'wrong values'
     assert test_repo_client.update.called, 'expect an execution'
     # TODO - why is the log file directory NOT the working directory?
 
     args, kwargs = dv_mock.visit.call_args
     assert kwargs.get('working_directory') == f'{tmpdir}/test_obs_id'
-    assert (
-        kwargs.get('storage_name') == test_sn
-    ), 'wrong storage name parameter'
+    assert kwargs.get('storage_name') == test_sn, 'wrong storage name parameter'
     assert kwargs.get('log_file_directory') == f'{tmpdir}/logs'
 
 
@@ -683,9 +674,7 @@ def test_store(compressor_mock, access_mock, file_info_mock, test_config, tmpdir
     test_metadata_reader = Mock(autospec=True)
     test_metadata_reader.file_info = {}
     test_config.change_working_directory(tmpdir)
-    compressor_mock.return_value = (
-        f'{test_config.working_directory}/test_obs_id/nonexistent.fits'
-    )
+    compressor_mock.return_value = f'{test_config.working_directory}/test_obs_id/nonexistent.fits'
     test_subject = ec.Store(
         test_config,
         test_observable,
@@ -697,13 +686,8 @@ def test_store(compressor_mock, access_mock, file_info_mock, test_config, tmpdir
     os.mkdir(os.path.join(tmpdir, test_sn.obs_id))
     test_subject.execute({'storage_name': test_sn})
     assert test_subject.working_dir == os.path.join(tmpdir, 'test_obs_id'), 'wrong working directory'
-    assert (
-        len(test_subject._storage_name.destination_uris) == 1
-    ), 'wrong file count'
-    assert (
-        test_subject._storage_name.destination_uris[0]
-        == 'cadc:TEST/test_file.fits'
-    ), 'wrong destination'
+    assert len(test_subject._storage_name.destination_uris) == 1, 'wrong file count'
+    assert test_subject._storage_name.destination_uris[0] == 'cadc:TEST/test_file.fits', 'wrong destination'
     assert test_data_client.put.called, 'data put not called'
     test_data_client.put.assert_called_with(f'{tmpdir}/test_obs_id', 'cadc:TEST/test_file.fits')
 
@@ -743,25 +727,14 @@ def test_local_store(compressor_mock, access_mock, file_info_mock, test_config):
     assert test_subject is not None, 'expect construction'
     test_subject.execute({'storage_name': test_sn})
     # does the working directory get used if it's just a local store?
-    assert test_subject.working_dir == os.path.join(
-        tc.TEST_DATA_DIR, 'test_obs_id'
-    ), 'wrong working directory'
+    assert test_subject.working_dir == os.path.join(tc.TEST_DATA_DIR, 'test_obs_id'), 'wrong working directory'
     # do one file at a time, so it doesn't matter how many files are
     # in the working directory
-    assert (
-        len(test_subject._storage_name.destination_uris) == 1
-    ), 'wrong file count'
-    assert (
-        test_subject._storage_name.destination_uris[0]
-        == 'cadc:TEST/test_file.fits'
-    ), 'wrong destination'
+    assert len(test_subject._storage_name.destination_uris) == 1, 'wrong file count'
+    assert test_subject._storage_name.destination_uris[0] == 'cadc:TEST/test_file.fits', 'wrong destination'
     assert test_data_client.put.called, 'data put not called'
-    assert (
-        test_data_client.put.call_args.args[0] == tc.TEST_DATA_DIR
-    ), 'working directory'
-    assert (
-        test_data_client.put.call_args.args[1] == test_sn.destination_uris[0]
-    ), 'expect a file name'
+    assert test_data_client.put.call_args.args[0] == tc.TEST_DATA_DIR, 'working directory'
+    assert test_data_client.put.call_args.args[1] == test_sn.destination_uris[0], 'expect a file name'
 
 
 class FlagStorageName(mc.StorageName):
@@ -779,9 +752,7 @@ class FlagStorageName(mc.StorageName):
 
 @patch('cadcutils.net.ws.WsCapabilities.get_access_url')
 @patch('caom2utils.data_util.StorageClientWrapper')
-def test_store_newer_files_only_flag_client(
-    client_mock, access_mock, test_config
-):
+def test_store_newer_files_only_flag_client(client_mock, access_mock, test_config):
     access_mock.return_value = 'https://localhost:2022'
     # first test case
     # flag set to True, file is older at CADC
@@ -792,9 +763,7 @@ def test_store_newer_files_only_flag_client(
     du = [f'cadc:TEST/{test_f_name}']
     test_sn = FlagStorageName(test_f_name, sn)
     observable_mock = Mock(autospec=True)
-    client_mock.cadcinfo.return_value = FileInfo(
-        id=du[0], md5sum='d41d8cd98f00b204e9800998ecf8427e'
-    )
+    client_mock.cadcinfo.return_value = FileInfo(id=du[0], md5sum='d41d8cd98f00b204e9800998ecf8427e')
     clients = ClientCollection(test_config)
     clients._data_client = client_mock
 
@@ -976,8 +945,9 @@ class TestDoOne:
         )
         test_result = test_subject.do_one(self._storage_name)
         assert test_result is not None, 'expect a result'
-        assert (
-            test_result == (-1, 'Execution failed for test_obs_id with Cannot build an observation')
+        assert test_result == (
+            -1,
+            'Execution failed for test_obs_id with Cannot build an observation',
         ), 'expect failure for the general exception case'
 
     def test_do_one_is_rejected_true(self, test_config, tmp_path):
@@ -1023,8 +993,9 @@ class TestDoOne:
         )
         test_result = test_subject.do_one(self._storage_name)
         assert test_result is not None, 'expect a result'
-        assert (
-            test_result == (-1, 'Execution failed for test_obs_id with Read timed out')
+        assert test_result == (
+            -1,
+            'Execution failed for test_obs_id with Read timed out',
         ), 'expect failure for the timeout exception case'
 
 
@@ -1199,8 +1170,9 @@ class TestDoOneIngestRunnerMeta:
         )
         test_result = test_subject.do_one(self._storage_name)
         assert test_result is not None, 'expect a result'
-        assert (
-            test_result == (-1, 'Execution failed for test_obs_id with Cannot build an observation')
+        assert test_result == (
+            -1,
+            'Execution failed for test_obs_id with Cannot build an observation',
         ), 'expect failure for the general exception case'
 
     def test_do_one_is_rejected_true(self, test_config, tmp_path):
@@ -1244,8 +1216,9 @@ class TestDoOneIngestRunnerMeta:
         )
         test_result = test_subject.do_one(self._storage_name)
         assert test_result is not None, 'expect a result'
-        assert (
-            test_result == (-1, 'Execution failed for test_obs_id with Read timed out')
+        assert test_result == (
+            -1,
+            'Execution failed for test_obs_id with Read timed out',
         ), 'expect failure for the timeout exception case'
 
 
@@ -1366,8 +1339,10 @@ class TestDoOneTaskTypesRunnerMeta:
         test_data = [VisitNoException()]
         test_modify_transfer = transfer_composable.modify_transfer_factory(test_config, self._clients)
         self._clients.metadata_client.read.return_value = _read_obs(None)
+
         def _copy_file(destination_path, uri):
             copyfile('/test_files/correct.fits', f'{destination_path}/correct.fits')
+
         self._clients.data_client.get.side_effect = _copy_file
         test_subject = ec.OrganizeExecutesRunnerMeta(
             test_config,
@@ -1473,8 +1448,10 @@ class TestDoOneTaskTypesRunnerMeta:
         test_data = [VisitNoException()]
         test_meta = [VisitNoException()]
         test_modify_transfer = transfer_composable.modify_transfer_factory(test_config, self._clients)
+
         def _copy_file(destination_path, uri):
             copyfile('/test_files/correct.fits', f'{destination_path}/correct.fits')
+
         self._clients.data_client.get.side_effect = _copy_file
         self._clients.metadata_client.read.return_value = _read_obs(None)
         test_subject = ec.OrganizeExecutesRunnerMeta(
@@ -1627,9 +1604,8 @@ class TestDoOneTaskTypesRunnerMeta:
         assert not self._clients.metadata_client.update.called, 'meta create called'
         assert self._clients.metadata_client.delete.called, 'meta delete called'
         assert self._clients.metadata_client.delete.call_count == 1, 'meta delete call_count'
-        self._clients.metadata_client.delete.assert_called_with(
-            'test_collection', 'test_obs_id'
-        ), 'meta delete calls'
+        self._clients.metadata_client.delete.assert_called_with('test_collection', 'test_obs_id'), 'meta delete calls'
+
 
 def _transfer_get_mock(entry, fqn):
     assert entry == 'vos:goliaths/nonexistent.fits.gz', 'wrong entry'
@@ -1737,10 +1713,7 @@ def to_caom2_with_client(ignore):
     if sys.argv != scrape_answer:
         # TaskType.INGEST (LocalMetaCreate)
         if sys.argv != local_meta_create_answer:
-            assert False, (
-                f'wrong sys.argv values \n{sys.argv} '
-                f'\n{local_meta_create_answer}'
-            )
+            assert False, f'wrong sys.argv values \n{sys.argv} ' f'\n{local_meta_create_answer}'
     fqn_index = sys.argv.index('--out') + 1
     fqn = sys.argv[fqn_index]
     mc.write_obs_to_file(

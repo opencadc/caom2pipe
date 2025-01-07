@@ -87,6 +87,7 @@ class HtmlFilter:
     Some timestamps on the pages with links to be followed do not get updated in concert with pages lower in the
     hierarchy. Use the ignore_datetime flag to identify hierarchy levels where all links found should be followed.
     """
+
     # the filter function to be called
     fn: Callable
     # if True, ignore the effect of the datetime check for time-boxing purposes
@@ -116,7 +117,9 @@ class HtmlFilteredPagesTemplate:
             return re.search(temp, href)
 
         # two filters that might be useful elsewhere
-        self._always_true_filter = HtmlFilter(HtmlFilteredPagesTemplate.filter_never, True)  # True - least restrictive
+        self._always_true_filter = HtmlFilter(
+            HtmlFilteredPagesTemplate.filter_never, True
+        )  # True - least restrictive
         self._file_filter = HtmlFilter(filter_by_extensions, False)  # False - only new files
 
     def add_children(self, to_node, in_tree, new_entries):
@@ -231,6 +234,7 @@ class HttpDataSource(IncrementalDataSource):
         """
         # local import to limit the number of Docker images that need to pip install bs4
         from bs4 import BeautifulSoup
+
         if node.data.ignore_datetime:
             msg = ', will ignore timestamps.'
         else:
@@ -265,4 +269,3 @@ class HttpDataSource(IncrementalDataSource):
                     self._logger.debug(f'skipping {dt_str_bits}')
         self._logger.debug(f'End _parse_html_string from {node.tag} with {node.data.fn.__name__}')
         return result
-

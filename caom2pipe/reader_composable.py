@@ -248,6 +248,7 @@ class Hdf5FileMetadataReader(FileMetadataReader):
         if key not in self._descriptors:
             # local import to limit exposure in Docker builds
             import h5py
+
             f_in = h5py.File(fqn)
             self._descriptors[key] = f_in
             # Laurie Rosseau-Nepton - 26-04-23
@@ -325,8 +326,7 @@ class DelayedClientReader(StorageClientReader):
     """
 
     def _retrieve_file_info(self, key, source_name):
-        """Retrieves FileInfo information to memory. Ignore retrieval failures, as the file may not yet be at CADC.
-        """
+        """Retrieves FileInfo information to memory. Ignore retrieval failures, as the file may not yet be at CADC."""
         temp = self._client.info(source_name)
         if temp is None:
             self._logger.debug(f'Ignore failure to find FileInfo for {source_name}')
@@ -334,8 +334,7 @@ class DelayedClientReader(StorageClientReader):
             self._file_info[key] = temp
 
     def _retrieve_headers(self, key, source_name):
-        """Retrieves the Header information to memory. Ignore retrieval failures, as the file may not yet be at CADC.
-        """
+        """Retrieves the Header information to memory. Ignore retrieval failures, as the file may not yet be at CADC."""
         if '.fits' in source_name:
             try:
                 self._headers[key] = self._client.get_head(source_name)

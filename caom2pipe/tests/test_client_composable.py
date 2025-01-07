@@ -134,9 +134,7 @@ def test_client_put_failure(mock_metrics):
             f.write('test content')
 
     mock_client = Mock()
-    mock_client.cadcput.side_effect = exceptions.UnexpectedException(
-        'error state'
-    )
+    mock_client.cadcput.side_effect = exceptions.UnexpectedException('error state')
     test_destination = 'cadc:GEMINI/TEST.fits'
     with pytest.raises(mc.CadcException):
         clc.si_client_put(
@@ -170,9 +168,7 @@ def test_client_get_failure(mock_client):
             test_metrics,
         )
     assert len(test_metrics.failures) == 1, 'wrong failures'
-    assert (
-        test_metrics.failures['si']['cadcget']['TEST_get.fits'] == 1
-    ), 'count'
+    assert test_metrics.failures['si']['cadcget']['TEST_get.fits'] == 1, 'count'
 
 
 @patch('vos.vos.Client')
@@ -191,9 +187,7 @@ def test_client_get(mock_metrics, mock_client):
         test_source,
         metrics=mock_metrics,
     )
-    mock_client.copy.assert_called_with(
-        test_source, destination=test_fqn
-    ), 'mock not called'
+    mock_client.copy.assert_called_with(test_source, destination=test_fqn), 'mock not called'
     assert mock_metrics.observe.called, 'mock not called'
     args, kwargs = mock_metrics.observe.call_args
     assert args[2] == 12, 'wrong size'
@@ -273,9 +267,7 @@ def test_repo_get(mock_client):
 
     clc.repo_get(mock_client, 'collection', 'test_obs_id', test_metrics)
 
-    mock_client.read.assert_called_with(
-        'collection', 'test_obs_id'
-    ), 'mock not called'
+    mock_client.read.assert_called_with('collection', 'test_obs_id'), 'mock not called'
     assert len(test_metrics.history) == 1, 'history conditions'
     assert len(test_metrics.failures) == 0, 'failure conditions'
     assert 'caom2' in test_metrics.history, 'history'
@@ -324,9 +316,7 @@ def test_repo_delete(mock_client):
 
     clc.repo_delete(mock_client, 'coll', 'test_id', test_metrics)
 
-    mock_client.delete.assert_called_with(
-        'coll', 'test_id'
-    ), 'mock not called'
+    mock_client.delete.assert_called_with('coll', 'test_id'), 'mock not called'
     assert len(test_metrics.history) == 1, 'history conditions'
     assert len(test_metrics.failures) == 0, 'failure conditions'
     assert 'caom2' in test_metrics.history, 'history'
@@ -350,18 +340,14 @@ def test_si_client_get(mock_metrics, mock_client):
     test_source = 'gemini:GEMINI/TEST.fits'
     test_fqn = os.path.join(tc.TEST_FILES_DIR, 'TEST.fits')
     mock_client.cadcget.side_effect = tc.mock_si_get
-    mock_client.info.return_value = FileInfo(
-        test_source, md5sum='9473fdd0d880a43c21b7778d34872157'
-    )
+    mock_client.info.return_value = FileInfo(test_source, md5sum='9473fdd0d880a43c21b7778d34872157')
     clc.si_client_get(
         mock_client,
         test_fqn,
         test_source,
         metrics=mock_metrics,
     )
-    mock_client.cadcget.assert_called_with(
-        test_source, dest=test_fqn
-    ), 'mock not called'
+    mock_client.cadcget.assert_called_with(test_source, dest=test_fqn), 'mock not called'
     assert mock_metrics.observe.called, 'mock not called'
     args, kwargs = mock_metrics.observe.call_args
     assert args[2] == 12, 'wrong size'

@@ -202,16 +202,15 @@ def test_http(query_mock, test_config, tmp_path):
 
     first_result = test_result.popleft()
     assert (
-        first_result.entry_name ==
-        'https://data.asc-csa.gc.ca/users/OpenData_DonneesOuvertes/pub/NEOSSAT/ASTRO/2017'
+        first_result.entry_name == 'https://data.asc-csa.gc.ca/users/OpenData_DonneesOuvertes/pub/NEOSSAT/ASTRO/2017'
         '/001/NEOS_SCI_2022001030508.fits'
     ), 'wrong first url'
     assert first_result.entry_dt == datetime(2022, 3, 1, 13, 56), 'wrong first time'
 
     last_result = test_result.pop()
     assert (
-        last_result.entry_name ==
-        'https://data.asc-csa.gc.ca/users/OpenData_DonneesOuvertes/pub/NEOSSAT/ASTRO/NESS/313/'
+        last_result.entry_name
+        == 'https://data.asc-csa.gc.ca/users/OpenData_DonneesOuvertes/pub/NEOSSAT/ASTRO/NESS/313/'
         'NEOS_SCI_2022001081159.fits'
     ), 'wrong last url'
     assert last_result.entry_dt == datetime(2022, 8, 22, 15, 30), 'wrong last time'

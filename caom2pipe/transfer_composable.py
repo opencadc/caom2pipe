@@ -204,10 +204,7 @@ class ScienceTransfer(Transfer):
             if os.path.exists(destination_fqn):
                 os.unlink(destination_fqn)
         except Exception as e:
-            self._logger.error(
-                f'Failed to clean up {destination_fqn} after a verification '
-                f'error.'
-            )
+            self._logger.error(f'Failed to clean up {destination_fqn} after a verification ' f'error.')
             raise mc.CadcException(e)
         raise mc.CadcException(msg)
 
@@ -289,9 +286,7 @@ class VoScienceCleanupTransfer(VoScienceTransfer):
             self._logger.debug(f'Successfully retrieved {source}')
         except Exception as e:
             self._logger.debug(traceback.format_exc())
-            self._logger.error(
-                f'Failed to return {source} to {dest_fqn}  with error {e}.'
-            )
+            self._logger.error(f'Failed to return {source} to {dest_fqn}  with error {e}.')
 
     def failure_action(self, original_fqn, destination_fqn, msg):
         self._logger.debug('Begin failure_action')
@@ -299,10 +294,7 @@ class VoScienceCleanupTransfer(VoScienceTransfer):
             if os.path.exists(destination_fqn):
                 os.unlink(destination_fqn)
         except Exception as e:
-            self._logger.error(
-                f'Failed to clean up {destination_fqn} after a verification '
-                f'error.'
-            )
+            self._logger.error(f'Failed to clean up {destination_fqn} after a verification ' f'error.')
             raise mc.CadcException(e)
 
         self._move_action(original_fqn, self._failure_destination)
@@ -318,10 +310,7 @@ class VoScienceCleanupTransfer(VoScienceTransfer):
                 self._vo_client.move(original_fqn, move_destination)
             except Exception as e:
                 self._logger.debug(traceback.format_exc())
-                self._logger.error(
-                    f'Failed to move {original_fqn} to {move_destination} '
-                    f' with error {e}.'
-                )
+                self._logger.error(f'Failed to move {original_fqn} to {move_destination} ' f' with error {e}.')
                 raise mc.CadcException(e)
         self._logger.debug('Done _move_action')
 

@@ -130,9 +130,7 @@ __all__ = [
 ]
 
 
-def append_plane_provenance(
-    plane, headers, lookup, collection, repair, obs_id
-):
+def append_plane_provenance(plane, headers, lookup, collection, repair, obs_id):
     """Append inputs to Planes, based on a particular keyword prefix.
     This function is NOT for removing inputs that have been previously added.
 
@@ -148,15 +146,11 @@ def append_plane_provenance(
     plane_inputs = TypedSet(
         PlaneURI,
     )
-    _update_plane_provenance(
-        headers, lookup, collection, repair, obs_id, plane_inputs
-    )
+    _update_plane_provenance(headers, lookup, collection, repair, obs_id, plane_inputs)
     plane.provenance.inputs.update(plane_inputs)
 
 
-def append_plane_provenance_single(
-    plane, headers, lookup, collection, repair, obs_id
-):
+def append_plane_provenance_single(plane, headers, lookup, collection, repair, obs_id):
     """Append inputs to Planes, based on a particular keyword prefix. This
     differs from update_plane_provenance because all the values are in a
     single keyword, such as COMMENT or HISTORY. It differs from
@@ -175,15 +169,11 @@ def append_plane_provenance_single(
     plane_inputs = TypedSet(
         PlaneURI,
     )
-    _find_plane_provenance_single(
-        plane_inputs, headers, lookup, collection, repair, obs_id
-    )
+    _find_plane_provenance_single(plane_inputs, headers, lookup, collection, repair, obs_id)
     plane.provenance.inputs.update(plane_inputs)
 
 
-def _find_plane_provenance_single(
-    plane_inputs, headers, lookup, collection, repair, obs_id
-):
+def _find_plane_provenance_single(plane_inputs, headers, lookup, collection, repair, obs_id):
     """
     :param plane_inputs TypedSet instance to add inputs to
     :param headers FITS keyword headers that have lookup values.
@@ -202,13 +192,9 @@ def _find_plane_provenance_single(
                 for entry in prov_ids:
                     # 0 - observation
                     # 1 - plane
-                    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(
-                        collection, entry[0]
-                    )
+                    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(collection, entry[0])
                     obs_member_uri = ObservationURI(obs_member_uri_str)
-                    plane_uri = PlaneURI.get_plane_uri(
-                        obs_member_uri, entry[1]
-                    )
+                    plane_uri = PlaneURI.get_plane_uri(obs_member_uri, entry[1])
                     plane_inputs.add(plane_uri)
                     logging.debug(f'Adding PlaneURI {plane_uri}')
                 # because all the content gets processed with one
@@ -243,9 +229,7 @@ def build_chunk_energy_range(chunk, filter_name, filter_md):
     cw = ac.FilterMetadataCache.get_central_wavelength(filter_md)
     fwhm = ac.FilterMetadataCache.get_fwhm(filter_md)
     if cw is not None and fwhm is not None:
-        resolving_power = ac.FilterMetadataCache.get_resolving_power(
-            filter_md
-        )
+        resolving_power = ac.FilterMetadataCache.get_resolving_power(filter_md)
         axis = CoordAxis1D(axis=Axis(ctype='WAVE', cunit='Angstrom'))
         ref_coord1 = RefCoord(0.5, cw - fwhm / 2.0)
         ref_coord2 = RefCoord(1.5, cw + fwhm / 2.0)
@@ -404,18 +388,13 @@ def build_temporal_wcs_bounds(tap_client, plane, collection):
 
     temporal_wcs = None
     for ip in inputs:
-        temporal_wcs = build_temporal_wcs_append_sample(
-            temporal_wcs, lower=ip[0], upper=(ip[0] + ip[1])
-        )
+        temporal_wcs = build_temporal_wcs_append_sample(temporal_wcs, lower=ip[0], upper=(ip[0] + ip[1]))
 
     for artifact in plane.artifacts.values():
         for part in artifact.parts.values():
             if part.product_type == ProductType.SCIENCE:
                 for chunk in part.chunks:
-                    logging.debug(
-                        f'Adding TemporalWCS to chunks in artifact '
-                        f'{artifact.uri}, part {part.name}.'
-                    )
+                    logging.debug(f'Adding TemporalWCS to chunks in artifact ' f'{artifact.uri}, part {part.name}.')
                     chunk.time = temporal_wcs
     logging.debug(f'End build_temporal_wcs_bounds.')
 
@@ -636,9 +615,7 @@ def copy_provenance(from_provenance):
     return copy
 
 
-def exec_footprintfinder(
-    chunk, science_fqn, log_file_directory, obs_id, params='-f'
-):
+def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id, params='-f'):
     """Execute the footprintfinder on a file. All preconditions for successful
     execution should be in place i.e. the file exists, and is unzipped (because
     that is faster).
@@ -662,9 +639,7 @@ def exec_footprintfinder(
     import footprintfinder
 
     if chunk.position is not None and chunk.position.axis is not None:
-        logging.debug(
-            f'position exists, calculate footprints for {science_fqn}.'
-        )
+        logging.debug(f'position exists, calculate footprints for {science_fqn}.')
         for parameters in [params, f'{params} -m 0.2', '-f']:
             # try in decreasing fidelity to get a Polygon that is supported
             # by CAOM's Polygon/MultiPolygon structures
@@ -733,9 +708,7 @@ def _handle_footprint_logs(log_file_directory, log_file):
         if os.path.exists(orig_log_fqn):
             log_fqn = os.path.join(log_file_directory, log_file)
             os.rename(orig_log_fqn, log_fqn)
-            logging.debug(
-                f'Moving footprint log file from {orig_log_fqn} to {log_fqn}'
-            )
+            logging.debug(f'Moving footprint log file from {orig_log_fqn} to {log_fqn}')
     else:
         logging.debug(f'Removing footprint log file {orig_log_fqn}')
         os.unlink(orig_log_fqn)
@@ -828,9 +801,7 @@ def make_plane_uri(obs_id, product_id, collection):
     :param collection: str CADC collection.
     :return: tuple with ObservationURI, PlaneURI instance
     """
-    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(
-        collection, obs_id
-    )
+    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(collection, obs_id)
     obs_member_uri = ObservationURI(obs_member_uri_str)
     plane_uri = PlaneURI.get_plane_uri(obs_member_uri, product_id)
     return obs_member_uri, plane_uri
@@ -862,9 +833,7 @@ def rename_parts(observation, headers):
                 artifact.parts.add(part)
 
 
-def _update_plane_provenance(
-    headers, lookup, collection, repair, obs_id, plane_inputs
-):
+def _update_plane_provenance(headers, lookup, collection, repair, obs_id, plane_inputs):
     """Add inputs to a collection, based on a particular keyword prefix.
 
     :param headers FITS keyword headers that have lookup values.
@@ -883,20 +852,14 @@ def _update_plane_provenance(
                 value = header.get(keyword)
                 prov_obs_id, prov_prod_id = repair(value, obs_id)
                 if prov_obs_id is not None and prov_prod_id is not None:
-                    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(
-                        collection, prov_obs_id
-                    )
+                    obs_member_uri_str = mc.CaomName.make_obs_uri_from_obs_id(collection, prov_obs_id)
                     obs_member_uri = ObservationURI(obs_member_uri_str)
-                    plane_uri = PlaneURI.get_plane_uri(
-                        obs_member_uri, prov_prod_id
-                    )
+                    plane_uri = PlaneURI.get_plane_uri(obs_member_uri, prov_prod_id)
                     plane_inputs.add(plane_uri)
                     logging.debug(f'Adding PlaneURI {plane_uri}')
 
 
-def update_plane_provenance(
-    plane, headers, lookup, collection, repair, obs_id
-):
+def update_plane_provenance(plane, headers, lookup, collection, repair, obs_id):
     """Add inputs to Planes, based on a particular keyword prefix.
 
     :param plane Plane instance to add inputs to
@@ -911,15 +874,11 @@ def update_plane_provenance(
     plane_inputs = TypedSet(
         PlaneURI,
     )
-    _update_plane_provenance(
-        headers, lookup, collection, repair, obs_id, plane_inputs
-    )
+    _update_plane_provenance(headers, lookup, collection, repair, obs_id, plane_inputs)
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
-def update_plane_provenance_from_values(
-    plane, repair, values, collection, obs_id
-):
+def update_plane_provenance_from_values(plane, repair, values, collection, obs_id):
     """
     Add inputs to Planes, based on a list of input values.
 
@@ -938,18 +897,14 @@ def update_plane_provenance_from_values(
     for value in values:
         prov_obs_id, prov_prod_id = repair(value, obs_id)
         if prov_obs_id is not None and prov_prod_id is not None:
-            obs_member_uri_ignore, plane_uri = make_plane_uri(
-                prov_obs_id, prov_prod_id, collection
-            )
+            obs_member_uri_ignore, plane_uri = make_plane_uri(prov_obs_id, prov_prod_id, collection)
             plane_inputs.add(plane_uri)
             logging.debug(f'Adding PlaneURI {plane_uri}')
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
     logging.debug(f'End update_plane_provenance_from_values')
 
 
-def update_plane_provenance_list(
-    plane, headers, lookups, collection, repair, obs_id
-):
+def update_plane_provenance_list(plane, headers, lookups, collection, repair, obs_id):
     """Add inputs to Planes, based on a particular keyword prefix.
 
     :param plane Plane instance to add inputs to
@@ -966,15 +921,11 @@ def update_plane_provenance_list(
     )
 
     for entry in lookups:
-        _update_plane_provenance(
-            headers, entry, collection, repair, obs_id, plane_inputs
-        )
+        _update_plane_provenance(headers, entry, collection, repair, obs_id, plane_inputs)
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
-def update_plane_provenance_single(
-    plane, headers, lookup, collection, repair, obs_id
-):
+def update_plane_provenance_single(plane, headers, lookup, collection, repair, obs_id):
     """Replace inputs in Planes, based on a particular keyword prefix. This
     differs from update_plane_provenance because all the values are in a
     single keyword, such as COMMENT or HISTORY.
@@ -991,9 +942,7 @@ def update_plane_provenance_single(
     plane_inputs = TypedSet(
         PlaneURI,
     )
-    _find_plane_provenance_single(
-        plane_inputs, headers, lookup, collection, repair, obs_id
-    )
+    _find_plane_provenance_single(plane_inputs, headers, lookup, collection, repair, obs_id)
     mc.update_typed_set(plane.provenance.inputs, plane_inputs)
 
 
@@ -1006,10 +955,7 @@ def update_observation_members(observation):
         ObservationURI,
     )
     for plane in observation.planes.values():
-        if (
-            plane.provenance is not None
-            and plane.provenance.inputs is not None
-        ):
+        if plane.provenance is not None and plane.provenance.inputs is not None:
             for inpt in plane.provenance.inputs:
                 if inpt.get_observation_uri() != observation.get_uri():
                     members_inputs.add(inpt.get_observation_uri())
@@ -1031,10 +977,7 @@ def update_observation_members_filtered(observation, filter_fn):
         ObservationURI,
     )
     for plane in observation.planes.values():
-        if (
-            plane.provenance is not None
-            and plane.provenance.inputs is not None
-        ):
+        if plane.provenance is not None and plane.provenance.inputs is not None:
             inputs = filter(filter_fn, plane.provenance.inputs)
 
     for entry in inputs:
@@ -1105,6 +1048,7 @@ class TelescopeMapping:
     map for a file, and then doing any n:n (FITS keywords:CAOM2 keywords)
     mapping, using the 'update' method.
     """
+
     def __init__(self, storage_name, headers, clients, observable=None, observation=None, config=None):
         self._storage_name = storage_name
         self._meta_producer = observable.meta_producer if observable is not None else None
@@ -1130,9 +1074,7 @@ class TelescopeMapping:
         Configure the telescope-specific ObsBlueprint at the CAOM model
         Observation level.
         """
-        self._logger.debug(
-            f'Begin accumulate_blueprint for {self._storage_name.file_uri}'
-        )
+        self._logger.debug(f'Begin accumulate_blueprint for {self._storage_name.file_uri}')
         bp.set('Observation.metaProducer', self._meta_producer)
         bp.set('Plane.metaProducer', self._meta_producer)
         bp.set('Artifact.metaProducer', self._meta_producer)
@@ -1207,6 +1149,7 @@ class TelescopeMapping2(TelescopeMapping):
     dependent on significant changes to the StorageName class, so when all dependent applications have also been
     refactored to use this API, this class will be integrated back into the TelescopeMapping class.
     """
+
     def __init__(self, storage_name, clients, reporter=None, observation=None, config=None):
         super().__init__(
             storage_name,
@@ -1242,15 +1185,10 @@ class Fits2caom2Visitor:
 
     def _get_parser(self, headers, blueprint, uri):
         if headers is None or len(headers) == 0:
-            self._logger.debug(
-                f'No headers, using a BlueprintParser for '
-                f'{self._storage_name.file_uri}'
-            )
+            self._logger.debug(f'No headers, using a BlueprintParser for ' f'{self._storage_name.file_uri}')
             parser = BlueprintParser(blueprint, uri)
         else:
-            self._logger.debug(
-                f'Using a FitsParser for {self._storage_name.file_uri}'
-            )
+            self._logger.debug(f'Using a FitsParser for {self._storage_name.file_uri}')
             parser = FitsParser(headers, blueprint, uri)
         self._logger.debug(f'Created {parser.__class__.__name__} parser for {uri}.')
         return parser
@@ -1287,7 +1225,7 @@ class Fits2caom2Visitor:
                         )
                     else:
                         self._logger.debug('Build a DerivedObservation')
-                        algorithm_name =(
+                        algorithm_name = (
                             'composite'
                             if blueprint._get('Observation.algorithm.name') == 'exposure'
                             else parser._get_from_list('Observation.algorithm.name', 0)
@@ -1382,7 +1320,7 @@ class Fits2caom2VisitorRunnerMeta(Fits2caom2Visitor):
                         )
                     else:
                         self._logger.debug('Build a DerivedObservation')
-                        algorithm_name =(
+                        algorithm_name = (
                             'composite'
                             if blueprint._get('Observation.algorithm.name') == 'exposure'
                             else parser._get_from_list('Observation.algorithm.name', 0)
