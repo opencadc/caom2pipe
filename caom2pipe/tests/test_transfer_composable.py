@@ -91,9 +91,7 @@ def test_cadc_transfer(client_mock, caps_mock):
     test_destination = '/tmp/test_file.fits'
     test_subject.get(test_source, test_destination)
     assert client_mock.get.called, 'should have been called'
-    client_mock.get.assert_called_with(
-        '/tmp', 'ad:TEST/test_file.fits'
-    ), 'wrong parameters'
+    client_mock.get.assert_called_with('/tmp', 'ad:TEST/test_file.fits'), 'wrong parameters'
 
 
 def test_vo_transfer():
@@ -199,9 +197,7 @@ def test_vo_fits_cleanup_transfer():
         mock_client.copy.side_effect = _copy_success
         test_subject.get(test_source, test_destination_fqn)
         assert mock_client.copy.called, 'expect copy to be called'
-        mock_client.copy.assert_called_with(
-            test_source, test_destination_fqn, send_md5=True
-        ), 'wrong call args'
+        mock_client.copy.assert_called_with(test_source, test_destination_fqn, send_md5=True), 'wrong call args'
         assert not mock_client.move.called, 'expect move to not be called'
 
         # failure
@@ -213,13 +209,9 @@ def test_vo_fits_cleanup_transfer():
         test_destination_fqn = '/tmp/abc.fits'
         test_subject.get(test_source, test_destination_fqn)
         assert mock_client.copy.called, 'expect copy to be called'
-        mock_client.copy.assert_called_with(
-            test_source, test_destination_fqn, send_md5=True
-        ), 'wrong call args'
+        mock_client.copy.assert_called_with(test_source, test_destination_fqn, send_md5=True), 'wrong call args'
         assert mock_client.move.called, 'expect move to be called'
-        mock_client.move.assert_called_with(
-            test_source, 'vos:goliaths/failure/abc.fits'
-        ), 'wrong failure move args'
+        mock_client.move.assert_called_with(test_source, 'vos:goliaths/failure/abc.fits'), 'wrong failure move args'
     finally:
         for p in ['/tmp/abc.fits', '/tmp/abc.fits.gz']:
             if os.path.exists(p):

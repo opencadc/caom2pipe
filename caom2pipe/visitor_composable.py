@@ -111,10 +111,7 @@ class ArtifactCleanupVisitor:
 
         plane_delete_list = list(set(plane_temp))
         for entry in plane_delete_list:
-            self._logger.warning(
-                f'Removing plane {entry} from observation '
-                f'{observation.observation_id}.'
-            )
+            self._logger.warning(f'Removing plane {entry} from observation ' f'{observation.observation_id}.')
             plane_count += 1
             observation.planes.pop(entry)
 
@@ -140,9 +137,7 @@ class ArtifactCleanupVisitor:
         """
         url = kwargs.get('url')
         if url is None:
-            raise CadcException(
-                'Must have a "url" parameter for ArtifactCleanupVisitor.'
-            )
+            raise CadcException('Must have a "url" parameter for ArtifactCleanupVisitor.')
         candidate_uri = build_uri(
             scheme=self._scheme,
             archive=self._archive,

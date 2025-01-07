@@ -298,7 +298,7 @@ class State:
             write_as_yaml(self.content, self.fqn)
 
     def write_bookmarks(self, state_fqn):
-        bookmark = { 'bookmarks': {}}
+        bookmark = {'bookmarks': {}}
         for book_mark, last_record in self.bookmarks.items():
             bookmark['bookmarks'][book_mark] = {}
             bookmark['bookmarks'][book_mark]['last_record'] = last_record['last_record']
@@ -340,13 +340,13 @@ class StateRay(State):
 
     def get_bookmark_end(self, bookmark_key):
         result = datetime.now()
-        if (temp := self.bookmarks.get(bookmark_key)):
+        if temp := self.bookmarks.get(bookmark_key):
             result = temp.get('end_timestamp', datetime.now())
         return result
 
     def get_bookmark_start(self, bookmark_key):
         result = None
-        if (temp := self.bookmarks.get(bookmark_key)):
+        if temp := self.bookmarks.get(bookmark_key):
             result = temp.get('last_record')
         return result
 
@@ -535,10 +535,7 @@ class ExecutionReporter:
 
     def _is_timeout(self, e):
         return e is not None and (
-            'Read timed out' in e
-            or 'reset by peer' in e
-            or 'ConnectTimeoutError' in e
-            or 'Broken pipe' in e
+            'Read timed out' in e or 'reset by peer' in e or 'ConnectTimeoutError' in e or 'Broken pipe' in e
         )
 
     def _set_log_files(self, config):
@@ -928,9 +925,7 @@ class Metrics:
             create_dir(self.observable_dir)
             now = datetime.now(tz=timezone.utc).timestamp()
             for service in self.history.keys():
-                fqn = os.path.join(
-                    self.observable_dir, f'{now}.{service}.yml'
-                )
+                fqn = os.path.join(self.observable_dir, f'{now}.{service}.yml')
                 write_as_yaml(self.history[service], fqn)
 
             fqn = os.path.join(self.observable_dir, f'{now}.fail.yml')
@@ -1045,9 +1040,7 @@ class Cache:
         try:
             self._cache = read_as_yaml(self._fqn)
         except Exception as e:
-            raise CadcException(
-                f'Cache file {self._fqn} read failure {e}. Stopping pipeline.'
-            )
+            raise CadcException(f'Cache file {self._fqn} read failure {e}. Stopping pipeline.')
 
     def add_to(self, key, values):
         """Add to or update the content of the cache. This is an over-write
@@ -1239,9 +1232,7 @@ class Config:
     def work_file(self, value):
         self._work_file = value
         if self._working_directory is not None:
-            self.work_fqn = os.path.join(
-                self._working_directory, self._work_file
-            )
+            self.work_fqn = os.path.join(self._working_directory, self._work_file)
 
     @property
     def data_read_groups(self):
@@ -1477,9 +1468,7 @@ class Config:
     def success_log_file_name(self, value):
         self._success_log_file_name = value
         if self._log_file_directory is not None:
-            self.success_fqn = os.path.join(
-                self._log_file_directory, self._success_log_file_name
-            )
+            self.success_fqn = os.path.join(self._log_file_directory, self._success_log_file_name)
 
     @property
     def failure_log_file_name(self):
@@ -1491,9 +1480,7 @@ class Config:
     def failure_log_file_name(self, value):
         self._failure_log_file_name = value
         if self._log_file_directory is not None:
-            self.failure_fqn = os.path.join(
-                self._log_file_directory, self._failure_log_file_name
-            )
+            self.failure_fqn = os.path.join(self._log_file_directory, self._failure_log_file_name)
 
     @property
     def report_fqn(self):
@@ -1559,13 +1546,9 @@ class Config:
         self._rejected_directory = value
         if self._rejected_file_name is not None:
             if self._rejected_directory is not None:
-                self.rejected_fqn = os.path.join(
-                    self._rejected_directory, self._rejected_file_name
-                )
+                self.rejected_fqn = os.path.join(self._rejected_directory, self._rejected_file_name)
             elif self._log_file_directory is not None:
-                self.rejected_fqn = os.path.join(
-                    self._log_file_directory, self._rejected_file_name
-                )
+                self.rejected_fqn = os.path.join(self._log_file_directory, self._rejected_file_name)
 
     @property
     def rejected_file_name(self):
@@ -1577,13 +1560,9 @@ class Config:
     def rejected_file_name(self, value):
         self._rejected_file_name = value
         if self._rejected_directory is not None:
-            self.rejected_fqn = os.path.join(
-                self._rejected_directory, self._rejected_file_name
-            )
+            self.rejected_fqn = os.path.join(self._rejected_directory, self._rejected_file_name)
         elif self._log_file_directory is not None:
-            self.rejected_fqn = os.path.join(
-                self._log_file_directory, self._rejected_file_name
-            )
+            self.rejected_fqn = os.path.join(self._log_file_directory, self._rejected_file_name)
 
     @property
     def slack_channel(self):
@@ -1620,9 +1599,7 @@ class Config:
     def progress_file_name(self, value):
         self._progress_file_name = value
         if self._log_file_directory is not None:
-            self.progress_fqn = os.path.join(
-                self._log_file_directory, self._progress_file_name
-            )
+            self.progress_fqn = os.path.join(self._log_file_directory, self._progress_file_name)
 
     @property
     def proxy_file_name(self):
@@ -1633,13 +1610,8 @@ class Config:
     @proxy_file_name.setter
     def proxy_file_name(self, value):
         self._proxy_file_name = value
-        if (
-            self._working_directory is not None
-            and self._proxy_file_name is not None
-        ):
-            self.proxy_fqn = os.path.join(
-                self._working_directory, self._proxy_file_name
-            )
+        if self._working_directory is not None and self._proxy_file_name is not None:
+            self.proxy_fqn = os.path.join(self._working_directory, self._proxy_file_name)
 
     @property
     def state_file_name(self):
@@ -1650,13 +1622,8 @@ class Config:
     @state_file_name.setter
     def state_file_name(self, value):
         self._state_file_name = value
-        if (
-            self._working_directory is not None
-            and self._state_file_name is not None
-        ):
-            self.state_fqn = os.path.join(
-                self._working_directory, self._state_file_name
-            )
+        if self._working_directory is not None and self._state_file_name is not None:
+            self.state_fqn = os.path.join(self._working_directory, self._state_file_name)
 
     @property
     def cache_file_name(self):
@@ -1667,13 +1634,8 @@ class Config:
     @cache_file_name.setter
     def cache_file_name(self, value):
         self._cache_file_name = value
-        if (
-            self._working_directory is not None
-            and self._cache_file_name is not None
-        ):
-            self.cache_fqn = os.path.join(
-                self._working_directory, self._cache_file_name
-            )
+        if self._working_directory is not None and self._cache_file_name is not None:
+            self.cache_fqn = os.path.join(self._working_directory, self._cache_file_name)
 
     @property
     def features(self):
@@ -1872,6 +1834,7 @@ class Config:
 
     def change_working_directory(self, new_directory):
         """Mostly for test support."""
+
         def _set_value(existing, new_name):
             return existing if existing is not None else new_name
 
@@ -1907,76 +1870,44 @@ class Config:
         """
         try:
             config = self.get_config()
-            self.working_directory = config.get(
-                'working_directory', os.getcwd()
-            )
+            self.working_directory = config.get('working_directory', os.getcwd())
             self.work_file = config.get('todo_file_name', 'todo.txt')
-            self.data_sources = Config._obtain_list(
-                'data_sources', config, []
-            )
-            self.data_source_extensions = Config._obtain_list(
-                'data_source_extensions', config, ['.fits']
-            )
-            self.resource_id = config.get(
-                'resource_id', 'ivo://cadc.nrc.ca/sc2repo'
-            )
+            self.data_sources = Config._obtain_list('data_sources', config, [])
+            self.data_source_extensions = Config._obtain_list('data_source_extensions', config, ['.fits'])
+            self.resource_id = config.get('resource_id', 'ivo://cadc.nrc.ca/sc2repo')
             self.tap_id = config.get('tap_id', 'ivo://cadc.nrc.ca/sc2tap')
             self.use_local_files = bool(config.get('use_local_files', False))
-            self.cleanup_failure_destination = config.get(
-                'cleanup_failure_destination', None
-            )
-            self.cleanup_files_when_storing = bool(
-                config.get('cleanup_files_when_storing', False)
-            )
-            self.cleanup_success_destination = config.get(
-                'cleanup_success_destination', None
-            )
+            self.cleanup_failure_destination = config.get('cleanup_failure_destination', None)
+            self.cleanup_files_when_storing = bool(config.get('cleanup_files_when_storing', False))
+            self.cleanup_success_destination = config.get('cleanup_success_destination', None)
             self.data_read_groups = config.get('data_read_groups', [])
             self.dump_blueprint = config.get('dump_blueprint', False)
             self.http_get_timeout = config.get('http_get_timeout', 10)
             self.logging_level = config.get('logging_level', 'DEBUG')
             self.log_to_file = config.get('log_to_file', False)
-            self.log_file_directory = config.get(
-                'log_file_directory', self.working_directory
-            )
+            self.log_file_directory = config.get('log_file_directory', self.working_directory)
             self.lookup = config.get('lookup', {})
             self.meta_read_groups = config.get('meta_read_groups', [])
             self.rclone_options = config.get('rclone_options', {})
             self.task_types = Config._obtain_task_types(config, [])
             self.collection = config.get('collection', 'TEST')
-            self.success_log_file_name = config.get(
-                'success_log_file_name', 'success_log.txt'
-            )
-            self.failure_log_file_name = config.get(
-                'failure_log_file_name', 'failure_log.txt'
-            )
-            self.retry_file_name = config.get(
-                'retry_file_name', 'retries.txt'
-            )
+            self.success_log_file_name = config.get('success_log_file_name', 'success_log.txt')
+            self.failure_log_file_name = config.get('failure_log_file_name', 'failure_log.txt')
+            self.retry_file_name = config.get('retry_file_name', 'retries.txt')
             self.retry_failures = config.get('retry_failures', False)
             self.retry_count = config.get('retry_count', 1)
             self.retry_decay = config.get('retry_decay', 1)
-            self.rejected_file_name = config.get(
-                'rejected_file_name', 'rejected.yml'
-            )
-            self.rejected_directory = config.get(
-                'rejected_directory', os.getcwd()
-            )
-            self.progress_file_name = config.get(
-                'progress_file_name', 'progress.txt'
-            )
+            self.rejected_file_name = config.get('rejected_file_name', 'rejected.yml')
+            self.rejected_directory = config.get('rejected_directory', os.getcwd())
+            self.progress_file_name = config.get('progress_file_name', 'progress.txt')
             self.interval = config.get('interval', 10)
             self.features = self._obtain_features(config)
             self.proxy_file_name = config.get('proxy_file_name', None)
             self.state_file_name = config.get('state_file_name', None)
             self.cache_file_name = config.get('cache_file_name', None)
             self.observe_execution = config.get('observe_execution', False)
-            self.observable_directory = config.get(
-                'observable_directory', None
-            )
-            self.recurse_data_sources = config.get(
-                'recurse_data_sources', False
-            )
+            self.observable_directory = config.get('observable_directory', None)
+            self.recurse_data_sources = config.get('recurse_data_sources', False)
             self.slack_channel = config.get('slack_channel', None)
             self.slack_token = config.get('slack_token', None)
             self.source_host = config.get('source_host', None)
@@ -1988,9 +1919,7 @@ class Config:
             self.storage_inventory_tap_resource_id = config.get(
                 'storage_inventory_tap_resource_id', 'ivo://cadc.nrc.ca/global/luskan'
             )
-            self.store_modified_files_only = config.get(
-                'store_modified_files_only', False
-            )
+            self.store_modified_files_only = config.get('store_modified_files_only', False)
             self.parallel_count = config.get('parallel_count', 1)
             self.preview_scheme = config.get('preview_scheme', 'cadc')
             self._report_fqn = os.path.join(
@@ -2029,10 +1958,7 @@ class Config:
         if self.retry_failures:
             meta = get_file_meta(self.retry_fqn)
             if meta['size'] == 0:
-                logging.info(
-                    f'Checked the retry file {self.retry_fqn}. There are no '
-                    f'logged failures.'
-                )
+                logging.info(f'Checked the retry file {self.retry_fqn}. There are no ' f'logged failures.')
                 result = False
         else:
             result = False
@@ -2110,9 +2036,7 @@ class Config:
                                 feature_attribute = getattr(attribute, feature)
                             except TypeError:
                                 pass
-                            if feature.startswith('_') or callable(
-                                feature_attribute
-                            ):
+                            if feature.startswith('_') or callable(feature_attribute):
                                 continue
                             f.write(f'  {feature}: {feature_attribute}\n')
                 elif entry == 'task_types':
@@ -2158,21 +2082,15 @@ class PreviewVisitor:
         self._working_dir = kwargs.get('working_directory', './')
         self._clients = kwargs.get('clients')
         if self._clients is None or self._clients.data_client is None:
-            self._logger.warning(
-                'Visitor needs a clients.data_client parameter to store previews.'
-            )
+            self._logger.warning('Visitor needs a clients.data_client parameter to store previews.')
         self._storage_name = kwargs.get('storage_name')
         if self._storage_name is None:
             raise CadcException('Visitor needs a storage_name parameter.')
         self._metadata_reader = kwargs.get('metadata_reader')
         self._science_file = self._storage_name.file_name
         self._science_fqn = self._storage_name.get_file_fqn(self._working_dir)
-        self._preview_fqn = os.path.join(
-            self._working_dir, self._storage_name.prev
-        )
-        self._thumb_fqn = os.path.join(
-            self._working_dir, self._storage_name.thumb
-        )
+        self._preview_fqn = os.path.join(self._working_dir, self._storage_name.prev)
+        self._thumb_fqn = os.path.join(self._working_dir, self._storage_name.thumb)
         self._delete_list = []
         # keys are uris, values are lists, where the 0th entry is a file name,
         # and the 1th entry is the artifact type
@@ -2200,8 +2118,7 @@ class PreviewVisitor:
             plane = observation.planes[self._storage_name.product_id]
             if self._storage_name.file_uri in plane.artifacts.keys():
                 self._logger.debug(
-                    f'Preview generation for observation '
-                    f'{observation.observation_id}, plane {plane.product_id}.'
+                    f'Preview generation for observation ' f'{observation.observation_id}, plane {plane.product_id}.'
                 )
                 count += self._do_prev(plane, observation.observation_id)
             self._augment_artifacts(plane)
@@ -2220,9 +2137,7 @@ class PreviewVisitor:
         release_type=None,
         mime_type='image/jpeg',
     ):
-        preview_meta = PreviewMeta(
-            f_name, product_type, release_type, mime_type
-        )
+        preview_meta = PreviewMeta(f_name, product_type, release_type, mime_type)
         self._previews[uri] = preview_meta
 
     def add_to_delete(self, fqn):
@@ -2240,18 +2155,13 @@ class PreviewVisitor:
             if self._release_type is None:
                 release_type = entry.release_type
             fqn = os.path.join(self._working_dir, f_name)
-            plane.artifacts[uri] = get_artifact_metadata(
-                fqn, product_type, release_type, uri, temp
-            )
+            plane.artifacts[uri] = get_artifact_metadata(fqn, product_type, release_type, uri, temp)
 
     def _delete_list_of_files(self):
         """Clean up files on disk after."""
         # cadc_client will be None if executing a ScrapeModify task, so
         # leave the files behind so the user can see them on disk.
-        if (
-            self._clients is not None
-            and self._clients.data_client is not None
-        ):
+        if self._clients is not None and self._clients.data_client is not None:
             for entry in self._delete_list:
                 if os.path.exists(entry):
                     self._logger.warning(f'Deleting {entry}')
@@ -2275,10 +2185,7 @@ class PreviewVisitor:
         return self._storage_name
 
     def _store_smalls(self):
-        if (
-            self._clients is not None
-            and self._clients.data_client is not None
-        ):
+        if self._clients is not None and self._clients.data_client is not None:
             for uri, entry in self._previews.items():
                 self._clients.data_client.put(self._working_dir, uri)
 
@@ -2289,16 +2196,11 @@ class PreviewVisitor:
             # keep import local
             import matplotlib.image as image
 
-            thumb = image.thumbnail(
-                self._preview_fqn, self._thumb_fqn, scale=0.25
-            )
+            thumb = image.thumbnail(self._preview_fqn, self._thumb_fqn, scale=0.25)
             if thumb is not None:
                 count = 1
         else:
-            self._logger.warning(
-                f'Could not find {self._preview_fqn} for thumbnail '
-                f'generation.'
-            )
+            self._logger.warning(f'Could not find {self._preview_fqn} for thumbnail ' f'generation.')
         return count
 
     def _save_figure(self):
@@ -2570,11 +2472,7 @@ class StorageName:
     @staticmethod
     def remove_extensions(name):
         """How to get the file_id from a file_name."""
-        return (
-            name.replace('.fits', '')
-            .replace('.gz', '')
-            .replace('.header', '')
-        )
+        return name.replace('.fits', '').replace('.gz', '').replace('.header', '')
 
     @staticmethod
     def is_hdf5(entry):
@@ -2596,10 +2494,7 @@ def compare_observations(actual_fqn, expected_fqn):
     msg = None
     if result:
         compare_text = '\n'.join([r for r in result])
-        msg = (
-            f'Differences found in observation {expected.observation_id}\n'
-            f'{compare_text}'
-        )
+        msg = f'Differences found in observation {expected.observation_id}\n' f'{compare_text}'
     return msg
 
 
@@ -2623,9 +2518,7 @@ def to_float(value):
     if value is not None:
         if isinstance(value, float):  #  or isinstance(value, int):
             result = value
-        elif (isinstance(value, str) and len(value.strip()) > 0) or (
-            isinstance(value, int)
-        ):
+        elif (isinstance(value, str) and len(value.strip()) > 0) or (isinstance(value, int)):
             result = float(value)
     return result
 
@@ -2672,9 +2565,7 @@ def exec_cmd_array(cmd_array, log_level_as=logging.debug, timeout=None):
     """
     cmd_text = ' '.join(ii for ii in cmd_array)
     try:
-        child = subprocess.Popen(
-            cmd_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
+        child = subprocess.Popen(cmd_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         try:
             output, outerr = child.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
@@ -2691,9 +2582,7 @@ def exec_cmd_array(cmd_array, log_level_as=logging.debug, timeout=None):
             logging.error(f'stderr {outerr.decode("utf-8")}')
         if child.returncode != 0 and child.returncode != -9:
             # not killed due to a timeout
-            logging.warning(
-                f'Command {cmd_text} failed with {child.returncode}.'
-            )
+            logging.warning(f'Command {cmd_text} failed with {child.returncode}.')
             raise CadcException(
                 f'Command {cmd_text} ::\nreturncode {child.returncode}, '
                 f'\nstdout {output.decode("utf-8")}\' \nstderr '
@@ -2704,9 +2593,7 @@ def exec_cmd_array(cmd_array, log_level_as=logging.debug, timeout=None):
             raise e
         logging.warning(f'Error with command {cmd_text}:: {e}')
         logging.debug(traceback.format_exc())
-        raise CadcException(
-            f'Could not execute cmd {cmd_text}. Exception {e}'
-        )
+        raise CadcException(f'Could not execute cmd {cmd_text}. Exception {e}')
 
 
 def exec_cmd_info(cmd):
@@ -2720,13 +2607,9 @@ def exec_cmd_info(cmd):
     # cmd_array = cmd.split()
     cmd_array = ['/bin/bash', '-c', cmd]
     try:
-        output, outerr = subprocess.Popen(
-            cmd_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        ).communicate()
+        output, outerr = subprocess.Popen(cmd_array, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         if outerr is not None and len(outerr) > 0 and outerr[0] is not None:
-            raise CadcException(
-                f'Command {cmd} had stderr {outerr.decode("utf-8")}'
-            )
+            raise CadcException(f'Command {cmd} had stderr {outerr.decode("utf-8")}')
         if output is not None and len(output) > 0:
             return output.decode('utf-8')
     except Exception as e:
@@ -2749,20 +2632,10 @@ def exec_cmd_redirect(cmd, fqn):
     cmd_array = cmd.split()
     try:
         with open(fqn, 'wb') as outfile:
-            outerr = subprocess.Popen(
-                cmd_array, stdout=outfile, stderr=subprocess.PIPE
-            ).communicate()
-            if (
-                outerr is not None
-                and len(outerr) > 0
-                and outerr[0] is not None
-            ):
-                logging.debug(
-                    f'Command {cmd} had stderr {outerr.decode("utf-8")}'
-                )
-                raise CadcException(
-                    f'Command {cmd} had outerr {outerr.decode("utf-8")}'
-                )
+            outerr = subprocess.Popen(cmd_array, stdout=outfile, stderr=subprocess.PIPE).communicate()
+            if outerr is not None and len(outerr) > 0 and outerr[0] is not None:
+                logging.debug(f'Command {cmd} had stderr {outerr.decode("utf-8")}')
+                raise CadcException(f'Command {cmd} had outerr {outerr.decode("utf-8")}')
     except Exception as e:
         logging.debug(f'Error with command {cmd}:: {e}')
         logging.debug(traceback.format_exc())
@@ -2793,16 +2666,11 @@ def ftp_get(ftp_host_name, source_fqn, dest_fqn):
                 logging.info(f'Downloaded {source_fqn} from {ftp_host_name}')
             else:
                 os.unlink(dest_fqn)
-                raise CadcException(
-                    f'File size error when transferring {source_fqn} from '
-                    f'{ftp_host_name}'
-                )
+                raise CadcException(f'File size error when transferring {source_fqn} from ' f'{ftp_host_name}')
     except Exception as e:
         logging.error(e)
         logging.debug(traceback.format_exc())
-        raise CadcException(
-            f'Could not transfer {source_fqn} from {ftp_host_name}'
-        )
+        raise CadcException(f'Could not transfer {source_fqn} from {ftp_host_name}')
 
 
 def ftp_get_timeout(ftp_host_name, source_fqn, dest_fqn, timeout=20):
@@ -2833,16 +2701,11 @@ def ftp_get_timeout(ftp_host_name, source_fqn, dest_fqn, timeout=20):
                 logging.info(f'Downloaded {source_fqn} from {ftp_host_name}')
             else:
                 os.unlink(dest_fqn)
-                raise CadcException(
-                    f'File size error when transferring {source_fqn} from '
-                    f'{ftp_host_name}'
-                )
+                raise CadcException(f'File size error when transferring {source_fqn} from ' f'{ftp_host_name}')
     except Exception as e:
         logging.error(e)
         logging.debug(traceback.format_exc())
-        raise CadcException(
-            f'Could not transfer {source_fqn} from {ftp_host_name}'
-        )
+        raise CadcException(f'Could not transfer {source_fqn} from {ftp_host_name}')
 
 
 def get_cadc_headers(uri):
@@ -2919,11 +2782,7 @@ def get_file_meta(fqn):
         'size': get_file_size(fqn),
         'md5sum': md5(open(fqn, 'rb').read()).hexdigest(),
     }
-    if (
-        fqn.endswith('.header')
-        or fqn.endswith('.txt')
-        or fqn.endswith('.cat')
-    ):
+    if fqn.endswith('.header') or fqn.endswith('.txt') or fqn.endswith('.cat'):
         meta['type'] = 'text/plain'
     elif fqn.endswith('.csv'):
         meta['type'] = 'text/csv'
@@ -2962,7 +2821,11 @@ def get_now():
 def get_version(collection):
     """A common implementation to retrieve a pipeline version."""
     v = None
-    for application in [f'{collection.lower()}2caom2', f'{collection.split("-")[0].lower()}2caom2', f'{collection}2caom2']:
+    for application in [
+        f'{collection.lower()}2caom2',
+        f'{collection.split("-")[0].lower()}2caom2',
+        f'{collection}2caom2',
+    ]:
         try:
             v = version(application)
             break
@@ -3000,9 +2863,7 @@ def decompose_uri(uri):
         file_name = temp1[1]
         return scheme, path, file_name
     except Exception as e:
-        logging.debug(
-            f'URI {uri} caused error {e}. Expected scheme:path/FILE_NAME'
-        )
+        logging.debug(f'URI {uri} caused error {e}. Expected scheme:path/FILE_NAME')
         logging.debug(traceback.format_exc())
         raise CadcException(f'Expected scheme:path/FILE_NAME. Got {uri}.')
 
@@ -3012,9 +2873,7 @@ def check_param(param, param_type):
     expected type.
     """
     if param is None or not isinstance(param, param_type):
-        raise CadcException(
-            f'Parameter {param} failed check for {param_type}'
-        )
+        raise CadcException(f'Parameter {param} failed check for {param_type}')
 
 
 def read_csv_file(fqn):
@@ -3095,9 +2954,7 @@ def get_keyword(headers, keyword):
     return result
 
 
-def get_artifact_metadata(
-    fqn, product_type, release_type, uri=None, artifact=None
-):
+def get_artifact_metadata(fqn, product_type, release_type, uri=None, artifact=None):
     """
     Build or update artifact content metadata using the CAOM2 objects, and
     with access to a file on disk.
@@ -3232,9 +3089,7 @@ def query_endpoint(url, timeout=20):
     # Open the URL and fetch the JSON document for the observation
     session = requests.Session()
     retries = 10
-    retry = Retry(
-        total=retries, read=retries, connect=retries, backoff_factor=0.5
-    )
+    retry = Retry(total=retries, read=retries, connect=retries, backoff_factor=0.5)
     adapter = HTTPAdapter(max_retries=retry)
     session.mount('http://', adapter)
     session.mount('https://', adapter)
@@ -3316,9 +3171,7 @@ def load_module(module, command_name):
         logging.debug(f'Looking for {command_name} in {module}.')
         result = importlib.import_module(mname)
         if not hasattr(result, command_name):
-            raise CadcException(
-                f'Could not find command {command_name} in module {module}.'
-            )
+            raise CadcException(f'Could not find command {command_name} in module {module}.')
     except ImportError as e:
         logging.debug(f'Looking for {mname} in {pname}')
         raise e
@@ -3423,22 +3276,14 @@ def http_get(url, local_fqn, timeout=10):
             length = to_int(r.headers.get('Content-Length'))
             if length is not None:
                 if file_meta['size'] != length:
-                    raise CadcException(
-                        f'Could not retrieve {local_fqn} from {url}. File '
-                        f'size error.'
-                    )
+                    raise CadcException(f'Could not retrieve {local_fqn} from {url}. File ' f'size error.')
             checksum = r.headers.get('Content-Checksum')
             if checksum is not None:
                 if file_meta['md5sum'] != checksum:
-                    raise CadcException(
-                        f'Could not retrieve {local_fqn} from {url}. File '
-                        f'checksum error.'
-                    )
+                    raise CadcException(f'Could not retrieve {local_fqn} from {url}. File ' f'checksum error.')
     except requests.exceptions.HTTPError as e:
         logging.debug(traceback.format_exc())
-        raise CadcException(
-            f'Could not retrieve {local_fqn} from {url}. Failed with {e}'
-        )
+        raise CadcException(f'Could not retrieve {local_fqn} from {url}. Failed with {e}')
 
 
 @dataclass
@@ -3476,9 +3321,7 @@ def query_tap(query_string, proxy_fqn, resource_id, timeout=10):
     :param timeout time in minutes, tap_client gives up after that
     :returns an astropy votable instance."""
 
-    logging.debug(
-        f'query_tap: execute query {query_string} against {resource_id}'
-    )
+    logging.debug(f'query_tap: execute query {query_string} against {resource_id}')
     subject = net.Subject(certificate=proxy_fqn)
     tap_client = CadcTapClient(subject, resource_id=resource_id)
     buffer = io.StringIO()
@@ -3626,22 +3469,11 @@ class ValueRepairCache(Cache):
     def _repair_attribute(self, entity, attribute_name):
         try:
             attribute_value = getattr(entity, attribute_name)
-            attribute_repr = (
-                attribute_value.value
-                if isinstance(attribute_value, Enum)
-                else attribute_value
-            )
-            if (
-                'any' in self._values.keys()
-                or 'none' in self._values.keys()
-                or attribute_repr in self._values.keys()
-            ):
+            attribute_repr = attribute_value.value if isinstance(attribute_value, Enum) else attribute_value
+            if 'any' in self._values.keys() or 'none' in self._values.keys() or attribute_repr in self._values.keys():
                 for original, fix in self._values.items():
                     if attribute_value is None and original != 'none':
-                        self._logger.info(
-                            f'{attribute_name} value is None. This class only '
-                            f'repairs values.'
-                        )
+                        self._logger.info(f'{attribute_name} value is None. This class only ' f'repairs values.')
                     else:
                         fixed = self._fix(
                             entity,
@@ -3650,11 +3482,7 @@ class ValueRepairCache(Cache):
                             original,
                             fix,
                         )
-                        if (
-                            fixed is None
-                            or fixed == fix
-                            or fixed != attribute_value
-                        ):
+                        if fixed is None or fixed == fix or fixed != attribute_value:
                             break
         except Exception as e:
             self._logger.debug(traceback.format_exc())
@@ -3667,9 +3495,7 @@ class ValueRepairCache(Cache):
             fixed = None
         elif original == 'any':
             setattr(entity, attribute_name, fix)
-            self._logger.info(
-                f'Repair {self._key} from {attribute_value} to {fix}'
-            )
+            self._logger.info(f'Repair {self._key} from {attribute_value} to {fix}')
             fixed = fix
         else:
             if attribute_value is None:
@@ -3681,7 +3507,5 @@ class ValueRepairCache(Cache):
                 setattr(entity, attribute_name, attribute_value_type(fixed))
         new_value = getattr(entity, attribute_name)
         if attribute_value != new_value:
-            self._logger.info(
-                f'Repair {self._key} from {attribute_value} to {fixed}'
-            )
+            self._logger.info(f'Repair {self._key} from {attribute_value} to {fixed}')
         return fixed

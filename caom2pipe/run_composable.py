@@ -165,7 +165,9 @@ class TodoRunner:
             if storage_name is None:
                 # keep going through storage name build failures
                 self._logger.debug(traceback.format_exc())
-                self._logger.warning(f'StorageName construction failed. Using a default instance for {entry}, for logging only.')
+                self._logger.warning(
+                    f'StorageName construction failed. Using a default instance for {entry}, for logging only.'
+                )
                 storage_name = mc.StorageName(obs_id=entry, source_names=[entry])
             self._reporter.capture_failure(storage_name, e, traceback.format_exc())
             self._logger.info(f'Execution failed for {storage_name.file_name} with {e}')
@@ -308,7 +310,7 @@ class TodoRunnerMeta(TodoRunner):
         self._logger.debug('End _run_todo_list.')
         self._todo_list = retry_list
         return result
- 
+
     def run_retry(self):
         self._logger.debug('Begin retry run.')
         result = 0
@@ -358,9 +360,7 @@ class StateRunner(TodoRunner):
         observable,
         reporter,
     ):
-        super().__init__(
-            config, organizer, builder, data_sources, metadata_reader, observable, reporter
-        )
+        super().__init__(config, organizer, builder, data_sources, metadata_reader, observable, reporter)
 
     def run(self):
         """
@@ -660,9 +660,7 @@ class StateRunnerMeta(StateRunner):
 
 
 def set_logging(config):
-    formatter = logging.Formatter(
-        '%(asctime)s:%(levelname)-7s:%(name)-12s:%(lineno)-4d:%(message)s'
-    )
+    formatter = logging.Formatter('%(asctime)s:%(levelname)-7s:%(name)-12s:%(lineno)-4d:%(message)s')
     for handler in logging.getLogger().handlers:
         handler.setLevel(config.logging_level)
         handler.setFormatter(formatter)
@@ -736,19 +734,15 @@ def common_runner_init(
         for source in sources:
             source.reporter = reporter
     if modify_transfer is None:
-        modify_transfer = transfer_composable.modify_transfer_factory(
-            config, clients
-        )
+        modify_transfer = transfer_composable.modify_transfer_factory(config, clients)
 
     if store_transfer is None:
-        store_transfer = transfer_composable.store_transfer_factory(
-            config, clients
-        )
+        store_transfer = transfer_composable.store_transfer_factory(config, clients)
 
     mdul = import_module(organizer_module_name)
     cls = getattr(mdul, organizer_class_name)
     organizer = cls(
-    # organizer = ec.OrganizeExecutes(
+        # organizer = ec.OrganizeExecutes(
         config,
         meta_visitors,
         data_visitors,
@@ -926,9 +920,7 @@ def run_by_todo(
         organizer_class_name,
     )
 
-    runner = TodoRunner(
-        config, organizer, name_builder, sources, metadata_reader, observable, reporter
-    )
+    runner = TodoRunner(config, organizer, name_builder, sources, metadata_reader, observable, reporter)
     result = runner.run()
     result |= runner.run_retry()
     runner.report()
@@ -1177,9 +1169,7 @@ def run_single(
     clients = cc.ClientCollection(config)
     clients.metrics = observable.metrics
     if modify_transfer is None:
-        modify_transfer = transfer_composable.modify_transfer_factory(
-            config, clients
-        )
+        modify_transfer = transfer_composable.modify_transfer_factory(config, clients)
     if metadata_reader is None:
         metadata_reader = reader_composable.reader_factory(config, clients)
     organizer = ec.OrganizeExecutes(

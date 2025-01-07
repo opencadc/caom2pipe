@@ -126,15 +126,14 @@ class Validator:
         if self._config.log_to_file and os.path.exists(self._config.log_file_directory):
             log_fqn = os.path.join(self._config.log_file_directory, f'{self._source_name}_validate_log.txt')
             log_handler = logging.FileHandler(log_fqn)
-            formatter = logging.Formatter(
-                '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s'
-            )
+            formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s')
             log_handler.setLevel(self._config.logging_level)
             log_handler.setFormatter(formatter)
             logging.getLogger().addHandler(log_handler)
 
     def _find_unaligned_dates(self, source, data):
         import pandas as pd
+
         newer = pd.DataFrame()
         if len(data) > 0 and len(source) > 0:
             # SG - 08-09-22 - All times in the SI databases are in UTC.
@@ -229,4 +228,5 @@ class Validator:
     @staticmethod
     def make_utc_aware(a):
         import pandas as pd
+
         return pd.to_datetime(a, utc=True)

@@ -79,10 +79,12 @@ class TValidator(Validator):
 
     def read_from_source(self):
         import pandas as pd
+
         return pd.DataFrame({'f_name': [], 'timestamp': []})
 
     def _find_unaligned_dates(self, source, data):
         import pandas as pd
+
         return pd.DataFrame({'f_name': []})
 
 
@@ -154,9 +156,7 @@ def test_validator2(caps_mock, storage_mock, test_config, tmpdir):
             f.write('test content')
 
         test_subject = TValidator('TEST_SOURCE_NAME', 'png')
-        test_destination_data = (
-            test_subject._read_list_from_destination_data()
-        )
+        test_destination_data = test_subject._read_list_from_destination_data()
         assert test_destination_data is not None, 'expected data result'
         assert len(test_destination_data) == 5, 'wrong number of data results'
         test_result = test_destination_data.loc[1, :]
@@ -168,5 +168,3 @@ def test_validator2(caps_mock, storage_mock, test_config, tmpdir):
         ), f'should be a datetime value, {test_result.contentLastModified}'
     finally:
         os.chdir(orig_cwd)
-
-

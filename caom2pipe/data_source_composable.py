@@ -230,9 +230,7 @@ class IncrementalDataSource(DataSource):
         self._end_dt = None
 
     def __str__(self):
-        return f'\nstart: {self._start_dt}' \
-               f'\n  end: {self._end_dt}' \
-               f'\n  key: {self._start_key}'
+        return f'\nstart: {self._start_dt}' f'\n  end: {self._end_dt}' f'\n  key: {self._start_key}'
 
     @property
     def end_dt(self):
@@ -432,9 +430,7 @@ class ListDirTimeBoxDataSource(IncrementalDataSource):
             prev_exec_time <= os.stat.mtime <= exec_time, and sorted by
             os.stat.mtime
         """
-        self._logger.debug(
-            f'Begin get_time_box_work from {prev_exec_dt} to {exec_dt}.'
-        )
+        self._logger.debug(f'Begin get_time_box_work from {prev_exec_dt} to {exec_dt}.')
         for source in self._source_directories:
             self._logger.debug(f'Looking for work in {source}')
             self._append_work(prev_exec_dt, exec_dt, source)
@@ -496,17 +492,11 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             # and over-ride the configuration that will undermine that
             # behaviour.
             self._cleanup_when_storing = False
-            self._logger.info(
-                'SCRAPE\'ing data - over-riding config.yml '
-                'cleanup_files_when_storing setting.'
-            )
+            self._logger.info('SCRAPE\'ing data - over-riding config.yml ' 'cleanup_files_when_storing setting.')
         if mc.TaskType.STORE not in config.task_types:
             # do not clean up files unless the STORE task is configured
             self._cleanup_when_storing = False
-            self._logger.info(
-                'Not STORE\'ing data - ignore config.yml '
-                'cleanup_files_when_storing setting.'
-            )
+            self._logger.info('Not STORE\'ing data - ignore config.yml ' 'cleanup_files_when_storing setting.')
 
     def get_collection(self, ignore=None):
         return self._collection
@@ -578,17 +568,16 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                         # only transfer files with a different MD5 checksum
                         work_with_file = self._is_remote_different(entry.path)
                         if not work_with_file:
-                            self._logger.warning(
-                                f'{entry.path} has the same md5sum at CADC. '
-                                f'Not transferring.'
-                            )
+                            self._logger.warning(f'{entry.path} has the same md5sum at CADC. ' f'Not transferring.')
                             # KW - 23-06-21
                             # if the file already exists, with the same
                             # checksum, at CADC, Kanoa says move it to the
                             # 'succeeded' directory.
                             self._skipped_files += 1
                             self._move_action(entry.path, self._cleanup_success_directory)
-                            self._reporter.capture_success(entry.name, entry.name, datetime.now(tz=timezone.utc).timestamp())
+                            self._reporter.capture_success(
+                                entry.name, entry.name, datetime.now(tz=timezone.utc).timestamp()
+                            )
                 else:
                     work_with_file = True
             else:
@@ -655,9 +644,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
             try:
                 cadc_meta = self._cadc_client.info(destination_name)
             except Exception as e:
-                self._logger.error(
-                    f'info call failed for {destination_name} with {e}'
-                )
+                self._logger.error(f'info call failed for {destination_name} with {e}')
                 self._logger.debug(traceback.format_exc())
                 cadc_meta = None
 
@@ -665,26 +652,17 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                 result = True
             else:
                 # get the local FileInfo
-                temp_storage_name = mc.StorageName(
-                    file_name=f_name, source_names=[entry_path]
-                )
+                temp_storage_name = mc.StorageName(file_name=f_name, source_names=[entry_path])
                 temp_storage_name._destination_uris = [destination_name]
                 self._metadata_reader.set_file_info(temp_storage_name)
-                if (
-                    self._metadata_reader.file_info.get(destination_name).md5sum.replace('md5:', '')
-                    == cadc_meta.md5sum.replace('md5:', '')
-                ):
+                if self._metadata_reader.file_info.get(destination_name).md5sum.replace(
+                    'md5:', ''
+                ) == cadc_meta.md5sum.replace('md5:', ''):
                     result = False
         else:
-            self._logger.debug(
-                f'SCRAPE\'ing data - no md5sum checking with CADC for '
-                f'{entry_path}.'
-            )
+            self._logger.debug(f'SCRAPE\'ing data - no md5sum checking with CADC for ' f'{entry_path}.')
         temp_text = 'different' if result else 'same'
-        self._logger.debug(
-            f'Done _is_remote_different for {entry_path} result is {temp_text} at '
-            f'CADC.'
-        )
+        self._logger.debug(f'Done _is_remote_different for {entry_path} result is {temp_text} at ' f'CADC.')
         return result
 
     def _find_work(self, entry_path):
@@ -694,9 +672,7 @@ class LocalFilesDataSource(ListDirTimeBoxDataSource):
                     self._find_work(entry.path)
                 else:
                     if self.default_filter(entry):
-                        self._logger.info(
-                            f'Adding {entry.path} to work list.'
-                        )
+                        self._logger.info(f'Adding {entry.path} to work list.')
                         self._work.append(entry.path)
 
     def _move_action(self, fqn, destination):
@@ -785,10 +761,9 @@ class LocalFilesDataSourceRunnerMeta(LocalFilesDataSource):
                 result = True
             else:
                 # the file_info is updated in execute_composable.py if conditional decompression occurs
-                if (
-                    entry.file_info.get(entry.destination_uris[index]).md5sum.replace('md5:', '')
-                    == cadc_meta.md5sum.replace('md5:', '')
-                ):
+                if entry.file_info.get(entry.destination_uris[index]).md5sum.replace(
+                    'md5:', ''
+                ) == cadc_meta.md5sum.replace('md5:', ''):
                     result = False
         else:
             self._logger.debug(f'SCRAPE\'ing data - no md5sum checking with CADC for {entry.source_names[index]}.')
@@ -1137,9 +1112,7 @@ class VaultDataSource(ListDirTimeBoxDataSource):
         self._logger.debug('Begin get_work.')
         self._work = deque()
         for source_directory in self._source_directories:
-            self._logger.debug(
-                f'Searching {source_directory} for work to do.'
-            )
+            self._logger.debug(f'Searching {source_directory} for work to do.')
             self._find_work(source_directory, self._work)
         self._capture_todo()
         self._logger.debug('End get_work.')
@@ -1163,22 +1136,16 @@ class VaultDataSource(ListDirTimeBoxDataSource):
             target_node_mtime = mc.make_datetime(target_node.props.get('date'))
             if target_node.type == 'vos:ContainerNode' and self._recursive:
                 if exec_dt >= target_node_mtime >= prev_exec_dt:
-                    self._append_work(
-                        prev_exec_dt, exec_dt, target_node.uri
-                    )
+                    self._append_work(prev_exec_dt, exec_dt, target_node.uri)
             else:
                 if exec_dt >= target_node_mtime >= prev_exec_dt:
                     if self.default_filter(target_node):
                         self._temp[target_node_mtime].append(target_node.uri)
-                        self._logger.info(
-                            f'Add {target_node.uri} to work list.'
-                        )
+                        self._logger.info(f'Add {target_node.uri} to work list.')
         self._logger.debug('End _append_work')
 
     def _find_work(self, source_directory, work):
-        node = self._vault_client.get_node(
-            source_directory, limit=None, force=True
-        )
+        node = self._vault_client.get_node(source_directory, limit=None, force=True)
         while node.type == 'vos:LinkNode':
             uri = node.target
             node = self._vault_client.get_node(uri, limit=None, force=True)
@@ -1294,7 +1261,9 @@ class VaultCleanupDataSource(VaultDataSource):
                             self._skipped_files += 1
                             self._move_action(dir_entry_fqn, self._cleanup_success_directory)
                             self._reporter.capture_success(
-                                dir_entry_fqn, os.path.basename(dir_entry_fqn), datetime.now(tz=timezone.utc).timestamp()
+                                dir_entry_fqn,
+                                os.path.basename(dir_entry_fqn),
+                                datetime.now(tz=timezone.utc).timestamp(),
                             )
                 break
         self._logger.debug(f'Done default_filter says copy_file is {copy_file} for {dir_entry_fqn}')
@@ -1350,9 +1319,7 @@ class VaultCleanupDataSource(VaultDataSource):
                 try:
                     if self._vault_client.status(dest_fqn):
                         # vos: doesn't support over-write
-                        self._logger.warning(
-                            f'Removing {dest_fqn} prior to over-write.'
-                        )
+                        self._logger.warning(f'Removing {dest_fqn} prior to over-write.')
                         self._vault_client.delete(dest_fqn)
                 except exceptions.NotFoundException as not_found_e:
                     # do nothing, since the node doesn't exist

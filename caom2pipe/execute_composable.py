@@ -152,9 +152,7 @@ class CaomExecute:
         """
         self._logger = logging.getLogger(self.__class__.__name__)
         self._logger.setLevel(config.logging_level)
-        formatter = logging.Formatter(
-            '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s'
-        )
+        formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s')
         for handler in self._logger.handlers:
             handler.setLevel(config.logging_level)
             handler.setFormatter(formatter)
@@ -202,9 +200,7 @@ class CaomExecute:
             self._model_fqn = os.path.join(self._config.log_file_directory, value.model_file_name)
         else:
             self._model_fqn = os.path.join(self._working_dir, value.model_file_name)
-        self._decompressor = decompressor_factory(
-            self._config, self._working_dir, self.log_level_as, value
-        )
+        self._decompressor = decompressor_factory(self._config, self._working_dir, self.log_level_as, value)
 
     @property
     def working_dir(self):
@@ -218,13 +214,9 @@ class CaomExecute:
             self._storage_name.obs_id,
             self.observable.metrics,
         )
-        self._caom2_update_needed = (
-            False if self._observation is None else True
-        )
+        self._caom2_update_needed = False if self._observation is None else True
         if self._caom2_update_needed:
-            self._logger.debug(
-                f'Found observation {self._observation.observation_id}'
-            )
+            self._logger.debug(f'Found observation {self._observation.observation_id}')
 
     def _caom2_store(self):
         """Update an existing observation instance.  Assumes the obs_id
@@ -272,14 +264,12 @@ class CaomExecute:
         self._observation = None
         if os.path.exists(self._model_fqn):
             self._observation = mc.read_obs_from_file(self._model_fqn)
-        self._caom2_update_needed = (
-            False if self._observation is None else True
-        )
+        self._caom2_update_needed = False if self._observation is None else True
 
     def _store_data(self):
         for index, entry in enumerate(self._storage_name.source_names):
             if self._config.use_local_files:
-               local_fqn = entry
+                local_fqn = entry
             else:
                 temp = urlparse(entry)
                 local_fqn = os.path.join(self._working_dir, temp.path.split('/')[-1])
@@ -645,9 +635,7 @@ class DataVisit(CaomExecute):
 
         self._logger.debug('get the input files')
         for entry in self._storage_name.destination_uris:
-            local_fqn = os.path.join(
-                self._working_dir, os.path.basename(entry)
-            )
+            local_fqn = os.path.join(self._working_dir, os.path.basename(entry))
             self._transferrer.get(entry, local_fqn)
 
         self._logger.debug('get the observation for the existing model')
@@ -873,9 +861,7 @@ class Store(CaomExecute):
     def execute(self, context):
         super().execute(context)
 
-        self._logger.debug(
-            f'Store {len(self._storage_name.source_names)} files to CADC.'
-        )
+        self._logger.debug(f'Store {len(self._storage_name.source_names)} files to CADC.')
         self._store_data()
         self._logger.debug('End execute')
 
@@ -1347,10 +1333,7 @@ class OrganizeExecutes:
         processing is done.
         """
         working_dir = os.path.join(self.config.working_directory, name)
-        if (
-            os.path.exists(working_dir)
-            and mc.TaskType.SCRAPE not in self.config.task_types
-        ):
+        if os.path.exists(working_dir) and mc.TaskType.SCRAPE not in self.config.task_types:
             for ii in os.listdir(working_dir):
                 os.remove(os.path.join(working_dir, ii))
             os.rmdir(working_dir)
@@ -1367,10 +1350,7 @@ class OrganizeExecutes:
         rejected entries."""
         result = self._observable.rejected.is_bad_metadata(storage_name.file_name)
         if result:
-            self._logger.info(
-                f'Rejected observation {storage_name.file_name} because of '
-                f'bad metadata'
-            )
+            self._logger.info(f'Rejected observation {storage_name.file_name} because of ' f'bad metadata')
         return result
 
     def _set_up_file_logging(self, storage_name):
@@ -1383,17 +1363,11 @@ class OrganizeExecutes:
 
         """
         if self.config.log_to_file:
-            log_fqn = os.path.join(
-                self.config.working_directory, storage_name.log_file
-            )
+            log_fqn = os.path.join(self.config.working_directory, storage_name.log_file)
             if self.config.log_file_directory is not None:
-                log_fqn = os.path.join(
-                    self.config.log_file_directory, storage_name.log_file
-                )
+                log_fqn = os.path.join(self.config.log_file_directory, storage_name.log_file)
             self._log_h = logging.FileHandler(log_fqn)
-            formatter = logging.Formatter(
-                '%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s'
-            )
+            formatter = logging.Formatter('%(asctime)s:%(levelname)s:%(name)-12s:%(lineno)d:%(message)s')
             self._log_h.setLevel(self.config.logging_level)
             self._log_h.setFormatter(formatter)
             logging.getLogger().addHandler(self._log_h)
@@ -1407,13 +1381,10 @@ class OrganizeExecutes:
             self._log_h.close()
 
     def can_use_single_visit(self):
-        return (
-            len(self.task_types) > 1
-            and (
-                (mc.TaskType.STORE in self.task_types and mc.TaskType.INGEST in self.task_types)
-                or (mc.TaskType.INGEST in self.task_types and mc.TaskType.MODIFY in self.task_types)
-                or (mc.TaskType.SCRAPE in self.task_types and mc.TaskType.MODIFY in self.task_types)
-            )
+        return len(self.task_types) > 1 and (
+            (mc.TaskType.STORE in self.task_types and mc.TaskType.INGEST in self.task_types)
+            or (mc.TaskType.INGEST in self.task_types and mc.TaskType.MODIFY in self.task_types)
+            or (mc.TaskType.SCRAPE in self.task_types and mc.TaskType.MODIFY in self.task_types)
         )
 
     def _choose(self):
@@ -1465,54 +1436,50 @@ class OrganizeExecutes:
             for task_type in self.task_types:
                 if task_type == mc.TaskType.SCRAPE:
                     if self.config.use_local_files:
-                        self._logger.debug(
-                            f'Choosing executor Scrape for {task_type}.'
-                        )
-                        self._executors.append(Scrape(self.config,  self._meta_visitors, self._metadata_reader))
+                        self._logger.debug(f'Choosing executor Scrape for {task_type}.')
+                        self._executors.append(Scrape(self.config, self._meta_visitors, self._metadata_reader))
 
                     else:
-                        raise mc.CadcException(
-                            'use_local_files must be True with Task Type '
-                            '"SCRAPE"'
-                        )
+                        raise mc.CadcException('use_local_files must be True with Task Type ' '"SCRAPE"')
                 elif task_type == mc.TaskType.STORE:
                     self._logger.debug(f'Choosing executor Store for {task_type}.')
                     self._executors.append(
-                        Store(self.config, self._observable, self._clients, self._metadata_reader, self._store_transfer)
+                        Store(
+                            self.config, self._observable, self._clients, self._metadata_reader, self._store_transfer
+                        )
                     )
                 elif task_type == mc.TaskType.INGEST:
                     if self.chooser is not None and self.chooser.needs_delete():
-                        self._logger.debug(
-                            f'Choosing executor MetaVisitDeleteCreate for '
-                            f'{task_type}.'
-                        )
+                        self._logger.debug(f'Choosing executor MetaVisitDeleteCreate for ' f'{task_type}.')
                         self._executors.append(
                             MetaVisitDeleteCreate(
-                                self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
+                                self.config,
+                                self._meta_visitors,
+                                self._observable,
+                                self._metadata_reader,
+                                self._clients,
                             )
                         )
                     else:
-                        self._logger.debug(
-                            f'Choosing executor MetaVisit for {task_type}.'
-                        )
+                        self._logger.debug(f'Choosing executor MetaVisit for {task_type}.')
                         self._executors.append(
                             MetaVisit(
-                                self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
+                                self.config,
+                                self._meta_visitors,
+                                self._observable,
+                                self._metadata_reader,
+                                self._clients,
                             )
                         )
                 elif task_type == mc.TaskType.MODIFY:
                     if self.config.use_local_files:
                         if len(self._executors) > 0 and isinstance(self._executors[0], Scrape):
-                            self._logger.debug(
-                                f'Choosing executor DataScrape for '
-                                f'{task_type}.'
+                            self._logger.debug(f'Choosing executor DataScrape for ' f'{task_type}.')
+                            self._executors.append(
+                                DataScrape(self.config, self._data_visitors, self._metadata_reader)
                             )
-                            self._executors.append(DataScrape(self.config, self._data_visitors, self._metadata_reader))
                         else:
-                            self._logger.debug(
-                                f'Choosing executor LocalDataVisit for '
-                                f'{task_type}.'
-                            )
+                            self._logger.debug(f'Choosing executor LocalDataVisit for ' f'{task_type}.')
                             self._executors.append(
                                 LocalDataVisit(
                                     self.config,
@@ -1523,9 +1490,7 @@ class OrganizeExecutes:
                                 )
                             )
                     else:
-                        self._logger.debug(
-                            f'Choosing executor DataVisit for {task_type}.'
-                        )
+                        self._logger.debug(f'Choosing executor DataVisit for {task_type}.')
                         self._executors.append(
                             DataVisit(
                                 self.config,
@@ -1537,9 +1502,7 @@ class OrganizeExecutes:
                             )
                         )
                 elif task_type == mc.TaskType.VISIT:
-                    self._logger.debug(
-                        f'Choosing executor MetaVisit for {task_type}.'
-                    )
+                    self._logger.debug(f'Choosing executor MetaVisit for {task_type}.')
                     self._executors.append(
                         MetaVisit(
                             self.config, self._meta_visitors, self._observable, self._metadata_reader, self._clients
@@ -1548,9 +1511,7 @@ class OrganizeExecutes:
                 elif task_type == mc.TaskType.DEFAULT:
                     pass
                 else:
-                    raise mc.CadcException(
-                        f'Do not understand task type {task_type}'
-                    )
+                    raise mc.CadcException(f'Do not understand task type {task_type}')
 
     def do_one(self, storage_name):
         """Process one entry.
@@ -1604,15 +1565,15 @@ class OrganizeExecutesRunnerMeta(OrganizeExecutes):
     """
 
     def __init__(
-            self,
-            config,
-            meta_visitors,
-            data_visitors,
-            needs_delete=False,
-            store_transfer=None,
-            modify_transfer=None,
-            clients=None,
-            reporter=None,
+        self,
+        config,
+        meta_visitors,
+        data_visitors,
+        needs_delete=False,
+        store_transfer=None,
+        modify_transfer=None,
+        clients=None,
+        reporter=None,
     ):
         self._needs_delete = needs_delete
         self._reporter = reporter
@@ -1625,7 +1586,7 @@ class OrganizeExecutesRunnerMeta(OrganizeExecutes):
             modify_transfer=modify_transfer,
             metadata_reader=None,
             clients=clients,
-            observable = reporter.observable,
+            observable=reporter.observable,
         )
 
     def _choose(self):
@@ -1636,9 +1597,7 @@ class OrganizeExecutesRunnerMeta(OrganizeExecutes):
             if mc.TaskType.SCRAPE in self.task_types:
                 self._logger.debug(f'Choosing executor NoFheadSScrape for tasks {self.task_types}.')
                 self._executors.append(
-                    NoFheadScrapeRunnerMeta(
-                        self.config, self._meta_visitors, self._data_visitors, self._reporter
-                    )
+                    NoFheadScrapeRunnerMeta(self.config, self._meta_visitors, self._data_visitors, self._reporter)
                 )
             elif mc.TaskType.STORE in self.task_types:
                 self._logger.debug(f'Choosing executor NoFheadStoreVisitRunnerMeta for tasks {self.task_types}.')
@@ -1669,7 +1628,7 @@ class OrganizeExecutesRunnerMeta(OrganizeExecutes):
                 if task_type == mc.TaskType.SCRAPE:
                     if self.config.use_local_files:
                         self._logger.debug(f'Choosing executor ScrapeRunnerMeta for {task_type}.')
-                        self._executors.append(ScrapeRunnerMeta(self.config,  self._meta_visitors, self._reporter))
+                        self._executors.append(ScrapeRunnerMeta(self.config, self._meta_visitors, self._reporter))
                     else:
                         raise mc.CadcException('use_local_files must be True with Task Type "SCRAPE"')
                 elif task_type == mc.TaskType.STORE:
@@ -1688,16 +1647,17 @@ class OrganizeExecutesRunnerMeta(OrganizeExecutes):
                     else:
                         self._logger.debug(f'Choosing executor MetaVisit for {task_type}.')
                         self._executors.append(
-                            MetaVisitRunnerMeta(
-                                self._clients, self.config, self._meta_visitors, self._reporter
-                            )
+                            MetaVisitRunnerMeta(self._clients, self.config, self._meta_visitors, self._reporter)
                         )
                 elif task_type == mc.TaskType.MODIFY:
                     if self.config.use_local_files:
                         self._logger.debug(f'Choosing executor LocalDataVisitRunnerMeta for {task_type}.')
                         self._executors.append(
                             LocalDataVisitRunnerMeta(
-                                self._clients, self.config, self._data_visitors, self._reporter,
+                                self._clients,
+                                self.config,
+                                self._data_visitors,
+                                self._reporter,
                             )
                         )
                     else:
@@ -1774,12 +1734,8 @@ class FitsForCADCDecompressor(DecompressorNoop):
                     self._working_directory,
                     os.path.basename(fqn).replace('.gz', ''),
                 )
-                self._logger.info(
-                    f'Decompressing {fqn} with gunzip to {returned_fqn}'
-                )
-                with gzip.open(fqn, 'rb') as f_in, open(
-                    returned_fqn, 'wb'
-                ) as f_out:
+                self._logger.info(f'Decompressing {fqn} with gunzip to {returned_fqn}')
+                with gzip.open(fqn, 'rb') as f_in, open(returned_fqn, 'wb') as f_out:
                     # use shutil to control memory consumption
                     copyfileobj(f_in, f_out)
             elif fqn.endswith('.bz2'):
@@ -1787,12 +1743,8 @@ class FitsForCADCDecompressor(DecompressorNoop):
                     self._working_directory,
                     os.path.basename(fqn).replace('.bz2', ''),
                 )
-                self._logger.info(
-                    f'Decompressing {fqn} with bz2 to {returned_fqn}'
-                )
-                with open(returned_fqn, 'wb') as f_out, bz2.BZ2File(
-                    fqn, 'rb'
-                ) as f_in:
+                self._logger.info(f'Decompressing {fqn} with bz2 to {returned_fqn}')
+                with open(returned_fqn, 'wb') as f_out, bz2.BZ2File(fqn, 'rb') as f_in:
                     # use shutil to control memory consumption
                     copyfileobj(f_in, f_out)
         self._logger.debug(f'End fix_compression with {returned_fqn}')
@@ -1826,12 +1778,8 @@ class FitsForCADCCompressor(FitsForCADCDecompressor):
                 )
                 compress_cmd = f"imcopy {fqn} '{fz_fqn}[compress]'"
                 self._logger.debug(f'Executing {compress_cmd}')
-                mc.exec_cmd_array(
-                    ['/bin/bash', '-c', compress_cmd], self._log_level_as
-                )
-                self._logger.info(
-                    f'Changed compressed file from {fqn} to {fz_fqn}'
-                )
+                mc.exec_cmd_array(['/bin/bash', '-c', compress_cmd], self._log_level_as)
+                self._logger.info(f'Changed compressed file from {fqn} to {fz_fqn}')
                 returned_fqn = fz_fqn
                 self._logger.debug(f'End fix_compression with {returned_fqn}')
             else:

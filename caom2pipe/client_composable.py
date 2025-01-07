@@ -181,9 +181,7 @@ class ClientCollection:
 
     def _init(self, config):
         if mc.TaskType.SCRAPE in config.task_types:
-            self._logger.info(
-                f'SCRAPE\'ing data - no clients will be initialized.'
-            )
+            self._logger.info(f'SCRAPE\'ing data - no clients will be initialized.')
         else:
             self._subject = define_subject(config)
             self._metadata_client = CAOM2RepoClient(self._subject, config.logging_level, config.resource_id)
@@ -237,9 +235,7 @@ def client_put_fqn(client, source_name, destination_name, metrics=None):
         logging.debug(traceback.format_exc())
         raise mc.CadcException(f'Failed to store data with {e}')
     end = current()
-    metrics.observe(
-        start, end, stored_size, 'copy', 'vos', os.path.basename(source_name)
-    )
+    metrics.observe(start, end, stored_size, 'copy', 'vos', os.path.basename(source_name))
 
 
 def current():
@@ -263,9 +259,7 @@ def data_get(client, working_directory, file_name, archive, metrics):
     try:
         client.get_file(archive, file_name, destination=fqn)
         if not os.path.exists(fqn):
-            raise mc.CadcException(
-                f'ad retrieve failed. {fqn} does not exist.'
-            )
+            raise mc.CadcException(f'ad retrieve failed. {fqn} does not exist.')
     except Exception as e:
         metrics.observe_failure('get', 'data', file_name)
         logging.debug(traceback.format_exc())
@@ -290,16 +284,11 @@ def define_subject(config):
     content of a Config instance."""
     subject = None
     if config.proxy_fqn is not None and os.path.exists(config.proxy_fqn):
-        logging.debug(
-            f'Using proxy certificate {config.proxy_fqn} for credentials.'
-        )
+        logging.debug(f'Using proxy certificate {config.proxy_fqn} for credentials.')
         subject = net.Subject(username=None, certificate=config.proxy_fqn)
     else:
         logging.warning(f'Proxy certificate is {config.proxy_fqn}.')
-        raise mc.CadcException(
-            'No credentials provided (proxy certificate). '
-            'Cannot create an anonymous subject.'
-        )
+        raise mc.CadcException('No credentials provided (proxy certificate). ' 'Cannot create an anonymous subject.')
     return subject
 
 
@@ -394,10 +383,7 @@ def repo_create(client, observation, metrics):
     except Exception as e:
         metrics.observe_failure('create', 'caom2', observation.observation_id)
         logging.debug(traceback.format_exc())
-        raise mc.CadcException(
-            f'Could not create an observation record for '
-            f'{observation.observation_id}. {e}'
-        )
+        raise mc.CadcException(f'Could not create an observation record for ' f'{observation.observation_id}. {e}')
     end = current()
     if metrics is not None:
         metrics.observe(
@@ -417,9 +403,7 @@ def repo_delete(client, collection, obs_id, metrics):
     except Exception as e:
         metrics.observe_failure('delete', 'caom2', obs_id)
         logging.debug(traceback.format_exc())
-        raise mc.CadcException(
-            f'Could not delete the observation record for {obs_id}. {e}'
-        )
+        raise mc.CadcException(f'Could not delete the observation record for {obs_id}. {e}')
     end = current()
     if metrics is not None:
         metrics.observe(start, end, 0, 'delete', 'caom2', obs_id)
@@ -435,15 +419,10 @@ def repo_get(client, collection, obs_id, metrics):
         if metrics is not None:
             metrics.observe_failure('read', 'caom2', obs_id)
         logging.debug(traceback.format_exc())
-        raise mc.CadcException(
-            f'Could not retrieve an observation record for {obs_id} '
-            f'because {e}.'
-        )
+        raise mc.CadcException(f'Could not retrieve an observation record for {obs_id} ' f'because {e}.')
     end = current()
     if metrics is not None:
-        metrics.observe(
-            start, end, getsizeof(observation), 'read', 'caom2', obs_id
-        )
+        metrics.observe(start, end, getsizeof(observation), 'read', 'caom2', obs_id)
     return observation
 
 
@@ -453,14 +432,9 @@ def repo_update(client, observation, metrics):
         client.update(observation)
     except Exception as e:
         if metrics is not None:
-            metrics.observe_failure(
-                'update', 'caom2', observation.observation_id
-            )
+            metrics.observe_failure('update', 'caom2', observation.observation_id)
         logging.debug(traceback.format_exc())
-        raise mc.CadcException(
-            f'Could not update an observation record for '
-            f'{observation.observation_id}. {e}'
-        )
+        raise mc.CadcException(f'Could not update an observation record for ' f'{observation.observation_id}. {e}')
     end = current()
     if metrics is not None:
         metrics.observe(
@@ -514,10 +488,7 @@ def si_client_get(client, fqn, source, metrics):
         local_meta = mc.get_file_meta(fqn)
         cadc_meta = si_client_info(client, source)
         if local_meta.get('md5sum') != cadc_meta.md5sum:
-            raise mc.CadcException(
-                f'Wrong MD5 checksum {local_meta.get("md5sum")} retrieved for '
-                f'{source}.'
-            )
+            raise mc.CadcException(f'Wrong MD5 checksum {local_meta.get("md5sum")} retrieved for ' f'{source}.')
     except Exception as e:
         if metrics is not None:
             metrics.observe_failure('cadcget', 'si', os.path.basename(fqn))
@@ -555,9 +526,7 @@ def si_client_get_headers(client, storage_name):
         return ac.make_headers_from_string(fits_header)
     except Exception as e:
         logging.debug(traceback.format_exc())
-        raise mc.CadcException(
-            f'Did not retrieve {storage_name} header ' f'because {e}'
-        )
+        raise mc.CadcException(f'Did not retrieve {storage_name} header ' f'because {e}')
 
 
 def si_client_put(client, fqn, storage_name, metrics):
