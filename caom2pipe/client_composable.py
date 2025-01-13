@@ -189,7 +189,7 @@ class ClientCollection:
             if config.tap_id is not None:
                 self._query_client = CadcTapClient(subject=self._subject, resource_id=config.tap_id)
             if config.storage_inventory_tap_resource_id is not None:
-                self._query_client = CadcTapClient(
+                self._storage_query_client = CadcTapClient(
                     subject=self._subject, resource_id=config.storage_inventory_tap_resource_id
                 )
 
