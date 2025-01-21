@@ -2359,14 +2359,12 @@ class StorageName:
 
     @property
     def model_file_name(self):
-        """The file name used on local disk that holds the CAOM2 Observation
-        XML."""
-        # return f'{self._obs_id}.xml'
+        """The file name used on local disk that holds the CAOM2 Observation XML."""
         return f'{self.name}.xml'
 
     @property
     def name(self):
-        return self._obs_id
+        return self._obs_id if self._obs_id is not None else self._file_id
 
     @property
     def prev(self):
@@ -2400,7 +2398,7 @@ class StorageName:
     @property
     def log_file(self):
         """The log file name used when running any of the 'execute' steps."""
-        return f'{self._obs_id}.log'
+        return f'{self.name}.log'
 
     @property
     def product_id(self):
