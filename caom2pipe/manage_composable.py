@@ -678,7 +678,7 @@ class ExecutionReporter:
         self._logger.debug('*' * len(msg))
 
     def capture_todo(self, todo, rejected, skipped):
-        self._logger.error(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
+        self._logger.debug(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
         self._summary.add_entries(todo + rejected + skipped)
         self._summary.add_rejections(rejected)
         self._summary.add_skipped(skipped)
