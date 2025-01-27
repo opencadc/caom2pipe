@@ -2,7 +2,7 @@
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2018.                            (c) 2018.
+#  (c) 2025.                            (c) 2025.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -678,7 +678,7 @@ class ExecutionReporter:
         self._logger.debug('*' * len(msg))
 
     def capture_todo(self, todo, rejected, skipped):
-        self._logger.error(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
+        self._logger.debug(f'Begin capture_todo todo {todo}, rejected {rejected}, skipped {skipped}')
         self._summary.add_entries(todo + rejected + skipped)
         self._summary.add_rejections(rejected)
         self._summary.add_skipped(skipped)
@@ -2245,7 +2245,7 @@ class StorageName:
 
     Lifecycle of a StorageName
        1. Created when a unit of work is identified
-       2. FileInfo - as lazy as possible
+       2. FileInfo - as lazy as possible, and representing the DataSource
        3. Header metadata - as lazy as possible
        4. Removed from the list of work when it’s (successfully? TODO - decide the optimal removal time ) done
           processing
@@ -2359,14 +2359,12 @@ class StorageName:
 
     @property
     def model_file_name(self):
-        """The file name used on local disk that holds the CAOM2 Observation
-        XML."""
-        # return f'{self._obs_id}.xml'
+        """The file name used on local disk that holds the CAOM2 Observation XML."""
         return f'{self.name}.xml'
 
     @property
     def name(self):
-        return self._obs_id
+        return self._obs_id if self._obs_id is not None else self._file_id
 
     @property
     def prev(self):
@@ -2400,7 +2398,7 @@ class StorageName:
     @property
     def log_file(self):
         """The log file name used when running any of the 'execute' steps."""
-        return f'{self._obs_id}.log'
+        return f'{self.name}.log'
 
     @property
     def product_id(self):
