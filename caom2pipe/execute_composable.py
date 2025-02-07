@@ -380,6 +380,23 @@ class CaomExecuteRunnerMeta(CaomExecute):
                     self._storage_name._metadata[uri] = get_local_file_headers(source_name)
         self._logger.debug('End _set_preconditions')
 
+    def _visit_data(self):
+        """Execute the visitors that require access to the full data content of a file."""
+        kwargs = {
+            'working_directory': self._working_dir,
+            'storage_name': self._storage_name,
+            'log_file_directory': self._config.log_file_directory,
+            'clients': self._clients,
+            'reporter': self._reporter,
+            'config': self._config,
+        }
+        for visitor in self._data_visitors:
+            try:
+                self._logger.debug(f'Visit for {visitor.__class__.__name__}')
+                self._observation = visitor.visit(self._observation, **kwargs)
+            except Exception as e:
+                raise mc.CadcException(e)
+
     def _visit_meta(self):
         """Execute metadata-only visitors on an Observation in memory."""
         if self.meta_visitors:
