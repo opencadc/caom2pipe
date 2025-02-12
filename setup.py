@@ -3,8 +3,6 @@
 
 import glob
 import os
-import sys
-from setuptools.command.test import test as TestCommand
 from setuptools import find_packages
 
 from setuptools import setup
@@ -51,23 +49,6 @@ for entry_point in entry_point_list:
     entry_points['console_scripts'].append('{0} = {1}'.format(entry_point[0],
                                                               entry_point[1]))
 
-# add the --cov option to the test command
-class PyTest(TestCommand):
-    """class py.test for the testing
-
-    """
-    user_options = []
-
-    def __init__(self, dist, **kw):
-        TestCommand.__init__(self, dist, **kw)
-        self.pytest_args = ['--cov', PACKAGENAME]
-
-    def run_tests(self):
-        # import here, cause outside the eggs aren't loaded
-        import pytest
-        err_no = pytest.main(self.pytest_args)
-        sys.exit(err_no)
-
 install_requires=metadata.get('install_requires', '').strip().split()
 
 setup(name=PACKAGENAME,
@@ -92,5 +73,4 @@ setup(name=PACKAGENAME,
         'Programming Language :: Python',
         'Programming Language :: Python :: 3.6'
       ],
-      cmdclass = {'coverage': PyTest}
 )
