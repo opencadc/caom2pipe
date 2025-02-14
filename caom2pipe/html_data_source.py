@@ -73,7 +73,7 @@ from dataclasses import dataclass
 from treelib import Tree
 from typing import Callable
 
-from caom2pipe.data_source_composable import IncrementalDataSource, StateRunnerMeta
+from caom2pipe.data_source_composable import IncrementalDataSource, RunnerMeta, StateRunnerMeta
 from caom2pipe.manage_composable import make_datetime, query_endpoint_session
 
 
@@ -269,3 +269,35 @@ class HttpDataSource(IncrementalDataSource):
                     self._logger.debug(f'skipping {dt_str_bits}')
         self._logger.debug(f'End _parse_html_string from {node.tag} with {node.data.fn.__name__}')
         return result
+
+
+class HttpDataSourceRunnerMeta(HttpDataSource):
+    """This is a temporary class to support refactoring, and when all dependent applications have also been
+    refactored to provide the expected StorageName API, this class will be integrated back into the HttpDataSource
+    class. """
+
+    def __init__(self, config, start_key, html_filters, session, storage_name_ctor):
+        super().__init__(config, start_key, html_filters, session)
+        self._storage_name_ctor = storage_name_ctor
+
+    def _initialize_end_dt(self):
+        self._logger.debug('Begin _initialize_end_dt')
+        self._descend_html_hierarchy(self._tree.get_node('root'))
+        # sort the work to be done by timestamp
+        sorted_todo_list = sorted(self._todo_list.items(), key=lambda x: x[1])
+        for url, dt in sorted_todo_list:
+            storage_name = self._storage_name_ctor([url])
+            entry = RunnerMeta(storage_name, dt)
+            self._work.append(entry)
+        if len(self._todo_list) > 0:
+            self._logger.info(f'Found {len(self._work)} total records.')
+            self._end_dt = max(self._todo_list.values())
+        else:
+            # the default implementation assumes a remote data source, so the time-box end-point only advances if
+            # the remote data source advances
+            self._logger.warning(f'Found no records. Setting end date to {self._start_dt}.')
+            self._end_dt = self._start_dt
+        # only need the sorted copy
+        self._todo_list = dict()
+        self._tree = Tree()  # TODO I wonder if this works?
+        self._logger.debug('End _initialize_end_dt')
