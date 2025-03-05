@@ -123,7 +123,7 @@ from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
 
-__all__ = ['CaomExecute', 'OrganizeExecutes', 'OrganizeChooser']
+__all__ = ['can_use_single_visit', 'CaomExecute', 'OrganizeExecutes', 'OrganizeChooser']
 
 
 class CaomExecute:
@@ -379,6 +379,23 @@ class CaomExecuteRunnerMeta(CaomExecute):
                 if '.fits' in source_name:
                     self._storage_name._metadata[uri] = get_local_file_headers(source_name)
         self._logger.debug('End _set_preconditions')
+
+    def _visit_data(self):
+        """Execute the visitors that require access to the full data content of a file."""
+        kwargs = {
+            'working_directory': self._working_dir,
+            'storage_name': self._storage_name,
+            'log_file_directory': self._config.log_file_directory,
+            'clients': self._clients,
+            'reporter': self._reporter,
+            'config': self._config,
+        }
+        for visitor in self._data_visitors:
+            try:
+                self._logger.debug(f'Visit for {visitor.__class__.__name__}')
+                self._observation = visitor.visit(self._observation, **kwargs)
+            except Exception as e:
+                raise mc.CadcException(e)
 
     def _visit_meta(self):
         """Execute metadata-only visitors on an Observation in memory."""
@@ -1381,11 +1398,7 @@ class OrganizeExecutes:
             self._log_h.close()
 
     def can_use_single_visit(self):
-        return len(self.task_types) > 1 and (
-            (mc.TaskType.STORE in self.task_types and mc.TaskType.INGEST in self.task_types)
-            or (mc.TaskType.INGEST in self.task_types and mc.TaskType.MODIFY in self.task_types)
-            or (mc.TaskType.SCRAPE in self.task_types and mc.TaskType.MODIFY in self.task_types)
-        )
+        return can_use_single_visit(self.task_types)
 
     def _choose(self):
         """The logic that decides which descendants of CaomExecute to
@@ -1786,3 +1799,14 @@ class FitsForCADCCompressor(FitsForCADCDecompressor):
                 returned_fqn = super().fix_compression(fqn)
                 # log message in the super
         return returned_fqn
+
+
+def can_use_single_visit(task_types):
+    return (
+        len(task_types) > 1
+        and (
+            (mc.TaskType.STORE in task_types and mc.TaskType.INGEST in task_types)
+            or (mc.TaskType.INGEST in task_types and mc.TaskType.MODIFY in task_types)
+            or (mc.TaskType.SCRAPE in task_types and mc.TaskType.MODIFY in task_types)
+        )
+    )
