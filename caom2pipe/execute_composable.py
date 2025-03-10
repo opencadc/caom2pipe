@@ -407,6 +407,8 @@ class CaomExecuteRunnerMeta(CaomExecute):
                 'storage_name': self._storage_name,
                 'reporter': self._reporter,
             }
+            self._logger.error(f'{len(self._storage_name._time_series)}')
+            self._logger.error('\n'.join(ii for ii in self._storage_name._time_series.keys()))
             for visitor in self.meta_visitors:
                 try:
                     self._observation = visitor.visit(self._observation, **kwargs)

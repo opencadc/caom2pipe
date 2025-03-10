@@ -320,17 +320,12 @@ class TodoRunnerMeta(TodoRunner):
                 self._logger.warning(
                     f'Beginning retry {count + 1} in {os.getcwd()} for data source {self._data_sources[0]}'
                 )
-                # to preserve the clean_up behaviour from one of the original data sources
                 self._reset_for_retry(self._data_sources[0], count)
-                # make another file list
-                # self._build_todo_list(self._retry_data_source)
                 self._reporter.capture_retry(len(self._todo_list))
                 decay_interval = self._config.retry_decay * (count + 1) * 60
                 self._logger.warning(f'Retry {len(self._todo_list)} entries at {decay_interval} seconds from now.')
                 sleep(decay_interval)
-                # result |= self._run_todo_list(self._retry_data_source, current_count=count + 1)
                 result |= self._run_todo_list(self._data_sources[0], current_count=count + 1)
-                # if not self._config.need_to_retry():
                 if len(self._todo_list) == 0:
                     break
             self._logger.warning(f'Done retry attempts with result {result}.')
@@ -636,10 +631,7 @@ class StateRunnerMeta(StateRunner):
         if self._config.need_to_retry():
             for count in range(0, self._config.retry_count):
                 self._logger.warning(f'Beginning retry {count + 1} in {os.getcwd()} for data source {0}')
-                # to preserve the clean_up behaviour from one of the original data sources
                 self._reset_for_retry(self._data_sources[0], count)
-                # make another file list
-                # self._build_todo_list(self._retry_data_source)
                 self._reporter.capture_retry(len(self._todo_list))
                 decay_interval = self._config.retry_decay * (count + 1) * 60
                 self._logger.warning(f'Retry {len(self._todo_list)} entries at {decay_interval} seconds from now.')
@@ -794,7 +786,7 @@ def common_runner_init_runner_meta(
     :param reporter:
     :param state: bool True if using StateRunner
     :param storage_name_ctor:
-    :param store_transfer Transfer extension that identifies hot to retrieve data from a source for storage at CADC,
+    :param store_transfer Transfer extension that identifies how to retrieve data from a source for storage at CADC,
         probably an HTTP or FTP site. Don't try to guess what this one is.
     """
     if config is None:
