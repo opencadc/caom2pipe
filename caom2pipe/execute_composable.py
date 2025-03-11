@@ -118,7 +118,7 @@ import traceback
 from shutil import copyfileobj
 from urllib.parse import urlparse
 
-from caom2utils.data_util import get_local_file_info, get_local_file_headers, get_local_headers_from_fits
+from caom2utils.data_util import get_local_file_info, get_local_file_headers
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
