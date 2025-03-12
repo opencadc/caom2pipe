@@ -808,7 +808,7 @@ class LocalFilesDataSourceRunnerMeta(LocalFilesDataSource):
         :param dir_entry: os.DirEntry
         """
         work_with_file = True
-        if super().default_filter(dir_entry):
+        if DataSource.default_filter(self, dir_entry):
             if dir_entry.name.startswith('.'):
                 # skip dot files
                 work_with_file = False
