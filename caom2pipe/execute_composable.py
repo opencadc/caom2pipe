@@ -118,7 +118,7 @@ import traceback
 from shutil import copyfileobj
 from urllib.parse import urlparse
 
-from caom2utils.data_util import get_local_file_info, get_local_file_headers, get_local_headers_from_fits
+from caom2utils.data_util import get_local_file_info, get_local_file_headers
 from caom2pipe import client_composable as clc
 from caom2pipe import manage_composable as mc
 from caom2pipe import transfer_composable as tc
@@ -399,26 +399,24 @@ class CaomExecuteRunnerMeta(CaomExecute):
 
     def _visit_meta(self):
         """Execute metadata-only visitors on an Observation in memory."""
-        if self.meta_visitors:
-            kwargs = {
-                'working_directory': self._working_dir,
-                'config': self._config,
-                'clients': self._clients,
-                'storage_name': self._storage_name,
-                'reporter': self._reporter,
-            }
-            for visitor in self.meta_visitors:
-                try:
-                    self._observation = visitor.visit(self._observation, **kwargs)
-                except Exception as e:
-                    self._logger.error(e)
-                    self._logger.error(traceback.format_exc())
-                    raise mc.CadcException(e)
+        if not self.meta_visitors:
+            return
 
-                if self._observation is None:
-                    msg = f'No Observation for {self._storage_name.file_uri}. Construction failed.'
-                    self._logger.error(f'Stopping _visit_meta with {msg}')
-                    raise mc.CadcException(msg)
+        kwargs = {
+            'working_directory': self._working_dir,
+            'config': self._config,
+            'clients': self._clients,
+            'storage_name': self._storage_name,
+            'reporter': self._reporter,
+        }
+
+        for visitor in self.meta_visitors:
+            try:
+                self._observation = visitor.visit(self._observation, **kwargs)
+            except Exception as e:
+                self._logger.error(f'Error during visitor {visitor}: {e}')
+                self._logger.debug(traceback.format_exc())
+                raise mc.CadcException(e)
 
     def execute(self, context):
         self._logger.debug('Begin execute with the steps:')

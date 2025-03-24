@@ -1042,6 +1042,30 @@ def undo_astropy_cdfix_call(chunk, time_delta):
         chunk.time.axis.function.delta = 0.0
 
 
+def update_file_info(file_info, caom_uri, plane):
+    """
+    Update the CAOM URI and observation details with the given file information
+
+    Args:
+        file_info (FileIinfo): containing file information to be update, if it's different.
+        caom_uri (str): The CAOM Artifact URI associated with the file.
+        plane (Plane): The CAOM Plane object containing the Artifact to update.
+
+    Returns:
+        None
+    """
+    for artifact in plane.artifacts.values():
+        if artifact.uri  == caom_uri:
+            logging.debug(f'Updating FileInfo metadata for {caom_uri}')
+            if file_info.md5sum.startswith('md5:'):
+                artifact.contentChecksum = file_info.md5sum
+            else:
+                artifact.contentChecksum = f'md5:{file_info.md5sum}'
+            artifact.contentLength = file_info.size
+            artifact.contentType = file_info.file_type
+            return
+
+
 class TelescopeMapping:
     """
     A default implementation for building up and applying an ObsBlueprint
