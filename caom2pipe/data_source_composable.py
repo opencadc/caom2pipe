@@ -357,7 +357,8 @@ class ListDirDataSourceRunnerMeta(ListDirDataSource):
     Implement the identification of the work to be done, by doing a directory
     listing. This is the original use_local_files: True behaviour.
 
-    When the RunnerMeta refactor work is complete, this class will replace ListDirDataSource.
+    When the RunnerMeta refactor work is complete across all affected *2caom2 applications, this class will replace
+    ListDirDataSource.
     """
 
     def __init__(self, config, chooser, storage_name_ctor):
@@ -400,9 +401,7 @@ class ListDirDataSourceRunnerMeta(ListDirDataSource):
             if f_name is not None:
                 self._logger.debug(f'{f_name} added to work list.')
                 self._work.append(
-                    self._storage_name_ctor(
-                        file_name=f_name, source_names=[os.path.join(self._config.working_directory, f)]
-                    )
+                    self._storage_name_ctor(source_names=[os.path.join(self._config.working_directory, f)])
                 )
         # ensure unique entries
         self._capture_todo()

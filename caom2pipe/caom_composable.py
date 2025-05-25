@@ -703,7 +703,7 @@ def exec_footprintfinder(chunk, science_fqn, log_file_directory, obs_id, params=
 def _handle_footprint_logs(log_file_directory, log_file):
     """Move footprintfinder logs to specific log directory, if there
     is one."""
-    orig_log_fqn = os.path.join(os.getcwd(), log_file)
+    orig_log_fqn = os.path.join(os.getcwd(), log_file).replace('.gz_', '_')
     if log_file_directory is not None and os.path.exists(log_file_directory):
         if os.path.exists(orig_log_fqn):
             log_fqn = os.path.join(log_file_directory, log_file)
