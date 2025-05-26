@@ -2,7 +2,7 @@
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2024.                            (c) 2024.
+#  (c) 2025.                            (c) 2025.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -1134,10 +1134,9 @@ def run_single(
     storage_name,
     meta_visitors,
     data_visitors,
-    chooser=None,
     store_transfer=None,
     modify_transfer=None,
-    metadata_reader=None,
+    needs_delete=False,
 ):
     """Process a single entry by StorageName detail.
 
@@ -1158,27 +1157,21 @@ def run_single(
     :param metadata_reader MetadataReader instance
     """
     logging.debug(f'Begin run_single {config.work_fqn}')
-    observable = mc.Observable(config)
-    reporter = mc.ExecutionReporter(config, observable)
+    reporter = mc.ExecutionReporter2(config)
     reporter.set_log_location(config)
     clients = cc.ClientCollection(config)
-    clients.metrics = observable.metrics
     if modify_transfer is None:
         modify_transfer = transfer_composable.modify_transfer_factory(config, clients)
-    if metadata_reader is None:
-        metadata_reader = reader_composable.reader_factory(config, clients)
-    organizer = ec.OrganizeExecutes(
+    organizer = ec.OrganizeExecutesRunnerMeta(
         config,
         meta_visitors,
         data_visitors,
-        chooser,
-        store_transfer,
-        modify_transfer,
-        metadata_reader,
-        clients,
-        observable,
+        needs_delete=needs_delete,
+        store_transfer=store_transfer,
+        modify_transfer=modify_transfer,
+        clients=clients,
+        reporter=reporter,
     )
-    organizer.choose()
     result = organizer.do_one(storage_name)
     logging.debug(f'run_single result is {result}')
     return result

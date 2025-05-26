@@ -352,6 +352,63 @@ class ListDirDataSource(DataSource):
         return self._work
 
 
+class ListDirDataSourceRunnerMeta(ListDirDataSource):
+    """
+    Implement the identification of the work to be done, by doing a directory
+    listing. This is the original use_local_files: True behaviour.
+
+    When the RunnerMeta refactor work is complete across all affected *2caom2 applications, this class will replace
+    ListDirDataSource.
+    """
+
+    def __init__(self, config, chooser, storage_name_ctor):
+        super().__init__(config, chooser)
+        self._storage_name_ctor = storage_name_ctor
+
+    def get_work(self):
+        self._logger.debug(f'Begin get_work from {self._config.working_directory}.')
+        file_list = os.listdir(self._config.working_directory)
+        for f in file_list:
+            f_name = None
+            if f.endswith('.fits') or f.endswith('.fits.gz'):
+                if self._chooser is None:
+                    f_name = f
+                else:
+                    if self._chooser.use_compressed(f):
+                        if f.endswith('.fits'):
+                            f_name = f'{f}.gz'
+                        else:
+                            f_name = f
+                    else:
+                        if f.endswith('.fits.gz'):
+                            f_name = f.replace('.gz', '')
+                        else:
+                            f_name = f
+            elif f.endswith('.header'):
+                f_name = f
+            elif f.endswith('.fz'):
+                f_name = f
+            elif f.endswith('.hdf5') or f.endswith('.h5'):
+                f_name = f
+            elif f.endswith('.json'):
+                f_name = f
+            elif f.endswith('.cat'):
+                # NGVS
+                f_name = f
+            elif f.endswith('.mask.rd.reg'):
+                # NGVS
+                f_name = f
+            if f_name is not None:
+                self._logger.debug(f'{f_name} added to work list.')
+                self._work.append(
+                    self._storage_name_ctor(source_names=[os.path.join(self._config.working_directory, f)])
+                )
+        # ensure unique entries
+        self._capture_todo()
+        self._logger.debug(f'End get_work.')
+        return self._work
+
+
 class ListDirSeparateDataSource(DataSource):
     """
     Implement the identification of the work to be done, by doing a directory
