@@ -874,7 +874,7 @@ class LocalFilesDataSourceRunnerMeta(LocalFilesDataSource):
                 local_file_info = get_local_file_info(dir_entry.path)
                 index = 0
                 self._temp_storage_name.set_file_info(index, local_file_info)
-                if '.hdf5' in dir_entry.name:
+                if '.hdf5' in dir_entry.name or '.h5' in dir_entry.name:
                     # no hdf5 validation
                     pass
                 elif self._verify_file(dir_entry.path):
