@@ -1279,6 +1279,64 @@ class Fits2caom2Visitor:
         return self._observation
 
 
+class Fits2caom2Visitor2(Fits2caom2Visitor):
+    def visit(self):
+        self._logger.debug('Begin visit')
+        try:
+            for uri in self._storage_name.destination_uris:
+                self._logger.debug(f'Build observation for {uri}')
+                headers = self._metadata_reader.headers.get(uri)
+                telescope_data = self._get_mapping(headers, uri)
+                if telescope_data is None:
+                    self._logger.info(f'Ignoring {uri} because there is no TelescopeMapping.')
+                    continue
+                blueprint = self._get_blueprint(telescope_data)
+                telescope_data.accumulate_blueprint(blueprint)
+                if self._config.dump_blueprint and self._config.log_to_file:
+                    with open(f'{self._config.log_file_directory}/{os.path.basename(uri)}.bp', 'w') as f:
+                        f.write(blueprint.__str__())
+                parser = self._get_parser(headers, blueprint, uri)
+
+                if self._observation is None:
+                    if blueprint._get('DerivedObservation.members') is None:
+                        self._logger.debug('Build a SimpleObservation')
+                        self._observation = SimpleObservation(
+                            collection=self._storage_name.collection,
+                            observation_id=self._storage_name.obs_id,
+                            algorithm=Algorithm('exposure'),
+                        )
+                    else:
+                        self._logger.debug('Build a DerivedObservation')
+                        algorithm_name = (
+                            'composite'
+                            if blueprint._get('Observation.algorithm.name') == 'exposure'
+                            else parser._get_from_list('Observation.algorithm.name', 0)
+                        )
+                        self._observation = DerivedObservation(
+                            collection=self._storage_name.collection,
+                            observation_id=self._storage_name.obs_id,
+                            algorithm=Algorithm(algorithm_name),
+                        )
+                    telescope_data.observation = self._observation
+                parser.augment_observation(
+                    observation=self._observation,
+                    artifact_uri=uri,
+                    product_id=self._storage_name.product_id,
+                )
+                file_info = self._metadata_reader.file_info.get(self._storage_name.destination_uris[0])
+                self._observation = telescope_data.update(file_info)
+        except Caom2Exception as e:
+            self._logger.debug(traceback.format_exc())
+            self._logger.warning(
+                f'CAOM2 record creation failed for {self._storage_name.obs_id}'
+                f':{self._storage_name.file_name} with {e}'
+            )
+            self._observation = None
+
+        self._logger.debug('End visit')
+        return self._observation
+
+
 class Fits2caom2VisitorRunnerMeta(Fits2caom2Visitor):
     """
     Use a TelescopeMapping2 specialization instance to create a CAOM2 record, as expected by the
