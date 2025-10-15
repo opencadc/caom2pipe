@@ -3131,7 +3131,7 @@ def query_endpoint_session(url, session, timeout=20):
     on the response.
     """
     try:
-        response = session.get(url, timeout=timeout)
+        response = session.get(url, timeout=timeout, verify=False)
         response.raise_for_status()
         return response
     except Exception as e:
@@ -3275,7 +3275,7 @@ def http_get(url, local_fqn, timeout=10):
         locally.
     """
     try:
-        with requests.get(url, stream=True, timeout=timeout) as r:
+        with requests.get(url, stream=True, timeout=timeout, verify=False) as r:
             r.raise_for_status()
             with open(local_fqn, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=READ_BLOCK_SIZE):
