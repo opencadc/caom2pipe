@@ -187,7 +187,7 @@ class HttpDataSource(IncrementalDataSource):
             response = None
             try:
                 self._logger.info(f'Querying {child_node.tag} for time-stamped entries.')
-                response = query_endpoint_session(child_node.tag, self._session, self._verify_session)
+                response = query_endpoint_session(child_node.tag, self._session, verify=self._verify_session)
                 response.raise_for_status()
                 if response is None:
                     self._logger.warning(f'No response from {child_node.tag}.')

@@ -117,7 +117,7 @@ def test_http(query_mock, test_config, tmp_path):
     def _close():
         pass
 
-    def _query_mock_side_effect(url, ignore_session, ignore_verify):
+    def _query_mock_side_effect(url, ignore_session, verify=False):
         top_page = f'{test_conf.TEST_DATA_DIR}/top_page.html'
         year_page = f'{test_conf.TEST_DATA_DIR}/year_page.html'
         day_page = f'{test_conf.TEST_DATA_DIR}/day_page.html'
