@@ -2,7 +2,7 @@
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2018.                            (c) 2018.
+#  (c) 2025.                            (c) 2025.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -1147,6 +1147,49 @@ class NoFheadStoreVisitRunnerMeta(CaomExecuteRunnerMeta):
         self._logger.debug('End execute.')
 
 
+class NoFheadStoreVisitStageRunnerMeta(NoFheadStoreVisitRunnerMeta):
+    """Defines a pipeline step for all the operations that require access to the file on disk for metadata and data
+    operations that includes STORE.
+
+    At the time of writing, there is no --fhead metadata retrieval option for HDF5 files.
+
+    This implementation re-orders the _set_preconditions call so that the file can be retrieved to the staging location
+    from its data source.
+
+    This is a temporary class to support refactoring, and when all dependent applications have also been refactored
+    to provide the expected StorageName API, this class will be integrated back into the NoFheadStoreVisit class.
+    """
+
+    def _set_preconditions(self):
+        """The default preconditions are ensuring that the StorageName instance from the 'context' parameter has
+        both the metadata and file_info members initialized correctly. For the default case assume the files are
+        found on local posix disk, and the preconditions are satisfied by local file access functions to the
+        source_names values in StorageName."""
+        if self._config.use_local_files:
+            super()._set_preconditions()
+        else:
+            self._logger.debug('Do _set_preconditions after the store, at the interim storage location.')
+
+    def _store_data(self):
+        super()._store_data()
+        # use the data staged locally to get the file info and header content, which is the default _set_preconditions
+        # implementation
+        self._logger.debug(f'Begin _set_preconditions for {self._storage_name.file_name}')
+        for index, source_name in enumerate(self._storage_name.source_names):
+            uri = self._storage_name.destination_uris[index]
+            interim_name = (
+                f'{self._config.working_directory}/{self._storage_name.obs_id}/{os.path.basename(source_name)}'
+            )
+            self._logger.error(interim_name)
+            if uri not in self._storage_name.file_info:
+                self._storage_name.file_info[uri] = get_local_file_info(interim_name)
+            if uri not in self._storage_name.metadata:
+                self._storage_name.metadata[uri] = []
+            if '.fits' in source_name:
+                self._storage_name._metadata[uri] = get_local_file_headers(interim_name)
+        self._logger.debug('End _set_preconditions')
+
+
 class Scrape(CaomExecute):
     """Defines the pipeline step for Collection creation of a CAOM model
     observation. The file containing the metadata is located on disk.
@@ -1611,17 +1654,29 @@ class OrganizeExecutesRunnerMeta(OrganizeExecutes):
                     NoFheadScrapeRunnerMeta(self.config, self._meta_visitors, self._data_visitors, self._reporter)
                 )
             elif mc.TaskType.STORE in self.task_types:
-                self._logger.debug(f'Choosing executor NoFheadStoreVisitRunnerMeta for tasks {self.task_types}.')
-                self._executors.append(
-                    NoFheadStoreVisitRunnerMeta(
-                        self.config,
-                        self._clients,
-                        self._store_transfer,
-                        self._meta_visitors,
-                        self._data_visitors,
-                        self._reporter,
+                if self.config.use_local_files:
+                    self._logger.debug(f'Choosing executor NoFheadStoreVisitRunnerMeta for tasks {self.task_types}.')
+                    self._executors.append(
+                        NoFheadStoreVisitRunnerMeta(
+                            self.config,
+                            self._clients,
+                            self._store_transfer,
+                            self._meta_visitors,
+                            self._data_visitors,
+                            self._reporter,
+                        )
                     )
-                )
+                else:
+                    self._executors.append(
+                        NoFheadStoreVisitStageRunnerMeta(
+                            self.config,
+                            self._clients,
+                            self._store_transfer,
+                            self._meta_visitors,
+                            self._data_visitors,
+                            self._reporter,
+                        )
+                    )
             else:
                 self._logger.debug(f'Choosing executor NoFheadVisitRunnerMeta for tasks {self.task_types}.')
                 self._executors.append(

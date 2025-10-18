@@ -2,7 +2,7 @@
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2018.                            (c) 2018.
+#  (c) 2025.                            (c) 2025.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -121,7 +121,7 @@ def test_query_endpoint():
         test_result = mc.query_endpoint('https://localhost', timeout=25)
         assert test_result is not None, 'expected result'
         assert session_get_mock.called, 'mock not called'
-        session_get_mock.assert_called_with('https://localhost', timeout=25)
+        session_get_mock.assert_called_with('https://localhost', timeout=25, verify=True)
 
 
 def test_query_endpoint_session():
@@ -129,7 +129,7 @@ def test_query_endpoint_session():
     test_result = mc.query_endpoint_session('https://localhost', session_mock, timeout=25)
     assert test_result is not None, 'expected result'
     assert session_mock.get.called, 'mock not called'
-    session_mock.get.assert_called_with('https://localhost', timeout=25)
+    session_mock.get.assert_called_with('https://localhost', timeout=25, verify=True)
 
 
 def test_config_class(tmp_path):
