@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2023.                            (c) 2023.
+#  (c) 2025.                            (c) 2025.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -118,7 +117,7 @@ def test_http(query_mock, test_config, tmp_path):
     def _close():
         pass
 
-    def _query_mock_side_effect(url, ignore_session):
+    def _query_mock_side_effect(url, ignore_session, ignore_verify):
         top_page = f'{test_conf.TEST_DATA_DIR}/top_page.html'
         year_page = f'{test_conf.TEST_DATA_DIR}/year_page.html'
         day_page = f'{test_conf.TEST_DATA_DIR}/day_page.html'

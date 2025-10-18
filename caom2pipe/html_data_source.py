@@ -1,9 +1,8 @@
-# -*- coding: utf-8 -*-
 # ***********************************************************************
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2023.                            (c) 2023.
+#  (c) 2025.                            (c) 2025.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -144,7 +143,7 @@ class HttpDataSource(IncrementalDataSource):
     Support incremental harvesting from hierarchical HTML pages that list URLs with timestamps.
     """
 
-    def __init__(self, config, start_key, html_filters, session):
+    def __init__(self, config, start_key, html_filters, session, verify_session=True):
         """
         :param config: manage_composable.Config instance
         :param html_filters: list of HtmlFilter instances to filter an html string for additional time-boxed
@@ -165,6 +164,7 @@ class HttpDataSource(IncrementalDataSource):
         self._tree = Tree()
         self._tree.create_node('ROOT', 'root')
         self._tree.create_node(tag=start_key, parent='root', data=html_filters.first_filter())
+        self._verify_session = verify_session
 
     @property
     def html_filters(self):
@@ -187,7 +187,7 @@ class HttpDataSource(IncrementalDataSource):
             response = None
             try:
                 self._logger.info(f'Querying {child_node.tag} for time-stamped entries.')
-                response = query_endpoint_session(child_node.tag, self._session)
+                response = query_endpoint_session(child_node.tag, self._session, self._verify_session)
                 response.raise_for_status()
                 if response is None:
                     self._logger.warning(f'No response from {child_node.tag}.')
@@ -276,8 +276,8 @@ class HttpDataSourceRunnerMeta(HttpDataSource):
     refactored to provide the expected StorageName API, this class will be integrated back into the HttpDataSource
     class. """
 
-    def __init__(self, config, start_key, html_filters, session, storage_name_ctor):
-        super().__init__(config, start_key, html_filters, session)
+    def __init__(self, config, start_key, html_filters, session, storage_name_ctor, verify_session=True):
+        super().__init__(config, start_key, html_filters, session, verify_session)
         self._storage_name_ctor = storage_name_ctor
 
     def _initialize_end_dt(self):

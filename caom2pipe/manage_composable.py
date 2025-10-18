@@ -3091,7 +3091,7 @@ def build_uri(archive, file_name, scheme='ad'):
     return f'{scheme}:{archive}/{file_name}'
 
 
-def query_endpoint(url, timeout=20):
+def query_endpoint(url, timeout=20, verify=True):
     """Return a response for an endpoint. Caller needs to call 'close'
     on the response.
     """
@@ -3104,7 +3104,7 @@ def query_endpoint(url, timeout=20):
     session.mount('http://', adapter)
     session.mount('https://', adapter)
     try:
-        response = session.get(url, timeout=timeout)
+        response = session.get(url, timeout=timeout, verify=verify)
         response.raise_for_status()
         return response
     except Exception as e:
@@ -3126,12 +3126,12 @@ def get_endpoint_session(retries=10, backoff_factor=0.5):
     return session
 
 
-def query_endpoint_session(url, session, timeout=20):
+def query_endpoint_session(url, session, timeout=20, verify=True):
     """Return a response for an endpoint. Caller needs to call 'close'
     on the response.
     """
     try:
-        response = session.get(url, timeout=timeout, verify=False)
+        response = session.get(url, timeout=timeout, verify=verify)
         response.raise_for_status()
         return response
     except Exception as e:

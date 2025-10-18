@@ -2,7 +2,7 @@
 # ******************  CANADIAN ASTRONOMY DATA CENTRE  *******************
 # *************  CENTRE CANADIEN DE DONNÉES ASTRONOMIQUES  **************
 #
-#  (c) 2020.                            (c) 2020.
+#  (c) 2025.                            (c) 2025.
 #  Government of Canada                 Gouvernement du Canada
 #  National Research Council            Conseil national de recherches
 #  Ottawa, Canada, K1A 0R6              Ottawa, Canada, K1A 0R6
@@ -214,8 +214,9 @@ class HttpTransfer(ScienceTransfer):
     Uses HTTP to manage transfers from external sites to local disk.
     """
 
-    def __init__(self):
+    def __init__(self, verify_session=True):
         super().__init__()
+        self._verify_session = verify_session
 
     def get(self, source, dest_fqn):
         """
@@ -224,7 +225,7 @@ class HttpTransfer(ScienceTransfer):
         :return:
         """
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
-        mc.http_get(source, dest_fqn)
+        mc.http_get(source, dest_fqn, self._verify_session)
         self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')
 
