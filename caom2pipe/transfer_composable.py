@@ -225,7 +225,7 @@ class HttpTransfer(ScienceTransfer):
         :return:
         """
         self._logger.debug(f'Transfer from {source} to {dest_fqn}.')
-        mc.http_get(source, dest_fqn, self._verify_session)
+        mc.http_get(source, dest_fqn, verify=self._verify_session)
         self.check(dest_fqn, source)
         self._logger.debug(f'Successfully retrieved {source}')
 

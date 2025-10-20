@@ -3267,7 +3267,7 @@ def increment_time(this_dt, by_interval, unit='%M'):
     return temp
 
 
-def http_get(url, local_fqn, timeout=10):
+def http_get(url, local_fqn, timeout=10, verify=True):
     """Retrieve a file via http.
 
     :param url where the file can be found.
@@ -3275,7 +3275,7 @@ def http_get(url, local_fqn, timeout=10):
         locally.
     """
     try:
-        with requests.get(url, stream=True, timeout=timeout, verify=False) as r:
+        with requests.get(url, stream=True, timeout=timeout, verify=verify) as r:
             r.raise_for_status()
             with open(local_fqn, 'wb') as f:
                 for chunk in r.iter_content(chunk_size=READ_BLOCK_SIZE):
